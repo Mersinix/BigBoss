@@ -1501,6 +1501,11 @@ export const baristaMissionStatusEnum = pgEnum('barista_mission_status', [
 export const baristaSkills = pgTable("barista_skills", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
+  // Add Icons to Barista Compétences — free-text emoji, same convention as
+  // maintenanceCompetencies.icon/marketingCategoryTaxonomy.icon (all `icon: text("icon")`,
+  // rendered directly as a string, not a lucide icon-name lookup). Nullable: existing
+  // competencies without one fall back to a client-side default.
+  icon: text("icon"),
   isActive: boolean("is_active").notNull().default(true),
   isFrozen: boolean("is_frozen").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
@@ -2146,8 +2151,29 @@ export const maintenanceProfiles = pgTable("maintenance_profiles", {
   userId: integer("user_id").notNull().unique(),
   jobTitle: text("job_title").notNull().default("Technicien de maintenance"),
   profileType: text("profile_type").notNull().default("Freelance"),
+  // DEPRECATED — superseded by `skills` below (task: "Remove Legacy Categories from
+  // Maintenance and Use Only Compétences"). Originally a second array meant to always
+  // mirror `skills` exactly; in practice the two had already drifted apart for real
+  // accounts (nothing enforced them staying in sync), which is exactly the "competing
+  // source of truth" the task flags. No longer written by any code path as of this
+  // task — `skills` (the admin-managed Compétences taxonomy's parent selections) is now
+  // the sole authoritative field. Column kept (not dropped) only to avoid an
+  // unnecessary destructive migration for a column no live code reads anymore.
   categories: text("categories").array().notNull().default([]),
+  // The ONE authoritative Maintenance competency ("Compétences") field — which parent
+  // competencies (maintenanceCompetencies.name) this account has selected and saved.
   skills: text("skills").array().notNull().default([]),
+  // Sub-skills ("Sous-compétences") this account actually offers. Each entry is a
+  // PARENT-QUALIFIED key "<competency>::<subSkill>" (see
+  // shared/maintenance-sub-skill-key.ts), never a bare sub-skill name — bug fix: the
+  // same sub-skill label (e.g. "Installation") legitimately exists under several
+  // different parent competencies in the admin taxonomy (maintenanceSubCompetencies),
+  // so a bare-name array made selecting it under one parent appear selected under every
+  // other parent sharing that same label. Still free text (soft reference, no hard FK,
+  // same convention as skills above), so a taxonomy edit/delete never corrupts a saved
+  // selection. A key here is only ever meaningful alongside its own parent in `skills`
+  // (enforced in PATCH /api/maintenance/profile — see server/routes.ts).
+  subSkills: text("sub_skills").array().notNull().default([]),
   certifications: text("certifications").array().notNull().default([]),
   yearsExperience: integer("years_experience").notNull().default(0),
   responseTime: text("response_time").notNull().default("< 24h"),
@@ -2258,6 +2284,27 @@ export const maintenanceZones = pgTable("maintenance_zones", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Admin-managed Maintenance sub-skill taxonomy — one level below maintenanceCompetencies
+// (e.g. competency "Climatisation" → sub-skills "Installation"/"Réparation"/"Entretien
+// préventif"). Mirrors printSubCategoryTaxonomy exactly: competencyId is a soft reference (no
+// hard FK), hard-delete, no cascade — maintenanceJobPosts.categories and
+// maintenanceProfiles.categories both stay plain-text competency names, so a sub-skill
+// taxonomy edit/delete never corrupts historical job-post/profile data.
+export const maintenanceSubCompetencies = pgTable("maintenance_sub_competencies", {
+  id: serial("id").primaryKey(),
+  competencyId: integer("competency_id").notNull(),
+  name: text("name").notNull(),
+  // Same free-text emoji convention as maintenanceCompetencies.icon above.
+  icon: text("icon"),
+  isActive: boolean("is_active").notNull().default(true),
+  isFrozen: boolean("is_frozen").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  competencyIdx: index("maintenance_sub_competencies_competency_idx").on(table.competencyId),
+  uniqueNamePerCompetency: uniqueIndex("maintenance_sub_competencies_unique").on(table.competencyId, table.name),
+}));
+
 // ── Maintenance — Job posting system ("Interventions") ──────────────────────
 // Mirrors the Barista Marketplace job-posting system (baristaJobPosts/
 // baristaJobTargets/baristaJobApplications above) field-for-field, adapted to
@@ -2280,10 +2327,25 @@ export const maintenanceJobPosts = pgTable("maintenance_job_posts", {
   title: text("title").notNull(),
   establishment: text("establishment").notNull().default(""),
   locationAddress: text("location_address").notNull().default(""),
-  // Multi-select, free-form strings matching maintenanceCompetencies.name —
-  // displayed criteria for a provider to self-assess, not a server-side
-  // eligibility filter (mirrors Barista's employmentTypes/educationLevels).
+  // Free-form string(s) matching maintenanceCompetencies.name — the required parent
+  // skill for this intervention. Stays an ARRAY column for backward compatibility with
+  // interventions saved before the "Fix Maintenance Sub-Skill Isolation..." task (which
+  // moved the create/edit FORM to a single-select parent — see
+  // maintenance-job-post-form-modal.tsx); going forward this holds at most one entry
+  // (`categories[0]`). Originally display-only criteria (mirrors Barista's
+  // employmentTypes/educationLevels); now also a real server-side eligibility filter for
+  // AUTOMATIC distribution and MANUAL targeting (see storage.isMaintenanceProviderSkillMatch),
+  // which anchors on categories[0] as the one required parent. Still free text (no hard
+  // FK), same reasoning as before: a taxonomy rename/delete must never corrupt a
+  // historical intervention's own saved requirement.
   categories: text("categories").array().notNull().default([]),
+  // Sub-skills ("Sous-compétences") required for this intervention, matching
+  // maintenanceSubCompetencies.name — only ever meaningful alongside a `categories`
+  // entry that is that sub-skill's own parent competency (enforced in
+  // POST/PATCH /api/maintenance/jobs, same pattern as maintenanceProfiles.subSkills).
+  // Optional: an intervention can specify a parent category with no sub-skill
+  // requirement, in which case matching only checks the parent.
+  subCategories: text("sub_categories").array().notNull().default([]),
   // Same LOW/NORMAL/HIGH/URGENT vocabulary as maintenanceReservations.urgency
   // (plain text, not a pg enum, for the same reason that table isn't either).
   urgency: text("urgency").notNull().default("NORMAL"),
@@ -2406,7 +2468,21 @@ export const marketingProfiles = pgTable("marketing_profiles", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().unique(),
   profileType: text("profile_type").notNull().default("Agency"), // 'Agency' | 'Freelancer' | 'Studio'
-  categories: text("categories").array().notNull().default([]), // offered services, from marketingCategoryTaxonomy names
+  // Derived/read-only summary — auto-synced from this agency's own currently
+  // PUBLISHED services (see storage.syncMarketingProfileCategories), never edited
+  // directly by any UI. Kept for peripheral consumers (MarketingFastSearch,
+  // MarketingBlacklistModal, the agency-level /api/marketing/profiles list) that
+  // read it as a cheap "what does this agency currently offer" summary.
+  categories: text("categories").array().notNull().default([]),
+  // The agency's OWN category/subcategory selection (Categories & Subcategories:
+  // Complete End-to-End Integration task) — mirrors PRINT's users.printCategories/
+  // printSubCategories selection model exactly, adapted to live on marketingProfiles
+  // (Marketing's own existing convention, unlike PRINT which keeps it on `users`).
+  // This is the single source of truth gating which categories/subcategories this
+  // agency can pick when creating or editing a Service (Business → Services) —
+  // distinct from `categories` above, which is a derived summary, never a selection.
+  selectedCategories: text("selected_categories").array().notNull().default([]),
+  selectedSubCategories: text("selected_sub_categories").array().notNull().default([]),
   responseTime: text("response_time").notNull().default("< 24h"),
   startingPriceInCents: integer("starting_price_in_cents").notNull().default(0),
   description: text("description").notNull().default(""),
@@ -2464,8 +2540,9 @@ export const marketingProjects = pgTable("marketing_projects", {
 }));
 
 // Admin-managed Marketing taxonomy (Website/SEO/Ads/Social/Vidéo/Photo/Branding)
-// — flat list, same shape as maintenanceCompetencies (Marketing services don't
-// have a category→subcategory split the way Print does).
+// — flat list, same shape as maintenanceCompetencies. Categories & Subcategories:
+// Complete End-to-End Integration (this task) adds marketingSubCategoryTaxonomy
+// below, one level under this table, mirroring printSubCategoryTaxonomy exactly.
 export const marketingCategoryTaxonomy = pgTable("marketing_category_taxonomy", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
@@ -2475,6 +2552,27 @@ export const marketingCategoryTaxonomy = pgTable("marketing_category_taxonomy", 
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// Admin-managed Marketing subcategory taxonomy — one level below
+// marketingCategoryTaxonomy (e.g. category "Vidéo" → subcategories "Montage
+// vidéo"/"Motion design"). Mirrors printSubCategoryTaxonomy field-for-field:
+// categoryId is a soft reference (no hard FK, same established convention as
+// maintenanceCompetencies/maintenanceZones/printSubCategoryTaxonomy) —
+// marketingServices keeps plain-text category/subCategories values, so a
+// taxonomy edit/delete never corrupts historical service records.
+export const marketingSubCategoryTaxonomy = pgTable("marketing_subcategory_taxonomy", {
+  id: serial("id").primaryKey(),
+  categoryId: integer("category_id").notNull(),
+  name: text("name").notNull(),
+  icon: text("icon"), // same free-text emoji convention as marketingCategoryTaxonomy.icon
+  isActive: boolean("is_active").notNull().default(true),
+  isFrozen: boolean("is_frozen").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  categoryIdx: index("marketing_subcategory_taxonomy_category_idx").on(table.categoryId),
+  uniqueNamePerCategory: uniqueIndex("marketing_subcategory_taxonomy_unique").on(table.categoryId, table.name),
+}));
 
 // Entity-level report — mirrors maintenanceReports exactly (own table, own
 // service scope — never shared with another service's blacklist).
@@ -2536,6 +2634,13 @@ export const marketingServices = pgTable("marketing_services", {
   // show a blank/fabricated title (docs/marketing_service_grid_and_title_synchronization_audit.md).
   title: text("title").notNull().default(""),
   category: text("category").notNull(), // from marketingCategoryTaxonomy, same taxonomy — never a second one
+  // Categories & Subcategories: Complete End-to-End Integration — multi-select,
+  // unlike PRINT's single `subCategory` (this task explicitly asks for multiple
+  // subcategories per service). From marketingSubCategoryTaxonomy, always
+  // children of `category` above (enforced in POST/PATCH /api/marketing/services).
+  // Existing rows default to [] — a pre-existing service with no subcategories
+  // keeps working unchanged everywhere this is read.
+  subCategories: text("sub_categories").array().notNull().default([]),
   startingPriceInCents: integer("starting_price_in_cents").notNull().default(0),
   responseTime: text("response_time").notNull().default("< 24h"),
   description: text("description").notNull().default(""),
@@ -2568,6 +2673,9 @@ export type MarketingReport = typeof marketingReports.$inferSelect;
 export type InsertMarketingReport = typeof marketingReports.$inferInsert;
 export type MarketingFavorite = typeof marketingFavorites.$inferSelect;
 export type MarketingCategory = typeof marketingCategoryTaxonomy.$inferSelect;
+export const insertMarketingSubCategoryTaxonomySchema = createInsertSchema(marketingSubCategoryTaxonomy).omit({ id: true, createdAt: true, updatedAt: true });
+export type MarketingSubCategory = typeof marketingSubCategoryTaxonomy.$inferSelect;
+export type InsertMarketingSubCategory = z.infer<typeof insertMarketingSubCategoryTaxonomySchema>;
 
 /** Agency-level card — the agency's own identity/description/website/portfolio/
  *  availability/visibility, used by the Agency Details Modal (Eye preview, the
@@ -3182,6 +3290,7 @@ export const insertMaintenanceFavoriteSchema = createInsertSchema(maintenanceFav
 export const insertMaintenanceReservationSchema = createInsertSchema(maintenanceReservations).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertMaintenanceCompetencySchema = createInsertSchema(maintenanceCompetencies).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertMaintenanceZoneSchema = createInsertSchema(maintenanceZones).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertMaintenanceSubCompetencySchema = createInsertSchema(maintenanceSubCompetencies).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPrintCatalogItemSchema = createInsertSchema(printCatalogItems).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertPrintFavoriteSchema = createInsertSchema(printFavorites).omit({ id: true, createdAt: true });
 export const insertPrintOrderSchema = createInsertSchema(printOrders).omit({ id: true, createdAt: true, updatedAt: true });
@@ -3290,6 +3399,8 @@ export type MaintenanceFavorite = typeof maintenanceFavorites.$inferSelect;
 export type MaintenanceReservation = typeof maintenanceReservations.$inferSelect;
 export type MaintenanceCompetency = typeof maintenanceCompetencies.$inferSelect;
 export type MaintenanceZone = typeof maintenanceZones.$inferSelect;
+export type MaintenanceSubCompetency = typeof maintenanceSubCompetencies.$inferSelect;
+export type InsertMaintenanceSubCompetency = z.infer<typeof insertMaintenanceSubCompetencySchema>;
 export type MaintenanceMarketplaceCard = MaintenanceProfile & {
   userId: number;
   name: string;

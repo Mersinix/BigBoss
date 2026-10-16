@@ -18,6 +18,7 @@ import {
   type NearbyPlace,
 } from "./prospecting-engine";
 import { api } from "@shared/routes";
+import { encodeMaintenanceSubSkillKey, decodeMaintenanceSubSkillKey } from "@shared/maintenance-sub-skill-key";
 import { z } from "zod";
 import { sessionMiddleware } from "./session";
 import rateLimit from "express-rate-limit";
@@ -257,10 +258,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
       const user = await storage.createUser(userData);
       if (role === "MAINTENANCE") {
+        // `categories` intentionally not set here (task: "Remove Legacy Categories from
+        // Maintenance and Use Only Compétences") — `skills` is the one authoritative
+        // competency field, selected post-registration from Business → Compétences
+        // (the registration form itself no longer collects any skill/category at
+        // signup time — see MaintenanceForm's own comment in landing-page.tsx).
+        // body.maintenanceCategories stays accepted-but-unused in the shared
+        // registration schema above, same as governorates/printCategories/etc. for
+        // other roles' own equivalent not-yet-collected-at-signup fields.
         await storage.upsertMaintenanceProfile(user.id, {
           jobTitle: body.maintenanceJobTitle,
           profileType: body.maintenanceProfileType,
-          categories: body.maintenanceCategories ?? [],
           skills: body.maintenanceSkills ?? [],
           description: body.maintenanceDescription ?? "",
           yearsExperience: body.maintenanceExperienceYears ?? 0,
@@ -801,8 +809,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const body = z.object({
       jobTitle: z.string().optional(),
       profileType: z.string().optional(),
-      categories: z.array(z.string()).optional(),
+      // `categories` intentionally removed (task: "Remove Legacy Categories from
+      // Maintenance and Use Only Compétences") — `skills` is the one authoritative
+      // competency field; maintaining a second parallel array that's supposed to always
+      // mirror it had already drifted out of sync for at least one real account.
       skills: z.array(z.string()).optional(),
+      subSkills: z.array(z.string()).optional(),
       certifications: z.array(z.string()).optional(),
       yearsExperience: z.number().int().min(0).optional(),
       responseTime: z.string().optional(),
@@ -829,7 +841,38 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       identityChanged && !currentProfile.autoApprove && (currentProfile.publicationStatus === "APPROVED" || currentProfile.publicationStatus === "REJECTED")
         ? { publicationStatus: "PENDING", publicationSubmittedAt: new Date(), publicationRejectionReason: null }
         : {};
-    const profile = await storage.upsertMaintenanceProfile(user.id, { ...body, ...extra });
+    // Data integrity: a sub-skill is only ever meaningful alongside its own parent
+    // competency — silently drop (never error) any submitted sub-skill whose parent isn't
+    // in the EFFECTIVE skills selection (the submitted body.skills if present, else the
+    // account's already-saved skills), and whose name isn't a real, admin-managed
+    // sub-competency of that parent. Mirrors the client's own "unselecting a parent drops
+    // its children" rule, enforced here too so a direct API call can't save an orphaned
+    // sub-skill under a parent the account doesn't actually have selected.
+    //
+    // Each submitted entry is a parent-qualified key ("<competency>::<subSkill>", see
+    // shared/maintenance-sub-skill-key.ts) — bug fix: the same sub-skill name can exist
+    // under several different parent competencies, so validating/storing by bare name
+    // would silently let a selection under one parent "leak" validity to another parent
+    // that happens to share a sub-skill of the same name.
+    let subSkills = body.subSkills;
+    if (subSkills !== undefined) {
+      const effectiveSkills = body.skills ?? currentProfile.skills;
+      const taxonomy = await storage.getMaintenanceTaxonomy();
+      const competencyIdByName = new Map(taxonomy.competencies.map((c) => [c.name, c.id]));
+      const validSubSkillNamesByCompetencyId = new Map<number, Set<string>>();
+      for (const s of taxonomy.subCompetencies) {
+        if (!validSubSkillNamesByCompetencyId.has(s.competencyId)) validSubSkillNamesByCompetencyId.set(s.competencyId, new Set());
+        validSubSkillNamesByCompetencyId.get(s.competencyId)!.add(s.name);
+      }
+      subSkills = subSkills.filter((key) => {
+        const decoded = decodeMaintenanceSubSkillKey(key);
+        if (!decoded || !effectiveSkills.includes(decoded.competency)) return false;
+        const competencyId = competencyIdByName.get(decoded.competency);
+        if (competencyId === undefined) return false;
+        return validSubSkillNamesByCompetencyId.get(competencyId)?.has(decoded.subSkill) ?? false;
+      });
+    }
+    const profile = await storage.upsertMaintenanceProfile(user.id, { ...body, ...(subSkills !== undefined ? { subSkills } : {}), ...extra });
     broadcast("maintenance_updated", { userId: user.id, kind: "profile" });
     res.json(profile);
   });
@@ -1093,6 +1136,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     establishment: z.string().trim().max(200).optional(),
     locationAddress: z.string().trim().max(300).optional(),
     categories: z.array(z.string().max(60)).max(20).optional(),
+    subCategories: z.array(z.string().max(60)).max(40).optional(),
     urgency: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]).optional(),
     scheduledDate: z.string().trim().max(20).optional().nullable(),
     scheduledTime: z.string().trim().max(10).optional().nullable(),
@@ -1110,11 +1154,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     return payload;
   }
 
+  // Data integrity: a required sub-skill is only ever meaningful alongside its own
+  // parent category — silently drop (never error) any submitted sub-category whose
+  // parent isn't in the EFFECTIVE categories selection, and whose name isn't a real,
+  // admin-managed sub-competency of that parent. Same pattern as PATCH
+  // /api/maintenance/profile's subSkills validation.
+  async function validMaintenanceSubCategories(categories: string[], subCategories: string[]): Promise<string[]> {
+    if (!subCategories.length) return subCategories;
+    const taxonomy = await storage.getMaintenanceTaxonomy();
+    const competencyNameById = new Map(taxonomy.competencies.map((c) => [c.id, c.name]));
+    const validNames = new Set(
+      taxonomy.subCompetencies
+        .filter((s) => categories.includes(competencyNameById.get(s.competencyId) ?? ""))
+        .map((s) => s.name),
+    );
+    return subCategories.filter((name) => validNames.has(name));
+  }
+
   app.post("/api/maintenance/jobs", requireApprovedCafeOwner, async (req: any, res) => {
     try {
       const body = maintenanceJobPostBodySchema.parse(req.body);
       const user = await storage.getUser(req.session.userId!);
       const payload = normalizeMaintenanceJobPostBody(body);
+      if (payload.subCategories !== undefined) {
+        payload.subCategories = await validMaintenanceSubCategories(payload.categories ?? [], payload.subCategories);
+      }
       if (!payload.establishment) payload.establishment = user!.name;
       if (!payload.locationAddress) payload.locationAddress = user!.locationAddress ?? "";
       if (!payload.contactPhone) payload.contactPhone = user!.phone ?? "";
@@ -1186,6 +1250,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const existing = await storage.getMaintenanceJobPostById(Number(req.params.id));
       if (!existing || existing.cafeOwnerId !== req.session.userId) return res.status(404).json({ message: "Intervention not found" });
       const payload = normalizeMaintenanceJobPostBody(body);
+      const effectiveCategories = payload.categories ?? existing.categories;
+      if (payload.subCategories !== undefined) {
+        payload.subCategories = await validMaintenanceSubCategories(effectiveCategories, payload.subCategories);
+      }
+      // Re-validate manual targets' skill match before actually publishing — a target's
+      // own skills may have changed since they were added, or the required categories/
+      // sub-categories may be changing in this very request. Never silently drop a saved
+      // target: block the publish instead so the Coffee Owner fixes the target list or
+      // the requirements themselves (task: "re-evaluate eligibility before publication
+      // and handle any mismatch clearly").
+      const willBePublished = (payload.status ?? existing.status) === "PUBLISHED";
+      const effectiveMode = payload.publicationMode ?? existing.publicationMode;
+      if (willBePublished && effectiveMode === "MANUAL") {
+        const effectiveSubCategories = payload.subCategories ?? existing.subCategories;
+        const targets = await storage.getMaintenanceJobTargets(existing.id);
+        const mismatchedNames: string[] = [];
+        for (const t of targets) {
+          const ok = await storage.isMaintenanceProviderSkillMatch(t.maintenanceUserId, { categories: effectiveCategories, subCategories: effectiveSubCategories });
+          if (!ok) mismatchedNames.push(t.maintenanceName);
+        }
+        if (mismatchedNames.length) {
+          return res.status(400).json({
+            message: `Impossible de publier : ${mismatchedNames.join(", ")} ne correspond${mismatchedNames.length > 1 ? "ent" : ""} plus aux compétences requises. Retirez ce${mismatchedNames.length > 1 ? "s profils" : " profil"} de la liste des cibles ou ajustez les compétences requises avant de publier.`,
+          });
+        }
+      }
       const updated = await storage.updateMaintenanceJobPost(Number(req.params.id), req.session.userId!, payload);
       if (!updated) return res.status(404).json({ message: "Intervention not found" });
       broadcast("maintenance_jobs_updated", { cafeOwnerId: req.session.userId });
@@ -1211,6 +1301,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!(await storage.isMaintenanceProviderEligible(maintenanceUserId))) {
         return res.status(400).json({ message: "Ce professionnel n'est pas éligible (profil non approuvé ou masqué)." });
       }
+      // Real enforcement point for "the Coffee Owner must not be able to bypass eligibility
+      // rules by manually selecting an otherwise ineligible profile" — this route is the
+      // only place a manual target is actually saved, regardless of which UI reached it.
+      if (!(await storage.isMaintenanceProviderSkillMatch(maintenanceUserId, { categories: job.categories, subCategories: job.subCategories }))) {
+        return res.status(400).json({ message: "Ce professionnel n'a pas les compétences requises pour cette intervention." });
+      }
       const row = await storage.addMaintenanceJobTarget(job.id, maintenanceUserId);
       await notify({
         userId: maintenanceUserId,
@@ -1221,6 +1317,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         prefKey: "maintenance_jobs",
         dedupeKey: `maintenance:job_targeted:${job.id}:${maintenanceUserId}`,
       });
+      // Pre-existing realtime gap (unrelated to skill-matching itself, found during this
+      // task's audit): this route never broadcast at all, so a newly-targeted provider's
+      // already-open "discover" view never refreshed until some other event happened to
+      // invalidate it. Closes it using the exact same event/convention the create/update
+      // routes above already use — no new event introduced.
+      broadcast("maintenance_jobs_updated", { cafeOwnerId: req.session.userId });
       res.status(201).json(row);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -1477,6 +1579,44 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { res.status(500).json({ message: "Failed to load Marketing taxonomy" }); }
   });
 
+  // Active subcategory taxonomy — kept as its own endpoint rather than folded
+  // into /api/marketing/taxonomy above, since that route's existing response
+  // shape (a flat MarketingCategory[]) is already read by several components
+  // as an array; changing it to {categories, subcategories} would be a breaking
+  // change for no benefit. Optional ?categoryId= mirrors getPrintSubCategoryTaxonomy.
+  app.get("/api/marketing/subcategories", async (req, res) => {
+    try {
+      const categoryId = req.query.categoryId ? Number(req.query.categoryId) : undefined;
+      res.json(await storage.getAvailableMarketingSubCategoryTaxonomy(categoryId));
+    } catch { res.status(500).json({ message: "Failed to load Marketing subcategories" }); }
+  });
+
+  // Agency's own category/subcategory selection (Categories & Subcategories:
+  // Complete End-to-End Integration) — mirrors GET/PATCH /api/print/me/categories
+  // exactly, adapted to marketingProfiles.selectedCategories/selectedSubCategories.
+  app.get("/api/marketing/me/categories", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "MARKETING") return res.status(403).json({ message: "Marketing access required" });
+    res.json(await storage.getMarketingCategoryMapping(user.id));
+  });
+
+  app.patch("/api/marketing/me/categories", requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user || user.role !== "MARKETING") return res.status(403).json({ message: "Marketing access required" });
+      const body = z.object({
+        categories: z.array(z.string()).default([]),
+        subCategories: z.array(z.string()).default([]),
+      }).parse(req.body);
+      const result = await storage.setMarketingCategoryMapping(user.id, body);
+      broadcast("marketing_updated", { userId: user.id, kind: "mapping" });
+      res.json(result);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to update category mapping" });
+    }
+  });
+
   app.get("/api/marketing/profile/:userId", requireAuth, async (req: any, res) => {
     const targetUserId = Number(req.params.userId);
     const viewer = await storage.getUser(req.session.userId);
@@ -1592,6 +1732,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const marketingServiceInputSchema = z.object({
     title: z.string().max(160).optional(),
     category: z.string().min(1).optional(),
+    subCategories: z.array(z.string()).optional(),
     startingPriceInCents: z.number().int().min(0).optional(),
     responseTime: z.string().optional(),
     description: z.string().optional(),
@@ -1599,6 +1740,42 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     imageUrl: z.string().optional().nullable(),
     isPublished: z.boolean().optional(),
   });
+
+  // An agency's category/subCategories choice on a service must be both (a)
+  // currently active in the Admin taxonomy and (b) already selected by that
+  // agency via PATCH /api/marketing/me/categories — never an arbitrary string,
+  // and never a category/subcategory the agency hasn't opted into. Mirrors
+  // validatePrintTaxonomySelection, adapted for a subCategories ARRAY (Marketing
+  // explicitly allows multiple subcategories per service, unlike PRINT's single
+  // subCategory). Only validates fields actually present in this call
+  // (partial-update-friendly).
+  async function validateMarketingTaxonomySelection(marketingUserId: number, category?: string, subCategories?: string[]): Promise<string | null> {
+    if (!category) return null;
+    const [categoryTaxonomy, mapping] = await Promise.all([
+      storage.getMarketingTaxonomy(),
+      storage.getMarketingCategoryMapping(marketingUserId),
+    ]);
+    const categoryRow = categoryTaxonomy.find((c) => c.name === category);
+    if (!categoryRow || !categoryRow.isActive || categoryRow.isFrozen) {
+      return "Cette catégorie n'est plus disponible.";
+    }
+    if (!mapping.categories.includes(category)) {
+      return "Sélectionnez d'abord cette catégorie dans Business → Catégories.";
+    }
+    if (subCategories && subCategories.length) {
+      const subCategoryTaxonomy = await storage.getMarketingSubCategoryTaxonomy(categoryRow.id);
+      for (const subCategory of subCategories) {
+        const subRow = subCategoryTaxonomy.find((s) => s.name === subCategory);
+        if (!subRow || !subRow.isActive || subRow.isFrozen) {
+          return `La sous-catégorie "${subCategory}" n'est plus disponible.`;
+        }
+        if (!mapping.subCategories.includes(subCategory)) {
+          return `Sélectionnez d'abord "${subCategory}" dans Business → Catégories.`;
+        }
+      }
+    }
+    return null;
+  }
 
   app.get("/api/marketing/services/mine", requireAuth, async (req: any, res) => {
     const user = await storage.getUser(req.session.userId);
@@ -1613,6 +1790,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const data = marketingServiceInputSchema.parse(req.body);
       if (!data.category) return res.status(400).json({ message: "La catégorie est requise" });
+      const taxonomyError = await validateMarketingTaxonomySelection(user.id, data.category, data.subCategories);
+      if (taxonomyError) return res.status(400).json({ message: taxonomyError });
       const service = await storage.createMarketingService(user.id, data as any);
       broadcast("marketing_service_updated", { userId: user.id, serviceId: service.id, kind: "created" });
       res.status(201).json(service);
@@ -1627,6 +1806,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!user || user.role !== "MARKETING") return res.status(403).json({ message: "Marketing access required" });
     try {
       const data = marketingServiceInputSchema.parse(req.body);
+      const taxonomyError = await validateMarketingTaxonomySelection(user.id, data.category, data.subCategories);
+      if (taxonomyError) return res.status(400).json({ message: taxonomyError });
       const service = await storage.updateMarketingService(Number(req.params.id), user.id, data as any);
       if (!service) return res.status(404).json({ message: "Service not found" });
       broadcast("marketing_service_updated", { userId: user.id, serviceId: service.id, kind: "updated" });
@@ -2661,6 +2842,53 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { res.status(500).json({ message: "Failed to delete zone" }); }
   });
 
+  // Sub-skills ("Sous-compétences") — one level below a Maintenance competency, mirroring
+  // POST/PATCH/DELETE /api/admin/print/subcategories exactly (same broadcast convention: reuses
+  // the existing 'maintenance_updated' event, already wired client-side to invalidate
+  // /api/maintenance/categories, /api/maintenance/taxonomy and /api/admin/maintenance — no new
+  // real-time event needed).
+  app.post("/api/admin/maintenance/sub-competencies", requireAdmin, async (req, res) => {
+    try {
+      const { competencyId, name, icon } = z.object({
+        competencyId: z.number().int().positive(),
+        name: z.string().trim().min(1).max(120),
+        icon: z.string().trim().max(8).nullable().optional(),
+      }).parse(req.body);
+      const created = await storage.createMaintenanceSubCompetency(competencyId, name, icon ?? null);
+      broadcast("maintenance_updated", { kind: "taxonomy" });
+      res.status(201).json(created);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Sub-skill already exists or is invalid" });
+    }
+  });
+
+  app.patch("/api/admin/maintenance/sub-competencies/:id", requireAdmin, async (req, res) => {
+    try {
+      const body = z.object({
+        name: z.string().trim().min(1).max(120).optional(),
+        icon: z.string().trim().max(8).nullable().optional(),
+        isActive: z.boolean().optional(),
+        isFrozen: z.boolean().optional(),
+      }).parse(req.body);
+      const updated = await storage.updateMaintenanceSubCompetency(Number(req.params.id), body);
+      if (!updated) return res.status(404).json({ message: "Sub-skill not found" });
+      broadcast("maintenance_updated", { kind: "taxonomy" });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid sub-skill" });
+    }
+  });
+
+  app.delete("/api/admin/maintenance/sub-competencies/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteMaintenanceSubCompetency(Number(req.params.id));
+      broadcast("maintenance_updated", { kind: "taxonomy" });
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Failed to delete sub-skill" }); }
+  });
+
   // ── Admin Maintenance account actions (Part 6-7) — EDIT reuses the existing
   // upsertMaintenanceProfile (the same method the Maintenance user's own
   // self-service PATCH /api/maintenance/profile calls); FREEZE toggles the new
@@ -2839,6 +3067,46 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       broadcast("marketing_updated", { kind: "taxonomy" });
       res.json({ ok: true });
     } catch { res.status(500).json({ message: "Failed to delete category" }); }
+  });
+
+  // ── Admin Marketing subcategories — mirrors Admin PRINT's
+  // POST/PATCH/DELETE /api/admin/print/subcategories exactly. ──
+  app.post("/api/admin/marketing/subcategories", requireAdmin, async (req, res) => {
+    try {
+      const { categoryId, name, icon } = z.object({ categoryId: z.number().int().positive(), name: z.string().trim().min(1).max(120), icon: z.string().trim().max(8).nullable().optional() }).parse(req.body);
+      const created = await storage.createMarketingSubCategory(categoryId, name, icon ?? null);
+      broadcast("marketing_updated", { kind: "taxonomy" });
+      res.status(201).json(created);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to create subcategory" });
+    }
+  });
+
+  app.patch("/api/admin/marketing/subcategories/:id", requireAdmin, async (req, res) => {
+    try {
+      const body = z.object({
+        name: z.string().trim().min(1).max(120).optional(),
+        icon: z.string().trim().max(8).nullable().optional(),
+        isActive: z.boolean().optional(),
+        isFrozen: z.boolean().optional(),
+      }).parse(req.body);
+      const updated = await storage.updateMarketingSubCategory(Number(req.params.id), body);
+      if (!updated) return res.status(404).json({ message: "Subcategory not found" });
+      broadcast("marketing_updated", { kind: "taxonomy" });
+      res.json(updated);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to update subcategory" });
+    }
+  });
+
+  app.delete("/api/admin/marketing/subcategories/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteMarketingSubCategory(Number(req.params.id));
+      broadcast("marketing_updated", { kind: "taxonomy" });
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Failed to delete subcategory" }); }
   });
 
   // Registered BEFORE the /:userId route below — see Print's identical comment above
@@ -4034,8 +4302,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post("/api/admin/barista/skills", requireAdmin, async (req, res) => {
     try {
-      const { name } = z.object({ name: z.string().trim().min(1).max(120) }).parse(req.body);
-      const item = await storage.createBaristaSkill(name);
+      const { name, icon } = z.object({ name: z.string().trim().min(1).max(120), icon: z.string().trim().max(8).nullable().optional() }).parse(req.body);
+      const item = await storage.createBaristaSkill(name, icon ?? null);
       broadcast("barista_taxonomy_updated", {});
       res.status(201).json(item);
     } catch (err) {
@@ -4048,6 +4316,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const body = z.object({
         name: z.string().trim().min(1).max(120).optional(),
+        icon: z.string().trim().max(8).nullable().optional(),
         isActive: z.boolean().optional(),
         isFrozen: z.boolean().optional(),
       }).parse(req.body);
@@ -5483,8 +5752,26 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         specialHandling: z.string().max(500).nullable().optional(),
       }).parse(req.body);
       const updated = await storage.updateSubOrderTransportRequirements(subOrderId, req.session.userId!, body);
-      broadcastToUsers([updated.supplierId], 'suborder_status_changed', { orderId: updated.orderId, subOrderId, status: updated.status });
-      broadcast('suborder_status_changed', { orderId: updated.orderId, subOrderId, status: updated.status });
+      // Dedicated event (distinct from 'suborder_status_changed', which this field group isn't
+      // part of) so every already-open consumer — Supplier/Coffee Owner/Admin order views
+      // (GET /api/orders) and Espace Livraison/Chauffeur/Admin delivery views
+      // (GET /api/deliveries) — refetches the one authoritative sub_orders row (see
+      // storage.updateSubOrderTransportRequirements) without a page refresh. Global broadcast,
+      // same convention as every other order/delivery event in this app: the payload here is
+      // only ids + the updated requirement fields (no pricing/personal data), and each
+      // consumer's subsequent GET is independently re-scoped server-side, so this never leaks
+      // another user's data — see use-realtime.ts's handling of this event.
+      broadcast('suborder_transport_requirements_updated', {
+        orderId: updated.orderId,
+        subOrderId,
+        requiredVehicleType: updated.requiredVehicleType,
+        totalWeightKg: updated.totalWeightKg,
+        totalVolumeL: updated.totalVolumeL,
+        numberOfPackages: updated.numberOfPackages,
+        numberOfItems: updated.numberOfItems,
+        isFragile: updated.isFragile,
+        specialHandling: updated.specialHandling,
+      });
       // Delivery System V2 Phase 2 — advisory suggestion only, never overrides the supplier's
       // own requiredVehicleType above. See storage.suggestRequiredVehicleType.
       const suggestedVehicleType = await storage.suggestRequiredVehicleType(updated);

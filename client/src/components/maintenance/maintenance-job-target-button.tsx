@@ -8,9 +8,24 @@ import {
 import {
   useMyMaintenanceJobs, useAddMaintenanceJobTarget, type MaintenanceJobPostWithStats,
 } from "@/hooks/use-maintenance-jobs";
+import { encodeMaintenanceSubSkillKey } from "@shared/maintenance-sub-skill-key";
 
 // Only MANUAL + PUBLISHED interventions can be targeted.
 const isEligible = (j: MaintenanceJobPostWithStats) => j.publicationMode === "MANUAL" && j.status === "PUBLISHED";
+
+// Client-side mirror of storage.isMaintenanceProviderSkillMatch (server/storage.ts) —
+// same single-parent-anchor + "every required sub-skill, not just one" semantics. This
+// is a UX pre-filter only (so an obviously-mismatched job is never even offered as an
+// option — "Fix Manual Provider Selection — Filter Before the User Selects"); the real
+// enforcement stays server-side in POST /api/maintenance/jobs/:id/targets, which still
+// re-validates on submit regardless of what this filtering shows.
+function jobMatchesProviderSkills(job: MaintenanceJobPostWithStats, providerSkills: string[], providerSubSkills: string[]): boolean {
+  if (!job.categories.length) return true;
+  const parent = job.categories[0];
+  if (!providerSkills.includes(parent)) return false;
+  if (!job.subCategories.length) return true;
+  return job.subCategories.every((subName) => providerSubSkills.includes(encodeMaintenanceSubSkillKey(parent, subName)));
+}
 
 // Manual intervention targeting — the ONE shared "Associer à une
 // intervention" action/dropdown, used identically from both
@@ -24,10 +39,18 @@ const isEligible = (j: MaintenanceJobPostWithStats) => j.publicationMode === "MA
 // makes re-picking the same intervention a no-op, so no duplicate-association
 // logic is needed client-side.
 export function MaintenanceJobTargetButton({
-  maintenanceUserId, maintenanceName, className, iconClassName,
+  maintenanceUserId, maintenanceName, maintenanceSkills, maintenanceSubSkills, className, iconClassName,
 }: {
   maintenanceUserId: number;
   maintenanceName: string;
+  // This specific provider's OWN saved skills/sub-skills (from the card/profile the
+  // caller already has fetched) — used to pre-filter which of the Coffee Owner's own
+  // MANUAL jobs are even offered, so an obviously-mismatched job never appears as a
+  // selectable option (the real "Association impossible" error only ever fires now if
+  // the provider's own skills changed between opening this menu and picking an item —
+  // see the server-side re-check in POST /api/maintenance/jobs/:id/targets).
+  maintenanceSkills: string[];
+  maintenanceSubSkills: string[];
   className: string;
   iconClassName?: string;
 }) {
@@ -38,13 +61,19 @@ export function MaintenanceJobTargetButton({
   const { data: myJobs = [], isLoading } = useMyMaintenanceJobs();
   const addTarget = useAddMaintenanceJobTarget();
 
-  const eligibleJobs = useMemo(() => myJobs.filter(isEligible), [myJobs]);
+  const manualPublished = useMemo(() => myJobs.filter(isEligible), [myJobs]);
+  const eligibleJobs = useMemo(
+    () => manualPublished.filter((j) => jobMatchesProviderSkills(j, maintenanceSkills, maintenanceSubSkills)),
+    [manualPublished, maintenanceSkills, maintenanceSubSkills],
+  );
   const disabled = isLoading || addTarget.isPending || eligibleJobs.length === 0;
   const title = isLoading
     ? "Chargement de vos interventions…"
-    : eligibleJobs.length === 0
+    : manualPublished.length === 0
       ? "Créez d'abord une intervention en publication manuelle"
-      : "Associer à une intervention";
+      : eligibleJobs.length === 0
+        ? "Aucune de vos interventions manuelles ne correspond aux compétences de ce professionnel"
+        : "Associer à une intervention";
 
   const pick = (jobId: number, jobTitle: string) => {
     if (addTarget.isPending) return;
@@ -96,7 +125,9 @@ export function MaintenanceJobTargetButton({
             className={`px-2 py-3 text-center text-xs ${isDark ? "text-gray-400" : "text-gray-500"}`}
             data-testid="text-maintenance-job-target-empty"
           >
-            Aucune intervention manuelle publiée
+            {manualPublished.length === 0
+              ? "Aucune intervention manuelle publiée"
+              : "Aucune de vos interventions manuelles ne correspond aux compétences de ce professionnel"}
           </p>
         )}
         {eligibleJobs.map((job) => (

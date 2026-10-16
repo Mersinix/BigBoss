@@ -8,7 +8,9 @@ export type BaristaLevel = "BEGINNER" | "ADVANCED" | "EXPERT";
 export type BaristaRequestStatus = "PENDING" | "DISCUSSION" | "ACCEPTED" | "REJECTED" | "CANCELLED" | "COMPLETED";
 export type BaristaMissionStatus = "UPCOMING" | "ACTIVE" | "COMPLETED" | "CANCELLED";
 
-export type BaristaSkill = { id: number; name: string; isActive: boolean; isFrozen: boolean };
+// Add Icons to Barista Compétences — icon is nullable (existing skills created
+// before this task have none yet, client falls back to a default).
+export type BaristaSkill = { id: number; name: string; icon: string | null; isActive: boolean; isFrozen: boolean };
 export type BaristaEducationLevel = { id: number; name: string; isActive: boolean; isFrozen: boolean };
 export type BaristaLanguage = { id: number; name: string; isActive: boolean; isFrozen: boolean };
 
@@ -506,7 +508,7 @@ export function useAdminBaristaSkills() {
 export function useCreateAdminBaristaSkill() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (name: string) => mutate("POST", "/api/admin/barista/skills", { name }),
+    mutationFn: ({ name, icon }: { name: string; icon?: string | null }) => mutate("POST", "/api/admin/barista/skills", { name, icon }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/barista/skills"] });
       qc.invalidateQueries({ queryKey: [api.barista.skills.path] });
@@ -517,7 +519,7 @@ export function useCreateAdminBaristaSkill() {
 export function useUpdateAdminBaristaSkill() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: number; name?: string; isActive?: boolean; isFrozen?: boolean }) =>
+    mutationFn: ({ id, ...data }: { id: number; name?: string; icon?: string | null; isActive?: boolean; isFrozen?: boolean }) =>
       mutate("PATCH", `/api/admin/barista/skills/${id}`, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/barista/skills"] });

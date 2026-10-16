@@ -26,6 +26,14 @@ const PROMOTION_EVENTS = ["promotion_updated"];
 const DISCOUNT_CODE_EVENTS = ["discount_code_updated"];
 const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_changed", "suborder_items_cancelled", "order_deleted"];
 const DELIVERY_EVENTS = ["delivery_created", "delivery_accepted", "delivery_assigned", "delivery_status_changed"];
+// A Supplier's saved transport requirements (vehicle/weight/volume/packages/special handling —
+// see components/supplier/supplier-order-details-modal.tsx) are embedded in BOTH OrderWithDetails
+// (GET /api/orders — Supplier/Coffee Owner/Admin order views) and DeliveryWithDetails
+// (GET /api/deliveries — Espace Livraison/Chauffeur/Admin delivery views), derived live from the
+// same sub_orders row server-side (see storage.updateSubOrderTransportRequirements /
+// toDeliveryWithDetails) — so this one event invalidates both query families, never a third
+// duplicate cache of the same data.
+const TRANSPORT_REQUIREMENTS_EVENTS = ["suborder_transport_requirements_updated"];
 const DELIVERY_ECOSYSTEM_EVENTS = ["vehicle_updated", "delivery_pricing_updated", "driver_review_created", "delivery_opportunity_updated"];
 const MESSAGING_EVENTS = ["new_message", "conversation_updated", "conversation_deleted", "messages_settings_updated"];
 const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated", "admin_maintenance_report_created", "maintenance_jobs_updated"];
@@ -161,6 +169,15 @@ export function useRealtime(userId?: number) {
         // offline is still persisted server-side (see server/notify.ts), but the badge/list
         // only reflects it once we refetch; do that on every (re)connect, not just live events.
         if (userId) invalidateNotificationQueries(qc);
+        // Same reasoning again for orders/deliveries — a transport-requirements save (or any
+        // other order/delivery event) that happened while this tab was disconnected would
+        // otherwise leave an already-open order/delivery view stale indefinitely with no
+        // further action from the user (task requirement: reconcile with authoritative data
+        // on reconnect, don't require a manual refresh). Cheap no-op when neither is mounted.
+        if (userId) {
+          qc.invalidateQueries({ queryKey: ["/api/orders"] });
+          qc.invalidateQueries({ queryKey: ["/api/deliveries"] });
+        }
       };
 
       ws.onmessage = (e) => {
@@ -336,6 +353,10 @@ export function useRealtime(userId?: number) {
             // Delivery status changes propagate into sub-order/order aggregates.
             qc.invalidateQueries({ queryKey: ["/api/orders"] });
           }
+          if (TRANSPORT_REQUIREMENTS_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/orders"] });
+            qc.invalidateQueries({ queryKey: ["/api/deliveries"] });
+          }
           if (DELIVERY_ECOSYSTEM_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/deliveries"] });
             qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).includes("/vehicles") });
@@ -423,6 +444,12 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/marketing/service") });
             qc.invalidateQueries({ queryKey: ["/api/marketing/categories"] });
             qc.invalidateQueries({ queryKey: ["/api/marketing/taxonomy"] });
+            // Categories & Subcategories: Complete End-to-End Integration — the new
+            // subcategory taxonomy and the agency's own category/subcategory
+            // selection, same invalidate-on-any-marketing_updated convention as
+            // every other Marketing query key above.
+            qc.invalidateQueries({ queryKey: ["/api/marketing/subcategories"] });
+            qc.invalidateQueries({ queryKey: ["/api/marketing/me/categories"] });
             qc.invalidateQueries({ queryKey: ["/api/marketing/projects"] });
             qc.invalidateQueries({ queryKey: ["/api/marketing/profile"] });
             qc.invalidateQueries({ queryKey: ["/api/marketing/revenue"] });

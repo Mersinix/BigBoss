@@ -64,7 +64,12 @@ export default function OrderRequestsPage() {
   const { toast } = useToast();
   const fmt = useFormatCurrency();
 
-  const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
+  // Tracks only the id, never a frozen object — the modal below re-resolves against the live
+  // `orders` array every render (same pattern as pages/cafe/orders-page.tsx), so a background
+  // refetch (e.g. the real-time transport-requirements sync) reaches an already-open modal
+  // instead of being stuck on whatever snapshot existed when it was opened.
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+  const selectedOrder = selectedOrderId != null ? (orders.find((o) => o.id === selectedOrderId) ?? null) : null;
   const [modalReadOnly, setModalReadOnly] = useState(false);
   const isMobile = useIsMobile();
   const [kpiModalOpen, setKpiModalOpen] = useState(false);
@@ -158,7 +163,7 @@ export default function OrderRequestsPage() {
   };
 
   const openModal = (order: OrderWithDetails, readOnly: boolean) => {
-    setSelectedOrder(order);
+    setSelectedOrderId(order.id);
     setModalReadOnly(readOnly);
   };
 
@@ -606,7 +611,7 @@ export default function OrderRequestsPage() {
 
       <SupplierOrderDetailsModal
         open={!!selectedOrder}
-        onClose={() => setSelectedOrder(null)}
+        onClose={() => setSelectedOrderId(null)}
         order={selectedOrder}
         supplierId={user?.id ?? 0}
         readOnly={modalReadOnly}

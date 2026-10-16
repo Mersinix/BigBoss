@@ -11,7 +11,6 @@ import { Input } from "@/components/ui/input";
 import { Calendar, Clock, Archive, Search, X, Store, Box, Layers, MapPin, Package, Zap, Filter } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import SupplierOrderDetailsModal from "@/components/supplier/supplier-order-details-modal";
-import type { OrderWithDetails } from "@shared/schema";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -90,7 +89,12 @@ export default function SupplierOrdersPage() {
   const [productSearch, setProductSearch] = useState("");
   const [dateFilter, setDateFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("ALL");
-  const [selectedOrder, setSelectedOrder] = useState<OrderWithDetails | null>(null);
+  // Tracks only the id, never a frozen object — the modal below re-resolves against the live
+  // `orders` array every render (same pattern as pages/cafe/orders-page.tsx), so a background
+  // refetch (e.g. the real-time transport-requirements sync) reaches an already-open modal
+  // instead of being stuck on whatever snapshot existed when it was opened.
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+  const selectedOrder = selectedOrderId != null ? (orders.find((o) => o.id === selectedOrderId) ?? null) : null;
 
   // Extract suborders for this supplier
   const mySubOrders = useMemo(() => orders.flatMap(order =>
@@ -322,7 +326,7 @@ export default function SupplierOrdersPage() {
                           </Button>
                         ))}
                         <Button size="sm" variant="ghost" className="h-7 text-xs text-primary"
-                          onClick={() => setSelectedOrder(so._order)}
+                          onClick={() => setSelectedOrderId(so._order.id)}
                         >
                           Détails
                         </Button>
@@ -338,7 +342,7 @@ export default function SupplierOrdersPage() {
 
       <SupplierOrderDetailsModal
         open={!!selectedOrder}
-        onClose={() => setSelectedOrder(null)}
+        onClose={() => setSelectedOrderId(null)}
         order={selectedOrder}
         supplierId={user?.id ?? 0}
       />

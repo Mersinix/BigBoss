@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/dashboard/dashboard-kit";
-import { Layers, Save } from "lucide-react";
+import { Layers, Check, MousePointerClick, Save } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { PrintCategoryTaxonomy, PrintSubCategoryTaxonomy } from "@shared/schema";
 import { printCategoryIcon, printSubCategoryIcon } from "@/lib/print-category-icons";
 
@@ -18,6 +20,14 @@ import { printCategoryIcon, printSubCategoryIcon } from "@/lib/print-category-ic
 // arbitrary value. Selecting here is what makes a category usable on the
 // "Ajouter un service" form (services.tsx) and, once an active service actually
 // uses it, what makes it appear on the Coffee Owner's /print marketplace.
+//
+// Visual presentation only (card list / stats / pagination) now mirrors
+// Supplier → Categories → My Categories (pages/supplier/categories-page.tsx) per
+// the "Redesign Espace Imprimerie Categories Page" task — the underlying
+// selection model stays exactly what it was: a direct multi-select (no per-
+// category approval/freeze/remove workflow, no "add category" modal — those are
+// Supplier-specific concepts this account never had), persisted by one
+// PATCH /api/print/me/categories call via the existing "Enregistrer" button.
 export default function PrinterCategoriesPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -80,6 +90,12 @@ export default function PrinterCategoriesPage() {
 
   const isLoading = taxonomyLoading || mappingLoading;
 
+  // Same 3-stat row as Supplier's My Categories (Selected / Sub-categories active /
+  // Available), same Card/icon-chip styling — presentation only, no new data source.
+  const pagination = usePagination(categories.length);
+  useEffect(() => { pagination.resetPage(); }, [categories.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageCategories = categories.slice(pagination.start, pagination.end);
+
   return (
     <div className="flex flex-col gap-5">
       <DashboardHero
@@ -96,55 +112,110 @@ export default function PrinterCategoriesPage() {
         }
       />
 
-      <Card className="bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2">
-            <Layers className="w-4 h-4 text-blue-600" />Catégories disponibles (gérées par l'administrateur)
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <p className="text-sm text-muted-foreground">Chargement…</p>
-          ) : categories.length === 0 ? (
-            <EmptyState message="Aucune catégorie PRINT n'a encore été créée par l'administrateur." icon={Layers} />
-          ) : (
-            <div className="space-y-1">
-              {categories.map((category) => {
-                const checked = selectedCategories.includes(category.name);
-                const subs = subcategories.filter((s) => s.categoryId === category.id);
-                return (
-                  <div key={category.id} className="rounded-xl border border-border/50 p-3" data-testid={`row-printer-category-${category.id}`}>
-                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                      <Checkbox checked={checked} onCheckedChange={() => toggleCategory(category.name)} data-testid={`checkbox-category-${category.id}`} />
-                      <span className="text-sm font-medium">{printCategoryIcon(category.name, category.icon)} {category.name}</span>
-                    </label>
-                    {checked && subs.length > 0 && (
-                      <div className="mt-2.5 ml-6 flex flex-wrap gap-2">
+      <div className="grid grid-cols-3 gap-3">
+        <Card className="border shadow-none">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="rounded-lg p-2 bg-blue-50 dark:bg-blue-950/30"><Layers className="w-4 h-4 text-blue-600" /></div>
+            <div><p className="text-xl font-bold leading-none">{selectedCategories.length}</p><p className="text-xs text-muted-foreground mt-0.5">Catégories sélectionnées</p></div>
+          </CardContent>
+        </Card>
+        <Card className="border shadow-none">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="rounded-lg p-2 bg-purple-50 dark:bg-purple-950/30"><Check className="w-4 h-4 text-purple-600" /></div>
+            <div><p className="text-xl font-bold leading-none">{selectedSubCategories.length}</p><p className="text-xs text-muted-foreground mt-0.5">Sous-catégories actives</p></div>
+          </CardContent>
+        </Card>
+        <Card className="border shadow-none">
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="rounded-lg p-2 bg-amber-50 dark:bg-amber-950/30"><Layers className="w-4 h-4 text-amber-600" /></div>
+            <div><p className="text-xl font-bold leading-none">{categories.length}</p><p className="text-xs text-muted-foreground mt-0.5">Disponibles</p></div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {categories.length > 0 && (
+        <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 px-4 py-2.5 text-sm text-blue-700 dark:text-blue-300 flex items-center gap-2">
+          <MousePointerClick className="w-4 h-4 flex-shrink-0" />
+          Cochez une catégorie pour afficher ses sous-catégories, puis cliquez sur "Enregistrer" pour confirmer votre sélection.
+        </div>
+      )}
+
+      {isLoading ? (
+        <div className="space-y-4">{[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}</div>
+      ) : categories.length === 0 ? (
+        <EmptyState message="Aucune catégorie PRINT n'a encore été créée par l'administrateur." icon={Layers} />
+      ) : (
+        <div className="space-y-4">
+          {pageCategories.map((category) => {
+            const checked = selectedCategories.includes(category.name);
+            const subs = subcategories.filter((s) => s.categoryId === category.id);
+            const selectedSubCount = subs.filter((s) => selectedSubCategories.includes(s.name)).length;
+            return (
+              <Card
+                key={category.id}
+                className={`overflow-hidden transition-all ${checked ? "ring-1 ring-primary shadow-sm border-primary/40" : "hover:border-primary/30"}`}
+                data-testid={`card-printer-category-${category.id}`}
+              >
+                <div className="p-4 pb-0">
+                  <label className="flex items-center gap-3 cursor-pointer select-none" data-testid={`row-printer-category-${category.id}`}>
+                    <Checkbox checked={checked} onCheckedChange={() => toggleCategory(category.name)} data-testid={`checkbox-category-${category.id}`} />
+                    <span className="text-2xl">{printCategoryIcon(category.name, category.icon)}</span>
+                    <div>
+                      <p className="font-semibold text-base">{category.name}</p>
+                      {subs.length > 0 && <p className="text-xs text-muted-foreground mt-0.5">{selectedSubCount} of {subs.length} sub-categories selected</p>}
+                    </div>
+                  </label>
+                </div>
+                {checked && (
+                  <CardContent className="pt-4">
+                    {subs.length === 0 ? (
+                      <p className="text-sm text-muted-foreground italic">No sub-categories defined yet.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                         {subs.map((sub) => {
                           const subChecked = selectedSubCategories.includes(sub.name);
                           return (
-                            <button
+                            <div
                               key={sub.id}
-                              type="button"
-                              onClick={() => toggleSubCategory(sub.name)}
-                              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-                                subChecked ? "bg-blue-600 text-white border-blue-600" : "bg-background border-border/50 hover:border-blue-400"
-                              }`}
-                              data-testid={`chip-subcategory-${sub.id}`}
+                              className={`flex items-center gap-2.5 rounded-lg border px-3 py-2.5 transition-colors ${subChecked ? "border-primary/40 bg-primary/5" : "border-border"}`}
+                              data-testid={`subcat-item-${sub.id}`}
                             >
-                              {printSubCategoryIcon(sub.name, sub.icon)} {sub.name}
-                            </button>
+                              <Checkbox
+                                checked={subChecked}
+                                onCheckedChange={() => toggleSubCategory(sub.name)}
+                                data-testid={`checkbox-subcat-${sub.id}`}
+                              />
+                              <button
+                                type="button"
+                                className="flex-1 min-w-0 text-left cursor-pointer"
+                                onClick={() => toggleSubCategory(sub.name)}
+                                data-testid={`button-select-subcat-${sub.id}`}
+                              >
+                                <p className="text-sm font-medium truncate">{printSubCategoryIcon(sub.name, sub.icon)} {sub.name}</p>
+                              </button>
+                            </div>
                           );
                         })}
                       </div>
                     )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                  </CardContent>
+                )}
+              </Card>
+            );
+          })}
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            totalItems={categories.length}
+            totalPages={pagination.totalPages}
+            start={pagination.start}
+            end={pagination.end}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel="catégories"
+          />
+        </div>
+      )}
 
       <Card className="rounded-2xl bg-blue-500/5 border-blue-500/20">
         <CardContent className="p-4">

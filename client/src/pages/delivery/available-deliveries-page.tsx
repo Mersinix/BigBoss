@@ -18,7 +18,12 @@ export default function AvailableDeliveriesPage() {
   const acceptDelivery = useAcceptDelivery();
   const fmt = useFormatCurrency();
   const { toast } = useToast();
-  const [viewTarget, setViewTarget] = useState<DeliveryWithDetails | null>(null);
+  // Tracks only the id, never a frozen object — re-resolved against the live `deliveries`
+  // array every render (same pattern as driver-deliveries-page.tsx) so a background refetch
+  // (e.g. the real-time transport-requirements sync) reaches an already-open modal instead of
+  // being stuck on whatever snapshot existed when it was opened.
+  const [viewTargetId, setViewTargetId] = useState<number | null>(null);
+  const viewTarget = viewTargetId != null ? (deliveries.find((d) => d.id === viewTargetId) ?? null) : null;
 
   // GET /api/deliveries already scopes DELIVERY_COMPANY to "own + AVAILABLE pool" —
   // filter to the pool here (own deliveries live on the "My Deliveries" page).
@@ -32,7 +37,7 @@ export default function AvailableDeliveriesPage() {
 
   const handleAccept = (id: number) => {
     acceptDelivery.mutate(id, {
-      onSuccess: () => { toast({ title: "Livraison acceptée" }); setViewTarget(null); },
+      onSuccess: () => { toast({ title: "Livraison acceptée" }); setViewTargetId(null); },
       onError: (err: any) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
     });
   };
@@ -64,7 +69,7 @@ export default function AvailableDeliveriesPage() {
             {pageAvailable.map((d) => (
               <Card
                 key={d.id}
-                onClick={() => setViewTarget(d)}
+                onClick={() => setViewTargetId(d.id)}
                 className="bg-white dark:bg-gray-800 rounded-2xl border-amber-200/60 dark:border-amber-800/40 cursor-pointer hover:shadow-md transition-shadow"
               >
                 <CardContent className="p-5 flex flex-col gap-3">
@@ -114,11 +119,11 @@ export default function AvailableDeliveriesPage() {
         </>
       )}
 
-      <Dialog open={!!viewTarget} onOpenChange={(v) => { if (!v) setViewTarget(null); }}>
+      <Dialog open={!!viewTarget} onOpenChange={(v) => { if (!v) setViewTargetId(null); }}>
         {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
             scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
         <DialogContent hideClose className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
-          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setViewTarget(null)} aria-label="Close" data-testid="button-close-delivery-detail">
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setViewTargetId(null)} aria-label="Close" data-testid="button-close-delivery-detail">
             <X className="w-4 h-4" />
           </button>
           <DialogHeader><DialogTitle>Détails de la livraison</DialogTitle></DialogHeader>

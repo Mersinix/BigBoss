@@ -97,8 +97,19 @@ function useTheme(isDark: boolean) {
     selectContent: isDark
       ? "bg-gray-800 border-gray-700 text-gray-100 [&_[data-highlighted]]:bg-gray-700 [&_[data-highlighted]]:text-white"
       : "bg-white border-gray-200 text-gray-900",
+    // Add Icons to Barista Compétences — same switcher chip tokens/shape as
+    // Maintenance's own parent-competency switcher (pages/cafe/maintenance/
+    // maintenance-page.tsx), recolored to this page's green brand accent.
+    switcherBg: isDark ? "bg-gray-800" : "bg-gray-100",
+    switcherActive: isDark ? "bg-gray-700 text-white shadow-sm" : "bg-white text-green-700 shadow-sm",
+    switcherInactive: isDark ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700",
   };
 }
+
+// Add Icons to Barista Compétences — generic fallback for "Tous" and for any
+// competency with no Admin-set icon yet, same convention as Maintenance's own
+// DEFAULT_CATEGORY_ICON (pages/cafe/maintenance/maintenance-page.tsx).
+const DEFAULT_SKILL_ICON = "☕";
 
 const BARISTA_LEVEL_COLORS: Record<string, string> = {
   BEGINNER: "bg-green-100 text-green-700",
@@ -468,10 +479,19 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
     baristaLanguages,
   ]);
 
-  const allSkills = useMemo(
-    () => (skillOptions.length > 0 ? skillOptions.map((s) => s.name) : Array.from(new Set(profiles.flatMap((b) => b.skills)))).sort(),
-    [skillOptions, profiles]
-  );
+  // Add Icons to Barista Compétences — {name, icon} pairs for the filter chip
+  // switcher below, rendered dynamically from the Admin-managed taxonomy
+  // (skillOptions) rather than a hardcoded icon map. Same bootstrap fallback as
+  // the previous allSkills (derive bare names from real profiles when the
+  // Admin taxonomy is completely empty) — those synthesized entries simply
+  // have no icon yet, so they fall back to DEFAULT_SKILL_ICON below.
+  const skillChipOptions = useMemo(() => {
+    const names = skillOptions.length > 0
+      ? skillOptions.map((s) => s.name)
+      : Array.from(new Set(profiles.flatMap((b) => b.skills)));
+    const iconByName = new Map(skillOptions.map((s) => [s.name, s.icon] as const));
+    return names.sort().map((name) => ({ name, icon: iconByName.get(name) ?? null }));
+  }, [skillOptions, profiles]);
   const allLocations = useMemo(
     () => Array.from(new Set(profiles.map((b) => b.location).filter(Boolean))).sort(),
     [profiles]
@@ -606,8 +626,43 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
         <section>
           {/* Hiring Filters — sticky below the persistent navbar (header is
               h-14 z-50, see components/cafe/marketplace-layout.tsx) so filters
-              stay reachable while scrolling the baristas grid. */}
-           <div className={`sticky top-14 z-30 border rounded-2xl p-3 mb-5 shadow-sm ${t.cardBg}`}>
+              stay reachable while scrolling the baristas grid. Remove Background
+              from Barista Marketplace Filters: no fill color or drop shadow behind
+              the panel anymore (was t.cardBg + shadow-sm) — same background-free
+              look as /maintenance, /print and /marketing's own filter strips.
+              Border/rounded shape/spacing kept exactly as before (t.border is the
+              same border color cardBg used, just without its bg-* part). */}
+           <div className={`sticky top-14 z-30 border rounded-2xl p-3 mb-5 ${t.border}`}>
+            {/* Compétence — Add Icons to Barista Compétences: a "Tous" + per-competency
+                chip switcher, same visual pattern as Maintenance's own parent-competency
+                switcher (pages/cafe/maintenance/maintenance-page.tsx — icon placement,
+                spacing, switcherActive/switcherInactive selected-state classes), adapted
+                to this page's existing rounded-card filter container instead of
+                Maintenance's full-width sticky strips. Icons come from the Admin-managed
+                taxonomy (skillChipOptions above), never a hardcoded mapping. */}
+            <div className={`flex gap-1.5 overflow-x-auto pb-2.5 mb-2.5 border-b ${t.border} [&::-webkit-scrollbar]:hidden`} style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+              <div className={`flex gap-1 rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
+                <button
+                  onClick={() => setBaristaSkill("")}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl shrink-0 transition-all text-[11px] font-semibold ${!baristaSkill ? t.switcherActive : t.switcherInactive}`}
+                  data-testid="button-barista-skill-all"
+                >
+                  <span className="text-base leading-none">{DEFAULT_SKILL_ICON}</span><span>Tous</span>
+                </button>
+              </div>
+              {skillChipOptions.map((skill) => (
+                <div key={skill.name} className={`flex rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
+                  <button
+                    onClick={() => setBaristaSkill(baristaSkill === skill.name ? "" : skill.name)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-[11px] font-semibold ${baristaSkill === skill.name ? t.switcherActive : t.switcherInactive}`}
+                    data-testid={`button-barista-skill-${skill.name}`}
+                  >
+                    <span className="text-base leading-none">{skill.icon || DEFAULT_SKILL_ICON}</span>
+                    <span className="max-w-[88px] truncate">{skill.name}</span>
+                  </button>
+                </div>
+              ))}
+            </div>
             <div
               className="flex items-center gap-2 flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden"
               style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
@@ -663,20 +718,6 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                   <SelectItem value="__all__">Toutes disponibilités</SelectItem>
                   <SelectItem value="available">Disponible</SelectItem>
                   <SelectItem value="unavailable">Indisponible</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                value={baristaSkill || "__all__"}
-                onValueChange={(v) => setBaristaSkill(v === "__all__" ? "" : v)}
-              >
-                 <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.inputBg}`} data-testid="select-barista-skill">
-                  <SelectValue placeholder="Compétence" />
-                </SelectTrigger>
-                <SelectContent className={t.selectContent}>
-                  <SelectItem value="__all__">Toutes compétences</SelectItem>
-                  {allSkills.map((s) => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
                 </SelectContent>
               </Select>
               <Select

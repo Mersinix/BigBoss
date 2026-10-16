@@ -531,7 +531,12 @@ export const useFavorites = create<FavoritesStore>((set, get) => ({
           name: profile.name,
           initials: profile.initials,
           specialty: profile.specialty,
-          categories: profile.categories,
+          // profile.skills is the one authoritative Maintenance competency field —
+          // profile.categories is a deprecated, no-longer-written duplicate (see
+          // maintenanceProfiles.categories's own schema comment). Both this item's
+          // own `categories` and `skills` fields are populated from the same source
+          // on purpose — not a second taxonomy, just this store's existing shape.
+          categories: profile.skills,
            skills: profile.skills,
           location: profile.location,
           rating: profile.rating / 10,

@@ -210,6 +210,16 @@ export function MarketingServiceDetailModal({
                     <Badge className={`text-[10px] border-0 px-1.5 ${isDark ? "bg-purple-900/50 text-purple-300" : "bg-purple-100 text-purple-700"}`}>{PROVIDER_TYPE_LABELS[service.agencyProfileType] ?? service.agencyProfileType}</Badge>
                   </div>
                 </div>
+                {/* Sous-catégories — only the ones actually saved for THIS service
+                    (Categories & Subcategories: Complete End-to-End Integration),
+                    never the parent category's full available list. */}
+                {service.subCategories?.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {service.subCategories.map((sub) => (
+                      <Badge key={sub} variant="outline" className={`text-[10px] ${isDark ? "border-gray-700 text-gray-300" : ""}`}>{sub}</Badge>
+                    ))}
+                  </div>
+                )}
                 {service.description && <p className={`text-sm leading-relaxed mt-1.5 ${t.textMuted}`}>{service.description}</p>}
                 <div className={`flex items-center gap-3 mt-2.5 text-xs flex-wrap ${t.textMuted}`}>
                   <span className="flex items-center gap-1 text-amber-500"><Star className="w-3 h-3 fill-amber-400" /> {(service.rating / 10).toFixed(1)} ({service.reviewCount} avis)</span>

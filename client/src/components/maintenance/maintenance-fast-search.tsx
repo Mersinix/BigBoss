@@ -34,11 +34,14 @@ export function MaintenanceFastSearch({ open, onClose, providers, onOpenDetail, 
   const [activeCategory, setActiveCategory] = useState("");
   const [activeLocation, setActiveLocation] = useState("");
 
-  const allCategories = useMemo(() => Array.from(new Set(providers.flatMap((p) => p.categories))).sort(), [providers]);
+  // p.skills is the one authoritative Maintenance competency field — p.categories
+  // (deprecated duplicate, see maintenanceProfiles.categories's own schema comment) is no
+  // longer read here.
+  const allCategories = useMemo(() => Array.from(new Set(providers.flatMap((p) => p.skills))).sort(), [providers]);
   const allLocations = useMemo(() => Array.from(new Set(providers.map((p) => p.location).filter(Boolean))).sort(), [providers]);
 
   const filtered = useMemo(() => providers.filter((p) => {
-    if (activeCategory && !p.categories.some((c) => c.toLowerCase() === activeCategory.toLowerCase())) return false;
+    if (activeCategory && !p.skills.some((c) => c.toLowerCase() === activeCategory.toLowerCase())) return false;
     if (activeLocation && p.location.toLowerCase() !== activeLocation.toLowerCase()) return false;
     return true;
   }), [providers, activeCategory, activeLocation]);
@@ -64,9 +67,11 @@ export function MaintenanceFastSearch({ open, onClose, providers, onOpenDetail, 
     // /api/maintenance-favorites requires role CAFE_OWNER), but this is a
     // client-side no-op too rather than relying on that alone.
     if (!current || previewMode) return;
+    // categories: current.skills — populated from the one authoritative source, never the
+    // deprecated current.categories duplicate.
     toggleMaintenance({
       id: current.userId, name: current.name, initials: current.initials, specialty: current.specialty,
-      categories: current.categories, skills: current.skills, location: current.location,
+      categories: current.skills, skills: current.skills, location: current.location,
       rating: current.rating / 10, available: current.available, profileImageUrl: current.profileImageUrl,
     });
     setHeartAnim(true);
@@ -198,6 +203,8 @@ export function MaintenanceFastSearch({ open, onClose, providers, onOpenDetail, 
               <MaintenanceJobTargetButton
                 maintenanceUserId={current.userId}
                 maintenanceName={current.name}
+                maintenanceSkills={current.skills}
+                maintenanceSubSkills={current.subSkills}
                 className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg transition-all active:scale-90 disabled:opacity-40"
               />
             )}
@@ -223,7 +230,7 @@ export function MaintenanceFastSearch({ open, onClose, providers, onOpenDetail, 
               </div>
               <div className="px-5 pb-5 space-y-4">
                 <div>
-                  <p className="text-gray-400 text-xs mb-2">Catégorie</p>
+                  <p className="text-gray-400 text-xs mb-2">Compétence</p>
                   <div className="flex flex-wrap gap-2 max-h-24 overflow-y-auto">
                     <button onClick={() => setPendingCategory("")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all ${!pendingCategory ? "bg-orange-500 text-white" : "bg-white/10 text-gray-300 hover:bg-white/15"}`}>
                       {!pendingCategory && <Check className="w-3 h-3" />} Toutes

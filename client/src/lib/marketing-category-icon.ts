@@ -18,3 +18,15 @@ export function resolveMarketingCategoryIcon(
   const match = taxonomy.find((c) => c.name === categoryName);
   return match?.icon || MARKETING_CATEGORY_ICON_FALLBACK[categoryName] || "📢";
 }
+
+// Subcategory counterpart — same convention, no hardcoded subcategory names
+// (unlike the parent map above, subcategories are entirely Admin-defined free
+// text, e.g. "Montage vidéo"), so this only ever falls back to the taxonomy's
+// own icon or the generic one.
+export function resolveMarketingSubCategoryIcon(
+  subCategoryName: string,
+  taxonomy: { name: string; icon?: string | null }[],
+): string {
+  const match = taxonomy.find((s) => s.name === subCategoryName);
+  return match?.icon || "📢";
+}

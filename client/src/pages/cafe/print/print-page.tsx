@@ -415,7 +415,7 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark,
           <Select value={filters.subCategoryId || "__all__"} onValueChange={(v) => onChange("subCategoryId", v === "__all__" ? "" : v)}>
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
             <SelectContent className={t.selectContent}>
-              <SelectItem value="__all__">Toutes sous-catégories</SelectItem>
+              <SelectItem value="__all__">Sous-catégories</SelectItem>
               {subCategories.map((sc) => {
                 const icon = subcategoryIconByName.get(sc);
                 return <SelectItem key={sc} value={sc}>{icon ? `${icon} ${sc}` : sc}</SelectItem>;

@@ -16,6 +16,11 @@ export type MarketingProfile = {
   userId: number;
   profileType: string;
   categories: string[];
+  // The agency's own category/subcategory selection (Categories & Subcategories:
+  // Complete End-to-End Integration) — managed from Business → Catégories,
+  // distinct from `categories` above (a derived, read-only summary).
+  selectedCategories: string[];
+  selectedSubCategories: string[];
   responseTime: string;
   startingPriceInCents: number;
   description: string;
@@ -53,6 +58,9 @@ export type MarketingService = {
   marketingUserId: number;
   title: string;
   category: string;
+  // Categories & Subcategories: Complete End-to-End Integration — multi-select,
+  // always children of `category` above.
+  subCategories: string[];
   startingPriceInCents: number;
   responseTime: string;
   description: string;
@@ -101,6 +109,8 @@ export type MarketingProjectWithParties = MarketingProject & {
 };
 
 export type MarketingCategory = { id: number; name: string; icon: string | null; isActive: boolean; isFrozen: boolean };
+export type MarketingSubCategory = { id: number; categoryId: number; name: string; icon: string | null; isActive: boolean; isFrozen: boolean };
+export type MarketingCategoryMapping = { categories: string[]; subCategories: string[] };
 
 export type MarketingReview = {
   id: number;
@@ -176,6 +186,36 @@ export function useMarketingTaxonomy() {
   });
 }
 
+// Categories & Subcategories: Complete End-to-End Integration ──
+
+export function useMarketingSubCategoryTaxonomy(categoryId?: number) {
+  const qs = categoryId != null ? `?categoryId=${categoryId}` : "";
+  return useQuery<MarketingSubCategory[]>({
+    queryKey: ["/api/marketing/subcategories", categoryId ?? null],
+    queryFn: () => getJson(`/api/marketing/subcategories${qs}`),
+  });
+}
+
+// The agency's own category/subcategory selection — mirrors PRINT's
+// GET/PATCH /api/print/me/categories hooks exactly.
+export function useMyMarketingCategoryMapping() {
+  return useQuery<MarketingCategoryMapping>({
+    queryKey: ["/api/marketing/me/categories"],
+    queryFn: () => getJson("/api/marketing/me/categories"),
+  });
+}
+
+export function useUpdateMarketingCategoryMapping() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: MarketingCategoryMapping) => mutate("PATCH", "/api/marketing/me/categories", data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/marketing/me/categories"] });
+      qc.invalidateQueries({ queryKey: ["/api/marketing/profile"] });
+    },
+  });
+}
+
 export function useMarketingProfileDetail(userId: number | null) {
   return useQuery<{ card?: MarketingMarketplaceCard & { services: MarketingService[] }; user?: any; profile?: any }>({
     queryKey: ["/api/marketing/profile", userId],
@@ -214,10 +254,12 @@ export function useMyMarketingServices() {
   });
 }
 
+type MarketingServiceEditableFields = Pick<MarketingService, "category" | "subCategories" | "startingPriceInCents" | "responseTime" | "description" | "imageUrl" | "isPublished">;
+
 export function useCreateMarketingService() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Partial<Pick<MarketingService, "category" | "startingPriceInCents" | "responseTime" | "description" | "imageUrl" | "isPublished">>) =>
+    mutationFn: (data: Partial<MarketingServiceEditableFields>) =>
       mutate("POST", "/api/marketing/services", data),
     onSuccess: () => qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/marketing/service") }),
   });
@@ -226,7 +268,7 @@ export function useCreateMarketingService() {
 export function useUpdateMarketingService() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: number } & Partial<Pick<MarketingService, "category" | "startingPriceInCents" | "responseTime" | "description" | "imageUrl" | "isPublished">>) =>
+    mutationFn: ({ id, ...data }: { id: number } & Partial<MarketingServiceEditableFields>) =>
       mutate("PATCH", `/api/marketing/services/${id}`, data),
     onSuccess: () => qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/marketing/service") }),
   });

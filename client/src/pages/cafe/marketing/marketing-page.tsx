@@ -41,6 +41,7 @@ import {
   useMarketingProfiles,
   useMarketingServices,
   useMarketingTaxonomy,
+  useMarketingSubCategoryTaxonomy,
   useCreateMarketingProject,
   useMarketingCompanies,
   type MarketingMarketplaceCard,
@@ -52,8 +53,9 @@ import { MarketingServiceDetailModal } from "@/components/marketing/marketing-se
 import { MarketingMappedServiceCard } from "@/components/marketing/marketing-mapped-service-card";
 import { MarketingFastSearch } from "@/components/marketing/marketing-fast-search";
 import { MarketingBlacklistModal } from "@/components/marketing/marketing-blacklist-modal";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
 import { formatDistance } from "@/lib/distance";
-import { resolveMarketingCategoryIcon } from "@/lib/marketing-category-icon";
+import { resolveMarketingCategoryIcon, resolveMarketingSubCategoryIcon } from "@/lib/marketing-category-icon";
 
 // ── Access helper (mirrors browse-products + barista-page pattern) ────────────
 
@@ -397,6 +399,12 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   const [filterRating, setFilterRating] = useState("");
   const [filterLocation, setFilterLocation] = useState("");
   const [filterType, setFilterType] = useState("");
+  // Keep Sous-compétences/Sous-catégories Filters Always Visible — selected subcategory
+  // NAMES (unlike Maintenance's parent-qualified keys, a Marketing service's own
+  // subCategories list is already scoped to that service's single parent category, so
+  // matching by plain name is unambiguous — see shared/schema.ts marketingServices
+  // comment on subCategories).
+  const [filterSubCategories, setFilterSubCategories] = useState<string[]>([]);
   const [detailServiceId, setDetailServiceId] = useState<number | null>(null);
   const [detailAgencyId, setDetailAgencyId] = useState<number | null>(null);
   const [quoteProvider, setQuoteProvider] = useState<MarketingMarketplaceCard | null>(null);
@@ -404,6 +412,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   const [blacklistOpen, setBlacklistOpen] = useState(false);
 
   const { data: taxonomy = [] } = useMarketingTaxonomy();
+  const { data: subcategoryTaxonomy = [] } = useMarketingSubCategoryTaxonomy();
   const { data: marketingCompanies = [] } = useMarketingCompanies();
   // /marketing now maps one card per published SERVICE (Agency → Multiple Services),
   // mirroring Academy's /academy (one card per formation, not per academy).
@@ -443,10 +452,13 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   const allLocations = useMemo(() => Array.from(new Set(services.map((s) => s.agencyLocation).filter(Boolean))).sort(), [services]);
 
   const filteredServices = useMemo(() => {
-    if (!filterRating) return services;
-    const min = parseFloat(filterRating) * 10;
-    return services.filter((s) => s.rating >= min);
-  }, [services, filterRating]);
+    let list = services;
+    if (filterRating) { const min = parseFloat(filterRating) * 10; list = list.filter((s) => s.rating >= min); }
+    // Multiple selected subcategories use OR semantics (match any one of them) — same
+    // convention as the Maintenance marketplace's own multi-select Sous-compétences filter.
+    if (filterSubCategories.length > 0) list = list.filter((s) => filterSubCategories.some((name) => s.subCategories?.includes(name)));
+    return list;
+  }, [services, filterRating, filterSubCategories]);
 
   // Resolved via the one shared lib/marketing-category-icon.ts helper — reused
   // here, by the filter strip below, and by the Store Details page, so no page
@@ -457,10 +469,36 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
     return map;
   }, [taxonomy]);
 
-  const hasFilters = !!(selectedService || search || filterRating || filterLocation || filterType);
+  // Keep Sous-catégories Filters Always Visible — options scoped to the selected parent
+  // category when one is active, or the union across every category otherwise, so the
+  // picklist is never empty just because no parent is selected yet.
+  const subCategoryFilterOptions = useMemo(() => {
+    const selectedCategoryTaxonomy = taxonomy.find((c) => c.name === selectedService);
+    const rows = selectedService
+      ? subcategoryTaxonomy.filter((s) => s.categoryId === selectedCategoryTaxonomy?.id)
+      : subcategoryTaxonomy;
+    return rows.filter((s) => s.isActive && !s.isFrozen);
+  }, [subcategoryTaxonomy, taxonomy, selectedService]);
+
+  const hasFilters = !!(selectedService || search || filterRating || filterLocation || filterType || filterSubCategories.length > 0);
 
   const resetFilters = () => {
-    setSelectedService(""); setSearch(""); setFilterRating(""); setFilterLocation(""); setFilterType("");
+    setSelectedService(""); setSearch(""); setFilterRating(""); setFilterLocation(""); setFilterType(""); setFilterSubCategories([]);
+  };
+
+  // Selecting (or switching) a parent category keeps only the selected subcategories
+  // that still belong to it (via the Admin taxonomy's categoryId relationship) — it
+  // never blanket-clears the whole selection, mirroring the Maintenance marketplace's
+  // own selectCategory behavior.
+  const selectCategoryFilter = (categoryName: string) => {
+    setSelectedService(categoryName);
+    if (!categoryName) return;
+    const categoryRow = taxonomy.find((c) => c.name === categoryName);
+    const validNames = new Set(subcategoryTaxonomy.filter((s) => s.categoryId === categoryRow?.id).map((s) => s.name));
+    setFilterSubCategories((prev) => prev.filter((name) => validNames.has(name)));
+  };
+  const toggleSubCategoryFilter = (name: string) => {
+    setFilterSubCategories((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
   };
 
   const averageRating = services.length > 0 ? services.reduce((s, v) => s + v.rating, 0) / services.length / 10 : 0;
@@ -547,7 +585,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
             <div className="flex gap-1.5 overflow-x-auto py-3" style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
               <div className={`flex gap-1 rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
                 <button
-                  onClick={() => setSelectedService("")}
+                  onClick={() => selectCategoryFilter("")}
                   data-testid="button-service-all"
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl shrink-0 transition-all text-[11px] font-semibold ${selectedService === "" ? t.switcherActive : t.switcherInactive}`}
                 >
@@ -558,7 +596,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               {taxonomy.filter((c) => c.isActive && !c.isFrozen).map((cat) => (
                 <div key={cat.id} className={`flex rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
                   <button
-                    onClick={() => setSelectedService(selectedService === cat.name ? "" : cat.name)}
+                    onClick={() => selectCategoryFilter(selectedService === cat.name ? "" : cat.name)}
                     data-testid={`button-service-cat-${cat.name}`}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-[11px] font-semibold ${selectedService === cat.name ? t.switcherActive : t.switcherInactive}`}
                   >
@@ -601,6 +639,48 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
                 />
               </div>
             </div>
+            {/* Sous-catégories — Keep Sous-catégories Filters Always Visible: a permanent
+                multi-select (never conditionally hidden), scoped to the selected parent
+                category when one is active or the union across every category otherwise
+                (subCategoryFilterOptions above). Same compact dropdown-with-checkboxes
+                pattern as the Maintenance/Barista marketplaces' own multi-select filters. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className={`h-7 text-xs rounded-full px-3 w-auto min-w-[150px] shrink-0 inline-flex items-center justify-between gap-1.5 border ${t.inputBg}`}
+                  data-testid="select-marketing-subcategory"
+                >
+                  {filterSubCategories.length > 0 ? `Sous-catégories (${filterSubCategories.length})` : "Sous-catégories"}
+                </button>
+              </DropdownMenuTrigger>
+              {/* Reduce Subcategory Picklist Scroller Height — caps the list at a
+                  compact height instead of the default's "up to the viewport edge"
+                  max-height, while staying internally scrollable. Remove Visible
+                  Scrollbars: matches /products' "All Sub-Categories" filter (no
+                  visible scrollbar, scroll still works) — same cross-browser
+                  hide-but-keep-scrolling combo already used by this very filter
+                  bar's own horizontal chip row just above ([&::-webkit-scrollbar]:hidden
+                  + scrollbarWidth: "none"), applied here to vertical scroll instead. */}
+              <DropdownMenuContent
+                className={`${t.selectContent} max-h-56 overflow-y-auto [&::-webkit-scrollbar]:hidden`}
+                style={{ scrollbarWidth: "none" }}
+                align="start"
+              >
+                {subCategoryFilterOptions.length === 0 ? (
+                  <div className="px-2 py-1.5 text-xs text-muted-foreground">Aucune sous-catégorie configurée</div>
+                ) : subCategoryFilterOptions.map((sub) => (
+                  <DropdownMenuCheckboxItem
+                    key={sub.id}
+                    checked={filterSubCategories.includes(sub.name)}
+                    onCheckedChange={() => toggleSubCategoryFilter(sub.name)}
+                    data-testid={`checkbox-marketing-subcategory-${sub.id}`}
+                  >
+                    {resolveMarketingSubCategoryIcon(sub.name, subcategoryTaxonomy)} {sub.name}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Select value={filterType || "__all__"} onValueChange={(v) => setFilterType(v === "__all__" ? "" : v)}>
               <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] shrink-0 ${t.selectTrigger}`} data-testid="select-provider-type">
                 <SelectValue placeholder="Type" />

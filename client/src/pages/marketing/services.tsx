@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   useMyMarketingServices, useCreateMarketingService, useUpdateMarketingService, useDeleteMarketingService,
-  useMarketingTaxonomy, type MarketingService,
+  useMarketingTaxonomy, useMarketingSubCategoryTaxonomy, useMyMarketingCategoryMapping, type MarketingService,
 } from "@/hooks/use-marketing";
 import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -12,32 +12,48 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Megaphone, Plus, Pencil, Trash2, Clock, Eye, EyeOff, X } from "lucide-react";
+import { Megaphone, Plus, Pencil, Trash2, Clock, Eye, EyeOff, X, Layers } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
-import { resolveMarketingCategoryIcon } from "@/lib/marketing-category-icon";
+import { Link } from "wouter";
+import { resolveMarketingCategoryIcon, resolveMarketingSubCategoryIcon } from "@/lib/marketing-category-icon";
 
 type ServiceFormState = {
-  title: string; category: string; startingPrice: string; responseTime: string; description: string; offerDetails: string; imageUrl: string;
+  title: string; category: string; subCategories: string[]; startingPrice: string; responseTime: string; description: string; offerDetails: string; imageUrl: string;
 };
-const EMPTY_FORM: ServiceFormState = { title: "", category: "", startingPrice: "", responseTime: "< 24h", description: "", offerDetails: "", imageUrl: "" };
+const EMPTY_FORM: ServiceFormState = { title: "", category: "", subCategories: [], startingPrice: "", responseTime: "< 24h", description: "", offerDetails: "", imageUrl: "" };
 
 function ServiceFormDialog({ service, onClose }: { service: MarketingService | "new" | null; onClose: () => void }) {
   const { toast } = useToast();
   const { data: taxonomy = [] } = useMarketingTaxonomy();
+  const { data: subcategoryTaxonomy = [] } = useMarketingSubCategoryTaxonomy();
   const create = useCreateMarketingService();
   const update = useUpdateMarketingService();
+  // Categories & Subcategories: Complete End-to-End Integration — Catégorie/
+  // Sous-catégories are constrained to what this agency has selected in the new
+  // Catégories tab (itself constrained to the Admin's active taxonomy) — never
+  // free text, mirroring Espace Imprimerie's own services.tsx exactly (see
+  // validateMarketingTaxonomySelection on POST/PATCH /api/marketing/services).
+  const { data: mapping } = useMyMarketingCategoryMapping();
+  const mappedCategories = mapping?.categories ?? [];
+  const mappedSubCategories = mapping?.subCategories ?? [];
   const [form, setForm] = useState<ServiceFormState>(EMPTY_FORM);
   const isNew = service === "new";
+
+  const selectedCategory = taxonomy.find((c) => c.name === form.category);
+  const subCategoryOptions = subcategoryTaxonomy
+    .filter((s) => s.categoryId === selectedCategory?.id && mappedSubCategories.includes(s.name));
 
   useEffect(() => {
     if (service && service !== "new") {
       setForm({
         title: service.title ?? "",
         category: service.category,
+        subCategories: service.subCategories ?? [],
         startingPrice: String((service.startingPriceInCents ?? 0) / 100),
         responseTime: service.responseTime,
         description: service.description,
@@ -52,6 +68,10 @@ function ServiceFormDialog({ service, onClose }: { service: MarketingService | "
   if (!service) return null;
   const isPending = create.isPending || update.isPending;
 
+  const toggleSubCategory = (name: string) => {
+    setForm((f) => ({ ...f, subCategories: f.subCategories.includes(name) ? f.subCategories.filter((s) => s !== name) : [...f.subCategories, name] }));
+  };
+
   const save = () => {
     if (!form.title.trim()) {
       toast({ title: "Titre requis", variant: "destructive" });
@@ -64,6 +84,7 @@ function ServiceFormDialog({ service, onClose }: { service: MarketingService | "
     const payload = {
       title: form.title.trim(),
       category: form.category,
+      subCategories: form.subCategories,
       startingPriceInCents: Math.round((parseFloat(form.startingPrice) || 0) * 100),
       responseTime: form.responseTime,
       description: form.description,
@@ -92,17 +113,54 @@ function ServiceFormDialog({ service, onClose }: { service: MarketingService | "
             <label className="text-xs text-muted-foreground mb-1 block">Titre</label>
             <Input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Ex : Campagne Google Ads Premium" data-testid="input-service-title" />
           </div>
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Catégorie</label>
-            <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
-              <SelectTrigger data-testid="select-service-category"><SelectValue placeholder="Choisir une catégorie" /></SelectTrigger>
-              <SelectContent>
-                {taxonomy.filter((t) => t.isActive && !t.isFrozen).map((t) => (
-                  <SelectItem key={t.id} value={t.name}>{t.icon ? `${t.icon} ` : ""}{t.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {mappedCategories.length === 0 ? (
+            <div className="rounded-xl border border-amber-300/50 bg-amber-500/5 p-3 flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                Sélectionnez d'abord au moins une catégorie dans l'onglet Catégories pour pouvoir créer un service.
+              </p>
+              <Link href="/marketing-panel/categories">
+                <Button type="button" size="sm" variant="outline" className="h-7 text-xs gap-1 shrink-0">
+                  <Layers className="w-3.5 h-3.5" /> Catégories
+                </Button>
+              </Link>
+            </div>
+          ) : (
+            <>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Catégorie</label>
+                <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v, subCategories: [] }))}>
+                  <SelectTrigger data-testid="select-service-category"><SelectValue placeholder="Choisir une catégorie" /></SelectTrigger>
+                  <SelectContent>{mappedCategories.map((c) => (
+                    <SelectItem key={c} value={c}>{resolveMarketingCategoryIcon(c, taxonomy)} {c}</SelectItem>
+                  ))}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Sous-catégories</label>
+                {!form.category ? (
+                  <p className="text-xs text-muted-foreground italic">Choisissez d'abord une catégorie.</p>
+                ) : subCategoryOptions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">Aucune sous-catégorie sélectionnée pour cette catégorie — gérez-les depuis Business → Catégories.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {subCategoryOptions.map((s) => {
+                      const checked = form.subCategories.includes(s.name);
+                      return (
+                        <label
+                          key={s.id}
+                          className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1.5 text-xs cursor-pointer transition-colors ${checked ? "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-700 dark:text-fuchsia-300" : "border-border"}`}
+                          data-testid={`checkbox-service-subcategory-${s.id}`}
+                        >
+                          <Checkbox checked={checked} onCheckedChange={() => toggleSubCategory(s.name)} />
+                          {resolveMarketingSubCategoryIcon(s.name, subcategoryTaxonomy)} {s.name}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Prix de départ (د.ت)</label>
@@ -129,7 +187,7 @@ function ServiceFormDialog({ service, onClose }: { service: MarketingService | "
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Annuler</Button>
-          <Button onClick={save} disabled={isPending} className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white" data-testid="button-save-service">
+          <Button onClick={save} disabled={isPending || mappedCategories.length === 0} className="bg-fuchsia-600 hover:bg-fuchsia-700 text-white" data-testid="button-save-service">
             {isPending ? "Enregistrement…" : "Enregistrer"}
           </Button>
         </DialogFooter>
@@ -236,6 +294,7 @@ export default function MarketingServicesPage() {
                       {service.isPublished ? "Publié" : "Brouillon"}
                     </Badge>
                   </div>
+                  {service.subCategories?.length > 0 && <p className="text-xs text-muted-foreground truncate">{service.subCategories.join(", ")}</p>}
                   <p className="text-xs text-muted-foreground line-clamp-2">{service.description || "Aucune description"}</p>
                 </CardContent>
               </button>

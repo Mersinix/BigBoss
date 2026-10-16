@@ -134,7 +134,7 @@ export default function MaintenanceAnalyticsPage() {
         <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Taux de complétion</p><p className="text-xl font-bold text-green-600">{completionRate}%</p></CardContent></Card>
         <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Note moyenne</p><p className="text-xl font-bold">{reviews.length > 0 ? avgRating.toFixed(1) : "—"}</p></CardContent></Card>
         <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Interventions totales</p><p className="text-xl font-bold">{reservations.length}</p></CardContent></Card>
-        <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Catégories utilisées</p><p className="text-xl font-bold text-orange-600">{categoriesUsed}</p></CardContent></Card>
+        <Card className={CARD_CLASS}><CardContent className="p-4"><p className="text-xs text-muted-foreground">Compétences utilisées</p><p className="text-xl font-bold text-orange-600">{categoriesUsed}</p></CardContent></Card>
       </div>
 
       {/* Additive Intervention-response KPIs — built on top of the existing

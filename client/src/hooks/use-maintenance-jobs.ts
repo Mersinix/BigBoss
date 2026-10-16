@@ -32,7 +32,7 @@ async function mutate<T>(method: string, url: string, body?: any): Promise<T> {
 
 export type MaintenanceJobPostInput = Partial<{
   title: string; establishment: string; locationAddress: string;
-  categories: string[]; urgency: string; scheduledDate: string | null; scheduledTime: string | null;
+  categories: string[]; subCategories: string[]; urgency: string; scheduledDate: string | null; scheduledTime: string | null;
   contactPhone: string; description: string; requirements: string; expiresAt: string | null;
   publicationMode: MaintenanceJobPublicationMode; status: MaintenanceJobStatus;
 }>;

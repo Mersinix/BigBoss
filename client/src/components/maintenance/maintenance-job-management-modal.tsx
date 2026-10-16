@@ -317,7 +317,7 @@ function JobDetailView({
   const rows: { label: string; value: ReactNode }[] = [
     { label: "Établissement", value: job.establishment || "—" },
     { label: "Localisation", value: job.locationAddress || "—" },
-    { label: "Catégorie", value: job.categories.length ? job.categories.join(", ") : "—" },
+    { label: "Compétence", value: job.categories.length ? job.categories.join(", ") : "—" },
     { label: "Urgence", value: URGENCY_LABELS[job.urgency] ?? job.urgency },
     { label: "Date / heure", value: job.scheduledDate ? `${fmtPlainDate(job.scheduledDate)}${job.scheduledTime ? ` à ${job.scheduledTime}` : ""}` : "—" },
     { label: "Téléphone de contact", value: job.contactPhone || "—" },

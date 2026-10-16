@@ -203,7 +203,12 @@ export default function SupplierDeliveryStatusPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [dispatchTarget, setDispatchTarget] = useState<DeliveryWithDetails | null>(null);
-  const [viewTarget, setViewTarget] = useState<DeliveryWithDetails | null>(null);
+  // Tracks only the id, never a frozen object — re-resolved against the live `deliveries`
+  // array every render (same pattern as driver-deliveries-page.tsx) so a background refetch
+  // (e.g. the real-time transport-requirements sync) reaches an already-open modal instead of
+  // being stuck on whatever snapshot existed when it was opened.
+  const [viewTargetId, setViewTargetId] = useState<number | null>(null);
+  const viewTarget = viewTargetId != null ? (deliveries.find((d) => d.id === viewTargetId) ?? null) : null;
   const isMobile = useIsMobile();
   const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
@@ -416,9 +421,9 @@ export default function SupplierDeliveryStatusPage() {
 
       {dispatchTarget && <DispatchDialog delivery={dispatchTarget} onClose={() => setDispatchTarget(null)} />}
 
-      <Dialog open={!!viewTarget} onOpenChange={(v) => { if (!v) setViewTarget(null); }}>
+      <Dialog open={!!viewTarget} onOpenChange={(v) => { if (!v) setViewTargetId(null); }}>
         <DialogContent hideClose className="max-w-lg max-h-[85vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
-          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setViewTarget(null)} aria-label="Close" data-testid="button-close-delivery-detail">
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setViewTargetId(null)} aria-label="Close" data-testid="button-close-delivery-detail">
             <X className="w-4 h-4" />
           </button>
           <DialogHeader><DialogTitle>Détails de la livraison</DialogTitle></DialogHeader>
@@ -435,7 +440,7 @@ export default function SupplierDeliveryStatusPage() {
         key={d.id}
         className="border-border/50 hover:shadow-md transition-shadow cursor-pointer"
         data-testid={`card-delivery-${d.id}`}
-        onClick={() => setViewTarget(d)}
+        onClick={() => setViewTargetId(d.id)}
       >
         <CardContent className="p-4 space-y-3">
           {/* Header: order # + café name + status */}

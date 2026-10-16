@@ -33,7 +33,6 @@ const TUNISIAN_GOVERNORATES = [
 const PRINT_CATS = ["Flyers","Menus","Cartes de visite","Affiches","Enseignes","Packaging","Étiquettes","Banderoles","Gobelets","Kakémonos"];
 const MARKETING_CATS = ["Réseaux sociaux","Vidéo","Photographie","SEO","Publicité","Branding","Site web","Influence","Email marketing","Événementiel"];
 const BARISTA_SPECIALTIES = ["Espresso","Latte Art","Cold Brew","Brewing Methods","Formation barista","Sensory Training","Coffee Roasting","Machine Maintenance"];
-const MAINTENANCE_CATS = ["Machines à café","Machines espresso","Moulins à café","Machines à glace","Réfrigérateurs","Lave-vaisselle","Fours","Mixeurs","Électricité","Plomberie","Climatisation","Ventilation","Systèmes POS","Réseaux WiFi","Caméras sécurité","Mobilier","Éclairage","Menuiserie","Peinture","Signalétique"];
 
 // Single source of truth for Barista skill names, fetched from the Barista
 // Marketplace taxonomy table. BARISTA_SPECIALTIES is kept only as a fallback
@@ -134,7 +133,6 @@ function UserDetailDialog({
     governorates: [] as string[],
     printCategories: [] as string[],
     marketingCategories: [] as string[],
-    maintenanceCategories: [] as string[],
     categories: [] as string[],
   });
 
@@ -151,7 +149,6 @@ function UserDetailDialog({
         governorates: u.governorates ?? [],
         printCategories: u.printCategories ?? [],
         marketingCategories: u.marketingCategories ?? [],
-        maintenanceCategories: u.maintenanceCategories ?? [],
         categories: u.categories ?? [],
       });
       setConfirmDelete(false);
@@ -209,7 +206,10 @@ function UserDetailDialog({
       governorates: form.governorates.length > 0 ? form.governorates : null,
       printCategories: form.printCategories.length > 0 ? form.printCategories : null,
       marketingCategories: form.marketingCategories.length > 0 ? form.marketingCategories : null,
-      maintenanceCategories: form.maintenanceCategories.length > 0 ? form.maintenanceCategories : null,
+      // maintenanceCategories intentionally no longer sent — users.maintenanceCategories
+      // was a legacy field, never read by the real Maintenance module (which exclusively
+      // uses maintenanceProfiles.skills/subSkills — see Business → Compétences). Task:
+      // "Remove Legacy Categories from Maintenance and Use Only Compétences."
       categories: form.categories.length > 0 ? form.categories : null,
     });
   };
@@ -422,25 +422,18 @@ function UserDetailDialog({
 
 function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
   const { toast } = useToast();
-  const baristaSkillOptions = useBaristaSkillOptions();
-  const printCategoryOptions = usePrintCategoryOptions();
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState("CAFE_OWNER");
   const [form, setForm] = useState({
     email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "",
     firstName: "", lastName: "",
     cafeName: "", companyName: "", contactName: "",
-    governorates: [] as string[],
-    printCategories: [] as string[],
-    marketingCategories: [] as string[],
-    maintenanceCategories: [] as string[],
-    categories: [] as string[],
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const reset = () => {
     setRole("CAFE_OWNER");
-    setForm({ email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", firstName: "", lastName: "", cafeName: "", companyName: "", contactName: "", governorates: [], printCategories: [], marketingCategories: [], maintenanceCategories: [], categories: [] });
+    setForm({ email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", firstName: "", lastName: "", cafeName: "", companyName: "", contactName: "" });
     setErrors({});
   };
 
@@ -463,7 +456,6 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
       case "DELIVERY_COMPANY":
         if (form.firstName.trim().length < 2) e.firstName = "Prénom requis";
         if (form.lastName.trim().length < 2) e.lastName = "Nom requis";
-        if (form.governorates.length === 0) e.governorates = "Sélectionnez au moins un gouvernorat";
         break;
       default:
         if (form.companyName.trim().length < 2) e.companyName = "Nom d'entreprise requis";
@@ -491,11 +483,13 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
       email: form.email, phone: form.phone, isWhatsapp: form.isWhatsapp,
       profileImageUrl: form.profileImageUrl.trim() || null, password: form.password,
     };
-    if (role === "DELIVERY_COMPANY") payload.governorates = form.governorates;
-    if (role === "PRINTER") payload.printCategories = form.printCategories;
-    if (role === "MARKETING") payload.marketingCategories = form.marketingCategories;
-    if (role === "BARISTA_ACADEMY" || role === "BARISTA_MARKETPLACE") payload.categories = form.categories;
-    if (role === "MAINTENANCE") payload.maintenanceCategories = form.maintenanceCategories;
+    // Governorates/categories/specialties/services are no longer collected at creation
+    // time (task: "Simplify Admin → Users → Add User Form") — the server already treats
+    // all of these as optional (`?? null`, see POST /api/admin/users), so the new account
+    // is created with them unset and configures them afterward through its own existing
+    // module (Delivery Company's coverage settings, Printer/Maintenance/Marketing/
+    // Barista's own category/skill pickers — all untouched by this change, still backed
+    // by the same taxonomy).
 
     try {
       const res = await fetch("/api/admin/users", {
@@ -612,31 +606,6 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
             <Input data-testid="input-user-password" type="password" value={form.password} onChange={sf("password")} placeholder="Min. 8 car., 1 majuscule, 1 chiffre, 1 symbole" />
             {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
           </div>
-
-          {/* Role-specific multi-selects */}
-          {role === "DELIVERY_COMPANY" && (
-            <div className="space-y-1">
-              <MultiChip label="Gouvernorats couverts *" options={TUNISIAN_GOVERNORATES}
-                selected={form.governorates} onChange={v => setForm(f => ({ ...f, governorates: v }))} />
-              {errors.governorates && <p className="text-xs text-destructive">{errors.governorates}</p>}
-            </div>
-          )}
-          {role === "PRINTER" && (
-            <MultiChip label="Catégories impression" options={printCategoryOptions}
-              selected={form.printCategories} onChange={v => setForm(f => ({ ...f, printCategories: v }))} />
-          )}
-          {role === "MARKETING" && (
-            <MultiChip label="Services marketing" options={MARKETING_CATS}
-              selected={form.marketingCategories} onChange={v => setForm(f => ({ ...f, marketingCategories: v }))} />
-          )}
-          {(role === "BARISTA_ACADEMY" || role === "BARISTA_MARKETPLACE") && (
-            <MultiChip label="Spécialités" options={baristaSkillOptions}
-              selected={form.categories} onChange={v => setForm(f => ({ ...f, categories: v }))} />
-          )}
-          {role === "MAINTENANCE" && (
-            <MultiChip label="Catégories de maintenance" options={MAINTENANCE_CATS}
-              selected={form.maintenanceCategories} onChange={v => setForm(f => ({ ...f, maintenanceCategories: v }))} />
-          )}
 
           <div className="flex gap-2 pt-1">
             <Button variant="outline" className="flex-1" onClick={() => { setOpen(false); reset(); }}>Annuler</Button>

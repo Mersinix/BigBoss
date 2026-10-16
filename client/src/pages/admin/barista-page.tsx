@@ -58,7 +58,11 @@ import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 // "Offres & Missions (emploi)" below, which is now this page's single
 // job-posting interface.
 
-type SkillItem = { id: number; name: string; isActive: boolean; isFrozen: boolean };
+// Add Icons to Barista Compétences — `icon` is optional/nullable so the shared
+// TaxonomySection below (also reused by Niveau d'étude/Langue, which have no icon
+// column at all) never requires it.
+type SkillItem = { id: number; name: string; icon?: string | null; isActive: boolean; isFrozen: boolean };
+const DEFAULT_SKILL_ICON = "☕";
 type AdminBarista = {
   userId: number; name: string; email: string; phone: string | null; profileImageUrl: string | null;
   coverImageUrl?: string | null;
@@ -144,31 +148,40 @@ function fmtPlainDate(value: string | null) {
 // three near-duplicate components. SkillsTaxonomy below is an unchanged thin wrapper
 // over this, so the existing Compétences tab's rendering/testids are byte-identical. ──
 
-function TaxonomySection({ title, items, placeholder, testIdPrefix, create, update, remove, emptyLabel }: {
+function TaxonomySection({ title, items, placeholder, testIdPrefix, create, update, remove, emptyLabel, withIcon }: {
   title: string;
   items: SkillItem[];
   placeholder: string;
   testIdPrefix: string;
   emptyLabel: string;
-  create: (name: string) => Promise<any>;
-  update: (id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }) => Promise<any>;
+  create: (name: string, icon?: string | null) => Promise<any>;
+  update: (id: number, data: { name?: string; icon?: string | null; isActive?: boolean; isFrozen?: boolean }) => Promise<any>;
   remove: (id: number) => Promise<any>;
+  // Add Icons to Barista Compétences — opt-in so Niveau d'étude/Langue (no icon
+  // column, out of this task's scope) keep rendering exactly as before.
+  withIcon?: boolean;
 }) {
   const { toast } = useToast();
   const [draft, setDraft] = useState("");
+  const [draftIcon, setDraftIcon] = useState("");
   const [editing, setEditing] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
+  const [iconEditing, setIconEditing] = useState<number | null>(null);
+  const [iconEditValue, setIconEditValue] = useState("");
   const [pending, setPending] = useState(false);
 
   const runCreate = async () => {
     if (!draft.trim() || pending) return;
     setPending(true);
-    try { await create(draft.trim()); setDraft(""); toast({ title: "Ajouté" }); }
+    try {
+      await create(draft.trim(), withIcon ? (draftIcon.trim() || null) : undefined);
+      setDraft(""); setDraftIcon(""); toast({ title: "Ajouté" });
+    }
     catch (e: any) { toast({ title: "Impossible d'ajouter", description: e.message, variant: "destructive" }); }
     finally { setPending(false); }
   };
-  const runUpdate = async (id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }) => {
-    try { await update(id, data); setEditing(null); }
+  const runUpdate = async (id: number, data: { name?: string; icon?: string | null; isActive?: boolean; isFrozen?: boolean }) => {
+    try { await update(id, data); setEditing(null); setIconEditing(null); }
     catch { toast({ title: "Mise à jour impossible", variant: "destructive" }); }
   };
   const runRemove = async (id: number) => {
@@ -181,11 +194,32 @@ function TaxonomySection({ title, items, placeholder, testIdPrefix, create, upda
       <CardHeader className="pb-3"><CardTitle className="text-base">{title}</CardTitle></CardHeader>
       <CardContent className="space-y-3">
         <div className="flex gap-2">
+          {withIcon && (
+            <Input value={draftIcon} onChange={(e) => setDraftIcon(e.target.value)} placeholder={DEFAULT_SKILL_ICON} className="w-14 text-center text-lg shrink-0" data-testid={`input-new-${testIdPrefix}-icon`} />
+          )}
           <Input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder={placeholder} onKeyDown={(e) => e.key === "Enter" && runCreate()} data-testid={`input-new-${testIdPrefix}`} />
           <Button size="sm" disabled={!draft.trim() || pending} onClick={runCreate} data-testid={`button-add-${testIdPrefix}`}><Plus className="h-4 w-4 mr-1" />Ajouter</Button>
         </div>
         {items.length === 0 ? <p className="text-sm text-muted-foreground">{emptyLabel}</p> : items.map((item) => (
           <div key={item.id} className="flex items-center gap-2 rounded-lg border p-2" data-testid={`row-${testIdPrefix}-${item.id}`}>
+            {withIcon && (
+              iconEditing === item.id ? (
+                <Input autoFocus value={iconEditValue} onChange={(e) => setIconEditValue(e.target.value)} onKeyDown={(e) => {
+                  if (e.key === "Enter") runUpdate(item.id, { icon: iconEditValue.trim() || null });
+                  if (e.key === "Escape") setIconEditing(null);
+                }} onBlur={() => runUpdate(item.id, { icon: iconEditValue.trim() || null })} className="w-12 text-center text-lg shrink-0 p-1" />
+              ) : (
+                <button
+                  type="button"
+                  title="Modifier l'icône"
+                  className="w-8 h-8 shrink-0 flex items-center justify-center text-lg rounded-md hover:bg-muted"
+                  onClick={() => { setIconEditing(item.id); setIconEditValue(item.icon ?? ""); }}
+                  data-testid={`button-edit-${testIdPrefix}-icon-${item.id}`}
+                >
+                  {item.icon || DEFAULT_SKILL_ICON}
+                </button>
+              )
+            )}
             {editing === item.id ? (
               <Input autoFocus value={editValue} onChange={(e) => setEditValue(e.target.value)} onKeyDown={(e) => {
                 if (e.key === "Enter" && editValue.trim()) runUpdate(item.id, { name: editValue.trim() });
@@ -210,7 +244,7 @@ function TaxonomySection({ title, items, placeholder, testIdPrefix, create, upda
 function SkillsTaxonomy({ items, onRefresh }: { items: SkillItem[]; onRefresh: () => void }) {
   const { toast } = useToast();
   const create = useMutation({
-    mutationFn: (name: string) => apiRequest("POST", "/api/admin/barista/skills", { name }),
+    mutationFn: ({ name, icon }: { name: string; icon?: string | null }) => apiRequest("POST", "/api/admin/barista/skills", { name, icon }),
     onSuccess: onRefresh,
   });
   const update = useMutation({
@@ -228,7 +262,8 @@ function SkillsTaxonomy({ items, onRefresh }: { items: SkillItem[]; onRefresh: (
       placeholder="Ajouter une compétence"
       testIdPrefix="barista-skill"
       emptyLabel="Aucune compétence."
-      create={(name) => create.mutateAsync(name)}
+      withIcon
+      create={(name, icon) => create.mutateAsync({ name, icon })}
       update={(id, data) => update.mutateAsync({ id, data })}
       remove={(id) => remove.mutateAsync(id)}
     />

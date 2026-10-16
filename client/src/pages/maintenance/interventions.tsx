@@ -168,7 +168,7 @@ function JobDetailDialog({ job, onClose, onApply }: { job: MaintenanceDiscoverab
               <div><p className="text-xs text-muted-foreground">Date / heure</p><p>{scheduled ?? "—"}</p></div>
               <div><p className="text-xs text-muted-foreground">Téléphone</p><p className="flex items-center gap-1"><Phone className="w-3.5 h-3.5" /> {job.contactPhone || "—"}</p></div>
               <div><p className="text-xs text-muted-foreground">Date limite</p><p>{job.expiresAt ? formatDate(job.expiresAt as any) : "—"}</p></div>
-              <div className="col-span-2"><p className="text-xs text-muted-foreground mb-1">Catégorie</p>
+              <div className="col-span-2"><p className="text-xs text-muted-foreground mb-1">Compétence</p>
                 {job.categories.length === 0 ? <span className="text-muted-foreground">—</span> : (
                   <div className="flex flex-wrap gap-1.5">{job.categories.map((c) => <Badge key={c} variant="secondary" className="bg-secondary/60 dark:bg-gray-700/70 font-normal">{c}</Badge>)}</div>
                 )}

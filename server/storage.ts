@@ -12,10 +12,10 @@ import {
   landingConfig, messagingSettings, authProviderSettings, loginSecuritySettings, packs, packItems, packFavorites, inventoryAdjustments, prospects,
   prospectCustomTypes, PROSPECT_TYPES,
   maintenanceProfiles, maintenanceFavorites, maintenanceReservations,
-  maintenanceCompetencies, maintenanceZones, maintenanceReports,
+  maintenanceCompetencies, maintenanceZones, maintenanceSubCompetencies, maintenanceReports,
   maintenanceJobPosts, maintenanceJobTargets, maintenanceJobApplications,
-  marketingProfiles, marketingProjects, marketingCategoryTaxonomy, marketingReports, marketingFavorites,
-  marketingServices, type MarketingService, type InsertMarketingService, type MarketingServiceCard,
+  marketingProfiles, marketingProjects, marketingCategoryTaxonomy, marketingSubCategoryTaxonomy, marketingReports, marketingFavorites,
+  marketingServices, type MarketingService, type InsertMarketingService, type MarketingServiceCard, type MarketingSubCategory,
   printCatalogItems, printOrders, printCategoryTaxonomy, printSubCategoryTaxonomy, printReports, type PrintReport, printFavorites,
   printerProfiles, type PrinterProfile, type InsertPrinterProfile, type PrintCompanyCard, type PrintCompanyListCard,
   heroActionSettings, type HeroService, type HeroActionSettingsMap,
@@ -76,7 +76,7 @@ import {
   type InventoryAdjustment, type StockStatus,
   type MaintenanceProfile, type InsertMaintenanceProfile, type MaintenanceMarketplaceCard, type OpeningHoursMap,
   type MaintenanceReservation, type InsertMaintenanceReservation,
-  type MaintenanceCompetency, type MaintenanceZone,
+  type MaintenanceCompetency, type MaintenanceZone, type MaintenanceSubCompetency,
   type MaintenanceJobPost, type InsertMaintenanceJobPost, type MaintenanceJobPostWithStats,
   type MaintenanceJobTarget, type MaintenanceJobApplication, type InsertMaintenanceJobApplication,
   type MaintenanceJobApplicationWithParties,
@@ -103,6 +103,7 @@ import {
   type AcademyRegistrationStatus, type AcademySessionStatus,
   academyFavorites, academyReports, type AcademyFavorite, type AcademyReport,
 } from "@shared/schema";
+import { encodeMaintenanceSubSkillKey } from "@shared/maintenance-sub-skill-key";
 import { eq, and, inArray, ne, sql, notInArray, asc, desc } from "drizzle-orm";
 
 // Delivery System V2 Phase 5B (hardening) — the shape redactDeliveryCodes actually returns:
@@ -429,8 +430,8 @@ export interface IStorage {
 
   // Barista Marketplace
   getBaristaSkills(activeOnly?: boolean): Promise<BaristaSkill[]>;
-  createBaristaSkill(name: string): Promise<BaristaSkill>;
-  updateBaristaSkill(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<BaristaSkill | undefined>;
+  createBaristaSkill(name: string, icon?: string | null): Promise<BaristaSkill>;
+  updateBaristaSkill(id: number, data: { name?: string; icon?: string | null; isActive?: boolean; isFrozen?: boolean }): Promise<BaristaSkill | undefined>;
   deleteBaristaSkill(id: number): Promise<void>;
   getBaristaMarketplaceProfile(userId: number): Promise<BaristaMarketplaceProfile>;
   upsertBaristaMarketplaceProfile(userId: number, updates: Partial<InsertBaristaMarketplaceProfile>): Promise<BaristaMarketplaceProfile>;
@@ -5944,7 +5945,9 @@ export class DatabaseStorage implements IStorage {
         initials: user.name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase(),
         available,
         type: profile.profileType,
-        specialty: profile.categories[0] ?? "Maintenance",
+        // profile.skills is the one authoritative competency field — see
+        // maintenanceProfiles.categories's own schema comment (deprecated, no longer written).
+        specialty: profile.skills[0] ?? "Maintenance",
         workingHours,
         distanceKm,
       } as MaintenanceMarketplaceCard;
@@ -5976,7 +5979,9 @@ export class DatabaseStorage implements IStorage {
     const taxonomy = await this.getMaintenanceTaxonomy();
     const activeTaxonomy = taxonomy.competencies.filter((item) => item.isActive && !item.isFrozen);
     if (activeTaxonomy.length) return activeTaxonomy.map((item) => item.name);
-    const rows = await db.select({ categories: maintenanceProfiles.categories })
+    // Bootstrap fallback only (admin taxonomy completely empty) — reads profile.skills, the
+    // one authoritative competency field, never the deprecated profile.categories duplicate.
+    const rows = await db.select({ skills: maintenanceProfiles.skills })
       .from(maintenanceProfiles)
       .innerJoin(users, eq(maintenanceProfiles.userId, users.id))
       .where(and(
@@ -5984,7 +5989,7 @@ export class DatabaseStorage implements IStorage {
         eq(users.status, "approved"),
         eq(maintenanceProfiles.marketplaceVisible, true),
       ));
-    return Array.from(new Set(rows.flatMap((row) => row.categories))).sort((a, b) => a.localeCompare(b));
+    return Array.from(new Set(rows.flatMap((row) => row.skills))).sort((a, b) => a.localeCompare(b));
   }
 
   async getMaintenanceProfile(userId: number): Promise<MaintenanceProfile> {
@@ -6024,7 +6029,9 @@ export class DatabaseStorage implements IStorage {
       initials: row.user.name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase(),
       available: row.profile.isAvailable && !row.profile.isOnVacation,
       type: row.profile.profileType,
-      specialty: row.profile.categories[0] ?? "Maintenance",
+      // profile.skills is the one authoritative competency field — see
+      // maintenanceProfiles.categories's own schema comment (deprecated, no longer written).
+      specialty: row.profile.skills[0] ?? "Maintenance",
       workingHours,
       distanceKm,
       rating,
@@ -6327,8 +6334,11 @@ export class DatabaseStorage implements IStorage {
   private async seedMaintenanceTaxonomyIfEmpty(): Promise<void> {
     const [competencyCount] = await db.select({ count: sql<number>`count(*)::int` }).from(maintenanceCompetencies);
     if (!competencyCount || competencyCount.count === 0) {
-      const rows = await db.select({ categories: maintenanceProfiles.categories }).from(maintenanceProfiles);
-      const names = Array.from(new Set(rows.flatMap((row) => row.categories ?? []).map((name) => name.trim()).filter(Boolean)));
+      // Bootstrap fallback only (taxonomy table completely empty) — seeds from
+      // profile.skills, the one authoritative competency field, never the deprecated
+      // profile.categories duplicate.
+      const rows = await db.select({ skills: maintenanceProfiles.skills }).from(maintenanceProfiles);
+      const names = Array.from(new Set(rows.flatMap((row) => row.skills ?? []).map((name) => name.trim()).filter(Boolean)));
       if (names.length) await db.insert(maintenanceCompetencies).values(names.map((name) => ({ name }))).onConflictDoNothing();
     }
     const [zoneCount] = await db.select({ count: sql<number>`count(*)::int` }).from(maintenanceZones);
@@ -6339,21 +6349,45 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getMaintenanceTaxonomy(): Promise<{ competencies: MaintenanceCompetency[]; zones: MaintenanceZone[] }> {
+  async getMaintenanceTaxonomy(): Promise<{ competencies: MaintenanceCompetency[]; zones: MaintenanceZone[]; subCompetencies: MaintenanceSubCompetency[] }> {
     await this.seedMaintenanceTaxonomyIfEmpty();
-    const [competencies, zones] = await Promise.all([
+    const [competencies, zones, subCompetencies] = await Promise.all([
       db.select().from(maintenanceCompetencies).orderBy(asc(maintenanceCompetencies.name)),
       db.select().from(maintenanceZones).orderBy(asc(maintenanceZones.name)),
+      db.select().from(maintenanceSubCompetencies).orderBy(asc(maintenanceSubCompetencies.name)),
     ]);
-    return { competencies, zones };
+    return { competencies, zones, subCompetencies };
   }
 
-  async getAvailableMaintenanceTaxonomy(): Promise<{ competencies: MaintenanceCompetency[]; zones: MaintenanceZone[] }> {
+  async getAvailableMaintenanceTaxonomy(): Promise<{ competencies: MaintenanceCompetency[]; zones: MaintenanceZone[]; subCompetencies: MaintenanceSubCompetency[] }> {
     const taxonomy = await this.getMaintenanceTaxonomy();
     return {
       competencies: taxonomy.competencies.filter((item) => item.isActive && !item.isFrozen),
       zones: taxonomy.zones.filter((item) => item.isActive && !item.isFrozen),
+      subCompetencies: taxonomy.subCompetencies.filter((item) => item.isActive && !item.isFrozen),
     };
+  }
+
+  async getMaintenanceSubCompetencies(competencyId?: number): Promise<MaintenanceSubCompetency[]> {
+    return db.select().from(maintenanceSubCompetencies)
+      .where(competencyId !== undefined ? eq(maintenanceSubCompetencies.competencyId, competencyId) : undefined)
+      .orderBy(asc(maintenanceSubCompetencies.name));
+  }
+
+  async createMaintenanceSubCompetency(competencyId: number, name: string, icon?: string | null): Promise<MaintenanceSubCompetency> {
+    const [created] = await db.insert(maintenanceSubCompetencies).values({ competencyId, name: name.trim(), icon: icon?.trim() || null }).returning();
+    return created;
+  }
+
+  async updateMaintenanceSubCompetency(id: number, data: { name?: string; icon?: string | null; isActive?: boolean; isFrozen?: boolean }): Promise<MaintenanceSubCompetency | undefined> {
+    const [updated] = await db.update(maintenanceSubCompetencies)
+      .set({ ...data, ...(data.name ? { name: data.name.trim() } : {}), ...(data.icon !== undefined ? { icon: data.icon?.trim() || null } : {}), updatedAt: new Date() })
+      .where(eq(maintenanceSubCompetencies.id, id)).returning();
+    return updated;
+  }
+
+  async deleteMaintenanceSubCompetency(id: number): Promise<void> {
+    await db.delete(maintenanceSubCompetencies).where(eq(maintenanceSubCompetencies.id, id));
   }
 
   async createMaintenanceCompetency(name: string, icon?: string | null): Promise<MaintenanceCompetency> {
@@ -6408,9 +6442,14 @@ export class DatabaseStorage implements IStorage {
     const jobTargetRows = await db.select().from(maintenanceJobTargets);
     const allUsers = await db.select().from(users);
     const userMap = new Map(allUsers.map((user) => [user.id, user]));
+    // Reads profile.skills — the ONE authoritative Maintenance competency field (task:
+    // "Remove Legacy Categories from Maintenance and Use Only Compétences"). profile.categories
+    // is a deprecated, no-longer-written duplicate of this same selection (see
+    // maintenanceProfiles.categories's own schema comment) — reading it here would make this
+    // stat silently stop tracking new skill selections once accounts stop touching it.
     const categoryCounts = new Map<string, number>();
-    for (const row of accounts) for (const category of row.profile.categories) {
-      categoryCounts.set(category, (categoryCounts.get(category) ?? 0) + 1);
+    for (const row of accounts) for (const skill of row.profile.skills) {
+      categoryCounts.set(skill, (categoryCounts.get(skill) ?? 0) + 1);
     }
     const averageRating = reviews.length ? reviews.reduce((sum, row) => sum + row.rating, 0) / reviews.length : 0;
 
@@ -6554,6 +6593,34 @@ export class DatabaseStorage implements IStorage {
     return !!row;
   }
 
+  /**
+   * Skill-matching gate — ADDITIONAL to isMaintenanceProviderEligible above (that one is
+   * untouched; this is a separate, composable check). Used by both AUTOMATIC discovery
+   * (getDiscoverableMaintenanceJobPosts) and MANUAL targeting
+   * (POST /api/maintenance/jobs/:id/targets) so the two publication modes enforce the
+   * exact same matching rule.
+   *
+   * An intervention has exactly one required parent category (job.categories[0] — the
+   * "Fix Maintenance Sub-Skill Isolation..." task moved intervention creation to a
+   * single-select parent, see maintenance-job-post-form-modal.tsx). A job with no
+   * category at all always matches (nothing to require). Otherwise the provider must
+   * have that parent in their own `skills`; if the job additionally requires specific
+   * sub-skills, the provider must have EVERY one of them (not just one — "do not
+   * silently weaken the requirements") under that SAME parent, checked via the same
+   * parent-qualified key encodeMaintenanceSubSkillKey/decodeMaintenanceSubSkillKey uses
+   * to store a provider's own subSkills (bug fix: a provider who has "Installation"
+   * selected under an unrelated parent must not match a job requiring
+   * "Caméras → Installation" merely because the label matches).
+   */
+  async isMaintenanceProviderSkillMatch(userId: number, job: { categories: string[]; subCategories: string[] }): Promise<boolean> {
+    if (!job.categories.length) return true;
+    const parent = job.categories[0];
+    const profile = await this.getMaintenanceProfile(userId);
+    if (!profile.skills.includes(parent)) return false;
+    if (!job.subCategories.length) return true;
+    return job.subCategories.every((subName) => profile.subSkills.includes(encodeMaintenanceSubSkillKey(parent, subName)));
+  }
+
   async createMaintenanceJobPost(cafeOwnerId: number, data: Partial<InsertMaintenanceJobPost>): Promise<MaintenanceJobPost> {
     const { cafeOwnerId: _ignored, id: _id, createdAt: _c, updatedAt: _u, ...safe } = data as any;
     const [created] = await db.insert(maintenanceJobPosts).values({ ...safe, cafeOwnerId }).returning();
@@ -6641,8 +6708,16 @@ export class DatabaseStorage implements IStorage {
         ))
       : [];
     const notExpired = (j: MaintenanceJobPost) => !j.expiresAt || new Date(j.expiresAt as any) > now;
+    // Skill-matching applies to AUTOMATIC distribution only — MANUAL jobs reach a provider
+    // through an explicit Coffee-Owner-chosen target (already skill-validated at assignment
+    // and re-validated at publish time, see POST .../targets and PATCH .../jobs/:id), so an
+    // already-targeted provider is never silently hidden from their own discover list by a
+    // later re-check here.
+    const automaticMatches = await Promise.all(
+      automatic.filter(notExpired).map((j) => this.isMaintenanceProviderSkillMatch(maintenanceUserId, { categories: j.categories, subCategories: j.subCategories })),
+    );
     return [
-      ...automatic.filter(notExpired).map((j) => ({ ...j, isTargeted: false })),
+      ...automatic.filter(notExpired).filter((_, i) => automaticMatches[i]).map((j) => ({ ...j, isTargeted: false })),
       ...manual.filter(notExpired).map((j) => ({ ...j, isTargeted: true })),
     ];
   }
@@ -7725,8 +7800,100 @@ export class DatabaseStorage implements IStorage {
     await db.delete(marketingCategoryTaxonomy).where(eq(marketingCategoryTaxonomy.id, id));
   }
 
+  // ── Marketing subcategory taxonomy — mirrors getPrintSubCategoryTaxonomy/
+  // createPrintSubCategory/updatePrintSubCategory/deletePrintSubCategory exactly. ──
+
+  async getMarketingSubCategoryTaxonomy(categoryId?: number): Promise<MarketingSubCategory[]> {
+    const rows = await db.select().from(marketingSubCategoryTaxonomy)
+      .where(categoryId !== undefined ? eq(marketingSubCategoryTaxonomy.categoryId, categoryId) : undefined)
+      .orderBy(asc(marketingSubCategoryTaxonomy.name));
+    return rows;
+  }
+
+  async createMarketingSubCategory(categoryId: number, name: string, icon?: string | null): Promise<MarketingSubCategory> {
+    const [created] = await db.insert(marketingSubCategoryTaxonomy).values({ categoryId, name: name.trim(), icon: icon?.trim() || null }).returning();
+    return created;
+  }
+
+  async updateMarketingSubCategory(id: number, data: { name?: string; icon?: string | null; isActive?: boolean; isFrozen?: boolean }): Promise<MarketingSubCategory | undefined> {
+    const [updated] = await db.update(marketingSubCategoryTaxonomy)
+      .set({ ...data, ...(data.name ? { name: data.name.trim() } : {}), ...(data.icon !== undefined ? { icon: data.icon?.trim() || null } : {}), updatedAt: new Date() })
+      .where(eq(marketingSubCategoryTaxonomy.id, id)).returning();
+    return updated;
+  }
+
+  async deleteMarketingSubCategory(id: number): Promise<void> {
+    await db.delete(marketingSubCategoryTaxonomy).where(eq(marketingSubCategoryTaxonomy.id, id));
+  }
+
+  async getAvailableMarketingSubCategoryTaxonomy(categoryId?: number): Promise<MarketingSubCategory[]> {
+    const rows = await this.getMarketingSubCategoryTaxonomy(categoryId);
+    return rows.filter((item) => item.isActive && !item.isFrozen);
+  }
+
+  /** Self-healing one-time migration: an agency that has real (pre-existing)
+   *  services but has never touched the new Business → Catégories tab gets its
+   *  `selectedCategories` seeded from those services' real categories, the first
+   *  time its mapping is ever read — never overwrites a real selection, never
+   *  fabricates subcategories (there's no historical subcategory data to
+   *  migrate). Without this, every agency that existed before this task would
+   *  suddenly be unable to edit its own existing services (their categories
+   *  wouldn't be in the new, empty-by-default selection yet). Mirrors the
+   *  exact rationale/shape of migrateMarketingServicesIfNeeded above. */
+  private async migrateMarketingCategoryMappingIfNeeded(marketingUserId: number): Promise<void> {
+    const profile = await this.getMarketingProfile(marketingUserId);
+    if (profile.selectedCategories.length > 0) return;
+    const services = await db.select({ category: marketingServices.category })
+      .from(marketingServices).where(eq(marketingServices.marketingUserId, marketingUserId));
+    const categories = Array.from(new Set(services.map((s) => s.category).filter(Boolean)));
+    if (!categories.length) return;
+    await db.update(marketingProfiles).set({ selectedCategories: categories, updatedAt: new Date() }).where(eq(marketingProfiles.userId, marketingUserId));
+  }
+
+  async getMarketingCategoryMapping(marketingUserId: number): Promise<{ categories: string[]; subCategories: string[] }> {
+    await this.migrateMarketingCategoryMappingIfNeeded(marketingUserId);
+    const profile = await this.getMarketingProfile(marketingUserId);
+    return { categories: profile.selectedCategories, subCategories: profile.selectedSubCategories };
+  }
+
+  /** Validates every submitted name against the ACTIVE admin taxonomy (an agency
+   *  can never map an inactive/frozen or nonexistent category), and every
+   *  subcategory against both the active taxonomy AND its declared parent
+   *  category being one of the categories being mapped in the same call —
+   *  silently drops anything invalid rather than erroring, and reports what was
+   *  dropped so the route layer can surface it. Mirrors
+   *  setPrinterCategoryMapping exactly. */
+  async setMarketingCategoryMapping(marketingUserId: number, mapping: { categories: string[]; subCategories: string[] }): Promise<{ categories: string[]; subCategories: string[]; rejected: { categories: string[]; subCategories: string[] } }> {
+    const [categoryTaxonomy, subCategoryTaxonomy] = await Promise.all([
+      this.getMarketingTaxonomy(),
+      this.getMarketingSubCategoryTaxonomy(),
+    ]);
+    const activeCategoryNames = new Set(categoryTaxonomy.filter((c) => c.isActive && !c.isFrozen).map((c) => c.name));
+    const categoryByName = new Map(categoryTaxonomy.map((c) => [c.name, c] as const));
+
+    const acceptedCategories = mapping.categories.filter((name) => activeCategoryNames.has(name));
+    const rejectedCategories = mapping.categories.filter((name) => !activeCategoryNames.has(name));
+    const acceptedCategorySet = new Set(acceptedCategories);
+
+    const acceptedSubCategories = mapping.subCategories.filter((name) => {
+      const sub = subCategoryTaxonomy.find((s) => s.name === name && s.isActive && !s.isFrozen);
+      if (!sub) return false;
+      const parent = Array.from(categoryByName.values()).find((c) => c.id === sub.categoryId);
+      return !!parent && acceptedCategorySet.has(parent.name);
+    });
+    const rejectedSubCategories = mapping.subCategories.filter((name) => !acceptedSubCategories.includes(name));
+
+    await this.upsertMarketingProfile(marketingUserId, { selectedCategories: acceptedCategories, selectedSubCategories: acceptedSubCategories });
+    return {
+      categories: acceptedCategories,
+      subCategories: acceptedSubCategories,
+      rejected: { categories: rejectedCategories, subCategories: rejectedSubCategories },
+    };
+  }
+
   async getMarketingAdminOverview(): Promise<any> {
     const taxonomy = await this.getMarketingTaxonomy();
+    const subcategoryTaxonomy = await this.getMarketingSubCategoryTaxonomy();
     const accounts = await db.select({ profile: marketingProfiles, user: users })
       .from(marketingProfiles)
       .innerJoin(users, eq(marketingProfiles.userId, users.id))
@@ -7770,6 +7937,7 @@ export class DatabaseStorage implements IStorage {
       },
       categories: Array.from(categoryCounts, ([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count),
       taxonomy,
+      subcategoryTaxonomy,
       accounts: accounts.map(({ profile, user }) => ({
         ...profile,
         userId: user.id,
@@ -8763,14 +8931,14 @@ export class DatabaseStorage implements IStorage {
     return activeOnly ? rows.filter((s) => s.isActive && !s.isFrozen) : rows;
   }
 
-  async createBaristaSkill(name: string): Promise<BaristaSkill> {
-    const [created] = await db.insert(baristaSkills).values({ name: name.trim() }).returning();
+  async createBaristaSkill(name: string, icon?: string | null): Promise<BaristaSkill> {
+    const [created] = await db.insert(baristaSkills).values({ name: name.trim(), icon: icon?.trim() || null }).returning();
     return created;
   }
 
-  async updateBaristaSkill(id: number, data: { name?: string; isActive?: boolean; isFrozen?: boolean }): Promise<BaristaSkill | undefined> {
+  async updateBaristaSkill(id: number, data: { name?: string; icon?: string | null; isActive?: boolean; isFrozen?: boolean }): Promise<BaristaSkill | undefined> {
     const [updated] = await db.update(baristaSkills)
-      .set({ ...data, ...(data.name ? { name: data.name.trim() } : {}), updatedAt: new Date() })
+      .set({ ...data, ...(data.name ? { name: data.name.trim() } : {}), ...(data.icon !== undefined ? { icon: data.icon?.trim() || null } : {}), updatedAt: new Date() })
       .where(eq(baristaSkills.id, id)).returning();
     return updated;
   }

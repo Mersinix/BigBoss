@@ -54,7 +54,7 @@ type Overview = {
     interventionsOngoing: number; interventionsCompleted: number; interventionsCancelled: number;
   };
   categories: { category: string; count: number }[];
-  taxonomy: { competencies: TaxonomyItem[]; zones: TaxonomyItem[] };
+  taxonomy: { competencies: TaxonomyItem[]; zones: TaxonomyItem[]; subCompetencies: (TaxonomyItem & { competencyId: number })[] };
   accounts: any[];
   reservations: any[];
   reviews: any[];
@@ -146,7 +146,7 @@ function MaintenanceJobPostDetail({ jobPost, onClose }: { jobPost: AdminMaintena
             <div><p className="text-xs text-muted-foreground">Café / Coffee Owner</p><p className="font-medium">{jobPost.cafeOwnerName || "—"}</p></div>
             <div><p className="text-xs text-muted-foreground">Établissement</p><p className="font-medium">{jobPost.establishment || "—"}</p></div>
             <div><p className="text-xs text-muted-foreground">Localisation</p><p>{jobPost.locationAddress || "—"}</p></div>
-            <div><p className="text-xs text-muted-foreground">Catégorie</p><p>{jobPost.categories.length ? jobPost.categories.join(", ") : "—"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Compétence</p><p>{jobPost.categories.length ? jobPost.categories.join(", ") : "—"}</p></div>
             <div><p className="text-xs text-muted-foreground">Urgence</p><p>{URGENCY_LABELS[jobPost.urgency] ?? jobPost.urgency}</p></div>
             <div><p className="text-xs text-muted-foreground">Date / heure</p><p>{scheduled ?? "—"}</p></div>
             <div><p className="text-xs text-muted-foreground">Téléphone de contact</p><p>{jobPost.contactPhone || "—"}</p></div>
@@ -276,6 +276,102 @@ function TaxonomyList({ title, items, kind, onRefresh }: {
         <Button variant="ghost" size="icon" title={item.isActive ? "Désactiver" : "Activer"} onClick={() => update.mutate({ id: item.id, data: { isActive: !item.isActive } })}><CheckCircle className={`h-3.5 w-3.5 ${item.isActive ? "text-green-600" : "text-muted-foreground"}`} /></Button>
         <Button variant="ghost" size="icon" className="text-destructive" onClick={() => remove.mutate(item.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
       </div>)}
+    </CardContent>
+  </Card>;
+}
+
+// Sous-compétences (one level below a Compétence) — same management experience as
+// Admin → PRINT → Catégories' SubCategoryManager (pick a parent via a Select, manage its
+// children inline below), adapted to this page's own TaxonomyList row styling instead of
+// Print's, per the task's "preserve Maintenance's visual identity" requirement. Sub-skills
+// are pure taxonomy metadata — no provider selection or intervention ever references them
+// (maintenanceProfiles/maintenanceJobPosts only ever store parent competency names), so
+// deleting one can never orphan a provider profile or historical intervention record.
+function SubCompetencyManager({ competencies, subCompetencies, onRefresh }: {
+  competencies: TaxonomyItem[]; subCompetencies: (TaxonomyItem & { competencyId: number })[]; onRefresh: () => void;
+}) {
+  const { toast } = useToast();
+  const [competencyId, setCompetencyId] = useState<number | null>(competencies[0]?.id ?? null);
+  const [draft, setDraft] = useState("");
+  const [draftIcon, setDraftIcon] = useState("");
+  const [editing, setEditing] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [iconEditing, setIconEditing] = useState<number | null>(null);
+  const [iconEditValue, setIconEditValue] = useState("");
+
+  // Keeps the selected parent valid if the competency list changes (e.g. the selected one
+  // gets deleted elsewhere) — never leaves this picker pointing at a nonexistent competency.
+  useEffect(() => {
+    if (competencyId != null && competencies.some((c) => c.id === competencyId)) return;
+    setCompetencyId(competencies[0]?.id ?? null);
+  }, [competencies, competencyId]);
+
+  const items = subCompetencies.filter((s) => s.competencyId === competencyId);
+
+  const create = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/maintenance/sub-competencies", { competencyId, name: draft.trim(), icon: draftIcon.trim() || null }),
+    onSuccess: () => { setDraft(""); setDraftIcon(""); onRefresh(); toast({ title: "Ajouté" }); },
+    onError: (e: any) => toast({ title: "Impossible d'ajouter", description: e.message, variant: "destructive" }),
+  });
+  const update = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/admin/maintenance/sub-competencies/${id}`, data),
+    onSuccess: () => { setEditing(null); setIconEditing(null); onRefresh(); },
+    onError: () => toast({ title: "Mise à jour impossible", variant: "destructive" }),
+  });
+  const remove = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/maintenance/sub-competencies/${id}`),
+    onSuccess: onRefresh,
+    onError: () => toast({ title: "Suppression impossible", variant: "destructive" }),
+  });
+
+  return <Card>
+    <CardHeader className="pb-3"><CardTitle className="text-base">Sous-compétences</CardTitle></CardHeader>
+    <CardContent className="space-y-3">
+      <Select value={competencyId != null ? String(competencyId) : undefined} onValueChange={(v) => setCompetencyId(Number(v))}>
+        <SelectTrigger data-testid="select-subcompetency-parent"><SelectValue placeholder="Choisir une compétence" /></SelectTrigger>
+        <SelectContent>
+          {competencies.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.icon ? `${c.icon} ` : ""}{c.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      {competencyId == null ? <p className="text-sm text-muted-foreground">Ajoutez d'abord une compétence.</p> : (
+        <>
+          <div className="flex gap-2">
+            <Input value={draftIcon} onChange={(e) => setDraftIcon(e.target.value)} placeholder="☕" className="w-14 text-center text-lg shrink-0" data-testid="input-subcompetency-draft-icon" />
+            <Input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Ajouter une sous-compétence" onKeyDown={(e) => e.key === "Enter" && draft.trim() && create.mutate()} data-testid="input-subcompetency-draft-name" />
+            <Button size="sm" disabled={!draft.trim() || create.isPending} onClick={() => create.mutate()}><Plus className="h-4 w-4 mr-1" />Ajouter</Button>
+          </div>
+          {items.length === 0 ? <p className="text-sm text-muted-foreground">Aucune sous-compétence pour cette compétence.</p> : items.map((item) => (
+            <div key={item.id} className="flex items-center gap-2 rounded-lg border p-2">
+              {iconEditing === item.id ? (
+                <Input autoFocus value={iconEditValue} onChange={(e) => setIconEditValue(e.target.value)} onKeyDown={(e) => {
+                  if (e.key === "Enter") update.mutate({ id: item.id, data: { icon: iconEditValue.trim() || null } });
+                  if (e.key === "Escape") setIconEditing(null);
+                }} onBlur={() => update.mutate({ id: item.id, data: { icon: iconEditValue.trim() || null } })} className="w-12 text-center text-lg shrink-0 p-1" />
+              ) : (
+                <button
+                  type="button"
+                  title="Modifier l'icône"
+                  className="w-8 h-8 shrink-0 flex items-center justify-center text-lg rounded-md hover:bg-muted"
+                  onClick={() => { setIconEditing(item.id); setIconEditValue(item.icon ?? ""); }}
+                  data-testid={`button-edit-subcompetency-icon-${item.id}`}
+                >
+                  {item.icon || <Wrench className="h-4 w-4 text-muted-foreground" />}
+                </button>
+              )}
+              {editing === item.id ? <Input autoFocus value={editValue} onChange={(e) => setEditValue(e.target.value)} onKeyDown={(e) => {
+                if (e.key === "Enter" && editValue.trim()) update.mutate({ id: item.id, data: { name: editValue.trim() } });
+                if (e.key === "Escape") setEditing(null);
+              }} /> : <span className="flex-1 text-sm font-medium">{item.name}</span>}
+              {item.isFrozen && <Badge variant="outline" className="text-xs text-blue-600"><Snowflake className="h-3 w-3 mr-1" />Gelé</Badge>}
+              {!item.isActive && <Badge variant="secondary" className="text-xs">Inactif</Badge>}
+              {editing === item.id ? <Button size="sm" onClick={() => editValue.trim() && update.mutate({ id: item.id, data: { name: editValue.trim() } })}>OK</Button> : <Button variant="ghost" size="icon" onClick={() => { setEditing(item.id); setEditValue(item.name); }}><Pencil className="h-3.5 w-3.5" /></Button>}
+              <Button variant="ghost" size="icon" title={item.isFrozen ? "Dégeler" : "Geler"} onClick={() => update.mutate({ id: item.id, data: { isFrozen: !item.isFrozen } })}><Snowflake className={`h-3.5 w-3.5 ${item.isFrozen ? "text-blue-600" : ""}`} /></Button>
+              <Button variant="ghost" size="icon" title={item.isActive ? "Désactiver" : "Activer"} onClick={() => update.mutate({ id: item.id, data: { isActive: !item.isActive } })}><CheckCircle className={`h-3.5 w-3.5 ${item.isActive ? "text-green-600" : "text-muted-foreground"}`} /></Button>
+              <Button variant="ghost" size="icon" className="text-destructive" onClick={() => remove.mutate(item.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+            </div>
+          ))}
+        </>
+      )}
     </CardContent>
   </Card>;
 }
@@ -410,7 +506,7 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
           <Info icon={Award} label="Expérience" value={`${account.yearsExperience} ans`} />
           <Info icon={Star} label="Évaluation" value={<><Stars value={account.rating} /> ({account.reviewCount} avis)</>} />
           <Info icon={MapPin} label="Zone de couverture" value={account.coverageArea} />
-          <div><p className="text-xs text-muted-foreground mb-1">Compétences / catégories</p><div className="flex flex-wrap gap-1">{[...(account.categories ?? []), ...(account.skills ?? [])].map((x: string) => <Badge key={x} variant="secondary" className="text-xs">{x}</Badge>)}</div></div>
+          <div><p className="text-xs text-muted-foreground mb-1">Compétences</p><div className="flex flex-wrap gap-1">{(account.skills ?? []).map((x: string) => <Badge key={x} variant="secondary" className="text-xs">{x}</Badge>)}</div></div>
           <div><p className="text-xs text-muted-foreground mb-1">Certifications</p><p>{(account.certifications ?? []).join(", ") || "—"}</p></div>
           <div className="sm:col-span-2"><p className="text-xs text-muted-foreground mb-1">Description</p><p className="whitespace-pre-wrap">{account.description || "—"}</p></div>
           <Info icon={Calendar} label="Jours et horaires" value={`${(account.workingDays ?? []).join(", ") || "—"} · ${account.startTime}–${account.endTime}`} />
@@ -570,6 +666,9 @@ export default function MaintenanceAdminPage() {
   // Compétences & zones → Analytics — docs/maintenance_pricing_admin_performance_audit.md
   // Section 6).
   const [section, setSection] = useState("accounts");
+  // Compétences/Zones switcher inside the existing "Compétences & zones" tab — splits what
+  // was one combined grid into two, without touching the outer 4-tab structure above it.
+  const [taxonomySection, setTaxonomySection] = useState<"competencies" | "zones">("competencies");
   const [selectedAccount, setSelectedAccount] = useState<any | null>(null);
   const [addAccountOpen, setAddAccountOpen] = useState(false);
   const [selectedJobPost, setSelectedJobPost] = useState<AdminMaintenanceJobPost | null>(null);
@@ -630,7 +729,7 @@ export default function MaintenanceAdminPage() {
     const accounts = data?.accounts ?? [];
     return {
       types: Array.from(new Set(accounts.map((a) => a.profileType).filter(Boolean))).sort(),
-      categories: Array.from(new Set(accounts.flatMap((a) => [...(a.categories ?? []), ...(a.skills ?? [])]))).sort(),
+      categories: Array.from(new Set(accounts.flatMap((a) => a.skills ?? []))).sort(),
       locations: Array.from(new Set(accounts.flatMap((a) => (a.coverageArea || a.location || "").split(",").map((x: string) => x.trim()).filter(Boolean)))).sort(),
     };
   }, [data?.accounts]);
@@ -643,7 +742,7 @@ export default function MaintenanceAdminPage() {
       : [...all].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
   }, [data?.accounts, accountOrderedIds]);
   const accounts = useMemo(() => sortedAccounts.filter((a) => {
-    const haystack = [a.name, a.jobTitle, a.location, a.coverageArea, ...(a.categories ?? []), ...(a.skills ?? [])].join(" ").toLowerCase();
+    const haystack = [a.name, a.jobTitle, a.location, a.coverageArea, ...(a.skills ?? [])].join(" ").toLowerCase();
     const zones = (a.coverageArea || a.location || "").split(",").map((x: string) => x.trim());
     const accountRating = (a.rating ?? 0) / 10;
     return (!search || haystack.includes(search.toLowerCase()))
@@ -651,7 +750,7 @@ export default function MaintenanceAdminPage() {
       && (availability === "all" || (availability === "available" ? a.available : !a.available))
       && (visibility === "all" || (visibility === "visible" ? a.marketplaceVisible : !a.marketplaceVisible))
       && (profileType === "all" || a.profileType === profileType)
-      && (category === "all" || [...(a.categories ?? []), ...(a.skills ?? [])].includes(category))
+      && (category === "all" || (a.skills ?? []).includes(category))
       && (location === "all" || zones.includes(location))
       && (rating === "all" || (rating === "rated" ? accountRating > 0 : accountRating >= Number(rating)));
   }), [sortedAccounts, search, status, availability, visibility, profileType, category, location, rating]);
@@ -777,10 +876,25 @@ export default function MaintenanceAdminPage() {
           <TabsTrigger value="analytics" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Analytics</TabsTrigger>
         </TabsList>
       </div>
-      <TabsContent value="taxonomy" className="mt-4 grid lg:grid-cols-2 gap-6">
-        <TaxonomyList title="Compétences demandées" kind="competencies" items={data?.taxonomy?.competencies ?? []} onRefresh={refresh} />
-        <TaxonomyList title="Zone d'intervention" kind="zones" items={data?.taxonomy?.zones ?? []} onRefresh={refresh} />
-        <Card className="lg:col-span-2"><CardHeader><CardTitle className="text-base">Demandes par compétence</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-2">{(data?.categories ?? []).map((row) => <Badge key={row.category} variant="outline">{row.category} · {row.count}</Badge>)}</CardContent></Card>
+      <TabsContent value="taxonomy" className="mt-4">
+        {/* Compétences/Zones switcher — splits what used to be one combined grid into two
+            sections, same pill-switcher visual convention as the outer tab bar above. */}
+        <Tabs value={taxonomySection} onValueChange={(v) => setTaxonomySection(v as "competencies" | "zones")}>
+          <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+            <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
+              <TabsTrigger value="competencies" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Compétences</TabsTrigger>
+              <TabsTrigger value="zones" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Zones</TabsTrigger>
+            </TabsList>
+          </div>
+          <TabsContent value="competencies" className="mt-4 grid lg:grid-cols-2 gap-6">
+            <TaxonomyList title="Compétences demandées" kind="competencies" items={data?.taxonomy?.competencies ?? []} onRefresh={refresh} />
+            <SubCompetencyManager competencies={data?.taxonomy?.competencies ?? []} subCompetencies={data?.taxonomy?.subCompetencies ?? []} onRefresh={refresh} />
+            <Card className="lg:col-span-2"><CardHeader><CardTitle className="text-base">Demandes par compétence</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-2">{(data?.categories ?? []).map((row) => <Badge key={row.category} variant="outline">{row.category} · {row.count}</Badge>)}</CardContent></Card>
+          </TabsContent>
+          <TabsContent value="zones" className="mt-4 grid lg:grid-cols-2 gap-6">
+            <TaxonomyList title="Zone d'intervention" kind="zones" items={data?.taxonomy?.zones ?? []} onRefresh={refresh} />
+          </TabsContent>
+        </Tabs>
       </TabsContent>
       <TabsContent value="accounts" className="mt-4 space-y-4">
         <div className="flex justify-end">
@@ -946,9 +1060,9 @@ export default function MaintenanceAdminPage() {
             </SelectContent>
           </Select>
           <Select value={jobPostCategory} onValueChange={setJobPostCategory}>
-            <SelectTrigger className="w-[180px] shrink-0"><SelectValue placeholder="Catégorie" /></SelectTrigger>
+            <SelectTrigger className="w-[180px] shrink-0"><SelectValue placeholder="Compétence" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes catégories</SelectItem>
+              <SelectItem value="all">Toutes compétences</SelectItem>
               {jobPostFilterOptions.categories.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}
             </SelectContent>
           </Select>

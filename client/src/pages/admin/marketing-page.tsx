@@ -41,6 +41,7 @@ type Overview = {
   };
   categories: { category: string; count: number }[];
   taxonomy: TaxonomyItem[];
+  subcategoryTaxonomy: (TaxonomyItem & { categoryId: number })[];
   accounts: any[];
   projects: any[];
   reviews: any[];
@@ -117,6 +118,94 @@ function TaxonomyList({ items, onRefresh }: { items: TaxonomyItem[]; onRefresh: 
       </div>)}
     </CardContent>
   </Card>;
+}
+
+// ── Subcategories taxonomy — one level below TaxonomyList (e.g. "Vidéo" →
+// "Montage vidéo"/"Motion design"). Mirrors Admin PRINT's SubCategoryManager
+// exactly: same list-row pattern, scoped to a category picked from a Select. ──
+
+function SubCategoryManager({ categories, subcategories, onRefresh }: {
+  categories: TaxonomyItem[]; subcategories: (TaxonomyItem & { categoryId: number })[]; onRefresh: () => void;
+}) {
+  const { toast } = useToast();
+  const [categoryId, setCategoryId] = useState<number | null>(categories[0]?.id ?? null);
+  const [draft, setDraft] = useState("");
+  const [draftIcon, setDraftIcon] = useState("");
+  const [editing, setEditing] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [iconEditing, setIconEditing] = useState<number | null>(null);
+  const [iconEditValue, setIconEditValue] = useState("");
+  const create = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/marketing/subcategories", { categoryId, name: draft.trim(), icon: draftIcon.trim() || null }),
+    onSuccess: () => { setDraft(""); setDraftIcon(""); onRefresh(); toast({ title: "Sous-catégorie ajoutée" }); },
+    onError: (e: any) => toast({ title: "Impossible d'ajouter", description: e.message, variant: "destructive" }),
+  });
+  const update = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: any }) => apiRequest("PATCH", `/api/admin/marketing/subcategories/${id}`, data),
+    onSuccess: () => { setEditing(null); setIconEditing(null); onRefresh(); },
+    onError: () => toast({ title: "Mise à jour impossible", variant: "destructive" }),
+  });
+  const remove = useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/marketing/subcategories/${id}`),
+    onSuccess: onRefresh,
+    onError: () => toast({ title: "Suppression impossible", variant: "destructive" }),
+  });
+  const items = subcategories.filter((s) => s.categoryId === categoryId);
+
+  return (
+    <Card>
+      <CardHeader className="pb-3"><CardTitle className="text-base">Sous-catégories de services</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        {categories.length === 0 ? <p className="text-sm text-muted-foreground">Créez d'abord une catégorie.</p> : (
+          <>
+            <Select value={categoryId ? String(categoryId) : undefined} onValueChange={(v) => setCategoryId(Number(v))}>
+              <SelectTrigger data-testid="select-marketing-subcategory-parent"><SelectValue placeholder="Choisir une catégorie" /></SelectTrigger>
+              <SelectContent>{categories.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}</SelectContent>
+            </Select>
+            <div className="flex gap-2">
+              <Input value={draftIcon} onChange={(e) => setDraftIcon(e.target.value)} placeholder="📢" className="w-14 text-center text-lg shrink-0" data-testid="input-marketing-subcategory-draft-icon" />
+              <Input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Ajouter une sous-catégorie" onKeyDown={(e) => e.key === "Enter" && draft.trim() && categoryId && create.mutate()} data-testid="input-new-marketing-subcategory" />
+              <Button size="sm" disabled={!draft.trim() || !categoryId || create.isPending} onClick={() => create.mutate()} data-testid="button-add-marketing-subcategory"><Plus className="h-4 w-4 mr-1" />Ajouter</Button>
+            </div>
+            {items.length === 0 ? <p className="text-sm text-muted-foreground">Aucune sous-catégorie pour cette catégorie.</p> : items.map((item) => (
+              <div key={item.id} className="flex items-center gap-2 rounded-lg border p-2" data-testid={`row-marketing-subcategory-${item.id}`}>
+                {iconEditing === item.id ? (
+                  <Input autoFocus value={iconEditValue} onChange={(e) => setIconEditValue(e.target.value)} onKeyDown={(e) => {
+                    if (e.key === "Enter") update.mutate({ id: item.id, data: { icon: iconEditValue.trim() || null } });
+                    if (e.key === "Escape") setIconEditing(null);
+                  }} onBlur={() => update.mutate({ id: item.id, data: { icon: iconEditValue.trim() || null } })} className="w-12 text-center text-lg shrink-0 p-1" />
+                ) : (
+                  <button
+                    type="button"
+                    title="Modifier l'icône"
+                    className="w-8 h-8 shrink-0 flex items-center justify-center text-lg rounded-md hover:bg-muted"
+                    onClick={() => { setIconEditing(item.id); setIconEditValue(item.icon ?? ""); }}
+                    data-testid={`button-edit-marketing-subcategory-icon-${item.id}`}
+                  >
+                    {item.icon || <Megaphone className="h-4 w-4 text-muted-foreground" />}
+                  </button>
+                )}
+                {editing === item.id ? (
+                  <Input autoFocus value={editValue} onChange={(e) => setEditValue(e.target.value)} onKeyDown={(e) => {
+                    if (e.key === "Enter" && editValue.trim()) update.mutate({ id: item.id, data: { name: editValue.trim() } });
+                    if (e.key === "Escape") setEditing(null);
+                  }} />
+                ) : <span className="flex-1 text-sm font-medium">{item.name}</span>}
+                {item.isFrozen && <Badge variant="outline" className="text-xs text-blue-600"><Snowflake className="h-3 w-3 mr-1" />Gelé</Badge>}
+                {!item.isActive && <Badge variant="secondary" className="text-xs">Inactif</Badge>}
+                {editing === item.id
+                  ? <Button size="sm" onClick={() => editValue.trim() && update.mutate({ id: item.id, data: { name: editValue.trim() } })}>OK</Button>
+                  : <Button variant="ghost" size="icon" onClick={() => { setEditing(item.id); setEditValue(item.name); }}><Pencil className="h-3.5 w-3.5" /></Button>}
+                <Button variant="ghost" size="icon" title={item.isFrozen ? "Dégeler" : "Geler"} onClick={() => update.mutate({ id: item.id, data: { isFrozen: !item.isFrozen } })}><Snowflake className={`h-3.5 w-3.5 ${item.isFrozen ? "text-blue-600" : ""}`} /></Button>
+                <Button variant="ghost" size="icon" title={item.isActive ? "Désactiver" : "Activer"} onClick={() => update.mutate({ id: item.id, data: { isActive: !item.isActive } })}><CheckCircle className={`h-3.5 w-3.5 ${item.isActive ? "text-green-600" : "text-muted-foreground"}`} /></Button>
+                <Button variant="ghost" size="icon" className="text-destructive" onClick={() => remove.mutate(item.id)} data-testid={`button-delete-marketing-subcategory-${item.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>
+              </div>
+            ))}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function AccountDetail({ account, onClose, onRefresh }: { account: any | null; onClose: () => void; onRefresh: () => void }) {
@@ -558,6 +647,7 @@ export default function MarketingAdminPage() {
     qc.invalidateQueries({ queryKey: ["/api/admin/marketing"] });
     qc.invalidateQueries({ queryKey: ["/api/marketing/categories"] });
     qc.invalidateQueries({ queryKey: ["/api/marketing/taxonomy"] });
+    qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "/api/marketing/subcategories" });
   };
   const stats = data?.stats;
   // Agency → Multiple Services: categories now live on each agency's real services
@@ -711,7 +801,8 @@ export default function MarketingAdminPage() {
       </div>
       <TabsContent value="taxonomy" className="mt-4 grid lg:grid-cols-2 gap-6">
         <TaxonomyList items={data?.taxonomy ?? []} onRefresh={refresh} />
-        <Card><CardHeader><CardTitle className="text-base">Demandes par catégorie</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-2">{(data?.categories ?? []).map((row) => <Badge key={row.category} variant="secondary">{row.category} · {row.count}</Badge>)}</CardContent></Card>
+        <SubCategoryManager categories={data?.taxonomy ?? []} subcategories={data?.subcategoryTaxonomy ?? []} onRefresh={refresh} />
+        <Card className="lg:col-span-2"><CardHeader><CardTitle className="text-base">Demandes par catégorie</CardTitle></CardHeader><CardContent className="flex flex-wrap gap-2">{(data?.categories ?? []).map((row) => <Badge key={row.category} variant="secondary">{row.category} · {row.count}</Badge>)}</CardContent></Card>
       </TabsContent>
       <TabsContent value="accounts" className="mt-4 space-y-4">
         <div className="flex justify-end">

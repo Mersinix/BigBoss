@@ -47,7 +47,13 @@ type FormState = {
   title: string;
   establishment: string;
   locationAddress: string;
-  categories: string[];
+  // Single-select parent skill (task: "Intervention Creation — One Parent Skill and
+  // Multiple Sub-Skills"). Still submitted as a one-element array (`categories: [category]`)
+  // to the existing `maintenanceJobPosts.categories: text[]` column — no schema change,
+  // and a historical job saved under the old multi-select UI still displays/edits fine
+  // (collapses to its first category on next save, same as the column always allowed).
+  category: string;
+  subCategories: string[];
   urgency: string;
   scheduledDate: string;
   scheduledTime: string;
@@ -72,7 +78,8 @@ function initialState(
     title: job?.title ?? "",
     establishment: job ? job.establishment : defaultEstablishment,
     locationAddress: job ? job.locationAddress : defaultLocationAddress,
-    categories: job?.categories ?? [],
+    category: job?.categories?.[0] ?? "",
+    subCategories: job?.subCategories ?? [],
     urgency: job?.urgency ?? "NORMAL",
     scheduledDate: job?.scheduledDate ?? "",
     scheduledTime: job?.scheduledTime ?? "",
@@ -109,7 +116,17 @@ export function MaintenanceJobPostFormModal({
 
   const createJob = useCreateMaintenanceJob();
   const updateJob = useUpdateMaintenanceJob();
-  const { data: categoryOptions = [] } = useQuery<string[]>({ queryKey: ["/api/maintenance/categories"] });
+  // Fetched from the taxonomy (not just /api/maintenance/categories) so the form also has
+  // each sub-competency's parent (competencyId), needed to filter the second picklist down
+  // to only the sub-skills belonging to whichever parent(s) are currently selected — same
+  // admin-managed source of truth as everywhere else (Admin Compétences, Espace Maintenance
+  // → Compétences, Coffee Owner /maintenance), never a second taxonomy.
+  const { data: taxonomy } = useQuery<{
+    competencies: { id: number; name: string }[];
+    subCompetencies: { id: number; competencyId: number; name: string }[];
+  }>({ queryKey: ["/api/maintenance/taxonomy"] });
+  const categoryOptions = taxonomy?.competencies.map((c) => c.name) ?? [];
+  const competencyIdByName = new Map((taxonomy?.competencies ?? []).map((c) => [c.name, c.id] as const));
 
   const [form, setForm] = useState<FormState>(() => initialState(editingJob, user?.name ?? "", user?.locationAddress ?? "", user?.phone ?? ""));
   const [titleError, setTitleError] = useState(false);
@@ -131,9 +148,27 @@ export function MaintenanceJobPostFormModal({
   const isEditing = !!editingJob;
   const isPending = createJob.isPending || updateJob.isPending;
 
+  // Second picklist's options: only sub-competencies belonging to the currently-selected
+  // SINGLE parent category — "when the Coffee Owner changes the parent category, the
+  // sub-skill options must update accordingly."
+  const selectedCompetencyId = form.category ? competencyIdByName.get(form.category) : undefined;
+  const subCategoryOptions = (taxonomy?.subCompetencies ?? []).filter((s) => s.competencyId === selectedCompetencyId);
+
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((p) => ({ ...p, [key]: value }));
-  const toggleCategory = (value: string) =>
-    setForm((p) => ({ ...p, categories: p.categories.includes(value) ? p.categories.filter((v) => v !== value) : [...p.categories, value] }));
+  const selectCategory = (value: string) =>
+    setForm((p) => {
+      const nextCompetencyId = value ? competencyIdByName.get(value) : undefined;
+      // Changing (or clearing) the parent clears any sub-skills that don't belong to the
+      // NEW parent — "if the previously selected sub-skill does not belong to the newly
+      // selected parent, it must be cleared" — same rule enforced server-side as a
+      // safety net (validMaintenanceSubCategories in server/routes.ts).
+      const subCategories = p.subCategories.filter((subName) =>
+        (taxonomy?.subCompetencies ?? []).some((s) => s.name === subName && s.competencyId === nextCompetencyId),
+      );
+      return { ...p, category: value, subCategories };
+    });
+  const toggleSubCategory = (value: string) =>
+    setForm((p) => ({ ...p, subCategories: p.subCategories.includes(value) ? p.subCategories.filter((v) => v !== value) : [...p.subCategories, value] }));
 
   const submit = (status: MaintenanceJobStatus) => {
     if (isPending) return;
@@ -156,7 +191,8 @@ export function MaintenanceJobPostFormModal({
     const payload: MaintenanceJobPostInput = {
       title,
       locationAddress: form.locationAddress.trim(),
-      categories: form.categories,
+      categories: form.category ? [form.category] : [],
+      subCategories: form.subCategories,
       urgency: form.urgency,
       scheduledDate: form.scheduledDate || null,
       scheduledTime: form.scheduledTime || null,
@@ -326,13 +362,32 @@ export function MaintenanceJobPostFormModal({
           {dateError && <p className="text-xs text-red-500 -mt-2" data-testid="error-maintenance-job-date">La date de l'intervention est obligatoire pour publier.</p>}
 
           <div>
-            {label("Catégorie")}
+            {label("Compétence")}
             {categoryOptions.length === 0 ? (
-              <p className={`text-xs ${t.textMuted}`}>Aucune catégorie disponible.</p>
+              <p className={`text-xs ${t.textMuted}`}>Aucune compétence disponible.</p>
+            ) : (
+              <Select value={form.category || "__none__"} onValueChange={(v) => selectCategory(v === "__none__" ? "" : v)}>
+                <SelectTrigger className={t.inputBg} data-testid="select-maintenance-job-category">
+                  <SelectValue placeholder="Sélectionner une compétence" />
+                </SelectTrigger>
+                <SelectContent className={t.selectContent}>
+                  <SelectItem value="__none__">Aucune</SelectItem>
+                  {categoryOptions.map((opt) => <SelectItem key={opt} value={opt} data-testid={`option-maintenance-job-category-${opt}`}>{opt}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          <div>
+            {label("Sous-compétences")}
+            {!form.category ? (
+              <p className={`text-xs ${t.textMuted}`}>Sélectionnez d'abord une compétence.</p>
+            ) : subCategoryOptions.length === 0 ? (
+              <p className={`text-xs ${t.textMuted}`}>Aucune sous-compétence disponible pour cette sélection.</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
-                {categoryOptions.map((opt) =>
-                  chip(opt, opt, form.categories.includes(opt), () => toggleCategory(opt), `chip-maintenance-job-category-${opt}`)
+                {subCategoryOptions.map((opt) =>
+                  chip(opt.name, opt.name, form.subCategories.includes(opt.name), () => toggleSubCategory(opt.name), `chip-maintenance-job-subcategory-${opt.id}`)
                 )}
               </div>
             )}

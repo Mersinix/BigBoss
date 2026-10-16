@@ -797,7 +797,12 @@ export default function DeliveryPage() {
   const { data: users = [] } = useQuery<User[]>({ queryKey: ["/api/admin/users"] });
   const updateStatus = useUpdateDeliveryStatus();
   const { toast } = useToast();
-  const [viewTarget, setViewTarget] = useState<DeliveryWithDetails | null>(null);
+  // Tracks only the id, never a frozen object — re-resolved against the live `deliveries`
+  // array every render (same pattern as driver-deliveries-page.tsx) so a background refetch
+  // (e.g. the real-time transport-requirements sync) reaches an already-open modal instead of
+  // being stuck on whatever snapshot existed when it was opened.
+  const [viewTargetId, setViewTargetId] = useState<number | null>(null);
+  const viewTarget = viewTargetId != null ? (deliveries.find((d) => d.id === viewTargetId) ?? null) : null;
   const [tab, setTab] = useState("deliveries");
   const isMobile = useIsMobile();
   const [kpiModalOpen, setKpiModalOpen] = useState(false);
@@ -884,7 +889,7 @@ export default function DeliveryPage() {
             <DeliveriesTab
               deliveries={deliveries}
               isLoading={isLoading}
-              onViewDetails={setViewTarget}
+              onViewDetails={(d) => setViewTargetId(d.id)}
               onCancel={handleCancel}
               cancelling={updateStatus.isPending}
             />
@@ -895,11 +900,11 @@ export default function DeliveryPage() {
         {tab === "supplier-drivers" && <div className="mt-4"><SupplierDriversTab users={users} deliveries={deliveries} /></div>}
       </Tabs>
 
-      <Dialog open={!!viewTarget} onOpenChange={(v) => { if (!v) setViewTarget(null); }}>
+      <Dialog open={!!viewTarget} onOpenChange={(v) => { if (!v) setViewTargetId(null); }}>
         {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
             scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
         <DialogContent hideClose className="max-w-lg max-h-[85vh] overflow-y-auto p-4 sm:p-6 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
-          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setViewTarget(null)} aria-label="Close" data-testid="button-close-delivery-detail">
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setViewTargetId(null)} aria-label="Close" data-testid="button-close-delivery-detail">
             <X className="w-4 h-4" />
           </button>
           <DialogHeader><DialogTitle>Détails de la livraison</DialogTitle></DialogHeader>

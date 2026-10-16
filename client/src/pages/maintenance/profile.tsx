@@ -51,10 +51,13 @@ export default function Profile() {
     },
     enabled: !!user?.id,
   });
-  const { data: taxonomy } = useQuery<{ competencies: { name: string }[]; zones: { name: string }[] }>({
+  // Only zones are read here now — competencies/sub-competencies moved to their own
+  // "Compétences" Business tab (pages/maintenance/competencies.tsx), which owns the
+  // skills selection state/save independently (same GET /api/maintenance/taxonomy,
+  // no second source of truth).
+  const { data: taxonomy } = useQuery<{ zones: { name: string }[] }>({
     queryKey: ["/api/maintenance/taxonomy"],
   });
-  const maintenanceSpecialties = taxonomy?.competencies.map((item) => item.name) ?? [];
   const coverageAreas = taxonomy?.zones.map((item) => item.name) ?? [];
 
   // Profile state — business fields only; name/phone/email/photo/cover are
@@ -63,7 +66,6 @@ export default function Profile() {
   const [jobTitle, setJobTitle] = useState("Technicien de maintenance");
   const [bio, setBio] = useState("");
   const [serviceDetails, setServiceDetails] = useState("");
-  const [selectedSpecialties, setSelectedSpecialties] = useState<string[]>([]);
   const [selectedAreas, setSelectedAreas] = useState<string[]>([]);
   const [agentType, setAgentType] = useState("Freelance");
   const [responseTime, setResponseTime] = useState("< 2h");
@@ -80,7 +82,6 @@ export default function Profile() {
     setJobTitle(p.jobTitle);
     setBio(p.description);
     setServiceDetails(p.serviceDetails ?? "");
-    setSelectedSpecialties(p.skills ?? []);
     setSelectedAreas(p.coverageArea ? p.coverageArea.split(",").map((v: string) => v.trim()).filter(Boolean) : []);
     setAgentType(p.profileType);
     setResponseTime(p.responseTime);
@@ -100,8 +101,7 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const saveProfileMutation = useMutation({
     mutationFn: () => apiRequest("PATCH", "/api/maintenance/profile", {
-      jobTitle, profileType: agentType, skills: selectedSpecialties,
-      categories: selectedSpecialties, description: bio, serviceDetails,
+      jobTitle, profileType: agentType, description: bio, serviceDetails,
       coverageArea: selectedAreas.join(", "),
       responseTime,
       certifications, portfolioImages,
@@ -142,9 +142,6 @@ export default function Profile() {
     if (saved) goLive.mutate();
   };
 
-  const toggleSpecialty = (s: string) => {
-    setSelectedSpecialties((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
-  };
   const toggleArea = (a: string) => {
     setSelectedAreas((prev) => prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]);
   };
@@ -316,29 +313,6 @@ export default function Profile() {
                 ))}
               </div>
             )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Specialties */}
-      <Card className="rounded-2xl bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 shadow-sm">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-semibold flex items-center gap-2"><Wrench className="w-4 h-4 text-orange-500" />Spécialités & Compétences</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-1.5">
-            {maintenanceSpecialties.map((s) => (
-              <button
-                key={s}
-                onClick={() => toggleSpecialty(s)}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
-                  selectedSpecialties.includes(s)
-                    ? "bg-orange-600 text-white border-orange-600"
-                    : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-orange-300 dark:hover:border-orange-600"
-                }`}>
-                {s}
-              </button>
-            ))}
           </div>
         </CardContent>
       </Card>

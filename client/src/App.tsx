@@ -481,6 +481,10 @@ function Router() {
       <Route path="/marketing-panel/projects">{() => <Redirect to="/marketing-panel/business?tab=projects" />}</Route>
       <Route path="/marketing-panel/clients">{() => <Redirect to="/marketing-panel/business?tab=clients" />}</Route>
       <Route path="/marketing-panel/invoices">{() => <Redirect to="/marketing-panel/business?tab=invoices" />}</Route>
+      {/* Categories & Subcategories: Complete End-to-End Integration — same
+          direct-link redirect convention as every other Business sub-tab
+          (e.g. /printer/categories → /printer/business?tab=categories). */}
+      <Route path="/marketing-panel/categories">{() => <Redirect to="/marketing-panel/business?tab=categories" />}</Route>
       <Route path="/marketing-panel/analytics">
         {() => (<MarketingAccountShell><ProtectedRoute component={MarketingAnalytics} allowedRoles={["MARKETING"]} requireApproved /></MarketingAccountShell>)}
       </Route>

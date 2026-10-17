@@ -707,7 +707,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
             </span>
             <span className="flex items-center gap-1.5">
               <Users className="w-4 h-4" />
-              {isLoading ? "…" : distinctPrinterCount} sociétés d'impression
+              {isLoading ? "…" : distinctPrinterCount} sociétés
             </span>
             <span className="flex items-center gap-1.5">
               <Star className="w-4 h-4 fill-blue-200" />

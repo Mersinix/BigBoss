@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Search, Flag, Moon, Sun, SunMoon, Car, Store, ShieldCheck, LogIn, AlertTriangle, X } from "lucide-react";
+import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Search, Flag, Moon, Sun, SunMoon, Car, Store, ShieldCheck, LogIn, AlertTriangle, X, RotateCcw, Save, Palette } from "lucide-react";
 import { useDeliveryPricingSettings, useUpdateDeliveryPricingSettings, VEHICLE_TYPE_LABELS, type DeliveryVehicleType, type DeliveryPricingSettings, useFinancialLedgerEntries, type FinancialLedgerFilters, useAdminSettlements, useApproveSettlement, useVoidSettlement, type SettlementFilters, useSettlementPayments, useCreatePayment, useConfirmPayment, useFailPayment, useReversePayment, type PaymentMethod, useAdminCodReconciliations, useReconcileCod, useAdminRefunds, useRequestRefund, useConfirmRefund, useFailRefund, useCancelRefund, useAdminAdjustments, useCreateAdjustment, useAdminFinancialSummary } from "@/hooks/use-delivery-ecosystem";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -20,6 +20,8 @@ import { useToast } from "@/hooks/use-toast";
 import type { ServiceKey, ServiceState, ServiceStatesMap } from "@/hooks/use-service-states";
 import { useServiceOrder, type MarketplaceServiceId } from "@/hooks/use-service-order";
 import { useHeroActionSettings, type HeroService, type HeroActionSettingsMap } from "@/hooks/use-hero-actions";
+import { useServiceHeroConfigMap, DEFAULT_SERVICE_HERO_CONFIG, type ServiceHeroConfig, type ServiceHeroConfigMap } from "@/hooks/use-service-hero-config";
+import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY } from "@/components/shared/service-hero";
 import { useAccountDarkModeSettings, type DarkModeAccount, type AccountDarkModeSettingsMap, type AccountThemeMode } from "@/hooks/use-account-dark-mode";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import type { LandingConfig, HeroSlide } from "@shared/schema";
@@ -424,6 +426,316 @@ function HeroActionsSection() {
             </div>
           </div>
         ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ── Service Hero Customization (background/gradient/subtitle/height/alignment/info-row) ──
+
+// Distinct from HeroActionsSection above (Fast Search/Report icon visibility)
+// and from HeroSlidesEditor/LandingConfigSection further below (the PRE-LOGIN
+// landing page's own hero carousel — a separate table/feature entirely). This
+// section lets an admin independently restyle each Coffee-Owner-facing
+// service's own hero (SHOP/BARISTA/ACADEMY/MAINTENANCE/PRINT/MARKETING) —
+// mirrors the staged-draft + explicit Save pattern already used elsewhere on
+// this page (e.g. LandingConfigSection), one config per service via
+// /api/admin/service-hero-config/:service.
+const HEIGHT_OPTIONS: { value: ServiceHeroConfig["height"]; label: string }[] = [
+  { value: "compact", label: "Compact" },
+  { value: "medium", label: "Moyen (défaut)" },
+  { value: "large", label: "Grand" },
+];
+const H_ALIGN_OPTIONS: { value: ServiceHeroConfig["horizontalAlign"]; label: string }[] = [
+  { value: "left", label: "Gauche" },
+  { value: "center", label: "Centre (défaut)" },
+  { value: "right", label: "Droite" },
+];
+const V_ALIGN_OPTIONS: { value: ServiceHeroConfig["verticalAlign"]; label: string }[] = [
+  { value: "top", label: "Haut" },
+  { value: "center", label: "Centre (défaut)" },
+  { value: "bottom", label: "Bas" },
+];
+
+function ServiceHeroCustomizationSection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { configs, isLoading } = useServiceHeroConfigMap();
+  const [selected, setSelected] = useState<HeroService>("SHOP");
+  const [draft, setDraft] = useState<ServiceHeroConfig>(configs[selected]);
+
+  useEffect(() => {
+    setDraft(configs[selected]);
+    // Only re-sync when switching services (or on first load) — not on every
+    // background refetch — so a background realtime refresh never silently
+    // discards an admin's in-progress, unsaved edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected, isLoading]);
+
+  const saved = configs[selected];
+  const isDirty = JSON.stringify(draft) !== JSON.stringify(saved);
+
+  const saveMutation = useMutation({
+    mutationFn: (updates: Partial<ServiceHeroConfig>) =>
+      apiRequest("PATCH", `/api/admin/service-hero-config/${selected}`, updates),
+    onSuccess: async (response) => {
+      const map: ServiceHeroConfigMap = await response.json();
+      queryClient.setQueryData(["/api/service-hero-config"], map);
+      setDraft(map[selected]);
+      toast({ title: "Hero mis à jour", description: `Service ${selected} enregistré.` });
+    },
+    onError: (error: any) => toast({ variant: "destructive", title: "Échec de l'enregistrement", description: error?.message }),
+  });
+
+  const resetMutation = useMutation({
+    mutationFn: () => apiRequest("PATCH", `/api/admin/service-hero-config/${selected}`, DEFAULT_SERVICE_HERO_CONFIG),
+    onSuccess: async (response) => {
+      const map: ServiceHeroConfigMap = await response.json();
+      queryClient.setQueryData(["/api/service-hero-config"], map);
+      setDraft(map[selected]);
+      toast({ title: "Hero réinitialisé", description: `Service ${selected} restauré par défaut.` });
+    },
+    onError: (error: any) => toast({ variant: "destructive", title: "Échec de la réinitialisation", description: error?.message }),
+  });
+
+  const activeMeta = HERO_SERVICES.find((s) => s.key === selected)!;
+  const images = draft.backgroundImages.filter((u) => u.trim().length > 0);
+
+  const setField = <K extends keyof ServiceHeroConfig>(field: K, value: ServiceHeroConfig[K]) => setDraft((d) => ({ ...d, [field]: value }));
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-3">
+          <div className="bg-amber-500/10 rounded-xl p-3"><Palette className="w-5 h-5 text-amber-600" /></div>
+          <div>
+            <CardTitle className="text-base">Personnalisation des Hero Services</CardTitle>
+            <CardDescription className="pt-1">Arrière-plan, sous-titre, hauteur, position et ligne d'info du hero de chaque service, indépendamment.</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        {/* Service selector */}
+        <div className="flex flex-wrap gap-2">
+          {HERO_SERVICES.map(({ key, label, icon: Icon }) => (
+            <Button
+              key={key}
+              type="button"
+              size="sm"
+              variant={selected === key ? "default" : "outline"}
+              onClick={() => setSelected(key)}
+              className={`gap-1.5 ${selected === key ? "bg-amber-500 hover:bg-amber-600 text-white" : ""}`}
+              data-testid={`button-select-hero-service-${key.toLowerCase()}`}
+            >
+              <Icon className="w-3.5 h-3.5" />{label}
+            </Button>
+          ))}
+        </div>
+
+        {isLoading ? (
+          <Skeleton className="h-64 w-full rounded-xl" />
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="space-y-5">
+              {/* Background */}
+              <div className="border border-border/50 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <SectionLabel>Images d'arrière-plan ({images.length})</SectionLabel>
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setField("backgroundImages", [...draft.backgroundImages, ""])} data-testid="button-add-hero-bg-image">
+                    <Plus className="w-3 h-3" /> Ajouter
+                  </Button>
+                </div>
+                {draft.backgroundImages.map((url, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Input
+                      value={url}
+                      onChange={(e) => setField("backgroundImages", draft.backgroundImages.map((u, idx) => idx === i ? e.target.value : u))}
+                      placeholder="https://..."
+                      className="rounded-lg text-sm"
+                      data-testid={`input-hero-bg-image-${i}`}
+                    />
+                    <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-destructive" onClick={() => setField("backgroundImages", draft.backgroundImages.filter((_, idx) => idx !== i))} data-testid={`button-remove-hero-bg-image-${i}`}>
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ))}
+                {images.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Aucune image — l'arrière-plan par défaut du service reste affiché.</p>
+                )}
+                {images.length > 1 && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <Label className="text-xs text-muted-foreground shrink-0">Rotation (secondes)</Label>
+                    <Input
+                      type="number"
+                      min={2}
+                      max={60}
+                      value={draft.rotationIntervalSeconds}
+                      onChange={(e) => setField("rotationIntervalSeconds", Math.max(2, Math.min(60, parseInt(e.target.value) || 6)))}
+                      className="rounded-lg text-sm h-8 w-20"
+                      data-testid="input-hero-rotation-seconds"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Gradient */}
+              <div className="border border-border/50 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <SectionLabel>Dégradé personnalisé</SectionLabel>
+                  <Switch
+                    checked={draft.gradientEnabled}
+                    onCheckedChange={(checked) => setField("gradientEnabled", checked)}
+                    aria-label="Activer le dégradé personnalisé"
+                    data-testid="switch-hero-gradient-enabled"
+                  />
+                </div>
+                {draft.gradientEnabled && (
+                  <>
+                    <p className="text-xs text-muted-foreground">Un dégradé activé remplace les images d'arrière-plan.</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {([["gradientFrom", "Début"], ["gradientVia", "Milieu"], ["gradientTo", "Fin"]] as const).map(([field, label]) => (
+                        <div key={field} className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">{label}</Label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="color"
+                              value={/^#[0-9a-fA-F]{6}$/.test(draft[field]) ? draft[field] : "#111827"}
+                              onChange={(e) => setField(field, e.target.value)}
+                              className="h-8 w-8 rounded border border-border/50 shrink-0"
+                              aria-label={`${label} — couleur`}
+                            />
+                            <Input value={draft[field]} onChange={(e) => setField(field, e.target.value)} placeholder="#111827" className="rounded-lg text-xs h-8" data-testid={`input-hero-${field}`} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Direction</Label>
+                      <Select value={draft.gradientDirection} onValueChange={(v) => setField("gradientDirection", v)}>
+                        <SelectTrigger className="rounded-lg text-sm h-8" data-testid="select-hero-gradient-direction"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="to right">Vers la droite</SelectItem>
+                          <SelectItem value="to bottom right">Diagonale ↘</SelectItem>
+                          <SelectItem value="to bottom">Vers le bas</SelectItem>
+                          <SelectItem value="to bottom left">Diagonale ↙</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Subtitle */}
+              <div className="border border-border/50 rounded-xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <SectionLabel>Sous-titre</SectionLabel>
+                  {draft.subtitle != null && (
+                    <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-muted-foreground" onClick={() => setField("subtitle", null)} data-testid="button-clear-hero-subtitle">
+                      <X className="w-3 h-3" /> Revenir au défaut
+                    </Button>
+                  )}
+                </div>
+                <Textarea
+                  value={draft.subtitle ?? ""}
+                  onChange={(e) => setField("subtitle", e.target.value)}
+                  placeholder="Laisser vide pour conserver le sous-titre par défaut du service"
+                  className="rounded-lg text-sm resize-none"
+                  rows={2}
+                  data-testid="textarea-hero-subtitle"
+                />
+              </div>
+
+              {/* Height & positioning */}
+              <div className="border border-border/50 rounded-xl p-4 space-y-3">
+                <SectionLabel>Hauteur &amp; Position</SectionLabel>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Hauteur</Label>
+                    <Select value={draft.height} onValueChange={(v) => setField("height", v as ServiceHeroConfig["height"])}>
+                      <SelectTrigger className="rounded-lg text-sm h-8" data-testid="select-hero-height"><SelectValue /></SelectTrigger>
+                      <SelectContent>{HEIGHT_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Horizontal</Label>
+                    <Select value={draft.horizontalAlign} onValueChange={(v) => setField("horizontalAlign", v as ServiceHeroConfig["horizontalAlign"])}>
+                      <SelectTrigger className="rounded-lg text-sm h-8" data-testid="select-hero-halign"><SelectValue /></SelectTrigger>
+                      <SelectContent>{H_ALIGN_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Vertical</Label>
+                    <Select value={draft.verticalAlign} onValueChange={(v) => setField("verticalAlign", v as ServiceHeroConfig["verticalAlign"])}>
+                      <SelectTrigger className="rounded-lg text-sm h-8" data-testid="select-hero-valign"><SelectValue /></SelectTrigger>
+                      <SelectContent>{V_ALIGN_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Info row toggle */}
+              <div className="border border-border/50 rounded-xl p-4 flex items-center justify-between">
+                <div>
+                  <SectionLabel>Ligne d'info sous le sous-titre</SectionLabel>
+                  <p className="text-xs text-muted-foreground">Ex. « techniciens disponibles / certifiés / intervention rapide ». Désactiver masque entièrement la ligne existante du service.</p>
+                </div>
+                <Switch
+                  checked={draft.infoRowEnabled}
+                  onCheckedChange={(checked) => setField("infoRowEnabled", checked)}
+                  aria-label="Afficher la ligne d'info"
+                  data-testid="switch-hero-info-row"
+                />
+              </div>
+            </div>
+
+            {/* Live preview */}
+            <div className="space-y-3">
+              <SectionLabel>Aperçu — {activeMeta.label}</SectionLabel>
+              <div className="rounded-xl border border-border/50 overflow-hidden max-h-72">
+                <ServiceHeroShell
+                  config={draft}
+                  defaultBackground={<div className="absolute inset-0 bg-gradient-to-br from-gray-700 via-gray-800 to-gray-900" />}
+                >
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 backdrop-blur-sm bg-white/20 ${H_ALIGN_ICON_MX[draft.horizontalAlign]}`}>
+                    <activeMeta.icon className="w-7 h-7 text-white" />
+                  </div>
+                  <h1 className="text-2xl font-extrabold text-white mb-2">BigBoss <span className="text-amber-200">{selected}</span></h1>
+                  <p className={`text-sm mb-3 max-w-xl text-amber-50/90 ${H_ALIGN_ICON_MX[draft.horizontalAlign]}`}>
+                    {draft.subtitle ?? "Sous-titre par défaut du service"}
+                  </p>
+                  {draft.infoRowEnabled && (
+                    <div className={`flex items-center gap-4 flex-wrap text-xs text-amber-50/80 ${H_ALIGN_ROW_JUSTIFY[draft.horizontalAlign]}`}>
+                      <span>Exemple statistique</span>
+                      <span>Autre info</span>
+                    </div>
+                  )}
+                </ServiceHeroShell>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  className="gap-1.5 bg-amber-500 hover:bg-amber-600 text-white"
+                  disabled={!isDirty || saveMutation.isPending}
+                  onClick={() => saveMutation.mutate(draft)}
+                  data-testid="button-save-hero-config"
+                >
+                  <Save className="w-3.5 h-3.5" /> {saveMutation.isPending ? "Enregistrement…" : "Enregistrer"}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  disabled={resetMutation.isPending}
+                  onClick={() => resetMutation.mutate()}
+                  data-testid="button-reset-hero-config"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> Réinitialiser ce service
+                </Button>
+                {isDirty && <span className="text-xs text-amber-600 font-medium">Modifications non enregistrées</span>}
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -2100,6 +2412,7 @@ export default function SystemManagementPage() {
           </div>
 
           <HeroActionsSection />
+          <ServiceHeroCustomizationSection />
         </>
       )}
 

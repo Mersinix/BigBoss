@@ -44,6 +44,8 @@ import {
 } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useHeroActionSettings } from "@/hooks/use-hero-actions";
+import { useServiceHeroConfig } from "@/hooks/use-service-hero-config";
+import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY } from "@/components/shared/service-hero";
 import {
   useBaristaProfiles,
   useBaristaSkills,
@@ -103,6 +105,11 @@ function useTheme(isDark: boolean) {
     switcherBg: isDark ? "bg-gray-800" : "bg-gray-100",
     switcherActive: isDark ? "bg-gray-700 text-white shadow-sm" : "bg-white text-green-700 shadow-sm",
     switcherInactive: isDark ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700",
+    // Match Barista Filter Section Layout and Styling — identical token to
+    // /maintenance and /marketing's own `stripBg` (pages/cafe/maintenance/
+    // maintenance-page.tsx, pages/cafe/marketing/marketing-page.tsx), used for
+    // the same full-bleed sticky filter strips instead of a floating card.
+    stripBg: isDark ? "bg-gray-900/95 border-gray-800" : "bg-white border-gray-100",
   };
 }
 
@@ -397,6 +404,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
   const isDark = useThemeStore((s) => s.isDark);
   const t = useTheme(isDark);
   const { settings: heroActions } = useHeroActionSettings();
+  const { config: heroConfig } = useServiceHeroConfig("BARISTA");
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
@@ -530,20 +538,22 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
   return (
     <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="relative pt-5 pb-12 px-5 overflow-hidden">
-        {/* Background image */}
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-80"
-          style={{ backgroundImage: `url(${baristaHeroImg})` }}
-        />
-        {/* Dark overlay */}
-        <div className={`absolute inset-0 ${isDark ? "bg-gradient-to-br from-gray-950/95 via-gray-900/95 to-green-950/90" : "bg-gradient-to-br from-green-600/90 via-green-700/85 to-emerald-700/90"}`} />
-        {/* Content */}
-        <div className="relative">
-          {/* The global navbar theme control is the single Dark/Light toggle
+      <ServiceHeroShell
+        config={heroConfig}
+        defaultBackground={
+          <>
+            <div
+              className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-80"
+              style={{ backgroundImage: `url(${baristaHeroImg})` }}
+            />
+            <div className={`absolute inset-0 ${isDark ? "bg-gradient-to-br from-gray-950/95 via-gray-900/95 to-green-950/90" : "bg-gradient-to-br from-green-600/90 via-green-700/85 to-emerald-700/90"}`} />
+          </>
+        }
+        controlsRow={
+          /* The global navbar theme control is the single Dark/Light toggle
               now, so the duplicated hero one is gone; Fast Search/Report stay
-              Admin-toggleable per service (see /api/hero-actions). */}
-          <div className="flex justify-end items-center gap-2 mb-9">
+              Admin-toggleable per service (see /api/hero-actions). */
+          <div className="relative flex justify-end items-center gap-2 mb-9">
             {canAct && heroActions.BARISTA.reportEnabled && (
               <button
                 onClick={() => setBlacklistOpen(true)}
@@ -578,25 +588,26 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
               </button>
             )}
           </div>
-          <div className="max-w-3xl mx-auto text-center">
-          <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>
-            <Coffee className={`w-8 h-8 ${isDark ? "text-amber-400" : "text-white"}`} />
-          </div>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3">
-            BigBoss <span className={isDark ? "text-amber-400" : "text-amber-200"}>BARISTA</span>
-          </h1>
-          <p className={`text-base mb-4 max-w-xl mx-auto ${isDark ? "text-gray-400" : "text-green-100"}`}>
-            Trouvez et recrutez des baristas professionnels pour votre établissement
-          </p>
-          <div className={`flex items-center justify-center gap-6 flex-wrap text-sm ${isDark ? "text-gray-400" : "text-green-100"}`}>
+        }
+      >
+        <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-5 backdrop-blur-sm ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>
+          <Coffee className={`w-8 h-8 ${isDark ? "text-amber-400" : "text-white"}`} />
+        </div>
+        <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3">
+          BigBoss <span className={isDark ? "text-amber-400" : "text-amber-200"}>BARISTA</span>
+        </h1>
+        <p className={`text-base mb-4 max-w-xl ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${isDark ? "text-white" : "text-green-100"}`}>
+          {heroConfig.subtitle ?? "Trouvez et recrutez des baristas professionnels pour votre établissement"}
+        </p>
+        {heroConfig.infoRowEnabled && (
+          <div className={`flex items-center gap-6 flex-wrap text-sm ${H_ALIGN_ROW_JUSTIFY[heroConfig.horizontalAlign]} ${isDark ? "text-white" : "text-green-100"}`}>
             <span className="flex items-center gap-1.5">
               <Users className="w-4 h-4" />
               {profiles.length} baristas disponibles
             </span>
           </div>
-          </div>
-        </div>
-      </section>
+        )}
+      </ServiceHeroShell>
 
       {comingSoon ? (
         <div className="max-w-3xl mx-auto px-4 py-20 text-center">
@@ -622,25 +633,21 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
         </div>
       )}
 
-       <div className="max-w-7xl mx-auto px-4 py-8">
-        <section>
-          {/* Hiring Filters — sticky below the persistent navbar (header is
-              h-14 z-50, see components/cafe/marketplace-layout.tsx) so filters
-              stay reachable while scrolling the baristas grid. Remove Background
-              from Barista Marketplace Filters: no fill color or drop shadow behind
-              the panel anymore (was t.cardBg + shadow-sm) — same background-free
-              look as /maintenance, /print and /marketing's own filter strips.
-              Border/rounded shape/spacing kept exactly as before (t.border is the
-              same border color cardBg used, just without its bg-* part). */}
-           <div className={`sticky top-14 z-30 border rounded-2xl p-3 mb-5 ${t.border}`}>
+      {/* Match Barista Filter Section Layout and Styling — same full-bleed sticky
+          strip structure as /maintenance and /marketing (two separate border-b
+          strips, each its own stripBg, outside the max-w-7xl content wrapper)
+          instead of the previous single rounded, bordered, padded card nested
+          inside it. Same sticky-below-navbar positioning (top-14 z-30) as before. */}
+      <div className="sticky top-14 z-30">
+        <div className={`border-b ${t.stripBg}`}>
+          <div className="max-w-7xl mx-auto px-4">
             {/* Compétence — Add Icons to Barista Compétences: a "Tous" + per-competency
                 chip switcher, same visual pattern as Maintenance's own parent-competency
                 switcher (pages/cafe/maintenance/maintenance-page.tsx — icon placement,
-                spacing, switcherActive/switcherInactive selected-state classes), adapted
-                to this page's existing rounded-card filter container instead of
-                Maintenance's full-width sticky strips. Icons come from the Admin-managed
-                taxonomy (skillChipOptions above), never a hardcoded mapping. */}
-            <div className={`flex gap-1.5 overflow-x-auto pb-2.5 mb-2.5 border-b ${t.border} [&::-webkit-scrollbar]:hidden`} style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
+                spacing, switcherActive/switcherInactive selected-state classes). Icons
+                come from the Admin-managed taxonomy (skillChipOptions above), never a
+                hardcoded mapping. */}
+            <div className="flex gap-1.5 overflow-x-auto py-3" style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}>
               <div className={`flex gap-1 rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
                 <button
                   onClick={() => setBaristaSkill("")}
@@ -663,11 +670,14 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 </div>
               ))}
             </div>
-            <div
-              className="flex items-center gap-2 flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden"
-              style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
-            >
-               <SlidersHorizontal className={`w-3.5 h-3.5 ${t.textSubtle} shrink-0`} />
+          </div>
+        </div>
+        <div className={`border-b py-2 px-4 ${t.stripBg}`}>
+          <div
+            className="max-w-7xl mx-auto flex items-center gap-2 flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden"
+            style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+          >
+             <SlidersHorizontal className={`w-3.5 h-3.5 ${t.textSubtle} shrink-0`} />
               <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px] sm:max-w-xs">
                 {!baristaSearchOpen && (
                   <button
@@ -794,7 +804,10 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
               )}
             </div>
           </div>
+        </div>
 
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <section>
           {profilesLoading ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {Array.from({ length: 8 }).map((_, i) => (

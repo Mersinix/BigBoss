@@ -2308,3 +2308,1005 @@ entièrement indépendantes de PRINT (aucune table/donnée PRINT réutilisée) :
   confirmée de la même combinaison exacte (`[&::-webkit-scrollbar]:hidden` +
   `scrollbarWidth: "none"`) sur la rangée de chips immédiatement adjacente dans
   chacune des deux pages, qui sert de précédent prouvé dans ce même contexte visuel.
+
+---
+
+# Analyse — Match Barista Filter Section Layout and Styling
+
+## 1. Audit
+
+- **Structure exacte de référence relue sur `/maintenance` ET `/marketing`**
+  (confirmée identique mot pour mot entre les deux) :
+  ```
+  </section>  (hero)
+  {comingSoon ? ... : (<>
+    {pending notice éventuel}
+    <div className="sticky top-14 z-30">
+      <div className={`border-b ${t.stripBg}`}>
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex gap-1.5 overflow-x-auto py-3" style={...}>{chips}</div>
+        </div>
+      </div>
+      <div className={`border-b py-2 px-4 ${t.stripBg}`}>
+        <div className="max-w-7xl mx-auto flex items-center gap-2 ..." style={...}>{contrôles}</div>
+      </div>
+    </div>
+    <div className="max-w-7xl mx-auto px-4 py-8"><section>{grille}</section></div>
+  </>)}
+  ```
+  Le bloc de filtres est un **frère** du conteneur `max-w-7xl` de contenu, placé
+  juste après la notice "en attente" et AVANT lui — jamais imbriqué dedans. Chaque
+  bande porte son propre fond `t.stripBg` plein format (pas de coins arrondis, pas
+  d'ombre, pas de marge) et sa propre bordure basse `border-b` ; c'est cette
+  bordure basse de la première bande qui sépare visuellement les deux, pas une
+  bordure interne.
+- **`/barista` (état avant cette tâche)** : le bloc de filtres (chips + contrôles)
+  était imbriqué **à l'intérieur** du conteneur `<div className="max-w-7xl mx-auto
+  px-4 py-8"><section>`, dans une carte unique `rounded-2xl p-3 mb-5` avec bordure
+  tout autour — largeur, hauteur, position et fond tous différents de la référence,
+  pas seulement la largeur. C'est exactement l'écart que cette tâche corrige : les
+  tâches précédentes ("Add Icons…", "Remove Background…") avaient déjà rapproché
+  l'apparence des puces/contrôles individuellement, mais jamais restructuré le
+  conteneur englobant lui-même.
+- `t.stripBg` n'existait pas dans le thème de `/barista` — valeur identique copiée
+  de `/maintenance`/`/marketing` (`bg-gray-900/95 border-gray-800` /
+  `bg-white border-gray-100`).
+
+## 2. Implémentation
+
+- `pages/cafe/barista/barista-page.tsx` :
+  - Ajout du jeton `stripBg` à `useTheme()` (valeur identique aux deux pages de
+    référence).
+  - Le bloc de filtres a été **déplacé** hors du conteneur `max-w-7xl mx-auto px-4
+    py-8` existant, repositionné comme frère juste après la notice "en attente",
+    et **restructuré** en deux bandes `sticky top-14 z-30` séparées (`border-b
+    ${t.stripBg}` pour les puces, `border-b py-2 px-4 ${t.stripBg}` pour les
+    contrôles), chacune avec son propre conteneur interne `max-w-7xl mx-auto
+    px-4`/`max-w-7xl mx-auto flex ...` — classes et imbrication reprises à
+    l'identique de `/maintenance`.
+  - Le conteneur `<div className="max-w-7xl mx-auto px-4 py-8"><section>` a été
+    **réouvert** immédiatement après, ne contenant plus désormais que la grille/les
+    états de chargement/erreur/vide des baristas.
+  - Tout le contenu interne (puces de compétences avec icônes, recherche, Select
+    Niveau/Disponibilité/Ville/Niveau d'étude, `DropdownMenu` Langue, bouton Reset)
+    a été déplacé tel quel, sans aucune modification de ses props, handlers,
+    data-testid ou logique — seule l'imbrication des `<div>` englobants a changé.
+
+## 3. Garde-fous respectés
+
+- **`/maintenance` et `/marketing` non modifiés** : utilisés uniquement comme
+  référence de lecture ; confirmé par `git status` (seul `barista-page.tsx`
+  apparaît dans le diff de cette tâche).
+- **Aucune logique de filtrage, state, handler ou route touchée** : `baristaSkill`,
+  `baristaSearch`, `baristaLevel`, etc., et leurs setters sont restés strictement
+  identiques ; seule la structure JSX englobante (quels `<div>` contiennent quoi)
+  a changé.
+- **Puces individuelles, icônes, états sélectionnés préservés** : `switcherBg`/
+  `switcherActive`/`switcherInactive`, icônes des compétences, et tous les
+  `data-testid` existants conservés mot pour mot.
+- **Dark mode** : `t.stripBg` reprend la même paire de valeurs déjà éprouvée dans
+  les deux modes sur les pages de référence.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur (y compris après correction d'un déséquilibre de
+  balises JSX provoqué par le déplacement initial du bloc, détecté par le
+  compilateur et corrigé avant de continuer).
+- `npm run build` → succès.
+- `git status` / `git diff --stat` → seul `client/src/pages/cafe/barista/
+  barista-page.tsx` modifié (28 insertions, 21 suppressions) ; aucun autre fichier
+  touché par cette tâche.
+- Aucun navigateur disponible dans cet environnement — pas de capture visuelle
+  réelle ; correspondance de structure vérifiée par relecture ligne à ligne des
+  trois fichiers (imbrication des `<div>`, classes, ordre des éléments) plutôt
+  que par un rendu réel.
+
+---
+
+# Analyse — Academy Filter Design + Print Search Input
+
+## Tâche 1 : Appliquer le même design de filtres à `/academy`
+
+### 1. Audit
+
+- `pages/cafe/barista/barista-academy-page.tsx` avait **exactement** le même écart
+  que `/barista` avant la tâche précédente : bloc de filtres imbriqué dans
+  `<div className="max-w-7xl mx-auto px-4 py-8"><section>`, dans une carte unique
+  `sticky top-14 z-30 border rounded-2xl p-3 mb-5 shadow-sm ${t.cardBg}`.
+- Différence structurelle à respecter : Academy n'a **qu'une seule rangée** de
+  filtres (recherche + Niveau + Certification + Reset) — aucun switcher de
+  catégories parentes comme Maintenance/Marketing/Barista. La référence à
+  reproduire est donc la forme à **une seule bande** (`border-b py-2 px-4
+  ${t.stripBg}`), identique à la seconde bande ("contrôles") de ces pages, pas
+  les deux.
+- `t.stripBg` absent du thème d'Academy — ajouté avec la même valeur exacte que
+  `/barista`/`/maintenance`/`/marketing`.
+
+### 2. Implémentation
+
+- Ajout de `stripBg` à `useTheme()`.
+- Bloc de filtres déplacé hors du conteneur `max-w-7xl` existant, repositionné
+  comme frère juste après la notice "en attente", restructuré en une bande
+  unique `sticky top-14 z-30` + `border-b py-2 px-4 ${t.stripBg}` +
+  `max-w-7xl mx-auto flex ...` — même classes que la bande "contrôles" des pages
+  de référence. Le conteneur `max-w-7xl mx-auto px-4 py-8` a été réouvert
+  immédiatement après pour la section "Académies" (Store) et la grille de
+  formations, qui restent inchangées.
+- Tout le contenu interne (recherche, Select Niveau/Certification, Reset) déplacé
+  tel quel — aucune prop, handler, state ou data-testid modifié.
+
+### 3. Garde-fous respectés
+
+- `/barista`, `/maintenance`, `/marketing` non modifiés (utilisés en lecture
+  seule comme référence).
+- Aucune logique de filtrage/state/route touchée.
+
+## Tâche 2 : Ajouter un champ de recherche à `/print`
+
+### 1. Audit
+
+- **Comportement de recherche de référence inspecté sur `/academy`** : état
+  `trainingSearch` (texte libre), transmis à `useAcademyCourses({ search:
+  trainingSearch || undefined, ... })`, qui l'envoie en paramètre de requête à
+  `GET /api/academy/courses`. Côté serveur, `storage.getPublishedAcademyCourses`
+  normalise par `.trim().toLowerCase()` puis fait un `.includes()` sur un
+  "haystack" `[titre, description, nom académie, catégorie].join(" ")` — une
+  correspondance par sous-chaîne, sans distinction majuscule/minuscule, mise à
+  jour à chaque frappe (la clé de requête React Query inclut le texte de
+  recherche, donc chaque frappe relance l'appel).
+- **État de `/print` avant cette tâche** : une logique de recherche existait
+  déjà — `initialSearch` lu une seule fois depuis le paramètre d'URL `?q=`, puis
+  filtrage **client-side** sur `cards` déjà chargées (`name`/`description`/
+  `category`/`subCategory`/`printerName`, même convention `.toLowerCase()
+  .includes()`) — mais **aucun champ de saisie visible** n'existait pour éditer
+  ce texte ; seule une navigation avec `?q=...` dans l'URL (ex. depuis Fast
+  Search) pouvait le renseigner. C'est exactement l'écart que cette tâche
+  comble : ajouter le champ, pas réinventer la logique de correspondance (déjà
+  identique en substance à celle d'Academy).
+- **Piège identifié avant d'implémenter** : le switcher de catégories de
+  `/print` (`PrintCategoryStrip.onSelect`) appelle déjà `resetFilters()` puis
+  réinjecte volontairement `searchQuery` dans la nouvelle URL — c'est-à-dire que
+  changer de catégorie doit **préserver** la recherche, jamais la vider. Si le
+  nouveau bouton "Reset" (qui doit, lui, vider la recherche comme sur Academy)
+  avait réutilisé cette même fonction `resetFilters`, les deux comportements
+  opposés se seraient annulés. Résolu en gardant `resetFilters` strictement
+  inchangée (ne vide que les 4 filtres de facette) et en ajoutant une nouvelle
+  fonction `resetAll` (= `resetFilters()` + vider la recherche), utilisée
+  uniquement par le bouton Reset de `PrintFilterBar`.
+
+### 2. Implémentation
+
+- `PrintFilterBar` (composant existant, inchangé dans sa structure générale) :
+  nouveaux props `search`/`onSearchChange` ; nouveau champ de recherche ajouté en
+  premier élément de la bande, repris à l'identique du champ de recherche
+  d'Academy (bouton icône repliable sur mobile, `searchOpen`/`searchInputRef`
+  **locaux** à ce composant — exactement le même découpage logique qu'Academy,
+  qui garde aussi son état d'ouverture mobile local). Garde `if
+  (!subCategories.length && !printers.length && !materials.length) return null`
+  remplacée par `if (!cards.length) return null` pour que la recherche reste
+  disponible même quand aucune autre facette n'existe. `hasActive` étendu pour
+  inclure `!!search`.
+- `PrintPage` : nouvel état `printSearch` (initialisé depuis `?q=` pour
+  préserver les liens profonds existants) ; `searchQuery` dérivé de
+  `printSearch.trim().toLowerCase()` au lieu de `initialSearch` figé ; nouvelle
+  fonction `resetAll` ; bouton "Effacer les filtres" (état vide) étendu pour
+  vider aussi `printSearch`.
+
+### 3. Garde-fous respectés
+
+- **Aucun nouvel endpoint ni changement de base de données** : la recherche
+  reste un filtrage client-side sur les `cards` déjà chargées via la route
+  existante — rien côté serveur n'a été touché.
+- **`/academy` non modifié** : utilisé uniquement comme référence de
+  comportement.
+- **Recherche de Print uniquement** : le haystack reste
+  `name`/`description`/`category`/`subCategory`/`printerName` du catalogue
+  PRINT ; aucune donnée Academy lue ni mélangée.
+- **Compatibilité avec les filtres existants préservée** : recherche + catégorie
+  + sous-catégorie + société + matière + délai continuent de se combiner dans
+  le même `useMemo` (`AND` entre tous les critères actifs, inchangé) ; changer
+  de catégorie continue de préserver la recherche (comportement intentionnel
+  existant, non régressé grâce à la séparation `resetFilters`/`resetAll`).
+
+### 4. Tests exécutés (pour les deux tâches)
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès.
+- `git status`/`git diff --stat` → seuls `barista-academy-page.tsx` et
+  `print-page.tsx` modifiés par cette tâche (plus `barista-page.tsx`, déjà
+  modifié par la tâche précédente et toujours non committé).
+- Aucun navigateur disponible dans cet environnement — pas de test de frappe
+  réel ; comportement vérifié par lecture directe de la logique de matching
+  serveur d'Academy, comparaison avec la logique client-side déjà existante de
+  Print, et relecture de la séquence `resetFilters`/`resetAll`/sélection de
+  catégorie pour confirmer l'absence de conflit entre "préserver la recherche au
+  changement de catégorie" et "vider la recherche au Reset".
+
+---
+
+# Analyse — Move SHOP Search Input into the Products Filter Section
+
+## 1. Audit
+
+- **Recherche produits actuelle localisée dans `marketplace-layout.tsx`** (la
+  navbar globale, PAS dans `browse-products.tsx` lui-même) : un `<form
+  onSubmit={handleSearch}>` avec son propre state local `search`/`setSearch`,
+  **masqué sur mobile** (`hidden sm:block`), qui ne déclenche la recherche qu'au
+  **submit** (Entrée) — `handleSearch` navigue vers `/products?q=...` (ou
+  `/print?q=...` selon `isOnPrint`). Donc : pas de mise à jour immédiate à la
+  frappe, et **cette même boîte est partagée entre `/products` et `/print`**.
+- **Important** : `browse-products.tsx` avait déjà sa **propre** logique de
+  correspondance déjà réactive — `search` (state local à cette page, state
+  **distinct** de celui de la navbar malgré le même nom), synchronisé en continu
+  depuis le paramètre d'URL `?q=` via un `useEffect` qui réagit à `searchStr`,
+  et consommé directement par `categoryFiltered`/`filtered`
+  (`.toLowerCase().includes()` sur nom+description). C'est exactement la
+  correspondance d'Academy (même normalisation), déjà en place — il manquait
+  seulement un champ de saisie **direct**, in situ, qui écrit dans ce state
+  sans passer par un submit de formulaire ni un aller-retour d'URL.
+- **Piège identifié avant d'implémenter** : la boîte de la navbar est
+  **partagée** avec `/print` (`isOnPrint ? /print?q=... : /products?q=...`).
+  La supprimer purement et simplement aurait cassé la recherche-depuis-la-navbar
+  de `/print` et toute utilisation "sauter vers /products avec une recherche"
+  depuis une autre page — hors du périmètre de cette tâche ("Do not modify
+  unrelated navbar elements or change the layout of other pages"). Résolu en
+  masquant ce formulaire **seulement** quand `location === "/products"`
+  (la page qui a désormais son propre champ) ; partout ailleurs (y compris
+  `/print` et le saut depuis n'importe quelle autre page), il reste identique.
+- Même piège "changement de catégorie doit préserver la recherche, Reset doit la
+  vider" déjà rencontré sur `/print` — `CategoryStrip.onSelect` de
+  `browse-products.tsx` réinjecte déjà volontairement `search` dans la nouvelle
+  URL au changement de catégorie.
+
+## 2. Implémentation
+
+- `components/cafe/marketplace-layout.tsx` : nouvelle variable `isOnProducts =
+  location === "/products"` ; le `<form>` de recherche navbar est maintenant
+  conditionné par `{!isOnProducts && (...)}` — strictement inchangé dans tout
+  son contenu/comportement, simplement non rendu sur `/products`.
+- `pages/cafe/browse-products.tsx` :
+  - `FilterBar` (déjà la bande `border-b ${t.filterBg} py-2 px-4` existante)
+    reçoit deux nouveaux props `search`/`onSearchChange` ; nouveau champ de
+    recherche ajouté en premier élément, repris à l'identique du champ
+    d'Academy/Print (bouton icône repliable sur mobile, `searchOpen`/
+    `searchInputRef` **locaux** à ce composant). Garde `if
+    (!subCategories.length && !brands.length && !flavors.length &&
+    !sizes.length) return null` remplacée par `if (!categoryProducts.length)
+    return null` pour que la recherche reste disponible même sans facette.
+    `hasActive` étendu pour inclure `!!search`.
+  - Nouveau token `inputBg` ajouté à `useTheme()` (valeur identique à Academy/
+    Print/Maintenance/Marketing/Barista — absent jusqu'ici dans ce fichier).
+  - Nouvelle fonction `resetAll` (= `resetFilters()` + `setSearch("")`),
+    utilisée uniquement par le bouton Reset de `FilterBar` ; `resetFilters`
+    elle-même strictement inchangée (toujours utilisée seule par
+    `CategoryStrip.onSelect`, qui doit continuer à préserver la recherche).
+  - `setSearch`/`search` (state déjà existant, déjà branché sur
+    `categoryFiltered`/`filtered`) simplement réutilisés tels quels — aucune
+    nouvelle logique de correspondance introduite.
+
+## 3. Garde-fous respectés
+
+- **Un seul champ de recherche produit visible à la fois** : masqué dans la
+  navbar uniquement sur `/products`, ajouté une seule fois dans `FilterBar`.
+- **`/print` et le reste de la navbar non affectés** : `isOnPrint`/
+  `handleSearch` inchangés ; la boîte navbar continue de fonctionner à
+  l'identique sur `/print` et sur toute autre page.
+- **Aucune route, API, donnée, ni logique métier touchée** : recherche toujours
+  filtrée client-side sur les données déjà chargées (`/api/marketplace`) ;
+  tri, pagination, variantes, prix, panier, visibilité par rôle — aucun de ces
+  éléments n'a été modifié, la state `search` existante alimentait déjà
+  exactement les mêmes `useMemo` qu'avant.
+- **Compatibilité avec les filtres existants préservée** : recherche +
+  catégorie + sous-catégorie + marque + saveur + taille + tri continuent de se
+  combiner dans les mêmes `useMemo` (`categoryFiltered` → `filtered`,
+  inchangés) ; changer de catégorie continue de préserver la recherche
+  (comportement intentionnel existant, non régressé grâce à
+  `resetFilters`/`resetAll`).
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès.
+- `git status`/`git diff --stat` → seuls `marketplace-layout.tsx` et
+  `browse-products.tsx` modifiés par cette tâche.
+- Aucun navigateur disponible dans cet environnement — pas de test de frappe ou
+  de clic réel ; comportement vérifié par lecture directe du state `search`
+  déjà existant (confirmé déjà branché sur le filtrage réactif avant cette
+  tâche), de la condition `isOnProducts` dans la navbar, et de la séquence
+  `resetFilters`/`resetAll`/sélection de catégorie pour confirmer l'absence de
+  régression sur `/print` ou sur le comportement de recherche-depuis-une-autre-page.
+
+---
+
+# Analyse — Extend SHOP Search to Products, Stores, and Packs
+
+## 1. Audit
+
+- **Constat central** : `StoresSection` et `PacksSection` (toutes deux déjà
+  existantes dans `browse-products.tsx`, chacune avec son propre `useMemo` de
+  filtrage par `categoryId`/`filters.subCategoryId`/`filters.brandId`) étaient
+  **entièrement masquées** dès qu'une recherche était active —
+  `{!search.trim() && (<StoresSection .../>)}` / `{!search.trim() && (<PacksSection
+  .../>)}`. Ce n'est pas un filtrage par la recherche : c'est une disparition
+  pure et simple des deux sections. C'est exactement le symptôme décrit par la
+  tâche ("the search primarily filters products").
+- **Champs réellement disponibles inspectés** (pas de champ inventé) :
+  - `StoreCard` (`shared/schema.ts`) : `name`, `description` — pas de
+    `supplierName` sur ce type côté Coffee Owner (seulement sur
+    `StoreAdminRow`, réservé à l'Admin) ; recherche donc limitée aux deux
+    champs réellement présents.
+  - `PackDetail` : `name`, `description` (via `Pack`), **`supplierName`**
+    (bien présent sur ce type-ci), et `items: PackItemDetail[]` dont chaque
+    élément a `productName` — exactement les "produits inclus" mentionnés par
+    la tâche.
+- Les deux composants recevaient déjà `categoryId`/`filters` en props et
+  calculaient leur propre liste filtrée localement — le point d'intégration le
+  plus cohérent pour la recherche est donc d'ajouter un prop `search` à chacun
+  et de l'inclure dans leur `useMemo` existant, au même niveau que les autres
+  conditions (combinaison `AND`), plutôt que de dupliquer une logique de
+  correspondance au niveau de la page.
+- **Sources de données non touchées** : `stores`/`packs` proviennent des mêmes
+  `useQuery` qu'avant (non modifiées) — déjà scopées côté serveur aux éléments
+  visibles/approuvés ; la recherche n'ajoute qu'un prédicat client
+  supplémentaire sur des données déjà autorisées, donc aucun risque
+  d'exposition de données non publiées.
+
+## 2. Implémentation
+
+- `StoresSection` : nouveau prop `search: string` ; `filteredStores` étend sa
+  condition avec `s.name.toLowerCase().includes(q) || (s.description ??
+  "").toLowerCase().includes(q)` quand `search.trim()` est non vide — ajoutée
+  en AND avec les filtres catégorie/sous-catégorie/marque déjà existants.
+- `PacksSection` : nouveau prop `search: string` ; `filteredPacks` étend sa
+  condition avec correspondance sur `name`, `description`, `supplierName`, et
+  `items.some(item => item.productName...)` — même logique AND.
+- Dans le composant principal : suppression du `{!search.trim() && (...)}` qui
+  masquait les deux sections ; elles sont maintenant toujours rendues et se
+  gèrent elles-mêmes via leur garde existante (`if (!filteredStores.length)
+  return null` / `if (!filteredPacks.length) return null`) — comportement
+  identique à avant quand la recherche est vide, filtré par la recherche en
+  plus quand elle ne l'est pas.
+- Aucun changement à `FilterBar`, au champ de recherche lui-même, à sa
+  position, son design, ou à la logique de correspondance des Produits
+  (`categoryFiltered`/`filtered`, déjà existante et inchangée).
+
+## 3. Garde-fous respectés
+
+- **Aucune nouvelle route, endpoint, ni changement de base de données** :
+  uniquement un prédicat client-side supplémentaire sur des données déjà
+  chargées par les requêtes existantes.
+- **Visibilité/autorisation préservées** : `stores`/`packs` toujours issues des
+  mêmes `useQuery` non modifiées — aucune donnée non publiée/non autorisée
+  n'est exposée, la recherche ne fait que réduire un ensemble déjà filtré côté
+  serveur.
+- **Filtres spécifiques aux produits non appliqués à tort** : les filtres
+  catégorie/sous-catégorie/marque restent ceux déjà utilisés par chaque
+  section (déjà pertinents pour elles avant cette tâche) ; aucun nouveau
+  filtre "produit uniquement" n'a été introduit sur Stores/Packs.
+- **Design et position du champ de recherche strictement inchangés** : aucune
+  modification de `FilterBar`, de son `Input`, ni de `marketplace-layout.tsx`
+  dans cette tâche.
+- **Panier, variantes, prix, pagination, tri, détails produit/store/pack** :
+  aucun de ces éléments n'a été touché.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès.
+- `git status`/`git diff --stat` → seul `browse-products.tsx` modifié par cette
+  tâche.
+- Aucun navigateur disponible dans cet environnement — pas de test de frappe
+  réel ; comportement vérifié par lecture directe des types `StoreCard`/
+  `PackDetail`/`PackItemDetail` (confirmant les champs réellement disponibles
+  avant de les utiliser) et de la nouvelle logique de filtrage dans les deux
+  `useMemo`, ainsi que par confirmation que `stores`/`packs` restent issues des
+  mêmes requêtes serveur non modifiées.
+
+---
+
+# Analyse — Unify Service and Store Search + Remove Navbar Search Inputs
+
+## Tâche 1 : Retirer la recherche de la navbar sur 5 pages
+
+### 1. Audit
+
+- Vérifié au préalable que chacune des cinq pages cibles a **déjà** son propre
+  champ de recherche fonctionnel dans sa section de filtres :
+  `input-maintenance-search`, `input-barista-search`, `input-training-search`
+  (Academy), `input-print-search`, `input-provider-search` (Marketing) — tous
+  déjà construits lors de tâches précédentes de cette session.
+- La boîte de recherche de la navbar (`marketplace-layout.tsx`) est un
+  `<form>` **unique et partagé**, dont le submit (`handleSearch`) ne navigue
+  jamais que vers `/print?q=...` ou `/products?q=...` selon `isOnPrint` — sur
+  `/maintenance`, `/barista`, `/academy` et `/marketing`, elle ne faisait déjà
+  rien de pertinent (elle aurait redirigé l'utilisateur vers `/products`).
+
+### 2. Implémentation
+
+- Nouvelle variable `hideNavbarSearch = isOnProducts || isOnPrint ||
+  ["/maintenance", "/barista", "/academy", "/marketing"].includes(location)` ;
+  le `<form>` est maintenant conditionné par `{!hideNavbarSearch && (...)}`.
+  Contenu du formulaire, `handleSearch`, `isOnPrint` et tout le reste de la
+  navbar strictement inchangés.
+
+### 3. Garde-fous respectés
+
+- La boîte reste visible et fonctionnelle sur **toute autre page** (accueil,
+  panier, etc.), y compris pour "sauter" vers `/products` ou `/print` avec une
+  requête.
+- Aucun autre élément de la navbar (logo, localisation, notifications, icônes
+  de compte) touché.
+- Pas de trou de mise en page : l'élément est simplement omis du `flex` (avec
+  son `gap`), un `<div className="flex-1" />` existant absorbe déjà l'espace
+  restant.
+
+## Tâches 2-4 : Étendre la recherche Academy/Print/Marketing aux Stores
+
+### 1. Audit
+
+- **Academy** : `AcademyStoresSection` (composant **partagé**, réutilisé aussi
+  par Espace Barista Marketplace → Académie selon son propre commentaire) ne
+  recevait **aucun filtrage** du tout — `companies={academyCompanies}` passé
+  brut, sans même la recherche. Comme le composant est partagé, le filtrage a
+  été ajouté **au niveau de la page** (`filteredAcademyCompanies`), pas dans le
+  composant lui-même, pour ne jamais affecter l'autre appelant.
+- **Print** et **Marketing** : `PrintStoresSection`/`MarketingStoresSection`
+  sont des fonctions **locales** à leur propre fichier de page (confirmé : zéro
+  autre site d'appel dans toute la base) — le prop `search` a donc pu être
+  ajouté directement sur ces composants sans risque.
+- **Champs réellement disponibles inspectés** (schema) :
+  `AcademyCompanyListCard`/`PrintCompanyListCard` (via `PrintCompanyCard`)/
+  `MarketingCompanyListCard` ont tous `name`/`description` — utilisés tels
+  quels, aucun champ inventé.
+- Dans les trois cas, les filtres déjà appliqués à ces sections (catégorie
+  pour Print/Marketing ; aucun pour Academy) sont restés des filtres
+  pertinents pour une "boutique" (ex. `categories` est un champ réel du
+  prestataire) — la recherche a été ajoutée en AND, jamais en remplacement.
+
+### 2. Implémentation
+
+- **Academy** (`barista-academy-page.tsx`) : nouveau `filteredAcademyCompanies`
+  (`useMemo`), filtrant `academyCompanies` par `trainingSearch` sur
+  `name`/`description` — **volontairement pas** filtré par
+  `trainingLevel`/`trainingCert` (attributs de formation, non pertinents pour
+  la carte d'une académie). `AcademyStoresSection` reçoit désormais cette liste
+  filtrée au lieu de la liste brute ; le composant partagé lui-même n'a pas
+  été modifié.
+- **Print** (`print-page.tsx`) : `PrintStoresSection` reçoit un nouveau prop
+  `search` ; son `filtered` (`useMemo`) combine désormais la condition
+  catégorie existante avec une correspondance sur `name`/`description`, en
+  AND. Appel mis à jour avec `search={printSearch}`.
+- **Marketing** (`marketing-page.tsx`) : même changement exact sur
+  `MarketingStoresSection`, avec `search={search}`.
+- Dans les trois cas, **aucun nouveau champ de saisie** n'a été ajouté — le
+  champ de recherche déjà existant dans chaque filtre section (inchangé dans
+  sa conception, sa position, son design) alimente désormais aussi bien le
+  service/produit que le store, exactement comme demandé ("Keep one search
+  input per page").
+
+### 3. Garde-fous respectés
+
+- **Modules restés indépendants** : chaque section continue de lire
+  exclusivement les données de son propre module (`academyCompanies`/
+  `printCompanies`/`marketingCompanies`, chacune de sa propre requête
+  existante, non modifiée) — aucun mélange de prestataires entre Academy,
+  Print et Marketing.
+- **Visibilité/autorisation préservées** : aucune des requêtes `useQuery`
+  alimentant ces trois listes de stores n'a été modifiée — la recherche
+  n'ajoute qu'un prédicat client supplémentaire sur des données déjà
+  autorisées côté serveur, exactement comme pour Shop.
+- **Pas de doublons de cartes** : chaque section continue d'afficher une seule
+  carte par prestataire (dérivée de sa propre liste de companies, jamais
+  dupliquée à partir des services) — aucune logique de déduplication
+  supplémentaire n'était nécessaire.
+- **Filtres existants préservés** : catégorie (Print/Marketing), Niveau/
+  Certification (Academy, non appliqués aux stores) — tous inchangés dans
+  leur propre portée.
+
+## Tests exécutés (pour les 4 tâches)
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès.
+- `git status`/`git diff --stat` → `marketplace-layout.tsx`,
+  `barista-academy-page.tsx`, `print-page.tsx` et `marketing-page.tsx`
+  modifiés par cette tâche ; confirmé par recherche exhaustive qu'aucun autre
+  site d'appel de `MarketingStoresSection`/`PrintStoresSection` n'existe dans
+  la base (donc aucun risque de régression ailleurs), et qu'`AcademyStoresSection`
+  (composant partagé) a délibérément été laissé intact pour ne pas affecter
+  son autre appelant.
+- Aucun navigateur disponible dans cet environnement — pas de test de frappe
+  réel ; comportement vérifié par lecture directe des types de données, des
+  nouvelles conditions de filtrage, et de la condition `hideNavbarSearch` dans
+  la navbar.
+
+---
+
+# Analyse — Add Product and Pack Search to Individual Store Pages
+
+## 1. Audit
+
+- **Page cible** : `pages/cafe/store-detail-page.tsx` (route `/stores/:storeId`,
+  composant `StoreDetailPage`) — aucun état de recherche n'existait avant
+  cette tâche (confirmé par recherche exhaustive : aucun `search`/`setSearch`
+  dans tout le fichier).
+- **Données déjà scopées au store courant** : `store?.products` provient de
+  `GET /api/stores/:storeId` et `storePacks` de `GET /api/stores/:storeId/packs`
+  — les deux requêtes sont déjà keyed par `storeId` et ne renvoient jamais que
+  le contenu de CE store. Aucune donnée d'un autre store ne peut donc jamais
+  apparaître dans les résultats de recherche — la portée "un seul store" est
+  héritée gratuitement de l'architecture de requêtes existante, pas quelque
+  chose à implémenter.
+- **`StorePacksSection` et `FilterState`** : composant local à ce fichier
+  (confirmé par recherche : aucun autre site d'appel), donc modifiable
+  directement sans risque pour un autre appelant — contrairement à
+  `AcademyStoresSection` dans la tâche précédente.
+- **Piège de mise en page identifié avant d'implémenter** : la bande de
+  filtres "Sub-category + brand" n'était rendue que si
+  `subCategories.length > 0 || brands.length > 0`, et la bande englobante
+  (catégories + filtres) que si l'une des trois taxonomies avait au moins une
+  entrée. Ajouter la recherche à l'intérieur de ces blocs sans ajuster leurs
+  gardes l'aurait fait disparaître pour tout store sans taxonomie du tout —
+  même correctif de principe que pour `/print`/`/products` dans les tâches
+  précédentes (`!cards.length`/`!categoryProducts.length` à la place de
+  "aucune facette").
+- **Pas de synchronisation URL `?q=`** sur cette page (contrairement à
+  `/products`/`/print`) ni de handler "changer de catégorie préserve la
+  recherche" — les boutons de catégorie appellent directement
+  `setCategoryId`/`setFilters` en ligne, jamais une fonction `resetFilters`
+  partagée. Donc, contrairement aux tâches précédentes, **pas besoin** de
+  séparer `resetFilters`/`resetAll` ici : le seul `resetFilters` existant (déjà
+  utilisé uniquement par le bouton Reset et par le bouton de l'état vide) peut
+  vider la recherche directement sans casser un autre comportement.
+
+## 2. Implémentation
+
+- Nouveaux `search`/`setSearch`, `searchOpen`/`setSearchOpen`,
+  `searchInputRef` (mêmes noms/rôles que `/products`).
+- Nouveau token `inputBg` ajouté à `useTheme()` (valeur identique aux autres
+  pages SHOP/Academy/Print/Marketing).
+- `categoryFiltered` (produits) étendu : recherche sur `name`/`description`
+  ajoutée en AND avant le filtre catégorie — exactement la même logique et le
+  même ordre que `browse-products.tsx`.
+- `StorePacksSection` : nouveau prop `search` ; son `filtered` (`useMemo`)
+  étendu avec une correspondance sur `name`/`description`/
+  `items.some(item => item.productName...)` — **pas** de `supplierName`
+  (contrairement à la version Shop-wide) puisque tous les packs d'un store
+  donné partagent déjà le même fournisseur ; ce champ n'aurait servi à rien
+  ici.
+- Garde englobante de la bande de filtres étendue avec `|| products.length >
+  0` ; garde interne de la bande "Sub-category + brand" supprimée (bande
+  toujours rendue désormais) pour que la recherche reste disponible même sans
+  aucune taxonomie.
+- Champ de recherche ajouté en premier élément de cette bande, repris à
+  l'identique du champ `/products` (bouton icône repliable sur mobile,
+  `w-44 sm:w-full`, `h-7 text-xs pl-8 rounded-full`, placeholder "Search
+  products…").
+- `resetFilters` étendu pour vider aussi `search` ; `hasActive` étendu avec
+  `|| !!search`.
+
+## 3. Garde-fous respectés
+
+- **Portée strictement limitée au store courant** : héritée des requêtes
+  `/api/stores/:storeId` et `/api/stores/:storeId/packs`, non modifiées —
+  aucune fuite de données d'un autre store possible.
+- **Changement de store** : `store`/`storePacks` se rafraîchissent déjà
+  automatiquement via leur `queryKey` incluant `storeId` ; `search` n'est pas
+  explicitement réinitialisé au changement de store, exactement comme
+  `categoryId`/`filters` ne l'étaient déjà pas avant cette tâche — aucune
+  régression introduite, comportement cohérent avec l'existant.
+- **Aucun nouvel endpoint, migration, ni composant navbar** : filtrage
+  entièrement client-side sur des données déjà chargées ; `marketplace-layout.tsx`
+  non touché par cette tâche (la case de recherche globale reste visible sur
+  `/stores/:id`, hors du périmètre explicite de cette tâche).
+- **Produits ≠ Packs** : chaque type continue d'utiliser sa propre section/
+  carte/navigation existante ; aucune carte de pack affichée comme produit ou
+  inversement.
+- **Panier, variantes, prix, disponibilité, navigation détail** : aucun de ces
+  éléments touché.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur (y compris après correction d'un déséquilibre
+  de balises JSX provoqué par la suppression de la garde conditionnelle de la
+  bande sub-category/brand, détecté et corrigé avant de continuer).
+- `npm run build` → succès.
+- `git status`/`git diff --stat` → seul `store-detail-page.tsx` modifié par
+  cette tâche.
+- Aucun navigateur disponible dans cet environnement — pas de test de frappe
+  ou de navigation entre stores réel ; comportement vérifié par lecture
+  directe des `queryKey` scopées par `storeId`, des nouvelles conditions de
+  filtrage, et confirmation que `StorePacksSection` n'a aucun autre site
+  d'appel dans la base.
+
+---
+
+# Analyse — Standardize Maintenance and Barista Detail Modal Layouts
+
+## 1. Audit
+
+- **Référence `/academy`** (`components/academy/academy-detail-modal.tsx`,
+  non modifié) : chaque section logique du corps (`p-5 sm:p-6 space-y-5`) a
+  son propre conteneur `p-3 rounded-xl ${t.sectionBg}` (petites tuiles Prix/
+  Catégorie/Format/Places en `grid grid-cols-2`, bloc "Détails de la
+  formation"), sauf l'en-tête (nom + badge + notation, texte brut sans fond)
+  et le bloc "Académie" (bouton cliquable avec bordure, `sectionBgAlt`). Pas
+  de hauteur fixe imposée à chaque section — `formationDetails` lui-même n'a
+  **aucun** scroll interne propre : c'est tout le `DialogContent`
+  (`max-h-[90vh] overflow-y-auto`) qui absorbe une longueur de contenu. Les
+  Avis ont déjà été déplacés hors du corps principal vers une modale dédiée.
+- **`/maintenance`** (`AgentDetailModal`, dans `pages/cafe/maintenance/
+  maintenance-page.tsx`) : incohérence confirmée — "Expérience/Réponse" et
+  "Zone d'intervention" utilisaient déjà un conteneur `${t.mutedBg} rounded-xl
+  p-3`, mais "À propos", "Détails de Service", "Compétences", "Certifications"
+  et "Portfolio" étaient de simples `<div><h3>…</h3>…</div>` sans fond ni
+  séparation visuelle — exactement l'écart que la tâche décrit.
+- **`/barista`** (`BaristaDetailModal`,
+  `components/barista/barista-detail-modal.tsx`) : même incohérence, avec le
+  jeton `t.sectionBg` (déjà défini et déjà utilisé par les tuiles Expérience/
+  Niveau d'étude) — "Compétences", "Langue", "Certifications", "Portfolio" et
+  "Cafés précédents" étaient tous non boîtés.
+- **Décision de palette** : garder le jeton de couleur déjà établi dans
+  **chaque** fichier (`t.mutedBg` pour Maintenance, `t.sectionBg` pour
+  Barista) plutôt que d'importer la valeur hexadécimale exacte d'Academy — la
+  tâche demande de reproduire la logique STRUCTURELLE d'Academy (chaque
+  section = son propre conteneur visuellement séparé), pas de recolorer deux
+  modules différents avec une palette qui n'est pas la leur. Les deux jetons
+  sont déjà conceptuellement équivalents (boîte de fond discrète) et déjà
+  utilisés ailleurs dans ces mêmes modales.
+
+## 2. Implémentation
+
+**`/maintenance`** : "À propos", "Compétences", "Certifications" et
+"Portfolio" enveloppés dans `p-3 rounded-xl ${t.mutedBg}` ; "Détails de
+Service" enveloppé de même, avec en plus un conteneur interne `max-h-48
+overflow-y-auto` (mêmes classes de scrollbar fine que le `DialogContent` de
+cette modale) — seule section explicitement visée par la tâche comme sujette
+à un long contenu ("long bullet lists"), les autres restent sans hauteur
+imposée, conformément à "Do not force every section to have an identical
+fixed height." "Expérience/Réponse" et "Zone d'intervention" strictement
+inchangées (déjà boîtées).
+
+**`/barista`** : "Compétences", "Langue", "Certifications" et "Portfolio"
+enveloppés dans `p-3 rounded-xl ${t.sectionBg}` ; "Cafés précédents" de même,
+avec le même traitement `max-h-48 overflow-y-auto` que "Détails de Service"
+côté Maintenance (liste d'emplois potentiellement longue). "Expérience/Niveau
+d'étude" strictement inchangées (déjà boîtées).
+
+Dans les deux fichiers : **aucune donnée, prop, handler, data-testid, route,
+ou logique métier modifiée** — uniquement l'ajout d'un `<div>` englobant
+(classe + fermeture) autour du contenu déjà existant de chaque section.
+
+## 3. Garde-fous respectés
+
+- **`/academy` non modifié** : confirmé par `git status` — seuls
+  `barista-detail-modal.tsx` et `maintenance-page.tsx` apparaissent dans le
+  diff de cette tâche.
+- **Aucune section vide créée** : chaque bloc reste gardé par sa condition
+  d'existence déjà en place (`agent.serviceDetails?.trim() &&`,
+  `card.skills.length > 0 &&`, etc.) — juste déplacée à l'intérieur du
+  nouveau conteneur, jamais retirée.
+- **Pas de hauteur fixe uniforme** : seules les deux sections explicitement
+  signalées comme pouvant devenir longues (Détails de Service, Cafés
+  précédents) ont reçu un plafond + défilement interne ; toutes les autres
+  restent de taille naturelle, exactement comme la référence Academy.
+- **Pas de conflit de défilement imbriqué** : le plafond `max-h-48
+  overflow-y-auto` ajouté est strictement interne à sa propre section (et
+  significativement plus petit que la hauteur du `DialogContent` englobant,
+  `max-h-[90vh]`), donc jamais en compétition avec le scroll global de la
+  modale.
+- **Portfolio, compétences/sous-compétences, certifications, zone
+  d'intervention, historique professionnel** : rendu interne (grille,
+  lightbox, puces, icônes) strictement inchangé — seul le conteneur
+  englobant a changé.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès.
+- `git status`/`git diff --stat` → seuls `barista-detail-modal.tsx` (39
+  lignes) et `maintenance-page.tsx` (48 lignes) modifiés par cette tâche ;
+  confirmé qu'`academy-detail-modal.tsx` n'apparaît pas dans le diff.
+- Aucun navigateur disponible dans cet environnement — pas de capture
+  visuelle réelle des nouvelles sections boîtées ; mise en page vérifiée par
+  lecture directe des classes ajoutées et comparaison structurelle avec la
+  référence Academy (conteneurs, espacement, absence de hauteur fixe
+  généralisée).
+
+---
+
+# Analyse — Reduce SHOP Hero Height and Remove Subtitle
+
+## 1. Audit
+
+- Hero SHOP localisé dans `pages/cafe/browse-products.tsx` : `<section
+  className="relative pt-5 pb-12 px-5 ...">`, une rangée de contrôles
+  (`mb-9`), puis un bloc centré (icône, `<h1>BigBoss SHOP</h1>` avec `mb-2`,
+  puis le `<p>` sous-titre "Commandez vos produits professionnels
+  directement auprès de fournisseurs vérifiés.").
+- Seuls trois leviers identifiés pour réduire la hauteur sans toucher au
+  reste : le padding bas de la `<section>` (`pb-12`), la marge sous la
+  rangée de contrôles (`mb-9`), et la marge du titre (`mb-2`, qui ne sert
+  plus à rien une fois le sous-titre retiré).
+
+## 2. Implémentation
+
+- `pb-12` → `pb-6` sur la `<section>`.
+- `mb-9` → `mb-5` sur la rangée de contrôles (bouton Flash Mode).
+- Suppression complète du `<p>` sous-titre.
+- Suppression de `mb-2` sur le `<h1>` (devenu inutile, plus aucun élément ne
+  le suit dans le bloc centré — évite un espace vide résiduel).
+- Titre "BigBoss SHOP", icône, couleurs, dégradé de fond, bouton Flash Mode :
+  tous strictement inchangés.
+
+## 3. Garde-fous respectés
+
+- Aucun autre contenu de la page (recherche, filtres, catégories, produits,
+  stores, packs, navigation) touché — seules les 4 lignes de la section hero
+  modifiées.
+- Aucun composant partagé modifié (le hero est local à `browse-products.tsx`).
+- Aucune logique métier, API, route, ni donnée touchée.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès.
+- `git status` → seul `browse-products.tsx` modifié par cette tâche.
+- Aucun navigateur disponible dans cet environnement — pas de capture
+  visuelle réelle ; changement vérifié par lecture directe des classes
+  Tailwind modifiées (réduction effective de padding/marges, titre toujours
+  présent, sous-titre entièrement retiré).
+
+---
+
+# Analyse — Restore Original SHOP Hero Section
+
+## 1. Contexte
+
+- Le résultat de la tâche précédente ("Reduce SHOP Hero Height and Remove
+  Subtitle") n'a pas convenu — demande explicite de tout annuler et de
+  restaurer l'apparence d'origine du hero SHOP.
+
+## 2. Implémentation
+
+- Les 4 modifications de la tâche précédente, toutes dans
+  `pages/cafe/browse-products.tsx`, annulées une à une à l'identique de leur
+  état avant cette tâche :
+  - `pb-6` → `pb-12` sur la `<section>` du hero (+ commentaire ajouté retiré).
+  - `mb-5` → `mb-9` sur la rangée de contrôles (bouton Flash Mode).
+  - `mb-2` restauré sur le `<h1>` "BigBoss SHOP".
+  - Sous-titre restauré : `<p className="text-base mb-0 max-w-xl mx-auto ...">Commandez
+    vos produits professionnels directement auprès de fournisseurs
+    vérifiés.</p>`.
+- Vérifié via `git diff` qu'aucun hunk ne subsiste sur la zone du hero par
+  rapport au dernier commit — confirmation que le fichier est revenu à l'état
+  exact d'avant la tâche précédente, pas une simple approximation visuelle.
+
+## 3. Garde-fous respectés
+
+- Seul `browse-products.tsx` touché ; aucune autre page, composant partagé,
+  route, API ou logique métier modifiée.
+- Aucune autre partie de SHOP (recherche, filtres, produits, stores, packs,
+  navigation) touchée.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès.
+- `git diff` sur la zone du hero → aucune différence restante par rapport au
+  dernier commit, confirmant la restauration exacte.
+
+---
+
+# Analyse — Admin Service Hero Customization + Dynamic SHOP Statistics
+
+## 1. Audit préalable
+
+### 1.1 Précédent architectural réutilisé
+
+- `heroActionSettings` (`shared/schema.ts`) : une ligne par service
+  (`heroServiceEnum` = SHOP/BARISTA/ACADEMY/MAINTENANCE/PRINT/MARKETING),
+  auto-seedée via `onConflictDoNothing`, lecture publique
+  (`GET /api/hero-actions`), écriture Admin uniquement
+  (`PATCH /api/admin/hero-actions/:service`), broadcast temps réel. Ce
+  modèle exact est repris pour la nouvelle table `service_hero_configs`
+  (même forme get/set, même seed, même garde Admin, même broadcast).
+- `HeroSlidesEditor`/`LandingConfigSection` (même fichier, ~lignes 551-680) :
+  confirmé comme une fonctionnalité distincte et non concernée — le
+  carrousel hero de la page de connexion (pré-login), piloté par
+  `/api/landing-config`. Ni la table, ni les routes, ni l'UI de cette tâche
+  n'y touchent.
+- `SERVICE_ORDER_CARDS`/`HERO_SERVICES` (`system-management-page.tsx`) :
+  registre existant des 6 services avec icône/label — réutilisé tel quel
+  comme sélecteur de service dans la nouvelle UI Admin (aucun nouveau
+  registre dupliqué).
+
+### 1.2 Vérification des données pour les statistiques SHOP (Partie 3)
+
+Objectif : confirmer que les compteurs Stores/Packs/Products peuvent être
+calculés sans nouvel endpoint, à partir des données déjà chargées par
+`browse-products.tsx`.
+
+- `storage.getMarketplacePacks()` (`server/storage.ts:11954`) : filtre déjà
+  `visibility='VISIBLE'`, `isArchived=false`, puis `isAvailable` — exactement
+  la même règle que la route détail `/api/marketplace/packs/:id`. Le tableau
+  `packs` reçu par le client est donc déjà 100% éligible.
+- `storage.getVisibleStores()` (`server/storage.ts:12405`) : filtre déjà
+  `approvalStatus='APPROVED'` + `visibility='VISIBLE'`, et ne retourne que
+  les stores avec `productCount > 0`. Le tableau `stores` est donc déjà la
+  liste exacte des magasins disponibles, sans filtre supplémentaire à
+  ajouter côté client.
+- `storage.getMarketplaceProducts()` (`server/storage.ts:5745`) : exclut déjà
+  les produits `status='FREEZE'`, les listings `onlyForPack`, les catégories
+  gelées par fournisseur, et les listings sans stock/prix positif. Le
+  tableau `allProducts` est donc déjà la liste exacte des produits
+  disponibles.
+- Conclusion : `stores.length`, `packs.length`, `allProducts.length` sur les
+  requêtes déjà existantes de `browse-products.tsx` donnent directement les
+  3 compteurs demandés, sans nouvelle route ni logique d'éligibilité
+  dupliquée.
+
+## 2. Implémentation
+
+### 2.1 Base de données (`shared/schema.ts`)
+
+- Nouvelle table `service_hero_configs` (une ligne par `heroServiceEnum`,
+  contrainte `unique()` sur `service`) : `backgroundImages` (text[]),
+  `rotationIntervalSeconds`, `gradientEnabled`/`gradientFrom`/`gradientVia`/
+  `gradientTo`/`gradientDirection`, `subtitle` (nullable = défaut du
+  service), `height` (compact/medium/large), `horizontalAlign`
+  (left/center/right), `verticalAlign` (top/center/bottom),
+  `infoRowEnabled` (bool, défaut `true` — préserve le comportement actuel).
+- Appliquée en base via `npm run db:push` (additive uniquement, aucune
+  colonne ni table existante modifiée/supprimée) — vérifié par requête SQL
+  directe sur `information_schema.columns`.
+
+### 2.2 Serveur (`server/storage.ts`, `server/routes.ts`)
+
+- `storage.getServiceHeroConfigs()` : même mécanique que
+  `getHeroActionSettings` — lit les lignes existantes, auto-seed les
+  services manquants avec les valeurs par défaut, retourne une map complète
+  des 6 services (jamais de trou).
+- `storage.setServiceHeroConfig(service, updates)` : upsert ciblé sur un
+  seul service (update si la ligne existe, insert sinon), puis relecture
+  complète — garantit qu'une modification/réinitialisation d'un service ne
+  touche jamais la ligne d'un autre.
+- `GET /api/service-hero-config` (public) : lecture, mêmes garanties que
+  `/api/hero-actions`.
+- `PATCH /api/admin/service-hero-config/:service` (`requireAdmin`) :
+  validation zod stricte par champ (longueurs/bornes/enums : rotation 2-60s,
+  max 8 images, max 240 caractères de sous-titre, enums fermés pour
+  height/horizontalAlign/verticalAlign), service invalide → 400, non-admin
+  → 401 (vérifié), broadcast `service_hero_config_updated` après écriture.
+- `client/src/hooks/use-realtime.ts` : nouvel événement
+  `service_hero_config_updated` invalide `["/api/service-hero-config"]`
+  (même convention que `hero_actions_updated`).
+
+### 2.3 Client — hook et composant partagés (nouveaux fichiers)
+
+- `client/src/hooks/use-service-hero-config.ts` : `useServiceHeroConfigMap()`
+  / `useServiceHeroConfig(service)`, défauts sûrs identiques au serveur (un
+  échec de chargement ne change jamais l'apparence actuelle d'un hero).
+- `client/src/components/shared/service-hero.tsx` : `ServiceHeroBackground`
+  (rotation d'images avec `setInterval`/`clearInterval` propre au montage,
+  dégradé CSS inline — couleurs admin arbitraires, pas de classes Tailwind
+  dynamiques —, repli sur le fond par défaut existant du service si rien
+  n'est configuré ; règle de précédence explicite : un dégradé actif
+  remplace les images) et `ServiceHeroShell` (centralise
+  hauteur/alignement horizontal/vertical autour du fond + du contenu propre
+  à chaque page). Un seul point d'implémentation pour les 6 heros — pas de
+  logique dupliquée ni réinventée par service.
+
+### 2.4 Intégration dans les 6 heros (Parties 1 & 2)
+
+Fichiers modifiés : `browse-products.tsx` (SHOP), `maintenance-page.tsx`,
+`barista-page.tsx`, `barista-academy-page.tsx`, `print-page.tsx`,
+`marketing-page.tsx`. Pour chacun :
+
+- `<section>` + fond conditionnel dark/light existant → `<ServiceHeroShell
+  config={heroConfig} defaultBackground={...} controlsRow={...}>` ; le fond
+  par défaut d'origine est passé tel quel (inchangé visuellement quand
+  aucune image/dégradé n'est configuré).
+- Icône/titre conservés à l'identique (propres à chaque service, jamais
+  génériques).
+- Sous-titre : `{heroConfig.subtitle ?? "<texte par défaut d'origine>"}` —
+  le texte par défaut exact de chaque service est préservé mot pour mot.
+- Ligne d'info (stats) existante : enveloppée dans
+  `{heroConfig.infoRowEnabled && (...)}` — ON affiche la ligne telle
+  qu'elle existait déjà (aucune valeur inventée), OFF la masque entièrement.
+- Alignement horizontal appliqué à l'icône (`H_ALIGN_ICON_MX`) et à la
+  ligne d'info (`H_ALIGN_ROW_JUSTIFY`) ; alignement vertical + hauteur
+  gérés par `ServiceHeroShell`.
+
+### 2.5 Statistiques SHOP (Partie 3, `browse-products.tsx`)
+
+- Nouvelle ligne sous le sous-titre du hero SHOP, toujours affichée
+  (exigence explicitement séparée du toggle `infoRowEnabled` ci-dessus — sa
+  propre règle, jamais masquée) :
+  `{storesLoading ? "…" : stores.length} magasins`,
+  `{packsLoading ? "…" : packs.length} packs`,
+  `{isLoading ? "…" : allProducts.length} produits`.
+- Zéro nouvelle requête : réutilise les 3 `useQuery` déjà existants de la
+  page (`/api/stores`, `/api/marketplace/packs`, `/api/marketplace`), ajout
+  seulement de `isLoading: storesLoading`/`isLoading: packsLoading` sur les
+  deux qui ne l'exposaient pas encore.
+- Catégories vides → `0` affiché explicitement (comportement natif de
+  `.length`), jamais masqué ni remplacé par une valeur inventée.
+
+### 2.6 Interface Admin (`system-management-page.tsx`)
+
+Nouveau composant `ServiceHeroCustomizationSection()`, inséré dans l'onglet
+« Services » juste après `HeroActionsSection` (zone déjà dédiée aux
+réglages par service) :
+
+- Sélecteur des 6 services (réutilise `HERO_SERVICES`).
+- Édition en brouillon local (`draft`) distincte de la valeur enregistrée
+  (`saved`) — un bandeau « Modifications non enregistrées » apparaît
+  uniquement si `draft` diffère de `saved` ; le brouillon ne se resynchronise
+  sur le serveur qu'au changement de service (jamais écrasé par un
+  rafraîchissement temps réel en arrière-plan pendant une édition en cours).
+- Sections : Images d'arrière-plan (ajout/suppression + intervalle de
+  rotation si ≥2 images), Dégradé (toggle + 3 couleurs avec
+  `<input type="color">` + sélecteur de direction), Sous-titre (texte vide
+  = défaut, bouton explicite « Revenir au défaut »), Hauteur & Position (3
+  `Select`), Ligne d'info (switch), Aperçu en direct (rendu du vrai
+  `ServiceHeroShell`, pas une maquette séparée), boutons Enregistrer
+  (désactivé si rien à enregistrer) et Réinitialiser (persiste les valeurs
+  par défaut pour le service sélectionné uniquement).
+- États de chargement (`Skeleton`), succès/erreur (toasts), chaque mutation
+  cible explicitement `:service` dans l'URL — jamais d'écriture multi-
+  services en un seul appel.
+
+## 3. Garde-fous respectés
+
+- `HeroSlidesEditor`/`LandingConfigSection`/`/api/landing-config` non
+  modifiés — fonctionnalité pré-login totalement indépendante.
+- Aucune route, permission ou règle d'éligibilité marketplace existante
+  modifiée ; les 3 requêtes SHOP réutilisées sont lues en l'état, jamais
+  réécrites.
+- Aucune donnée métier existante supprimée ; migration DB strictement
+  additive (nouvelle table uniquement).
+- Chaque service garde son apparence exacte tant qu'il n'a pas de
+  configuration Admin (valeurs par défaut = comportement actuel inchangé).
+- Réinitialiser un service ne touche que ce service (vérifié par script,
+  voir §4).
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur (avant et après l'ajout de l'UI Admin).
+- `npm run build` → succès (client + serveur).
+- `npm run db:push` → changements appliqués ; colonnes de
+  `service_hero_configs` vérifiées directement en base
+  (`information_schema.columns`).
+- Redémarrage du serveur de dev (`tsx` sans mode watch serveur — nécessaire
+  pour charger les nouvelles routes) ; ancien process arrêté puis relancé
+  proprement (`[express] serving on port 5000`).
+- `GET /api/service-hero-config` sans authentification → 200, les 6
+  services présents avec les valeurs par défaut exactes.
+- `PATCH /api/admin/service-hero-config/SHOP` sans authentification → 401
+  (garde Admin active avant toute validation).
+- Script temporaire (`scratch-test-hero.ts`, supprimé après usage) appelant
+  directement `storage.setServiceHeroConfig` : mise à jour de MARKETING
+  (sous-titre, hauteur, alignements, images, rotation) confirmée persistée,
+  PRINT strictement inchangé après cette mise à jour, puis réinitialisation
+  de MARKETING confirmée retournant exactement aux valeurs par défaut,
+  PRINT toujours inchangé — confirme le scoping par service demandé par la
+  tâche.
+- `GET /api/stores`, `/api/marketplace/packs`, `/api/marketplace` sur
+  l'environnement réel : 10 magasins, 6 packs, 34 produits — chiffres réels
+  non fabriqués, cohérents avec les données déjà en base.
+- `git status --short` final : uniquement les fichiers attendus pour cette
+  tâche (+ fichiers déjà modifiés par des tâches précédentes de la session,
+  non touchés davantage ici).
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible dans cet environnement pour une
+  vérification visuelle directe (rendu du dégradé, timing exact de la
+  rotation d'images, absence de chevauchement du logo/titre à toutes les
+  tailles d'écran). La logique a été vérifiée par lecture de code, type-
+  checking strict et tests fonctionnels côté serveur/API ; une vérification
+  visuelle manuelle reste recommandée avant mise en production.
+- Les couleurs de dégradé sont stockées en texte libre (hex ou nom CSS) et
+  appliquées via `style` inline — aucune validation de format côté serveur
+  au-delà d'une limite de longueur (cohérent avec les autres champs "image
+  URL" déjà en texte libre ailleurs dans l'app, ex. `landingConfig`).

@@ -1300,6 +1300,50 @@ export type HeroService = 'SHOP' | 'BARISTA' | 'ACADEMY' | 'MAINTENANCE' | 'PRIN
 export type HeroActionSetting = typeof heroActionSettings.$inferSelect;
 export type HeroActionSettingsMap = Record<HeroService, { fastSearchEnabled: boolean; reportEnabled: boolean }>;
 
+// Admin-controlled visual customization of each Coffee-Owner-facing service
+// hero section (background image rotation / gradient, subtitle override,
+// height preset, content alignment, and the stats/info-row toggle). One row
+// per heroServiceEnum service, same seed/get/set shape as heroActionSettings
+// above. Unrelated to landingConfig (the PRE-LOGIN marketing page's own hero
+// carousel) — that feature must not be touched by this table.
+export const serviceHeroConfigs = pgTable("service_hero_configs", {
+  id: serial("id").primaryKey(),
+  service: heroServiceEnum("service").notNull().unique(),
+  backgroundImages: text("background_images").array().notNull().default(sql`'{}'::text[]`),
+  rotationIntervalSeconds: integer("rotation_interval_seconds").notNull().default(6),
+  gradientEnabled: boolean("gradient_enabled").notNull().default(false),
+  gradientFrom: text("gradient_from").notNull().default(""),
+  gradientVia: text("gradient_via").notNull().default(""),
+  gradientTo: text("gradient_to").notNull().default(""),
+  gradientDirection: text("gradient_direction").notNull().default("to bottom right"),
+  subtitle: text("subtitle"),
+  height: text("height").notNull().default("medium"),
+  horizontalAlign: text("horizontal_align").notNull().default("center"),
+  verticalAlign: text("vertical_align").notNull().default("center"),
+  infoRowEnabled: boolean("info_row_enabled").notNull().default(true),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type ServiceHeroHeight = 'compact' | 'medium' | 'large';
+export type ServiceHeroHAlign = 'left' | 'center' | 'right';
+export type ServiceHeroVAlign = 'top' | 'center' | 'bottom';
+export type ServiceHeroConfigRow = typeof serviceHeroConfigs.$inferSelect;
+export type ServiceHeroConfig = {
+  backgroundImages: string[];
+  rotationIntervalSeconds: number;
+  gradientEnabled: boolean;
+  gradientFrom: string;
+  gradientVia: string;
+  gradientTo: string;
+  gradientDirection: string;
+  subtitle: string | null;
+  height: ServiceHeroHeight;
+  horizontalAlign: ServiceHeroHAlign;
+  verticalAlign: ServiceHeroVAlign;
+  infoRowEnabled: boolean;
+};
+export type ServiceHeroConfigMap = Record<HeroService, ServiceHeroConfig>;
+
 // Admin-controlled theme POLICY for each of the 7 non-Coffee-Owner service
 // accounts' own navbar. Separate table/key set again (same reasoning as
 // heroActionSettings above): this is a per-PROVIDER-ACCOUNT UI control,

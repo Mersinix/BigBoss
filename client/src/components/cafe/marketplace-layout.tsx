@@ -3142,6 +3142,23 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   const unreadNotifCount = unreadNotifData?.count ?? 0;
 
   const isOnPrint = location.startsWith("/print");
+  // Move SHOP Search Input into the Products Filter Section — the SHOP listing
+  // page now has its own live, inline search in its filter bar (matching
+  // /academy's behavior), so this navbar box is hidden there to avoid a
+  // duplicate. Jumping to /products with a query from any other page still
+  // works via this same box.
+  const isOnProducts = location === "/products";
+  // Unify Service and Store Search + Remove Navbar Search Inputs — every one of
+  // these five pages already has its own working in-page search in its filter
+  // section (maintenance-page.tsx/barista-page.tsx/barista-academy-page.tsx/
+  // print-page.tsx/marketing-page.tsx all already have a real, live
+  // search input — confirmed before removing this one). This single shared
+  // navbar box only ever routed to /print or /products on submit anyway, so on
+  // the other three it never did anything useful. Hidden only on these exact
+  // pages — still available everywhere else (incl. jumping to /products or
+  // /print with a query from any other page).
+  const hideNavbarSearch = isOnProducts || isOnPrint
+    || ["/maintenance", "/barista", "/academy", "/marketing"].includes(location);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -3186,23 +3203,28 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
             </button>
           )}
 
-          {/* Search */}
-          <form onSubmit={handleSearch} className="flex-1 max-w-md hidden sm:block">
-            <div className="relative">
-              <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDark ? "text-gray-500" : "text-gray-400"}`} />
-              <Input
-                className={`pl-9 h-9 rounded-2xl text-sm transition-colors ${
-                  isDark
-                    ? "bg-gray-800 border-gray-700 text-gray-200 placeholder:text-gray-500 focus:bg-gray-700 focus:border-gray-600"
-                    : "bg-gray-50 border-gray-200 text-gray-900 focus:bg-white"
-                }`}
-                placeholder="Search products…"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                data-testid="input-marketplace-search"
-              />
-            </div>
-          </form>
+          {/* Search — hidden on /products, /maintenance, /barista, /academy,
+              /print and /marketing (each already has its own in-page search);
+              kept exactly as-is everywhere else, incl. jumping to /products or
+              /print with a query from any other page. */}
+          {!hideNavbarSearch && (
+            <form onSubmit={handleSearch} className="flex-1 max-w-md hidden sm:block">
+              <div className="relative">
+                <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 ${isDark ? "text-gray-500" : "text-gray-400"}`} />
+                <Input
+                  className={`pl-9 h-9 rounded-2xl text-sm transition-colors ${
+                    isDark
+                      ? "bg-gray-800 border-gray-700 text-gray-200 placeholder:text-gray-500 focus:bg-gray-700 focus:border-gray-600"
+                      : "bg-gray-50 border-gray-200 text-gray-900 focus:bg-white"
+                  }`}
+                  placeholder="Search products…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  data-testid="input-marketplace-search"
+                />
+              </div>
+            </form>
+          )}
 
           <div className="flex-1" />
 

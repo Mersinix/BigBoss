@@ -37,6 +37,8 @@ import {
 } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useHeroActionSettings } from "@/hooks/use-hero-actions";
+import { useServiceHeroConfig } from "@/hooks/use-service-hero-config";
+import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY } from "@/components/shared/service-hero";
 import {
   useMarketingProfiles,
   useMarketingServices,
@@ -201,9 +203,14 @@ function MarketingStoreCardTile({ company, onClick, isDark }: {
   );
 }
 
-function MarketingStoresSection({ companies, categoryId, onSelect, isDark }: {
+function MarketingStoresSection({ companies, categoryId, search, onSelect, isDark }: {
   companies: MarketingCompanyListCard[];
   categoryId: string;
+  // Unify Service and Store Search + Remove Navbar Search Inputs — same query
+  // as the services search below, matched against this agency's own name/
+  // description, so an agency is discoverable even when none of its own
+  // service names match.
+  search: string;
   onSelect: (agencyId: number) => void;
   isDark: boolean;
 }) {
@@ -212,9 +219,14 @@ function MarketingStoresSection({ companies, categoryId, onSelect, isDark }: {
   const INITIAL_LIMIT = 5;
 
   const filtered = useMemo(() => {
-    if (!categoryId) return companies;
-    return companies.filter((c) => c.categories.some((cat: string) => cat.toLowerCase() === categoryId.toLowerCase()));
-  }, [companies, categoryId]);
+    let list = companies;
+    if (categoryId) list = list.filter((c) => c.categories.some((cat: string) => cat.toLowerCase() === categoryId.toLowerCase()));
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((c) => c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q));
+    }
+    return list;
+  }, [companies, categoryId, search]);
 
   if (!filtered.length) return null;
   const showToggle = filtered.length > INITIAL_LIMIT;
@@ -387,6 +399,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   const isDark = useThemeStore((s) => s.isDark);
   const t = useTheme(isDark);
   const { settings: heroActions } = useHeroActionSettings();
+  const { config: heroConfig } = useServiceHeroConfig("MARKETING");
   const [, navigate] = useLocation();
 
   const searchStr = useSearch();
@@ -507,14 +520,19 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   return (
     <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="relative pt-5 pb-12 px-5 overflow-hidden">
-        <div className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-80" style={{ backgroundImage: `url(${marketingHeroImg})` }} />
-        <div className={`absolute inset-0 ${isDark ? "bg-gradient-to-br from-gray-950/95 via-gray-900/95 to-purple-950/90" : "bg-gradient-to-br from-purple-600/90 via-purple-700/85 to-violet-700/90"}`} />
-        <div className="relative">
-          {/* The global navbar theme control is the single Dark/Light toggle
+      <ServiceHeroShell
+        config={heroConfig}
+        defaultBackground={
+          <>
+            <div className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-80" style={{ backgroundImage: `url(${marketingHeroImg})` }} />
+            <div className={`absolute inset-0 ${isDark ? "bg-gradient-to-br from-gray-950/95 via-gray-900/95 to-purple-950/90" : "bg-gradient-to-br from-purple-600/90 via-purple-700/85 to-violet-700/90"}`} />
+          </>
+        }
+        controlsRow={
+          /* The global navbar theme control is the single Dark/Light toggle
               now, so the duplicated hero one is gone; Fast Search/Report stay
-              Admin-toggleable per service (see /api/hero-actions). */}
-          <div className="flex justify-end items-center gap-2 mb-9">
+              Admin-toggleable per service (see /api/hero-actions). */
+          <div className="relative flex justify-end items-center gap-2 mb-9">
             {canAct && heroActions.MARKETING.reportEnabled && (
               <button
                 onClick={() => setBlacklistOpen(true)}
@@ -538,26 +556,27 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               </button>
             )}
           </div>
-          <div className="max-w-3xl mx-auto text-center">
-            <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>
-              <Megaphone className={`w-8 h-8 ${isDark ? "text-amber-400" : "text-white"}`} />
-            </div>
-            <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3">
-              BigBoss <span className={isDark ? "text-amber-400" : "text-amber-200"}>MARKETING</span>
-            </h1>
-            <p className={`text-base mb-4 max-w-xl mx-auto ${isDark ? "text-gray-400" : "text-purple-100"}`}>
-              Boostez la visibilité de votre café avec des experts marketing dédiés à la restauration
-            </p>
-            <div className={`flex items-center justify-center gap-6 flex-wrap text-sm ${isDark ? "text-gray-400" : "text-purple-100"}`}>
-              <span className="flex items-center gap-1.5"><Users className="w-4 h-4" />{providers.length} prestataires</span>
-              <span className="flex items-center gap-1.5"><Megaphone className="w-4 h-4" />{taxonomy.length} types de services</span>
-              {averageRating > 0 && (
-                <span className="flex items-center gap-1.5"><Star className="w-4 h-4 fill-purple-200" />Note moyenne {averageRating.toFixed(1)}/5</span>
-              )}
-            </div>
-          </div>
+        }
+      >
+        <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-5 backdrop-blur-sm ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>
+          <Megaphone className={`w-8 h-8 ${isDark ? "text-amber-400" : "text-white"}`} />
         </div>
-      </section>
+        <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3">
+          BigBoss <span className={isDark ? "text-amber-400" : "text-amber-200"}>MARKETING</span>
+        </h1>
+        <p className={`text-base mb-4 max-w-xl ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${isDark ? "text-white" : "text-purple-100"}`}>
+          {heroConfig.subtitle ?? "Boostez la visibilité de votre café avec des experts marketing dédiés à la restauration"}
+        </p>
+        {heroConfig.infoRowEnabled && (
+          <div className={`flex items-center gap-6 flex-wrap text-sm ${H_ALIGN_ROW_JUSTIFY[heroConfig.horizontalAlign]} ${isDark ? "text-white" : "text-purple-100"}`}>
+            <span className="flex items-center gap-1.5"><Users className="w-4 h-4" />{providers.length} prestataires</span>
+            <span className="flex items-center gap-1.5"><Megaphone className="w-4 h-4" />{taxonomy.length} types de services</span>
+            {averageRating > 0 && (
+              <span className="flex items-center gap-1.5"><Star className="w-4 h-4 fill-purple-200" />Note moyenne {averageRating.toFixed(1)}/5</span>
+            )}
+          </div>
+        )}
+      </ServiceHeroShell>
 
       {comingSoon ? (
         <div className="max-w-3xl mx-auto px-4 py-20 text-center">
@@ -725,6 +744,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
         <MarketingStoresSection
           companies={marketingCompanies}
           categoryId={selectedService}
+          search={search}
           onSelect={(agencyId) => navigate(`/marketing/stores/${agencyId}`)}
           isDark={isDark}
         />

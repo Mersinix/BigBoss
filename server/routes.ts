@@ -486,6 +486,41 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // ── Service hero visual customization (background/gradient/subtitle/height/alignment/info-row per service) ──
+  app.get("/api/service-hero-config", async (_req, res) => {
+    try {
+      res.json(await storage.getServiceHeroConfigs());
+    } catch { res.status(500).json({ message: "Failed to load service hero config" }); }
+  });
+
+  app.patch("/api/admin/service-hero-config/:service", requireAdmin, async (req, res) => {
+    try {
+      const service = req.params.service as string;
+      const VALID_SERVICES = ['SHOP', 'BARISTA', 'ACADEMY', 'MAINTENANCE', 'PRINT', 'MARKETING'];
+      if (!VALID_SERVICES.includes(service)) return res.status(400).json({ message: "Invalid service" });
+      const body = z.object({
+        backgroundImages: z.array(z.string().trim().max(1000)).max(8).optional(),
+        rotationIntervalSeconds: z.number().int().min(2).max(60).optional(),
+        gradientEnabled: z.boolean().optional(),
+        gradientFrom: z.string().trim().max(32).optional(),
+        gradientVia: z.string().trim().max(32).optional(),
+        gradientTo: z.string().trim().max(32).optional(),
+        gradientDirection: z.string().trim().max(32).optional(),
+        subtitle: z.string().trim().max(240).nullable().optional(),
+        height: z.enum(["compact", "medium", "large"]).optional(),
+        horizontalAlign: z.enum(["left", "center", "right"]).optional(),
+        verticalAlign: z.enum(["top", "center", "bottom"]).optional(),
+        infoRowEnabled: z.boolean().optional(),
+      }).parse(req.body);
+      const settings = await storage.setServiceHeroConfig(service as any, body);
+      broadcast("service_hero_config_updated", settings);
+      res.json(settings);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(500).json({ message: "Failed to update service hero config" });
+    }
+  });
+
   // ── Dark mode toggle visibility per service account (System Management) ──
   app.get("/api/account-dark-mode-settings", async (_req, res) => {
     try {

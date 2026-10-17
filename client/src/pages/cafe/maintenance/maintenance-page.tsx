@@ -5,6 +5,8 @@ import { useThemeStore } from "@/store/theme-store";
 import { useAuth } from "@/hooks/use-auth";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useHeroActionSettings } from "@/hooks/use-hero-actions";
+import { useServiceHeroConfig } from "@/hooks/use-service-hero-config";
+import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY } from "@/components/shared/service-hero";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { MaintenanceFastSearch } from "@/components/maintenance/maintenance-fast-search";
@@ -533,16 +535,36 @@ export function AgentDetailModal({
               </div>
             </div>
 
-            {/* Section headings unified to the same text-xs/muted style the
-                Barista modal uses (Part 3/5/8-10) — content stays Maintenance's
-                own real data throughout. */}
-            <div><h3 className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>À propos</h3><p className={`text-sm leading-relaxed ${t.textMuted}`}>{agent.description || "Aucune description disponible."}</p></div>
+            {/* Standardize Maintenance and Barista Detail Modal Layouts — every
+                logical section below is now its own visually separated
+                container (p-3 rounded-xl ${t.mutedBg}), same structural
+                pattern as the Academy detail modal's own sectionBg boxes
+                (components/academy/academy-detail-modal.tsx) — reusing
+                Maintenance's own already-established mutedBg token (already
+                used by Expérience/Réponse above and Zone d'intervention below)
+                rather than importing Academy's distinct color values into a
+                different module. Content/data/logic inside each box
+                unchanged. */}
+            <div className={`p-3 rounded-xl ${t.mutedBg}`}>
+              <h3 className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>À propos</h3>
+              <p className={`text-sm leading-relaxed ${t.textPrimary}`}>{agent.description || "Aucune description disponible."}</p>
+            </div>
             {/* Détails de Service — real, professional-entered content only, never
                 shown when empty, same convention as marketingServices.offerDetails
                 (docs/service_details_offer_details_and_desktop_navbar_audit.md).
-                Distinct from the short "À propos" blurb above. */}
+                Distinct from the short "À propos" blurb above. Internal
+                max-height + scroll (same thin-scrollbar classes as this modal's
+                own DialogContent) added here specifically because this is the
+                one field explicitly prone to long bullet-list content — other,
+                typically-short sections stay uncapped, matching the Academy
+                reference's own "don't force a fixed height everywhere" approach. */}
             {agent.serviceDetails?.trim() && (
-              <div><h3 className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ListChecks className="w-3.5 h-3.5" /> Détails de Service</h3><p className={`text-sm leading-relaxed whitespace-pre-wrap ${t.textMuted}`}>{agent.serviceDetails}</p></div>
+              <div className={`p-3 rounded-xl ${t.mutedBg}`}>
+                <h3 className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ListChecks className="w-3.5 h-3.5" /> Détails de Service</h3>
+                <div className="max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+                  <p className={`text-sm leading-relaxed whitespace-pre-wrap ${t.textPrimary}`}>{agent.serviceDetails}</p>
+                </div>
+              </div>
             )}
             {/* agent.skills is the one authoritative Maintenance competency field — no
                 longer unioned with agent.categories (deprecated duplicate, see
@@ -550,7 +572,7 @@ export function AgentDetailModal({
                 Categories from Maintenance and Use Only Compétences"). Chips carry a real
                 dark-mode variant instead of the previous hardcoded light-only
                 orange-50/amber-50 colors (Part 8's own fix, unrelated to this change). */}
-            <div>
+            <div className={`p-3 rounded-xl ${t.mutedBg}`}>
               <h3 className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Compétences</h3>
               <div className="space-y-2">
                 {agent.skills.map((item) => {
@@ -561,7 +583,7 @@ export function AgentDetailModal({
                       {subs.length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1 ml-1">
                           {subs.map((subName) => (
-                            <span key={subName} className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${isDark ? "bg-gray-800 text-gray-300 border-gray-700" : "bg-gray-50 text-gray-600 border-gray-200"}`}>{subName}</span>
+                            <span key={subName} className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${isDark ? "bg-gray-800 text-white border-gray-700" : "bg-gray-50 text-gray-700 border-gray-200"}`}>{subName}</span>
                           ))}
                         </div>
                       )}
@@ -570,12 +592,22 @@ export function AgentDetailModal({
                 })}
               </div>
             </div>
-             {agent.certifications.length > 0 && <div><h3 className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><Award className="w-3.5 h-3.5 text-amber-500" /> Certifications</h3><div className="flex flex-wrap gap-1.5">{agent.certifications.map((item) => <span key={item} className={`text-[11px] px-2 py-0.5 rounded-full font-medium border ${isDark ? "bg-amber-900/30 text-amber-300 border-amber-800" : "bg-amber-50 text-amber-700 border-amber-200"}`}>{item}</span>)}</div></div>}
+             {agent.certifications.length > 0 && (
+               <div className={`p-3 rounded-xl ${t.mutedBg}`}>
+                 <h3 className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><Award className="w-3.5 h-3.5 text-amber-500" /> Certifications</h3>
+                 <div className="flex flex-wrap gap-1.5">{agent.certifications.map((item) => <span key={item} className={`text-[11px] px-2 py-0.5 rounded-full font-medium border ${isDark ? "bg-amber-900/30 text-amber-300 border-amber-800" : "bg-amber-50 text-amber-700 border-amber-200"}`}>{item}</span>)}</div>
+               </div>
+             )}
              {/* Old "Disponibilité / Horaires" section removed from the main
                  body (Part 8) — now reachable via the Disponibilité icon on
                  the profile picture, which opens MaintenanceAvailabilityModal. */}
-             <div className={`${t.mutedBg} rounded-xl p-3`}><h3 className={`text-xs font-semibold mb-2 ${t.textMuted}`}>Zone d'intervention</h3><div className={`flex items-center gap-2 text-sm ${t.textMuted}`}><MapPin className="w-3.5 h-3.5 text-orange-500" />{agent.coverageArea || agent.location || "—"}</div></div>
-             {agent.portfolioImages.length > 0 && <div><h3 className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ImageIcon className="w-3.5 h-3.5" /> Portfolio</h3><div className="grid grid-cols-4 gap-2">{agent.portfolioImages.map((image, i) => <button key={i} type="button" onClick={() => { setAlbumIndex(i); setAlbumOpen(true); }} className={`aspect-square rounded-lg overflow-hidden border ${t.border} ${isDark ? "bg-gray-800" : "bg-gray-100"}`} data-testid={`button-portfolio-thumb-${i}`}><img src={image} alt={`Portfolio ${i + 1}`} className="w-full h-full object-cover" /></button>)}</div></div>}
+             <div className={`${t.mutedBg} rounded-xl p-3`}><h3 className={`text-xs font-semibold mb-2 ${t.textMuted}`}>Zone d'intervention</h3><div className={`flex items-center gap-2 text-sm ${t.textPrimary}`}><MapPin className="w-3.5 h-3.5 text-orange-500" />{agent.coverageArea || agent.location || "—"}</div></div>
+             {agent.portfolioImages.length > 0 && (
+               <div className={`p-3 rounded-xl ${t.mutedBg}`}>
+                 <h3 className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ImageIcon className="w-3.5 h-3.5" /> Portfolio</h3>
+                 <div className="grid grid-cols-4 gap-2">{agent.portfolioImages.map((image, i) => <button key={i} type="button" onClick={() => { setAlbumIndex(i); setAlbumOpen(true); }} className={`aspect-square rounded-lg overflow-hidden border ${t.border} ${isDark ? "bg-gray-800" : "bg-gray-100"}`} data-testid={`button-portfolio-thumb-${i}`}><img src={image} alt={`Portfolio ${i + 1}`} className="w-full h-full object-cover" /></button>)}</div>
+               </div>
+             )}
             {/* Avis — moved into the dedicated Star-icon ReviewsModal (Phase 7),
                 no longer rendered inline here. The old "Réserver" button/modal
                 was removed here (docs/maintenance_intervention_reservation_cleanup_audit.md
@@ -688,6 +720,7 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
   const isDark = useThemeStore((s) => s.isDark);
   const t = useTheme(isDark);
   const { settings: heroActions } = useHeroActionSettings();
+  const { config: heroConfig } = useServiceHeroConfig("MAINTENANCE");
   const [search, setSearch] = useState("");
   // Mobile collapsible search (mobile_filters_darkmode_audit.md) — presentation only.
   const [searchOpen, setSearchOpen] = useState(false);
@@ -837,35 +870,39 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
           one instead of the other way around, and Fast Search simply stays
           open underneath rather than being closed when Details opens. */}
       <MaintenanceFastSearch open={fastSearchOpen} onClose={() => setFastSearchOpen(false)} providers={profiles} onOpenDetail={(agent) => openDetail(agent)} />
-      <section className="relative pt-5 pb-12 px-5 overflow-hidden">
-        {t.dk ? <><div className="absolute inset-0 bg-gray-900" /><div className="absolute inset-0 bg-gradient-to-br from-orange-900/25 via-gray-900 to-gray-900" /><div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-48 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" /></> : <><div className="absolute inset-0 bg-gradient-to-br from-orange-500 via-orange-600 to-amber-600" /><div className="absolute inset-0 bg-black/10" /></>}
-        {/* The global navbar theme control is the single Dark/Light toggle
-            now, so the duplicated hero one is gone; Fast Search/Report stay
-            Admin-toggleable per service (see /api/hero-actions). */}
-        <div className="relative flex justify-end items-center gap-2 mb-9">
-          {accessLevel === "approved" && heroActions.MAINTENANCE.reportEnabled && (
-            <button onClick={() => setBlacklistOpen(true)} aria-label="Professionnels signalés" title="Professionnels signalés" data-testid="button-open-maintenance-blacklist" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-red-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
-              <Ban className="w-4 h-4" />
-            </button>
-          )}
-          {accessLevel === "approved" && heroActions.MAINTENANCE.fastSearchEnabled && (
-            <button onClick={() => setFastSearchOpen(true)} aria-label="Fast Search" title="Fast Search — parcourir les professionnels" data-testid="button-open-maintenance-fastsearch" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-orange-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
-              <Zap className="w-4 h-4" />
-            </button>
-          )}
-          {accessLevel === "approved" && (
-            <button onClick={() => { setJobManagementJobId(null); setJobManagementOpen(true); }} aria-label="Intervention" title="Intervention — publier et gérer" data-testid="button-open-maintenance-job-management" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-blue-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
-              <ClipboardList className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-        <div className="relative max-w-3xl mx-auto text-center">
-          <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${t.dk ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}><Wrench className={`w-8 h-8 ${t.dk ? "text-amber-400" : "text-white"}`} /></div>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-2">BigBoss <span className={t.dk ? "text-amber-400" : "text-amber-200"}>MAINTENANCE</span></h1>
-          <p className={`text-base mb-4 max-w-xl mx-auto ${t.dk ? "text-gray-400" : "text-orange-100"}`}>Trouvez des techniciens certifiés pour la maintenance et réparation de vos équipements de café</p>
-          <div className={`flex items-center justify-center gap-6 flex-wrap text-sm ${t.dk ? "text-gray-400" : "text-orange-100"}`}><span className="flex items-center gap-1.5"><Users className="w-4 h-4" />{profiles.filter((item) => item.available).length} techniciens disponibles</span><span className="flex items-center gap-1.5"><Shield className="w-4 h-4" />{profiles.filter((item) => item.certifications.length > 0).length} certifiés</span><span className="flex items-center gap-1.5"><Zap className="w-4 h-4" />Intervention rapide</span></div>
-        </div>
-      </section>
+      <ServiceHeroShell
+        config={heroConfig}
+        defaultBackground={t.dk ? <><div className="absolute inset-0 bg-gray-900" /><div className="absolute inset-0 bg-gradient-to-br from-orange-900/25 via-gray-900 to-gray-900" /><div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-48 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" /></> : <><div className="absolute inset-0 bg-gradient-to-br from-orange-500 via-orange-600 to-amber-600" /><div className="absolute inset-0 bg-black/10" /></>}
+        controlsRow={
+          /* The global navbar theme control is the single Dark/Light toggle
+             now, so the duplicated hero one is gone; Fast Search/Report stay
+             Admin-toggleable per service (see /api/hero-actions). */
+          <div className="relative flex justify-end items-center gap-2 mb-9">
+            {accessLevel === "approved" && heroActions.MAINTENANCE.reportEnabled && (
+              <button onClick={() => setBlacklistOpen(true)} aria-label="Professionnels signalés" title="Professionnels signalés" data-testid="button-open-maintenance-blacklist" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-red-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
+                <Ban className="w-4 h-4" />
+              </button>
+            )}
+            {accessLevel === "approved" && heroActions.MAINTENANCE.fastSearchEnabled && (
+              <button onClick={() => setFastSearchOpen(true)} aria-label="Fast Search" title="Fast Search — parcourir les professionnels" data-testid="button-open-maintenance-fastsearch" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-orange-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
+                <Zap className="w-4 h-4" />
+              </button>
+            )}
+            {accessLevel === "approved" && (
+              <button onClick={() => { setJobManagementJobId(null); setJobManagementOpen(true); }} aria-label="Intervention" title="Intervention — publier et gérer" data-testid="button-open-maintenance-job-management" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-blue-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
+                <ClipboardList className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        }
+      >
+        <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-5 backdrop-blur-sm ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${t.dk ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}><Wrench className={`w-8 h-8 ${t.dk ? "text-amber-400" : "text-white"}`} /></div>
+        <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-2">BigBoss <span className={t.dk ? "text-amber-400" : "text-amber-200"}>MAINTENANCE</span></h1>
+        <p className={`text-base mb-4 max-w-xl ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${t.dk ? "text-white" : "text-orange-100"}`}>{heroConfig.subtitle ?? "Trouvez des techniciens certifiés pour la maintenance et réparation de vos équipements de café"}</p>
+        {heroConfig.infoRowEnabled && (
+          <div className={`flex items-center gap-6 flex-wrap text-sm ${H_ALIGN_ROW_JUSTIFY[heroConfig.horizontalAlign]} ${t.dk ? "text-white" : "text-orange-100"}`}><span className="flex items-center gap-1.5"><Users className="w-4 h-4" />{profiles.filter((item) => item.available).length} techniciens disponibles</span><span className="flex items-center gap-1.5"><Shield className="w-4 h-4" />{profiles.filter((item) => item.certifications.length > 0).length} certifiés</span><span className="flex items-center gap-1.5"><Zap className="w-4 h-4" />Intervention rapide</span></div>
+        )}
+      </ServiceHeroShell>
       {comingSoon ? <div className="max-w-3xl mx-auto px-4 py-20 text-center"><Clock className="w-8 h-8 text-orange-600 mx-auto mb-5" /><h2 className={`text-xl font-bold mb-2 ${t.textPrimary}`}>Bientôt disponible</h2><p className={`text-sm ${t.textMuted}`}>Ce service est en cours de préparation. Revenez bientôt pour le découvrir.</p></div> : (
         <>
           <div className="sticky top-14 z-30">

@@ -394,8 +394,15 @@ export function BaristaDetailModal({
                 )}
               </div>
 
+              {/* Standardize Maintenance and Barista Detail Modal Layouts — every
+                  logical section below is now its own visually separated
+                  container (p-3 rounded-xl ${t.sectionBg}), same structural
+                  pattern as the Academy detail modal's own sectionBg boxes
+                  (components/academy/academy-detail-modal.tsx) and as already
+                  used by the Expérience/Niveau d'étude tiles above in this
+                  same modal — content/data/logic inside each box unchanged. */}
               {card.skills.length > 0 && (
-                <div>
+                <div className={`p-3 rounded-xl ${t.sectionBg}`}>
                   <p className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Compétences</p>
                   <div className="flex flex-wrap gap-1.5">
                     {card.skills.map((s) => (
@@ -406,7 +413,7 @@ export function BaristaDetailModal({
               )}
 
               {card.languages?.length > 0 && (
-                <div>
+                <div className={`p-3 rounded-xl ${t.sectionBg}`}>
                   <p className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Langue</p>
                   <div className="flex flex-wrap gap-1.5">
                     {card.languages.map((l) => (
@@ -417,7 +424,7 @@ export function BaristaDetailModal({
               )}
 
               {card.certifications.length > 0 && (
-                <div>
+                <div className={`p-3 rounded-xl ${t.sectionBg}`}>
                   <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><Award className="w-3.5 h-3.5" /> Certifications</p>
                   <div className="flex flex-wrap gap-1.5">
                     {card.certifications.map((c) => (
@@ -432,7 +439,7 @@ export function BaristaDetailModal({
                   the profile picture, which opens BaristaAvailabilityModal. */}
 
               {card.portfolioUrls.length > 0 && (
-                <div>
+                <div className={`p-3 rounded-xl ${t.sectionBg}`}>
                   <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><ImageIcon className="w-3.5 h-3.5" /> Portfolio</p>
                   <div className="grid grid-cols-4 gap-2">
                     {card.portfolioUrls.map((url, i) => (
@@ -450,16 +457,24 @@ export function BaristaDetailModal({
                 </div>
               )}
 
+              {/* Cafés précédents — long employment history stays readable via
+                  an internal max-height + scroll (same thin-scrollbar classes
+                  as this modal's own DialogContent), same rationale as
+                  Maintenance's "Détails de Service" section: this is the one
+                  field explicitly prone to a long list, other sections above
+                  stay uncapped. */}
               {card.workHistory.length > 0 && (
-                <div>
+                <div className={`p-3 rounded-xl ${t.sectionBg}`}>
                   <p className={`text-xs font-semibold mb-1.5 flex items-center gap-1 ${t.textMuted}`}><Briefcase className="w-3.5 h-3.5" /> Cafés précédents</p>
-                  <div className="space-y-2">
-                    {card.workHistory.map((w) => (
-                      <div key={w.id} className={`p-2.5 rounded-lg border text-sm ${t.border} ${t.textPrimary}`}>
-                        <p className="font-medium">{w.cafeName}{w.role ? ` — ${w.role}` : ""}</p>
-                        <p className={`text-xs ${t.textMuted}`}>{w.startPeriod || "?"} → {w.endPeriod || "Aujourd'hui"}</p>
-                      </div>
-                    ))}
+                  <div className="max-h-48 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+                    <div className="space-y-2">
+                      {card.workHistory.map((w) => (
+                        <div key={w.id} className={`p-2.5 rounded-lg border text-sm ${t.border} ${t.textPrimary}`}>
+                          <p className="font-medium">{w.cafeName}{w.role ? ` — ${w.role}` : ""}</p>
+                          <p className={`text-xs ${t.textMuted}`}>{w.startPeriod || "?"} → {w.endPeriod || "Aujourd'hui"}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}

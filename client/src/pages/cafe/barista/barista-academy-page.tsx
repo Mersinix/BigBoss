@@ -32,6 +32,8 @@ import {
 } from "lucide-react";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useHeroActionSettings } from "@/hooks/use-hero-actions";
+import { useServiceHeroConfig } from "@/hooks/use-service-hero-config";
+import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY } from "@/components/shared/service-hero";
 import {
   useAcademyCourses, useAcademyCompanies,
   type AcademyCourseCard, type AcademyCourseLevel,
@@ -85,6 +87,10 @@ function useTheme(isDark: boolean) {
     selectContent: isDark
       ? "bg-gray-800 border-gray-700 text-gray-100 [&_[data-highlighted]]:bg-gray-700 [&_[data-highlighted]]:text-white"
       : "bg-white border-gray-200 text-gray-900",
+    // Academy Filter Design — identical token to /barista, /maintenance and
+    // /marketing's own `stripBg`, used for the same full-bleed sticky filter
+    // strip instead of a floating card.
+    stripBg: isDark ? "bg-gray-900/95 border-gray-800" : "bg-white border-gray-100",
   };
 }
 
@@ -185,6 +191,7 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
   const isDark = useThemeStore((s) => s.isDark);
   const t = useTheme(isDark);
   const { settings: heroActions } = useHeroActionSettings();
+  const { config: heroConfig } = useServiceHeroConfig("ACADEMY");
 
   const [trainingSearch, setTrainingSearch] = useState("");
   // Mobile collapsible search (mobile_filters_darkmode_audit.md) — presentation only.
@@ -203,6 +210,19 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
     certification: trainingCert || undefined,
   });
   const { data: academyCompanies = [] } = useAcademyCompanies();
+  // Unify Service and Store Search + Remove Navbar Search Inputs — same query
+  // as the courses search above, matched against this academy's own name/
+  // description, so a provider is discoverable even when none of its own
+  // course names match. Deliberately NOT filtered by trainingLevel/
+  // trainingCert — those are course-specific attributes, not relevant to an
+  // academy's own store card. AcademyStoresSection itself stays untouched
+  // (it's also reused by Espace Barista Marketplace → Académie); only the
+  // list passed into it here is narrowed.
+  const filteredAcademyCompanies = useMemo(() => {
+    if (!trainingSearch.trim()) return academyCompanies;
+    const q = trainingSearch.trim().toLowerCase();
+    return academyCompanies.filter((c) => c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q));
+  }, [academyCompanies, trainingSearch]);
 
   const filteredTraining = useMemo(() => courses, [courses]);
   const hasTrainingFilters = !!(trainingSearch || trainingLevel || trainingCert);
@@ -247,17 +267,22 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
   return (
     <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="relative pt-5 pb-12 px-5 overflow-hidden">
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-80"
-          style={{ backgroundImage: `url(${baristaHeroImg})` }}
-        />
-        <div className={`absolute inset-0 ${isDark ? "bg-gradient-to-br from-gray-950/95 via-gray-900/95 to-indigo-950/90" : "bg-gradient-to-br from-indigo-600/90 via-indigo-700/85 to-violet-700/90"}`} />
-        <div className="relative">
-          {/* The global navbar theme control is the single Dark/Light toggle
+      <ServiceHeroShell
+        config={heroConfig}
+        defaultBackground={
+          <>
+            <div
+              className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-80"
+              style={{ backgroundImage: `url(${baristaHeroImg})` }}
+            />
+            <div className={`absolute inset-0 ${isDark ? "bg-gradient-to-br from-gray-950/95 via-gray-900/95 to-indigo-950/90" : "bg-gradient-to-br from-indigo-600/90 via-indigo-700/85 to-violet-700/90"}`} />
+          </>
+        }
+        controlsRow={
+          /* The global navbar theme control is the single Dark/Light toggle
               now, so the duplicated hero one is gone; Fast Search/Report stay
-              Admin-toggleable per service (see /api/hero-actions). */}
-          <div className="flex justify-end items-center gap-2 mb-9">
+              Admin-toggleable per service (see /api/hero-actions). */
+          <div className="relative flex justify-end items-center gap-2 mb-9">
             {canAct && heroActions.ACADEMY.reportEnabled && (
               <button
                 onClick={() => setBlacklistOpen(true)}
@@ -281,17 +306,19 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
               </button>
             )}
           </div>
-          <div className="max-w-3xl mx-auto text-center">
-          <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>
-            <GraduationCap className={`w-8 h-8 ${isDark ? "text-amber-400" : "text-white"}`} />
-          </div>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3">
-            BigBoss <span className={isDark ? "text-amber-400" : "text-amber-200"}>ACADEMY</span>
-          </h1>
-          <p className={`text-base mb-4 max-w-xl mx-auto ${isDark ? "text-gray-400" : "text-indigo-100"}`}>
-            Formez votre équipe avec des programmes barista professionnels
-          </p>
-          <div className={`flex items-center justify-center gap-6 flex-wrap text-sm ${isDark ? "text-gray-400" : "text-indigo-100"}`}>
+        }
+      >
+        <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-5 backdrop-blur-sm ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>
+          <GraduationCap className={`w-8 h-8 ${isDark ? "text-amber-400" : "text-white"}`} />
+        </div>
+        <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3">
+          BigBoss <span className={isDark ? "text-amber-400" : "text-amber-200"}>ACADEMY</span>
+        </h1>
+        <p className={`text-base mb-4 max-w-xl ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${isDark ? "text-white" : "text-indigo-100"}`}>
+          {heroConfig.subtitle ?? "Formez votre équipe avec des programmes barista professionnels"}
+        </p>
+        {heroConfig.infoRowEnabled && (
+          <div className={`flex items-center gap-6 flex-wrap text-sm ${H_ALIGN_ROW_JUSTIFY[heroConfig.horizontalAlign]} ${isDark ? "text-white" : "text-indigo-100"}`}>
             <span className="flex items-center gap-1.5">
               <GraduationCap className="w-4 h-4" />
               {courses.length} formations
@@ -301,9 +328,8 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
               {certifiedCount} certifications
             </span>
           </div>
-          </div>
-        </div>
-      </section>
+        )}
+      </ServiceHeroShell>
 
       {comingSoon ? (
         <div className="max-w-3xl mx-auto px-4 py-20 text-center">
@@ -328,91 +354,97 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <section>
-          {/* Training Filters — sticky below the persistent navbar (header is
-              h-14 z-50, see components/cafe/marketplace-layout.tsx) so filters
-              stay reachable while scrolling the formations grid. */}
-          <div className={`sticky top-14 z-30 border rounded-2xl p-3 mb-5 shadow-sm ${t.cardBg}`}>
-            <div
-              className="flex items-center gap-2 flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden"
-              style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
-            >
-              <SlidersHorizontal className={`w-3.5 h-3.5 ${t.textSubtle} shrink-0`} />
-              <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px] sm:max-w-xs">
-                {!trainingSearchOpen && (
-                  <button
-                    type="button"
-                    className={`sm:hidden h-7 w-7 rounded-full border flex items-center justify-center shrink-0 ${t.inputBg}`}
-                    onClick={() => { setTrainingSearchOpen(true); setTimeout(() => trainingSearchInputRef.current?.focus(), 0); }}
-                    aria-label="Rechercher"
-                    data-testid="button-open-training-search"
-                  >
-                    <Search className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                <div className={`${trainingSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-44 sm:w-full`}>
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-                  <Input
-                    ref={trainingSearchInputRef}
-                    value={trainingSearch}
-                    onChange={(e) => setTrainingSearch(e.target.value)}
-                    onBlur={() => { if (!trainingSearch) setTrainingSearchOpen(false); }}
-                    placeholder="Rechercher une formation..."
-                    className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
-                    data-testid="input-training-search"
-                  />
-                </div>
-              </div>
-              <Select
-                value={trainingLevel || "__all__"}
-                onValueChange={(v) => setTrainingLevel(v === "__all__" ? "" : v)}
-              >
-                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.inputBg}`} data-testid="select-training-level">
-                  <SelectValue placeholder="Niveau" />
-                </SelectTrigger>
-                <SelectContent className={t.selectContent}>
-                  <SelectItem value="__all__">Tous niveaux</SelectItem>
-                  <SelectItem value="BEGINNER">Débutant</SelectItem>
-                  <SelectItem value="ADVANCED">Avancé</SelectItem>
-                  <SelectItem value="EXPERT">Expert</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                value={trainingCert || "__all__"}
-                onValueChange={(v) => setTrainingCert(v === "__all__" ? "" : v)}
-              >
-                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] shrink-0 ${t.inputBg}`} data-testid="select-training-cert">
-                  <SelectValue placeholder="Certification" />
-                </SelectTrigger>
-                <SelectContent className={t.selectContent}>
-                  <SelectItem value="__all__">Toutes formations</SelectItem>
-                  <SelectItem value="true">Avec certification</SelectItem>
-                  <SelectItem value="false">Sans certification</SelectItem>
-                </SelectContent>
-              </Select>
-              {hasTrainingFilters && (
+      {/* Academy Filter Design — same full-bleed sticky strip structure as
+          /barista, /maintenance and /marketing (border-b + stripBg, outside the
+          max-w-7xl content wrapper) instead of the previous single rounded,
+          bordered, padded card nested inside it. Academy has only one filter
+          row (no parent-category chip switcher), so it gets one strip — the
+          same shape as those pages' own second ("controls") strip. Same
+          sticky-below-navbar positioning (top-14 z-30) as before. */}
+      <div className="sticky top-14 z-30">
+        <div className={`border-b py-2 px-4 ${t.stripBg}`}>
+          <div
+            className="max-w-7xl mx-auto flex items-center gap-2 flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden"
+            style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+          >
+            <SlidersHorizontal className={`w-3.5 h-3.5 ${t.textSubtle} shrink-0`} />
+            <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px] sm:max-w-xs">
+              {!trainingSearchOpen && (
                 <button
-                  onClick={() => {
-                    setTrainingSearch("");
-                    setTrainingLevel("");
-                    setTrainingCert("");
-                  }}
-                  className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors shrink-0 whitespace-nowrap"
-                  data-testid="button-reset-training-filters"
+                  type="button"
+                  className={`sm:hidden h-7 w-7 rounded-full border flex items-center justify-center shrink-0 ${t.inputBg}`}
+                  onClick={() => { setTrainingSearchOpen(true); setTimeout(() => trainingSearchInputRef.current?.focus(), 0); }}
+                  aria-label="Rechercher"
+                  data-testid="button-open-training-search"
                 >
-                  <RotateCcw className="w-3 h-3" /> Reset
+                  <Search className="w-3.5 h-3.5" />
                 </button>
               )}
+              <div className={`${trainingSearchOpen ? "flex" : "hidden"} sm:flex items-center relative w-44 sm:w-full`}>
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                <Input
+                  ref={trainingSearchInputRef}
+                  value={trainingSearch}
+                  onChange={(e) => setTrainingSearch(e.target.value)}
+                  onBlur={() => { if (!trainingSearch) setTrainingSearchOpen(false); }}
+                  placeholder="Rechercher une formation..."
+                  className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
+                  data-testid="input-training-search"
+                />
+              </div>
             </div>
+            <Select
+              value={trainingLevel || "__all__"}
+              onValueChange={(v) => setTrainingLevel(v === "__all__" ? "" : v)}
+            >
+              <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.inputBg}`} data-testid="select-training-level">
+                <SelectValue placeholder="Niveau" />
+              </SelectTrigger>
+              <SelectContent className={t.selectContent}>
+                <SelectItem value="__all__">Tous niveaux</SelectItem>
+                <SelectItem value="BEGINNER">Débutant</SelectItem>
+                <SelectItem value="ADVANCED">Avancé</SelectItem>
+                <SelectItem value="EXPERT">Expert</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={trainingCert || "__all__"}
+              onValueChange={(v) => setTrainingCert(v === "__all__" ? "" : v)}
+            >
+              <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] shrink-0 ${t.inputBg}`} data-testid="select-training-cert">
+                <SelectValue placeholder="Certification" />
+              </SelectTrigger>
+              <SelectContent className={t.selectContent}>
+                <SelectItem value="__all__">Toutes formations</SelectItem>
+                <SelectItem value="true">Avec certification</SelectItem>
+                <SelectItem value="false">Sans certification</SelectItem>
+              </SelectContent>
+            </Select>
+            {hasTrainingFilters && (
+              <button
+                onClick={() => {
+                  setTrainingSearch("");
+                  setTrainingLevel("");
+                  setTrainingCert("");
+                }}
+                className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors shrink-0 whitespace-nowrap"
+                data-testid="button-reset-training-filters"
+              >
+                <RotateCcw className="w-3 h-3" /> Reset
+              </button>
+            )}
           </div>
+        </div>
+      </div>
 
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <section>
           {/* Académies (Store section) — rendered after the filters bar, same
               organizational order as /print's Imprimeries and /marketing's
               Agences (docs/academy_print_marketing_store_synchronization_audit.md
               Section 10-13). */}
           <AcademyStoresSection
-            companies={academyCompanies}
+            companies={filteredAcademyCompanies}
             onSelect={(academyUserId) => navigate(`/academy/stores/${academyUserId}`)}
             isDark={isDark}
           />

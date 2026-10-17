@@ -1,17 +1,18 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useThemeStore } from "@/store/theme-store";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useSearch, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
   Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation,
-  Plus, ShoppingBag, Layers, Star, MapPin, Zap,
+  Plus, ShoppingBag, Layers, Star, MapPin, Zap, Search,
 } from "lucide-react";
 import type { ListingPromotion } from "@shared/schema";
 import { useCurrency } from "@/hooks/use-currency";
@@ -23,6 +24,8 @@ import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import type { MarketplaceProduct, CategoryWithCount, StoreCard, PackDetail, TaxonomyLabel } from "@shared/schema";
 import { FlashMode } from "@/components/flash-mode";
+import { useServiceHeroConfig } from "@/hooks/use-service-hero-config";
+import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY } from "@/components/shared/service-hero";
 
 // ── Access helper ─────────────────────────────────────────────────────────────
 
@@ -49,6 +52,10 @@ function useTheme(isDark: boolean) {
     switcherInactive: dk ? "text-gray-400 hover:text-gray-200"    : "text-gray-500 hover:text-gray-700",
     stripBg:          dk ? "bg-gray-900/95 border-gray-800"       : "bg-white border-gray-100",
     filterBg:         dk ? "bg-gray-900/95 border-gray-800"       : "bg-white border-gray-100",
+    // Move SHOP Search Input into the Products Filter Section — same token
+    // (identical values) as /academy, /print, /maintenance, /marketing and
+    // /barista's own `inputBg`, used for the new inline search field below.
+    inputBg:          dk ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
     selectTrigger:    dk ? "border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700" : "border-gray-200 bg-gray-50",
     divider:          dk ? "border-gray-800"                      : "border-gray-100",
     sectionBtn:       dk ? "text-blue-400 hover:text-blue-300 hover:bg-gray-800" : "text-blue-600 hover:text-blue-700 hover:bg-blue-50",
@@ -420,11 +427,17 @@ function StoreCardTile({
 }
 
 function StoresSection({
-  stores, categoryId, filters, onSelect, searchLat, searchLng, hasSearchLocation, isDark,
+  stores, categoryId, filters, search, onSelect, searchLat, searchLng, hasSearchLocation, isDark,
 }: {
   stores: StoreCard[];
   categoryId: string;
   filters: FilterState;
+  // Extend SHOP Search to Products, Stores, and Packs — same query, same
+  // normalization (.trim().toLowerCase().includes()) as the products match
+  // below, applied here against this store's own name/description. Combines
+  // with the existing category/sub-category/brand filters via plain AND,
+  // same as every other condition in this list.
+  search: string;
   onSelect: (storeId: number) => void;
   searchLat: number | null;
   searchLng: number | null;
@@ -440,8 +453,12 @@ function StoresSection({
     if (categoryId) list = list.filter((s) => s.categoryIds.includes(Number(categoryId)));
     if (filters.subCategoryId) list = list.filter((s) => s.subCategoryIds.includes(Number(filters.subCategoryId)));
     if (filters.brandId) list = list.filter((s) => s.brandIds.includes(Number(filters.brandId)));
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((s) => s.name.toLowerCase().includes(q) || (s.description ?? "").toLowerCase().includes(q));
+    }
     return list;
-  }, [stores, categoryId, filters.subCategoryId, filters.brandId]);
+  }, [stores, categoryId, filters.subCategoryId, filters.brandId, search]);
 
   if (!filteredStores.length) return null;
 
@@ -694,11 +711,15 @@ export function PackCardTile({
 }
 
 function PacksSection({
-  packs, categoryId, filters, isDark,
+  packs, categoryId, filters, search, isDark,
 }: {
   packs: PackDetail[];
   categoryId: string;
   filters: FilterState;
+  // Extend SHOP Search to Products, Stores, and Packs — same query/normalization
+  // as Products/Stores, matched against this pack's own name/description/
+  // supplier name, plus the name of any product included in it.
+  search: string;
   isDark: boolean;
 }) {
   const t = useTheme(isDark);
@@ -711,8 +732,17 @@ function PacksSection({
     if (categoryId) list = list.filter((p) => p.categoryIds.includes(Number(categoryId)));
     if (filters.subCategoryId) list = list.filter((p) => p.subCategoryIds.includes(Number(filters.subCategoryId)));
     if (filters.brandId) list = list.filter((p) => p.brandIds.includes(Number(filters.brandId)));
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.description ?? "").toLowerCase().includes(q) ||
+        p.supplierName.toLowerCase().includes(q) ||
+        p.items.some((item) => item.productName.toLowerCase().includes(q))
+      );
+    }
     return list;
-  }, [packs, categoryId, filters.subCategoryId, filters.brandId]);
+  }, [packs, categoryId, filters.subCategoryId, filters.brandId, search]);
 
   if (!filteredPacks.length) return null;
   const showToggle = filteredPacks.length > INITIAL_LIMIT;
@@ -767,7 +797,7 @@ function PacksSection({
 interface FilterState { subCategoryId: string; brandId: string; flavorId: string; sizeId: string; sortBy: string; }
 
 function FilterBar({
-  categoryProducts, filters, onChange, onReset, hasSearchLocation, isDark,
+  categoryProducts, filters, onChange, onReset, hasSearchLocation, isDark, search, onSearchChange,
 }: {
   categoryProducts: MarketplaceProduct[];
   filters: FilterState;
@@ -775,9 +805,18 @@ function FilterBar({
   onReset: () => void;
   hasSearchLocation: boolean;
   isDark: boolean;
+  // Move SHOP Search Input into the Products Filter Section — same split as
+  // /print's PrintFilterBar: value/onChange live here as a controlled prop
+  // (the actual match/filter logic stays in the parent, same as every other
+  // filter here), while the mobile open/closed toggle stays local, exactly
+  // like /academy's own trainingSearchOpen.
+  search: string;
+  onSearchChange: (value: string) => void;
 }) {
   const t = useTheme(isDark);
-  const hasActive = Object.values(filters).some(Boolean);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const hasActive = Object.values(filters).some(Boolean) || !!search;
 
   const subCategories = useMemo(() => {
     const map = new Map<string, string>();
@@ -817,7 +856,10 @@ function FilterBar({
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [categoryProducts]);
 
-  if (!subCategories.length && !brands.length && !flavors.length && !sizes.length) return null;
+  // Previously hid the whole bar (search included) whenever there were no
+  // facets to filter by — now only hides it when there's nothing to search
+  // either, so the search input stays available as long as any product exists.
+  if (!categoryProducts.length) return null;
 
   return (
     <div className={`border-b ${t.filterBg} py-2 px-4`}>
@@ -826,6 +868,31 @@ function FilterBar({
         style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
       >
         <SlidersHorizontal className={`w-3.5 h-3.5 shrink-0 ${t.textMuted}`} />
+        <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px] sm:max-w-xs">
+          {!searchOpen && (
+            <button
+              type="button"
+              className={`sm:hidden h-7 w-7 rounded-full border flex items-center justify-center shrink-0 ${t.inputBg}`}
+              onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
+              aria-label="Search"
+              data-testid="button-open-products-search"
+            >
+              <Search className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <div className={`${searchOpen ? "flex" : "hidden"} sm:flex items-center relative w-44 sm:w-full`}>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <Input
+              ref={searchInputRef}
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              onBlur={() => { if (!search) setSearchOpen(false); }}
+              placeholder="Search products…"
+              className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
+              data-testid="input-products-search"
+            />
+          </div>
+        </div>
         {subCategories.length > 0 && (
           <Select value={filters.subCategoryId || "__all__"} onValueChange={(v) => onChange("subCategoryId", v === "__all__" ? "" : v)}>
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`}>
@@ -931,6 +998,8 @@ export default function BrowseProducts() {
     setCategoryId(cat);
   }, [searchStr]);
 
+  const { config: heroConfig } = useServiceHeroConfig("SHOP");
+
   const { data: allProducts = [], isLoading } = useQuery<MarketplaceProduct[]>({
     queryKey: ["/api/marketplace"],
     queryFn: async () => {
@@ -946,7 +1015,7 @@ export default function BrowseProducts() {
 
   const { data: categories = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
 
-  const { data: stores = [] } = useQuery<StoreCard[]>({
+  const { data: stores = [], isLoading: storesLoading } = useQuery<StoreCard[]>({
     queryKey: ["/api/stores"],
     queryFn: async () => {
       const res = await fetch("/api/stores");
@@ -956,7 +1025,7 @@ export default function BrowseProducts() {
     staleTime: 30000,
   });
 
-  const { data: packs = [] } = useQuery<PackDetail[]>({
+  const { data: packs = [], isLoading: packsLoading } = useQuery<PackDetail[]>({
     queryKey: ["/api/marketplace/packs"],
     queryFn: async () => {
       const res = await fetch("/api/marketplace/packs");
@@ -1017,7 +1086,14 @@ export default function BrowseProducts() {
   }, [allProducts, listingPromotions]);
 
   const updateFilter = (key: keyof FilterState, val: string) => setFilters((p) => ({ ...p, [key]: val }));
+  // Resets only the facet filters — kept separate from search on purpose: the
+  // category strip's own onSelect calls this while deliberately carrying the
+  // current search text over into the new category (see its own call site
+  // below), so resetFilters must never clear it.
   const resetFilters = () => setFilters({ subCategoryId: "", brandId: "", flavorId: "", sizeId: "", sortBy: "" });
+  // The Reset button (FilterBar) clears everything, including search — same
+  // "Reset clears search too" behavior as /academy's own Reset.
+  const resetAll = () => { resetFilters(); setSearch(""); };
   const activeFilterCount = Object.values(filters).filter(Boolean).length + (search ? 1 : 0) + (categoryId ? 1 : 0);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -1032,50 +1108,62 @@ export default function BrowseProducts() {
     <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
 
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="relative pt-5 pb-12 px-5 overflow-hidden">
-        {/* Background — dark: subtle amber glow | light: amber gradient */}
-        {t.dk ? (
-          <>
-            <div className="absolute inset-0 bg-gray-900" />
-            <div className="absolute inset-0 bg-gradient-to-br from-amber-900/25 via-gray-900 to-gray-900" />
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-          </>
-        ) : (
-          <>
-            <div className="absolute inset-0 bg-gradient-to-br from-amber-500 via-amber-600 to-orange-600" />
-            <div className="absolute inset-0 bg-black/10" />
-          </>
-        )}
-
-        {/* Top-right controls: Flash Mode only — the duplicated Dark/Light
-            toggle is gone, the global navbar theme control is now the single
-            source for this page too (still driven by the same isDark below). */}
-        <div className="relative flex justify-end items-center gap-2 mb-9">
-          {(allProducts.length > 0 || packs.length > 0) && (
-            <button
-              onClick={() => setFlashOpen(true)}
-              aria-label="Flash Mode"
-              data-testid="button-flash-mode"
-              title="Flash Mode — browse products"
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700" : "bg-white/20 hover:bg-white/30"}`}
-            >
-              <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
-            </button>
-          )}
-        </div>
-
-        <div className="relative max-w-3xl mx-auto text-center">
-          <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${t.dk ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>
-            <ShoppingBag className={`w-8 h-8 ${t.dk ? "text-amber-400" : "text-white"}`} />
+      <ServiceHeroShell
+        config={heroConfig}
+        defaultBackground={
+          /* Background — dark: subtle amber glow | light: amber gradient */
+          t.dk ? (
+            <>
+              <div className="absolute inset-0 bg-gray-900" />
+              <div className="absolute inset-0 bg-gradient-to-br from-amber-900/25 via-gray-900 to-gray-900" />
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+            </>
+          ) : (
+            <>
+              <div className="absolute inset-0 bg-gradient-to-br from-amber-500 via-amber-600 to-orange-600" />
+              <div className="absolute inset-0 bg-black/10" />
+            </>
+          )
+        }
+        controlsRow={
+          /* Top-right controls: Flash Mode only — the duplicated Dark/Light
+              toggle is gone, the global navbar theme control is now the single
+              source for this page too (still driven by the same isDark below). */
+          <div className="relative flex justify-end items-center gap-2 mb-9">
+            {(allProducts.length > 0 || packs.length > 0) && (
+              <button
+                onClick={() => setFlashOpen(true)}
+                aria-label="Flash Mode"
+                data-testid="button-flash-mode"
+                title="Flash Mode — browse products"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700" : "bg-white/20 hover:bg-white/30"}`}
+              >
+                <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
+              </button>
+            )}
           </div>
-          <h1 className={`text-3xl md:text-4xl font-extrabold mb-2 ${t.dk ? "text-white" : "text-white"}`}>
-            BigBoss <span className={t.dk ? "text-amber-400" : "text-amber-200"}>SHOP</span>
-          </h1>
-          <p className={`text-base mb-0 max-w-xl mx-auto ${t.dk ? "text-gray-400" : "text-amber-100"}`}>
-            Commandez vos produits professionnels directement auprès de fournisseurs vérifiés.
-          </p>
+        }
+      >
+        <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-5 backdrop-blur-sm ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${t.dk ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>
+          <ShoppingBag className={`w-8 h-8 ${t.dk ? "text-amber-400" : "text-white"}`} />
         </div>
-      </section>
+        <h1 className={`text-3xl md:text-4xl font-extrabold mb-2 ${t.dk ? "text-white" : "text-white"}`}>
+          BigBoss <span className={t.dk ? "text-amber-400" : "text-amber-200"}>SHOP</span>
+        </h1>
+        <p className={`text-base mb-4 max-w-xl ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${t.dk ? "text-white" : "text-amber-100"}`}>
+          {heroConfig.subtitle ?? "Commandez vos produits professionnels directement auprès de fournisseurs vérifiés."}
+        </p>
+        {/* SHOP stats row (Stores/Packs/Products currently available) — a
+            SEPARATE requirement from the per-service info-row toggle above:
+            always shown (own config/rules), explicit "0" for empty rather
+            than hiding, counts come straight from the same already
+            eligibility-filtered arrays the sections below render from. */}
+        <div className={`flex items-center gap-6 flex-wrap text-sm ${H_ALIGN_ROW_JUSTIFY[heroConfig.horizontalAlign]} ${t.dk ? "text-white" : "text-amber-100"}`}>
+          <span className="flex items-center gap-1.5" data-testid="text-shop-stat-stores"><Store className="w-4 h-4" />{storesLoading ? "…" : stores.length} magasins</span>
+          <span className="flex items-center gap-1.5" data-testid="text-shop-stat-packs"><Package className="w-4 h-4" />{packsLoading ? "…" : packs.length} packs</span>
+          <span className="flex items-center gap-1.5" data-testid="text-shop-stat-products"><ShoppingBag className="w-4 h-4" />{isLoading ? "…" : allProducts.length} produits</span>
+        </div>
+      </ServiceHeroShell>
 
       {/* ── Sticky: Category strip + Filter bar ──────────────────────────── */}
       <div className="sticky top-14 z-30">
@@ -1097,33 +1185,35 @@ export default function BrowseProducts() {
           categoryProducts={categoryFiltered}
           filters={filters}
           onChange={updateFilter}
-          onReset={resetFilters}
+          onReset={resetAll}
           hasSearchLocation={hasSearchLocation}
           isDark={isDark}
+          search={search}
+          onSearchChange={setSearch}
         />
       </div>
 
       {/* ── Main content ─────────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-4 py-6">
 
-        {/* Stores */}
-        {!search.trim() && (
-          <StoresSection
-            stores={stores}
-            categoryId={categoryId}
-            filters={filters}
-            onSelect={(storeId) => navigate(`/stores/${storeId}`)}
-            searchLat={searchLat}
-            searchLng={searchLng}
-            hasSearchLocation={hasSearchLocation}
-            isDark={isDark}
-          />
-        )}
+        {/* Stores — Extend SHOP Search to Products, Stores, and Packs: no longer
+            hidden while searching; it now self-filters by the same query (see
+            its own filteredStores above) and simply renders nothing (existing
+            `if (!filteredStores.length) return null`) when nothing matches. */}
+        <StoresSection
+          stores={stores}
+          categoryId={categoryId}
+          filters={filters}
+          search={search}
+          onSelect={(storeId) => navigate(`/stores/${storeId}`)}
+          searchLat={searchLat}
+          searchLng={searchLng}
+          hasSearchLocation={hasSearchLocation}
+          isDark={isDark}
+        />
 
-        {/* Packs */}
-        {!search.trim() && (
-          <PacksSection packs={packs} categoryId={categoryId} filters={filters} isDark={isDark} />
-        )}
+        {/* Packs — same change as Stores above. */}
+        <PacksSection packs={packs} categoryId={categoryId} filters={filters} search={search} isDark={isDark} />
 
         {/* Products header */}
         <div className="flex items-center justify-between mb-4">

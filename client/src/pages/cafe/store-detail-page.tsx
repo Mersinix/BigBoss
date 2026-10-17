@@ -5,6 +5,7 @@ import { useLocation, useRoute, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -13,7 +14,7 @@ import {
 import {
   Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock,
   ChevronLeft, MapPin, Plus, Info, Star, Music, Zap, Clock, Layers,
-  Sun, Moon, X,
+  Sun, Moon, X, Search,
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -67,6 +68,9 @@ function useTheme(isDark: boolean) {
     emptySubText:     dk ? "text-gray-600" : "text-gray-400",
     headerCard:       dk ? "bg-gray-900/80 border-gray-800"       : "bg-white/90 border-gray-100",
     metaAccent:       dk ? "text-amber-400"                       : "text-amber-600",
+    // Add Product and Pack Search to Individual Store Pages — same token
+    // (identical values) as /products' own `inputBg`.
+    inputBg:          dk ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
   };
 }
 
@@ -259,9 +263,14 @@ export function InfoModal({ open, onClose, openingHours, storeName }: {
   );
 }
 
-function StorePacksSection({ packs, filters, hasCommercialAccess, isDark }: {
+function StorePacksSection({ packs, filters, search, hasCommercialAccess, isDark }: {
   packs: PackDetail[];
   filters: { subCategoryId: string; brandId: string };
+  // Add Product and Pack Search to Individual Store Pages — same query as the
+  // products match above, matched against this pack's own name/description/
+  // included-product names (packs here are already scoped to this store via
+  // GET /api/stores/:storeId/packs, so no extra store scoping is needed).
+  search: string;
   hasCommercialAccess: boolean;
   isDark: boolean;
 }) {
@@ -273,8 +282,16 @@ function StorePacksSection({ packs, filters, hasCommercialAccess, isDark }: {
     let list = packs;
     if (filters.subCategoryId) list = list.filter((p) => p.subCategoryIds.includes(Number(filters.subCategoryId)));
     if (filters.brandId) list = list.filter((p) => p.brandIds.includes(Number(filters.brandId)));
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.description ?? "").toLowerCase().includes(q) ||
+        p.items.some((item) => item.productName.toLowerCase().includes(q))
+      );
+    }
     return list;
-  }, [packs, filters.subCategoryId, filters.brandId]);
+  }, [packs, filters.subCategoryId, filters.brandId, search]);
 
   if (!filtered.length) return null;
   const showToggle = filtered.length > INITIAL_LIMIT;
@@ -552,6 +569,13 @@ export default function StoreDetailPage() {
 
   const [categoryId, setCategoryId] = useState("");
   const [filters, setFilters] = useState<FilterState>({ subCategoryId: "", brandId: "" });
+  // Add Product and Pack Search to Individual Store Pages — same pattern as
+  // /products' own `search` state, scoped here to this store's own products/
+  // packs (store?.products / storePacks below are already fetched for just
+  // this storeId, so no extra scoping is needed for the match itself).
+  const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [infoOpen, setInfoOpen] = useState(false);
   const [flashOpen, setFlashOpen] = useState(false);
   const [isMusicPlaying, setIsMusicPlaying] = useState(true);
@@ -636,9 +660,14 @@ export default function StoreDetailPage() {
   }, [products, categoryIconMap]);
 
   const categoryFiltered = useMemo(() => {
-    if (!categoryId) return products;
-    return products.filter((p) => String(p.categoryId) === categoryId);
-  }, [products, categoryId]);
+    let list = products;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter((p) => p.name.toLowerCase().includes(q) || (p.description ?? "").toLowerCase().includes(q));
+    }
+    if (categoryId) list = list.filter((p) => String(p.categoryId) === categoryId);
+    return list;
+  }, [products, search, categoryId]);
 
   const subCategories = useMemo(() => {
     const map = new Map<string, string>();
@@ -664,8 +693,13 @@ export default function StoreDetailPage() {
   }, [categoryFiltered, filters]);
 
   const updateFilter = (key: keyof FilterState, val: string) => setFilters((p) => ({ ...p, [key]: val }));
-  const resetFilters = () => { setFilters({ subCategoryId: "", brandId: "" }); setCategoryId(""); };
-  const hasActive = !!categoryId || Object.values(filters).some(Boolean);
+  // No category-switch handler on this page preserves search across a
+  // reset the way /products'/print's do (the category chips here just call
+  // setCategoryId directly), so Reset can safely clear search too — matching
+  // the one existing resetFilters used by both the filter bar's own Reset and
+  // the empty-state "reset" button.
+  const resetFilters = () => { setFilters({ subCategoryId: "", brandId: "" }); setCategoryId(""); setSearch(""); };
+  const hasActive = !!categoryId || !!search || Object.values(filters).some(Boolean);
 
   // Derived media fields (with backward-compat for old coverUrl)
   const storeAny = store as any;
@@ -849,7 +883,10 @@ export default function StoreDetailPage() {
       </div>
 
       {/* ── Category + Filter bar — sticky ──────────────────────────────── */}
-      {(categories.length > 0 || subCategories.length > 0 || brands.length > 0) && (
+      {/* Add Product and Pack Search to Individual Store Pages — also shows
+          whenever there's at least one product to search, even if this store
+          happens to have no category/sub-category/brand taxonomy at all. */}
+      {(categories.length > 0 || subCategories.length > 0 || brands.length > 0 || products.length > 0) && (
         <div className={`sticky top-14 z-30 border-b mt-4 transition-colors ${t.filterBg}`}>
           <div className="max-w-7xl mx-auto px-4">
 
@@ -885,42 +922,69 @@ export default function StoreDetailPage() {
               </div>
             )}
 
-            {/* Sub-category + brand filters */}
-            {(subCategories.length > 0 || brands.length > 0) && (
-              <div className="flex items-center gap-2 flex-wrap py-2">
-                <SlidersHorizontal className={`w-3.5 h-3.5 shrink-0 ${t.textMuted}`} />
-                {subCategories.length > 0 && (
-                  <Select value={filters.subCategoryId || "__all__"} onValueChange={(v) => updateFilter("subCategoryId", v === "__all__" ? "" : v)}>
-                    <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.selectTrigger}`}>
-                      <SelectValue placeholder="Sub-Category" />
-                    </SelectTrigger>
-                    <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
-                      <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>All Sub-Categories</SelectItem>
-                      {subCategories.map((sc) => <SelectItem key={sc.id} value={sc.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{sc.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                )}
-                {brands.length > 0 && (
-                  <Select value={filters.brandId || "__all__"} onValueChange={(v) => updateFilter("brandId", v === "__all__" ? "" : v)}>
-                    <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] ${t.selectTrigger}`}>
-                      <SelectValue placeholder="Brand" />
-                    </SelectTrigger>
-                    <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
-                      <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>All Brands</SelectItem>
-                      {brands.map((b) => <SelectItem key={b.id} value={b.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{b.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                )}
-                {hasActive && (
+            {/* Sub-category + brand filters + search — always rendered now
+                (was gated on subCategories/brands existing) so the search
+                input stays available even when neither taxonomy has
+                entries. Search input placed first, same position/design as
+                /products' own FilterBar. */}
+            <div className="flex items-center gap-2 flex-wrap py-2">
+              <SlidersHorizontal className={`w-3.5 h-3.5 shrink-0 ${t.textMuted}`} />
+              <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px] sm:max-w-xs">
+                {!searchOpen && (
                   <button
-                    onClick={resetFilters}
-                    className={`flex items-center gap-1 text-xs transition-colors ml-1 ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}
+                    type="button"
+                    className={`sm:hidden h-7 w-7 rounded-full border flex items-center justify-center shrink-0 ${t.inputBg}`}
+                    onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
+                    aria-label="Search"
+                    data-testid="button-open-store-search"
                   >
-                    <RotateCcw className="w-3 h-3" /> Reset
+                    <Search className="w-3.5 h-3.5" />
                   </button>
                 )}
+                <div className={`${searchOpen ? "flex" : "hidden"} sm:flex items-center relative w-44 sm:w-full`}>
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                  <Input
+                    ref={searchInputRef}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onBlur={() => { if (!search) setSearchOpen(false); }}
+                    placeholder="Search products…"
+                    className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
+                    data-testid="input-store-search"
+                  />
+                </div>
               </div>
-            )}
+              {subCategories.length > 0 && (
+                <Select value={filters.subCategoryId || "__all__"} onValueChange={(v) => updateFilter("subCategoryId", v === "__all__" ? "" : v)}>
+                  <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.selectTrigger}`}>
+                    <SelectValue placeholder="Sub-Category" />
+                  </SelectTrigger>
+                  <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+                    <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>All Sub-Categories</SelectItem>
+                    {subCategories.map((sc) => <SelectItem key={sc.id} value={sc.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{sc.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+              {brands.length > 0 && (
+                <Select value={filters.brandId || "__all__"} onValueChange={(v) => updateFilter("brandId", v === "__all__" ? "" : v)}>
+                  <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] ${t.selectTrigger}`}>
+                    <SelectValue placeholder="Brand" />
+                  </SelectTrigger>
+                  <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+                    <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>All Brands</SelectItem>
+                    {brands.map((b) => <SelectItem key={b.id} value={b.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{b.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+              {hasActive && (
+                <button
+                  onClick={resetFilters}
+                  className={`flex items-center gap-1 text-xs transition-colors ml-1 ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}
+                >
+                  <RotateCcw className="w-3 h-3" /> Reset
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -931,6 +995,7 @@ export default function StoreDetailPage() {
           <StorePacksSection
             packs={storePacks}
             filters={filters}
+            search={search}
             hasCommercialAccess={hasCommercialAccess}
             isDark={isDark}
           />

@@ -19,6 +19,7 @@ import {
   printCatalogItems, printOrders, printCategoryTaxonomy, printSubCategoryTaxonomy, printReports, type PrintReport, printFavorites,
   printerProfiles, type PrinterProfile, type InsertPrinterProfile, type PrintCompanyCard, type PrintCompanyListCard,
   heroActionSettings, type HeroService, type HeroActionSettingsMap,
+  serviceHeroConfigs, type ServiceHeroConfig, type ServiceHeroConfigMap, type ServiceHeroHeight, type ServiceHeroHAlign, type ServiceHeroVAlign,
   accountDarkModeSettings, type DarkModeAccount, type AccountDarkModeSettingsMap, type AccountThemeMode,
   baristaSkills, baristaMarketplaceProfiles, baristaMarketplaceRequests, baristaMarketplaceMissions, baristaMarketplaceFavorites,
   baristaWorkHistory, baristaReports,
@@ -8493,6 +8494,64 @@ export class DatabaseStorage implements IStorage {
       await db.insert(heroActionSettings).values({ service, ...updates });
     }
     return this.getHeroActionSettings();
+  }
+
+  // Admin-controlled visual customization of each Coffee-Owner-facing
+  // service hero (background/gradient, subtitle override, height, content
+  // alignment, info-row toggle) — mirrors getHeroActionSettings exactly.
+  private defaultServiceHeroConfig(): ServiceHeroConfig {
+    return {
+      backgroundImages: [],
+      rotationIntervalSeconds: 6,
+      gradientEnabled: false,
+      gradientFrom: "",
+      gradientVia: "",
+      gradientTo: "",
+      gradientDirection: "to bottom right",
+      subtitle: null,
+      height: "medium",
+      horizontalAlign: "center",
+      verticalAlign: "center",
+      infoRowEnabled: true,
+    };
+  }
+
+  async getServiceHeroConfigs(): Promise<ServiceHeroConfigMap> {
+    const ALL_SERVICES: HeroService[] = ['SHOP', 'BARISTA', 'ACADEMY', 'MAINTENANCE', 'PRINT', 'MARKETING'];
+    const rows = await db.select().from(serviceHeroConfigs);
+    const map = {} as ServiceHeroConfigMap;
+    for (const service of ALL_SERVICES) map[service] = this.defaultServiceHeroConfig();
+    for (const row of rows) {
+      map[row.service as HeroService] = {
+        backgroundImages: row.backgroundImages ?? [],
+        rotationIntervalSeconds: row.rotationIntervalSeconds,
+        gradientEnabled: row.gradientEnabled,
+        gradientFrom: row.gradientFrom,
+        gradientVia: row.gradientVia,
+        gradientTo: row.gradientTo,
+        gradientDirection: row.gradientDirection,
+        subtitle: row.subtitle,
+        height: row.height as ServiceHeroHeight,
+        horizontalAlign: row.horizontalAlign as ServiceHeroHAlign,
+        verticalAlign: row.verticalAlign as ServiceHeroVAlign,
+        infoRowEnabled: row.infoRowEnabled,
+      };
+    }
+    const missing = ALL_SERVICES.filter((s) => !rows.some((r) => r.service === s));
+    for (const service of missing) {
+      await db.insert(serviceHeroConfigs).values({ service }).onConflictDoNothing();
+    }
+    return map;
+  }
+
+  async setServiceHeroConfig(service: HeroService, updates: Partial<ServiceHeroConfig>): Promise<ServiceHeroConfigMap> {
+    const existing = await db.select().from(serviceHeroConfigs).where(eq(serviceHeroConfigs.service, service));
+    if (existing.length) {
+      await db.update(serviceHeroConfigs).set({ ...updates, updatedAt: new Date() }).where(eq(serviceHeroConfigs.service, service));
+    } else {
+      await db.insert(serviceHeroConfigs).values({ service, ...updates });
+    }
+    return this.getServiceHeroConfigs();
   }
 
   // Admin-controlled theme POLICY for the 7 non-Coffee-Owner service

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import printBannerImg from "@assets/1000_F_446608261_m4mqK7D6A8O68SkqWo4ea4VQgrGVbRHY_(1)_1780853922496.jpg";
 import { useLocation, useSearch } from "wouter";
 import { useQuery } from "@tanstack/react-query";
@@ -7,15 +7,18 @@ import { useThemeStore } from "@/store/theme-store";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Package, Star, Clock, SlidersHorizontal, RotateCcw, Printer, Users, Heart, Zap, Ban, MapPin
+  Package, Star, Clock, SlidersHorizontal, RotateCcw, Printer, Users, Heart, Zap, Ban, MapPin, Search,
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useHeroActionSettings } from "@/hooks/use-hero-actions";
+import { useServiceHeroConfig } from "@/hooks/use-service-hero-config";
+import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY } from "@/components/shared/service-hero";
 import type { PrintCatalogCard, PrintCompanyListCard } from "@shared/schema";
 import { printCategoryIcon } from "@/lib/print-category-icons";
 import { useFallbackImage } from "@/hooks/use-fallback-image";
@@ -232,9 +235,14 @@ function PrintStoreCardTile({ company, onClick, isDark }: {
   );
 }
 
-function PrintStoresSection({ companies, categoryId, onSelect, isDark }: {
+function PrintStoresSection({ companies, categoryId, search, onSelect, isDark }: {
   companies: PrintCompanyListCard[];
   categoryId: string;
+  // Unify Service and Store Search + Remove Navbar Search Inputs — same query
+  // as the catalog search below, matched against this printer's own name/
+  // description, so a company is discoverable even when none of its own
+  // service names match.
+  search: string;
   onSelect: (printerId: number) => void;
   isDark: boolean;
 }) {
@@ -243,9 +251,14 @@ function PrintStoresSection({ companies, categoryId, onSelect, isDark }: {
   const INITIAL_LIMIT = 5;
 
   const filtered = useMemo(() => {
-    if (!categoryId) return companies;
-    return companies.filter((c) => c.categories.some((cat) => cat.toLowerCase() === categoryId.toLowerCase()));
-  }, [companies, categoryId]);
+    let list = companies;
+    if (categoryId) list = list.filter((c) => c.categories.some((cat) => cat.toLowerCase() === categoryId.toLowerCase()));
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((c) => c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q));
+    }
+    return list;
+  }, [companies, categoryId, search]);
 
   if (!filtered.length) return null;
   const showToggle = filtered.length > INITIAL_LIMIT;
@@ -365,7 +378,7 @@ interface PrintFilters {
   deliveryTime: string;
 }
 
-function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark, subcategoryIconByName }: {
+function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark, subcategoryIconByName, search, onSearchChange }: {
   cards: PrintCatalogCard[];
   filters: PrintFilters;
   onChange: (key: keyof PrintFilters, val: string) => void;
@@ -373,9 +386,19 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark,
   categoryId: string;
   isDark: boolean;
   subcategoryIconByName: Map<string, string>;
+  // Add a Search Input to /print — same collapsible mobile search as /academy's
+  // own trainingSearch (pages/cafe/barista/barista-academy-page.tsx): value/
+  // onChange live here as a controlled prop (the match/filter logic and any
+  // URL sync stay in the parent, same split PrintFilterBar already has for
+  // every other filter), while the open/closed mobile toggle stays local,
+  // exactly like Academy keeps its own trainingSearchOpen local.
+  search: string;
+  onSearchChange: (value: string) => void;
 }) {
   const t = useTheme(isDark);
-  const hasActive = Object.values(filters).some(Boolean);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const hasActive = Object.values(filters).some(Boolean) || !!search;
 
   const subCategories = useMemo(() => {
     const set = new Set<string>();
@@ -402,7 +425,10 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark,
     return PRODUCTION_TIME_BUCKETS.map((b) => b.label).filter((l) => set.has(l));
   }, [cards]);
 
-  if (!subCategories.length && !printers.length && !materials.length) return null;
+  // Previously hid the whole bar (search included) whenever there were no
+  // facets to filter by — now only hides it when there's nothing to search
+  // either, so the search input stays available as long as any card exists.
+  if (!cards.length) return null;
 
   return (
     <div className={`border-b py-2 px-4 ${t.stripBg}`}>
@@ -411,6 +437,31 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark,
         style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
       >
             <SlidersHorizontal className={`w-3.5 h-3.5 ${t.textSubtle} shrink-0`} />
+        <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px] sm:max-w-xs">
+          {!searchOpen && (
+            <button
+              type="button"
+              className={`sm:hidden h-7 w-7 rounded-full border flex items-center justify-center shrink-0 ${t.inputBg}`}
+              onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
+              aria-label="Rechercher"
+              data-testid="button-open-print-search"
+            >
+              <Search className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <div className={`${searchOpen ? "flex" : "hidden"} sm:flex items-center relative w-44 sm:w-full`}>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <Input
+              ref={searchInputRef}
+              value={search}
+              onChange={(e) => onSearchChange(e.target.value)}
+              onBlur={() => { if (!search) setSearchOpen(false); }}
+              placeholder="Rechercher un service..."
+              className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
+              data-testid="input-print-search"
+            />
+          </div>
+        </div>
         {subCategories.length > 0 && (
           <Select value={filters.subCategoryId || "__all__"} onValueChange={(v) => onChange("subCategoryId", v === "__all__" ? "" : v)}>
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
@@ -469,6 +520,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
   const isDark = useThemeStore((s) => s.isDark);
   const t = useTheme(isDark);
   const { settings: heroActions } = useHeroActionSettings();
+  const { config: heroConfig } = useServiceHeroConfig("PRINT");
   const [fastSearchOpen, setFastSearchOpen] = useState(false);
   const [blacklistOpen, setBlacklistOpen] = useState(false);
   const [previewServiceId, setPreviewServiceId] = useState<number | null>(null);
@@ -511,12 +563,20 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
 
   const [categoryId, setCategoryId] = useState(initialCategory);
   const [filters, setFilters] = useState<PrintFilters>({ subCategoryId: "", brandId: "", material: "", deliveryTime: "" });
+  // Add a Search Input to /print — editable search text lives here (was
+  // previously only settable via the ?q= URL param, with no visible input at
+  // all); seeded from that same param so existing deep links keep working.
+  const [printSearch, setPrintSearch] = useState(initialSearch);
 
   useEffect(() => {
     setCategoryId(urlParams.get("categoryId") ?? "");
   }, [searchStr]);
 
-  const searchQuery = initialSearch.toLowerCase();
+  // Same normalization as /academy's own search match (trim + lowercase,
+  // substring .includes() across a handful of text fields) — see
+  // storage.getPublishedAcademyCourses, reproduced client-side here since
+  // /print's catalog is already fetched in full and filtered in-memory.
+  const searchQuery = printSearch.trim().toLowerCase();
 
   const filtered = useMemo(() => {
     let list = cards;
@@ -540,7 +600,14 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
   }, [cards, searchQuery, categoryId, filters]);
 
   const updateFilter = (key: keyof PrintFilters, val: string) => setFilters((p) => ({ ...p, [key]: val }));
+  // Resets only the facet filters — kept separate from search on purpose: the
+  // category chip strip's own onSelect calls this while deliberately carrying
+  // the current search text over into the new category (see its own comment
+  // below), so resetFilters must never clear it.
   const resetFilters = () => setFilters({ subCategoryId: "", brandId: "", material: "", deliveryTime: "" });
+  // The Reset button (PrintFilterBar) clears everything, including search —
+  // same "Reset clears search too" behavior as /academy's own Reset.
+  const resetAll = () => { resetFilters(); setPrintSearch(""); };
 
   const isLoading = cardsLoading || categoriesLoading;
   const distinctPrinterCount = useMemo(() => new Set(cards.map((c) => c.printerId)).size, [cards]);
@@ -579,23 +646,25 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
   return (
     <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="relative pt-5 pb-12 px-5 overflow-hidden">
-        {/* Background image */}
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-80"
-          style={{ backgroundImage: `url('${printBannerImg}')` }}
-        />
-        {/* Dark overlay */}
-        <div className={`absolute inset-0 ${isDark ? "bg-gradient-to-br from-gray-950/95 via-gray-900/95 to-blue-950/90" : "bg-gradient-to-br from-blue-600/90 via-blue-700/85 to-indigo-700/90"}`} />
-        {/* Content */}
-        <div className="relative">
-          {/* "Mes commandes" removed — Print orders stay reachable from My
+      <ServiceHeroShell
+        config={heroConfig}
+        defaultBackground={
+          <>
+            <div
+              className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-80"
+              style={{ backgroundImage: `url('${printBannerImg}')` }}
+            />
+            <div className={`absolute inset-0 ${isDark ? "bg-gradient-to-br from-gray-950/95 via-gray-900/95 to-blue-950/90" : "bg-gradient-to-br from-blue-600/90 via-blue-700/85 to-indigo-700/90"}`} />
+          </>
+        }
+        controlsRow={
+          /* "Mes commandes" removed — Print orders stay reachable from My
               Account → Réservations (unchanged). The global navbar theme
               control is the single Dark/Light toggle now, so the duplicated
               hero one is gone too; Fast Search/Report (Admin-toggleable per
               service — see /api/hero-actions) follow the exact /barista
-              hero pattern. */}
-          <div className="flex justify-end items-center gap-2 mb-9">
+              hero pattern. */
+          <div className="relative flex justify-end items-center gap-2 mb-9">
             {!comingSoon && canAct && heroActions.PRINT.reportEnabled && (
               <button
                 onClick={() => setBlacklistOpen(true)}
@@ -619,17 +688,19 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
               </button>
             )}
           </div>
-          <div className="max-w-3xl mx-auto text-center">
-          <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mx-auto mb-5 backdrop-blur-sm ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>
-            <Printer className={`w-8 h-8 ${isDark ? "text-amber-400" : "text-white"}`} />
-          </div>
-          <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3">
-            BigBoss <span className={isDark ? "text-amber-400" : "text-amber-200"}>PRINT</span>
-          </h1>
-          <p className={`text-base mb-4 max-w-xl mx-auto ${isDark ? "text-gray-400" : "text-blue-100"}`}>
-            Commandez vos supports imprimés professionnels directement depuis la plateforme.
-          </p>
-          <div className={`flex items-center justify-center gap-6 flex-wrap text-sm ${isDark ? "text-gray-400" : "text-blue-100"}`}>
+        }
+      >
+        <div className={`w-16 h-16 rounded-3xl flex items-center justify-center mb-5 backdrop-blur-sm ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${isDark ? "bg-gray-800/80 border border-gray-700" : "bg-white/20"}`}>
+          <Printer className={`w-8 h-8 ${isDark ? "text-amber-400" : "text-white"}`} />
+        </div>
+        <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3">
+          BigBoss <span className={isDark ? "text-amber-400" : "text-amber-200"}>PRINT</span>
+        </h1>
+        <p className={`text-base mb-4 max-w-xl ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${isDark ? "text-white" : "text-blue-100"}`}>
+          {heroConfig.subtitle ?? "Commandez vos supports imprimés professionnels directement depuis la plateforme."}
+        </p>
+        {heroConfig.infoRowEnabled && (
+          <div className={`flex items-center gap-6 flex-wrap text-sm ${H_ALIGN_ROW_JUSTIFY[heroConfig.horizontalAlign]} ${isDark ? "text-white" : "text-blue-100"}`}>
             <span className="flex items-center gap-1.5">
               <Package className="w-4 h-4" />
               {isLoading ? "…" : cards.length} produits disponibles
@@ -643,9 +714,8 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
               {isLoading ? "…" : categories.length} catégories
             </span>
           </div>
-          </div>
-        </div>
-      </section>
+        )}
+      </ServiceHeroShell>
 
       {comingSoon ? (
         <div className="max-w-3xl mx-auto px-4 py-20 text-center">
@@ -682,10 +752,12 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
           cards={cards}
           filters={filters}
           onChange={updateFilter}
-          onReset={resetFilters}
+          onReset={resetAll}
            categoryId={categoryId}
            isDark={isDark}
            subcategoryIconByName={subcategoryIconByName}
+           search={printSearch}
+           onSearchChange={setPrintSearch}
         />
       </div>
 
@@ -694,6 +766,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
           <PrintStoresSection
             companies={printCompanies}
             categoryId={categoryId}
+            search={printSearch}
             onSelect={(printerId) => navigate(`/print/stores/${printerId}`)}
             isDark={isDark}
           />
@@ -718,7 +791,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
                <p className={`font-semibold ${t.textPrimary}`}>Aucun service trouvé</p>
                <p className={`text-sm mt-1 ${t.textMuted}`}>Essayez d'ajuster vos filtres.</p>
             </div>
-            <Button size="sm" variant="outline" onClick={() => { resetFilters(); setCategoryId(""); navigate("/print"); }}>
+            <Button size="sm" variant="outline" onClick={() => { resetFilters(); setPrintSearch(""); setCategoryId(""); navigate("/print"); }}>
               Effacer les filtres
             </Button>
           </div>

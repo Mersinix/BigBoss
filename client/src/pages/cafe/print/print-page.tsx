@@ -703,7 +703,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
           <div className={`flex items-center gap-6 flex-wrap text-sm ${H_ALIGN_ROW_JUSTIFY[heroConfig.horizontalAlign]} ${isDark ? "text-white" : "text-blue-100"}`}>
             <span className="flex items-center gap-1.5">
               <Package className="w-4 h-4" />
-              {isLoading ? "…" : cards.length} produits disponibles
+              {isLoading ? "…" : cards.length} produits
             </span>
             <span className="flex items-center gap-1.5">
               <Users className="w-4 h-4" />

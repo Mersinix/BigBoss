@@ -572,7 +572,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
             <span className="flex items-center gap-1.5"><Users className="w-4 h-4" />{providers.length} prestataires</span>
             <span className="flex items-center gap-1.5"><Megaphone className="w-4 h-4" />{taxonomy.length} types de services</span>
             {averageRating > 0 && (
-              <span className="flex items-center gap-1.5"><Star className="w-4 h-4 fill-purple-200" />Note moyenne {averageRating.toFixed(1)}/5</span>
+              <span className="flex items-center gap-1.5"><Star className="w-4 h-4 fill-purple-200" />Note {averageRating.toFixed(1)}/5</span>
             )}
           </div>
         )}

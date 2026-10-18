@@ -45,7 +45,7 @@ import {
 import { useFavorites } from "@/hooks/use-favorites";
 import { useHeroActionSettings } from "@/hooks/use-hero-actions";
 import { useServiceHeroConfig } from "@/hooks/use-service-hero-config";
-import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY } from "@/components/shared/service-hero";
+import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY, getHeroSubtitleColorStyle } from "@/components/shared/service-hero";
 import {
   useBaristaProfiles,
   useBaristaSkills,
@@ -596,9 +596,11 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
         <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3">
           BigBoss <span className={isDark ? "text-amber-400" : "text-amber-200"}>BARISTA</span>
         </h1>
-        <p className={`text-base mb-4 max-w-xl ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${isDark ? "text-white" : "text-green-100"}`}>
-          {heroConfig.subtitle ?? "Trouvez et recrutez des baristas professionnels pour votre établissement"}
-        </p>
+        {heroConfig.subtitleEnabled && (
+          <p className={`text-base mb-4 max-w-xl ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${isDark ? "text-white" : "text-green-100"}`} style={getHeroSubtitleColorStyle(heroConfig, isDark)}>
+            {heroConfig.subtitle ?? "Trouvez et recrutez des baristas professionnels pour votre établissement"}
+          </p>
+        )}
         {heroConfig.infoRowEnabled && (
           <div className={`flex items-center gap-6 flex-wrap text-sm ${H_ALIGN_ROW_JUSTIFY[heroConfig.horizontalAlign]} ${isDark ? "text-white" : "text-green-100"}`}>
             <span className="flex items-center gap-1.5">

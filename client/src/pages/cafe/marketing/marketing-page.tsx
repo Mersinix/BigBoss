@@ -38,7 +38,7 @@ import {
 import { useFavorites } from "@/hooks/use-favorites";
 import { useHeroActionSettings } from "@/hooks/use-hero-actions";
 import { useServiceHeroConfig } from "@/hooks/use-service-hero-config";
-import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY } from "@/components/shared/service-hero";
+import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY, getHeroSubtitleColorStyle } from "@/components/shared/service-hero";
 import {
   useMarketingProfiles,
   useMarketingServices,
@@ -564,9 +564,11 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
         <h1 className="text-3xl md:text-4xl font-extrabold text-white mb-3">
           BigBoss <span className={isDark ? "text-amber-400" : "text-amber-200"}>MARKETING</span>
         </h1>
-        <p className={`text-base mb-4 max-w-xl ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${isDark ? "text-white" : "text-purple-100"}`}>
-          {heroConfig.subtitle ?? "Boostez la visibilité de votre café avec des experts marketing dédiés à la restauration"}
-        </p>
+        {heroConfig.subtitleEnabled && (
+          <p className={`text-base mb-4 max-w-xl ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${isDark ? "text-white" : "text-purple-100"}`} style={getHeroSubtitleColorStyle(heroConfig, isDark)}>
+            {heroConfig.subtitle ?? "Boostez la visibilité de votre café avec des experts marketing dédiés à la restauration"}
+          </p>
+        )}
         {heroConfig.infoRowEnabled && (
           <div className={`flex items-center gap-6 flex-wrap text-sm ${H_ALIGN_ROW_JUSTIFY[heroConfig.horizontalAlign]} ${isDark ? "text-white" : "text-purple-100"}`}>
             <span className="flex items-center gap-1.5"><Users className="w-4 h-4" />{providers.length} prestataires</span>

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Search, Flag, Moon, Sun, SunMoon, Car, Store, ShieldCheck, LogIn, AlertTriangle, X, RotateCcw, Save, Palette } from "lucide-react";
 import { useDeliveryPricingSettings, useUpdateDeliveryPricingSettings, VEHICLE_TYPE_LABELS, type DeliveryVehicleType, type DeliveryPricingSettings, useFinancialLedgerEntries, type FinancialLedgerFilters, useAdminSettlements, useApproveSettlement, useVoidSettlement, type SettlementFilters, useSettlementPayments, useCreatePayment, useConfirmPayment, useFailPayment, useReversePayment, type PaymentMethod, useAdminCodReconciliations, useReconcileCod, useAdminRefunds, useRequestRefund, useConfirmRefund, useFailRefund, useCancelRefund, useAdminAdjustments, useCreateAdjustment, useAdminFinancialSummary } from "@/hooks/use-delivery-ecosystem";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -21,7 +22,7 @@ import type { ServiceKey, ServiceState, ServiceStatesMap } from "@/hooks/use-ser
 import { useServiceOrder, type MarketplaceServiceId } from "@/hooks/use-service-order";
 import { useHeroActionSettings, type HeroService, type HeroActionSettingsMap } from "@/hooks/use-hero-actions";
 import { useServiceHeroConfigMap, DEFAULT_SERVICE_HERO_CONFIG, type ServiceHeroConfig, type ServiceHeroConfigMap } from "@/hooks/use-service-hero-config";
-import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY } from "@/components/shared/service-hero";
+import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY, getHeroSubtitleColorStyle } from "@/components/shared/service-hero";
 import { useAccountDarkModeSettings, type DarkModeAccount, type AccountDarkModeSettingsMap, type AccountThemeMode } from "@/hooks/use-account-dark-mode";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import type { LandingConfig, HeroSlide } from "@shared/schema";
@@ -463,6 +464,7 @@ function ServiceHeroCustomizationSection() {
   const { configs, isLoading } = useServiceHeroConfigMap();
   const [selected, setSelected] = useState<HeroService>("SHOP");
   const [draft, setDraft] = useState<ServiceHeroConfig>(configs[selected]);
+  const [previewDark, setPreviewDark] = useState(true);
 
   useEffect(() => {
     setDraft(configs[selected]);
@@ -576,6 +578,59 @@ function ServiceHeroCustomizationSection() {
                     />
                   </div>
                 )}
+                {images.length > 0 && (
+                  <div className="border-t border-border/50 pt-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <Label className="text-xs font-medium">Calque transparent</Label>
+                        <p className="text-xs text-muted-foreground">Superpose une teinte sur les images pour garder le texte lisible.</p>
+                      </div>
+                      <Switch
+                        checked={draft.overlayEnabled}
+                        onCheckedChange={(checked) => setField("overlayEnabled", checked)}
+                        aria-label="Activer le calque transparent"
+                        data-testid="switch-hero-overlay-enabled"
+                      />
+                    </div>
+                    {draft.overlayEnabled && (
+                      <>
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Couleur du calque</Label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="color"
+                              value={/^#[0-9a-fA-F]{6}$/.test(draft.overlayColor) ? draft.overlayColor : "#000000"}
+                              onChange={(e) => setField("overlayColor", e.target.value)}
+                              className="h-8 w-8 rounded border border-border/50 shrink-0"
+                              aria-label="Couleur du calque — sélecteur"
+                            />
+                            <Input
+                              value={draft.overlayColor}
+                              onChange={(e) => setField("overlayColor", e.target.value)}
+                              placeholder="#000000"
+                              className="rounded-lg text-xs h-8"
+                              data-testid="input-hero-overlay-color"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs text-muted-foreground">Opacité du calque</Label>
+                            <span className="text-xs font-medium tabular-nums" data-testid="text-hero-overlay-opacity">{draft.overlayOpacity}%</span>
+                          </div>
+                          <Slider
+                            value={[draft.overlayOpacity]}
+                            min={0}
+                            max={100}
+                            step={5}
+                            onValueChange={([v]) => setField("overlayOpacity", v)}
+                            data-testid="slider-hero-overlay-opacity"
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Gradient */}
@@ -626,23 +681,66 @@ function ServiceHeroCustomizationSection() {
               </div>
 
               {/* Subtitle */}
-              <div className="border border-border/50 rounded-xl p-4 space-y-2">
+              <div className="border border-border/50 rounded-xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <SectionLabel>Sous-titre</SectionLabel>
-                  {draft.subtitle != null && (
-                    <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-muted-foreground" onClick={() => setField("subtitle", null)} data-testid="button-clear-hero-subtitle">
-                      <X className="w-3 h-3" /> Revenir au défaut
-                    </Button>
-                  )}
+                  <Switch
+                    checked={draft.subtitleEnabled}
+                    onCheckedChange={(checked) => setField("subtitleEnabled", checked)}
+                    aria-label="Afficher le sous-titre"
+                    data-testid="switch-hero-subtitle-enabled"
+                  />
                 </div>
-                <Textarea
-                  value={draft.subtitle ?? ""}
-                  onChange={(e) => setField("subtitle", e.target.value)}
-                  placeholder="Laisser vide pour conserver le sous-titre par défaut du service"
-                  className="rounded-lg text-sm resize-none"
-                  rows={2}
-                  data-testid="textarea-hero-subtitle"
-                />
+                {draft.subtitleEnabled ? (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">Texte affiché sous le titre.</p>
+                      {draft.subtitle != null && (
+                        <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-muted-foreground" onClick={() => setField("subtitle", null)} data-testid="button-clear-hero-subtitle">
+                          <X className="w-3 h-3" /> Revenir au défaut
+                        </Button>
+                      )}
+                    </div>
+                    <Textarea
+                      value={draft.subtitle ?? ""}
+                      onChange={(e) => setField("subtitle", e.target.value)}
+                      placeholder="Laisser vide pour conserver le sous-titre par défaut du service"
+                      className="rounded-lg text-sm resize-none"
+                      rows={2}
+                      data-testid="textarea-hero-subtitle"
+                    />
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      {([["subtitleColorLight", "Couleur — Mode clair"], ["subtitleColorDark", "Couleur — Mode sombre"]] as const).map(([field, label]) => (
+                        <div key={field} className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">{label}</Label>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="color"
+                              value={/^#[0-9a-fA-F]{6}$/.test(draft[field]) ? draft[field] : "#ffffff"}
+                              onChange={(e) => setField(field, e.target.value)}
+                              className="h-8 w-8 rounded border border-border/50 shrink-0"
+                              aria-label={`${label} — sélecteur`}
+                            />
+                            <Input
+                              value={draft[field]}
+                              onChange={(e) => setField(field, e.target.value)}
+                              placeholder="Défaut du service"
+                              className="rounded-lg text-xs h-8"
+                              data-testid={`input-hero-${field}`}
+                            />
+                            {draft[field] && (
+                              <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-muted-foreground" onClick={() => setField(field, "")} aria-label={`${label} — revenir au défaut`}>
+                                <X className="w-3.5 h-3.5" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Le sous-titre est masqué ; le texte enregistré est conservé et réapparaît en réactivant ce réglage.</p>
+                )}
               </div>
 
               {/* Height & positioning */}
@@ -677,7 +775,7 @@ function ServiceHeroCustomizationSection() {
               <div className="border border-border/50 rounded-xl p-4 flex items-center justify-between">
                 <div>
                   <SectionLabel>Ligne d'info sous le sous-titre</SectionLabel>
-                  <p className="text-xs text-muted-foreground">Ex. « techniciens disponibles / certifiés / intervention rapide ». Désactiver masque entièrement la ligne existante du service.</p>
+                  <p className="text-xs text-muted-foreground">Ex. pour Maintenance : « techniciens disponibles / certifiés / intervention rapide » ; pour Shop : « magasins / packs / produits ». Chaque service garde son propre contenu — désactiver masque entièrement la ligne existante de ce service.</p>
                 </div>
                 <Switch
                   checked={draft.infoRowEnabled}
@@ -690,19 +788,35 @@ function ServiceHeroCustomizationSection() {
 
             {/* Live preview */}
             <div className="space-y-3">
-              <SectionLabel>Aperçu — {activeMeta.label}</SectionLabel>
+              <div className="flex items-center justify-between">
+                <SectionLabel>Aperçu — {activeMeta.label}</SectionLabel>
+                <div className="flex items-center gap-1">
+                  <Button type="button" size="sm" variant={previewDark ? "outline" : "default"} className={`h-6 px-2 text-xs gap-1 ${!previewDark ? "bg-amber-500 hover:bg-amber-600 text-white" : ""}`} onClick={() => setPreviewDark(false)} data-testid="button-preview-theme-light">
+                    <Sun className="w-3 h-3" /> Clair
+                  </Button>
+                  <Button type="button" size="sm" variant={previewDark ? "default" : "outline"} className={`h-6 px-2 text-xs gap-1 ${previewDark ? "bg-amber-500 hover:bg-amber-600 text-white" : ""}`} onClick={() => setPreviewDark(true)} data-testid="button-preview-theme-dark">
+                    <Moon className="w-3 h-3" /> Sombre
+                  </Button>
+                </div>
+              </div>
               <div className="rounded-xl border border-border/50 overflow-hidden max-h-72">
                 <ServiceHeroShell
                   config={draft}
-                  defaultBackground={<div className="absolute inset-0 bg-gradient-to-br from-gray-700 via-gray-800 to-gray-900" />}
+                  defaultBackground={
+                    previewDark
+                      ? <div className="absolute inset-0 bg-gradient-to-br from-gray-700 via-gray-800 to-gray-900" />
+                      : <div className="absolute inset-0 bg-gradient-to-br from-amber-400 via-amber-500 to-orange-500" />
+                  }
                 >
                   <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 backdrop-blur-sm bg-white/20 ${H_ALIGN_ICON_MX[draft.horizontalAlign]}`}>
                     <activeMeta.icon className="w-7 h-7 text-white" />
                   </div>
                   <h1 className="text-2xl font-extrabold text-white mb-2">BigBoss <span className="text-amber-200">{selected}</span></h1>
-                  <p className={`text-sm mb-3 max-w-xl text-amber-50/90 ${H_ALIGN_ICON_MX[draft.horizontalAlign]}`}>
-                    {draft.subtitle ?? "Sous-titre par défaut du service"}
-                  </p>
+                  {draft.subtitleEnabled && (
+                    <p className={`text-sm mb-3 max-w-xl text-amber-50/90 ${H_ALIGN_ICON_MX[draft.horizontalAlign]}`} style={getHeroSubtitleColorStyle(draft, previewDark)}>
+                      {draft.subtitle ?? "Sous-titre par défaut du service"}
+                    </p>
+                  )}
                   {draft.infoRowEnabled && (
                     <div className={`flex items-center gap-4 flex-wrap text-xs text-amber-50/80 ${H_ALIGN_ROW_JUSTIFY[draft.horizontalAlign]}`}>
                       <span>Exemple statistique</span>

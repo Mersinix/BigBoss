@@ -8509,10 +8509,16 @@ export class DatabaseStorage implements IStorage {
       gradientTo: "",
       gradientDirection: "to bottom right",
       subtitle: null,
+      subtitleEnabled: true,
+      subtitleColorLight: "",
+      subtitleColorDark: "",
       height: "medium",
       horizontalAlign: "center",
       verticalAlign: "center",
       infoRowEnabled: true,
+      overlayEnabled: true,
+      overlayColor: "#000000",
+      overlayOpacity: 30,
     };
   }
 
@@ -8531,10 +8537,16 @@ export class DatabaseStorage implements IStorage {
         gradientTo: row.gradientTo,
         gradientDirection: row.gradientDirection,
         subtitle: row.subtitle,
+        subtitleEnabled: row.subtitleEnabled,
+        subtitleColorLight: row.subtitleColorLight,
+        subtitleColorDark: row.subtitleColorDark,
         height: row.height as ServiceHeroHeight,
         horizontalAlign: row.horizontalAlign as ServiceHeroHAlign,
         verticalAlign: row.verticalAlign as ServiceHeroVAlign,
         infoRowEnabled: row.infoRowEnabled,
+        overlayEnabled: row.overlayEnabled,
+        overlayColor: row.overlayColor,
+        overlayOpacity: row.overlayOpacity,
       };
     }
     const missing = ALL_SERVICES.filter((s) => !rows.some((r) => r.service === s));

@@ -25,7 +25,7 @@ import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import type { MarketplaceProduct, CategoryWithCount, StoreCard, PackDetail, TaxonomyLabel } from "@shared/schema";
 import { FlashMode } from "@/components/flash-mode";
 import { useServiceHeroConfig } from "@/hooks/use-service-hero-config";
-import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY } from "@/components/shared/service-hero";
+import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY, getHeroSubtitleColorStyle } from "@/components/shared/service-hero";
 
 // ── Access helper ─────────────────────────────────────────────────────────────
 
@@ -1150,19 +1150,24 @@ export default function BrowseProducts() {
         <h1 className={`text-3xl md:text-4xl font-extrabold mb-2 ${t.dk ? "text-white" : "text-white"}`}>
           BigBoss <span className={t.dk ? "text-amber-400" : "text-amber-200"}>SHOP</span>
         </h1>
-        <p className={`text-base mb-4 max-w-xl ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${t.dk ? "text-white" : "text-amber-100"}`}>
-          {heroConfig.subtitle ?? "Commandez vos produits professionnels directement auprès de fournisseurs vérifiés."}
-        </p>
-        {/* SHOP stats row (Stores/Packs/Products currently available) — a
-            SEPARATE requirement from the per-service info-row toggle above:
-            always shown (own config/rules), explicit "0" for empty rather
-            than hiding, counts come straight from the same already
-            eligibility-filtered arrays the sections below render from. */}
-        <div className={`flex items-center gap-6 flex-wrap text-sm ${H_ALIGN_ROW_JUSTIFY[heroConfig.horizontalAlign]} ${t.dk ? "text-white" : "text-amber-100"}`}>
-          <span className="flex items-center gap-1.5" data-testid="text-shop-stat-stores"><Store className="w-4 h-4" />{storesLoading ? "…" : stores.length} magasins</span>
-          <span className="flex items-center gap-1.5" data-testid="text-shop-stat-packs"><Package className="w-4 h-4" />{packsLoading ? "…" : packs.length} packs</span>
-          <span className="flex items-center gap-1.5" data-testid="text-shop-stat-products"><ShoppingBag className="w-4 h-4" />{isLoading ? "…" : allProducts.length} produits</span>
-        </div>
+        {heroConfig.subtitleEnabled && (
+          <p className={`text-base mb-4 max-w-xl ${H_ALIGN_ICON_MX[heroConfig.horizontalAlign]} ${t.dk ? "text-white" : "text-amber-100"}`} style={getHeroSubtitleColorStyle(heroConfig, t.dk)}>
+            {heroConfig.subtitle ?? "Commandez vos produits professionnels directement auprès de fournisseurs vérifiés."}
+          </p>
+        )}
+        {/* SHOP stats row (Stores/Packs/Products currently available) — same
+            "Ligne d'info" toggle as every other service (previously this row
+            always rendered unconditionally, ignoring heroConfig.infoRowEnabled —
+            fixed so Admin's toggle now actually controls it here too). The
+            row's own data/icons are untouched by the toggle, only its
+            visibility is. */}
+        {heroConfig.infoRowEnabled && (
+          <div className={`flex items-center gap-6 flex-wrap text-sm ${H_ALIGN_ROW_JUSTIFY[heroConfig.horizontalAlign]} ${t.dk ? "text-white" : "text-amber-100"}`}>
+            <span className="flex items-center gap-1.5" data-testid="text-shop-stat-stores"><Store className="w-4 h-4" />{storesLoading ? "…" : stores.length} magasins</span>
+            <span className="flex items-center gap-1.5" data-testid="text-shop-stat-packs"><Package className="w-4 h-4" />{packsLoading ? "…" : packs.length} packs</span>
+            <span className="flex items-center gap-1.5" data-testid="text-shop-stat-products"><ShoppingBag className="w-4 h-4" />{isLoading ? "…" : allProducts.length} produits</span>
+          </div>
+        )}
       </ServiceHeroShell>
 
       {/* ── Sticky: Category strip + Filter bar ──────────────────────────── */}

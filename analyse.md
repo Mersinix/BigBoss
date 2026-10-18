@@ -3310,3 +3310,212 @@ réglages par service) :
   appliquées via `style` inline — aucune validation de format côté serveur
   au-delà d'une limite de longueur (cohérent avec les autres champs "image
   URL" déjà en texte libre ailleurs dans l'app, ex. `landingConfig`).
+
+---
+
+# Analyse — Improve Service Hero Personalization (Non-Breaking Update)
+
+## 1. Audit préalable
+
+### 1.1 Cause exacte du bug SHOP (Partie 1)
+
+Trace complète du réglage "Ligne d'info sous le sous-titre" de l'admin
+jusqu'au rendu réel :
+
+- Admin → `draft.infoRowEnabled` (state local) → `saveMutation` →
+  `PATCH /api/admin/service-hero-config/SHOP` → `storage.setServiceHeroConfig`
+  → colonne `info_row_enabled` en base → `GET /api/service-hero-config` →
+  `useServiceHeroConfig("SHOP")` côté client. Cette chaîne fonctionne
+  correctement et a été vérifiée de bout en bout (voir §4).
+- Le défaut se trouvait uniquement dans `browse-products.tsx` : lors de
+  l'implémentation précédente (tâche "Admin Service Hero Customization"),
+  la ligne de statistiques SHOP (magasins/packs/produits) avait été codée
+  comme **toujours affichée sans condition**, avec un commentaire
+  explicite justifiant cela comme "une exigence séparée" du toggle
+  `infoRowEnabled`. Aucune autre page ne présentait ce problème — les 5
+  autres heros (Maintenance, Barista, Academy, Print, Marketing) encapsulent
+  déjà correctement leur ligne d'info dans `{heroConfig.infoRowEnabled && (...)}`.
+- Confirmé en lisant l'état réel sauvegardé en base avant toute correction :
+  SHOP avait déjà `infoRowEnabled: false` enregistré, mais la ligne
+  continuait de s'afficher — reproduction exacte du bug signalé.
+- Aucun second mécanisme de configuration concurrent trouvé ; un seul champ
+  `infoRowEnabled` existe et est déjà correctement persisté/chargé. La
+  correction consiste uniquement à faire respecter ce champ existant dans
+  `browse-products.tsx`, sans toucher à la persistance ni à l'admin.
+
+### 1.2 Détection dark/light mode
+
+- Chaque page héros lit son propre booléen (`t.dk`, `isDark`, etc.) depuis
+  `useThemeStore` (déjà utilisé pour toutes les classes Tailwind
+  conditionnelles existantes du hero). Les nouvelles couleurs de sous-titre
+  réutilisent exactement cette même valeur par page — aucun nouveau
+  mécanisme de détection de thème introduit.
+
+### 1.3 Rendu et rotation des images d'arrière-plan
+
+- `ServiceHeroBackground` (`client/src/components/shared/service-hero.tsx`)
+  gère déjà la rotation (`setInterval`/`clearInterval` sur changement
+  d'images ou d'intervalle) et empilait un calque **fixe et non
+  configurable** `bg-black/30` par-dessus les images, sans jamais l'appliquer
+  aux modes dégradé/couleur unie (branche séparée, retournée avant). C'est
+  exactement la même séparation déjà en place qui permet d'ajouter le calque
+  configurable uniquement dans la branche "images" sans toucher au dégradé.
+
+## 2. Implémentation
+
+### 2.1 Partie 1 — Correction du toggle SHOP
+
+- `client/src/pages/cafe/browse-products.tsx` : la ligne de statistiques
+  SHOP est désormais enveloppée dans `{heroConfig.infoRowEnabled && (...)}`,
+  exactement comme les 5 autres services. Les données/icônes/testids de la
+  ligne sont inchangés — seule sa visibilité est maintenant pilotée par le
+  réglage existant. Aucun nouveau mécanisme introduit.
+
+### 2.2 Partie 2 — Visibilité et couleurs du sous-titre
+
+- Nouveaux champs persistés (table `service_hero_configs`) : `subtitleEnabled`
+  (bool, défaut `true`), `subtitleColorLight`/`subtitleColorDark` (text,
+  défaut `""` = couleur Tailwind par défaut du service, inchangée).
+- `client/src/components/shared/service-hero.tsx` : nouvelle fonction
+  exportée `getHeroSubtitleColorStyle(config, isDark)` — retourne
+  `{ color: "#xxxxxx" }` uniquement si une couleur valide (format hex
+  `#RRGGBB`) est enregistrée pour le thème actif, sinon `{}` (aucun style
+  inline, les classes Tailwind existantes du service s'appliquent comme
+  avant). Centralisé une seule fois, réutilisé par les 6 pages + l'aperçu
+  Admin — pas de logique dupliquée.
+- Chaque page héros (`browse-products.tsx`, `maintenance-page.tsx`,
+  `barista-page.tsx`, `barista-academy-page.tsx`, `print-page.tsx`,
+  `marketing-page.tsx`) : le `<p>` du sous-titre est désormais enveloppé
+  dans `{heroConfig.subtitleEnabled && (...)}` (démontage complet — pas de
+  `visibility:hidden` — donc aucun espace vide résiduel) et reçoit
+  `style={getHeroSubtitleColorStyle(heroConfig, isDark)}` en plus de ses
+  classes existantes. Titre, icône, ligne d'info, arrière-plan : non
+  modifiés par ce réglage.
+- Le toggle sous-titre et le toggle ligne d'info restent deux champs
+  totalement indépendants (`subtitleEnabled` vs `infoRowEnabled`) — aucune
+  des deux implémentations ne lit l'état de l'autre.
+
+### 2.3 Partie 3 — Calque transparent configurable sur les images
+
+- Nouveaux champs persistés : `overlayEnabled` (bool, défaut `true`),
+  `overlayColor` (text, défaut `"#000000"`), `overlayOpacity` (integer 0-100,
+  défaut `30`) — ces valeurs par défaut reproduisent exactement l'ancien
+  calque fixe `bg-black/30`, donc un service déjà configuré avant cette
+  tâche garde une apparence strictement identique.
+- `ServiceHeroBackground` : le calque fixe est remplacé par un calque
+  conditionnel calculé via un nouvel utilitaire interne `hexToRgba(color,
+  alpha)` (conversion hex → `rgba()` pour appliquer l'opacité), rendu
+  uniquement dans la branche "images" (jamais sur dégradé/couleur unie,
+  comme demandé) et seulement si `overlayEnabled !== false`. Ordre
+  d'empilement inchangé : images (opacité croisée pour la transition) →
+  calque → (dans `ServiceHeroShell`) contrôles puis contenu — le calque
+  reste un simple `<div>` sans `pointer-events`, donc n'intercepte aucune
+  interaction avec le contenu au-dessus.
+- Aucun espace ni dimension additionnelle introduite ; le calque est
+  `absolute inset-0` comme l'ancien, donc le comportement responsive
+  (mobile/tablette/desktop) suit exactement celui déjà existant du fond.
+
+### 2.4 Interface Admin (`system-management-page.tsx`)
+
+- Section **Sous-titre** étendue : switch de visibilité en en-tête : quand
+  désactivé, le texte/les couleurs restent éditables mais un message indique
+  que le sous-titre est masqué et que le texte est conservé ; quand activé,
+  deux sélecteurs couleur (clair/sombre), chacun avec `<input type="color">`
+  + champ hex + bouton "revenir au défaut" par couleur.
+- Section **Images d'arrière-plan** étendue : bloc "Calque transparent"
+  affiché uniquement si au moins une image est configurée (switch ON/OFF,
+  sélecteur de couleur, `Slider` 0-100% avec pourcentage affiché en direct).
+- **Aperçu en direct** : ajout d'un petit bouton Clair/Sombre pour que
+  l'aperçu puisse refléter la couleur de sous-titre correspondant au thème
+  choisi (le calque et la rotation d'images étaient déjà reflétés
+  automatiquement, car l'aperçu utilise le même composant
+  `ServiceHeroShell`/`ServiceHeroBackground` que les vraies pages — aucune
+  logique de rendu séparée/dupliquée pour l'aperçu).
+- Description du toggle "Ligne d'info" clarifiée (l'exemple "techniciens"
+  ne concernait que Maintenance ; le texte précise maintenant explicitement
+  que chaque service garde son propre contenu, Shop inclus).
+
+### 2.5 Persistance et compatibilité (Partie 4)
+
+- Les 6 nouveaux champs suivent exactement les conventions déjà en place
+  (table/route/validation existantes étendues, pas de nouveau mécanisme) :
+  colonnes ajoutées à `service_hero_configs` via `npm run db:push` (ajout
+  additif uniquement), zod étendu dans la même route
+  `PATCH /api/admin/service-hero-config/:service` (`requireAdmin`,
+  inchangé), mapping étendu dans `storage.getServiceHeroConfigs`/
+  `setServiceHeroConfig` (même upsert ciblé par service, inchangé).
+- Compatibilité arrière vérifiée en base réelle : les lignes déjà
+  existantes (SHOP et MAINTENANCE avaient déjà des configurations réelles
+  enregistrées par des tests précédents) ont automatiquement reçu les
+  valeurs par défaut de rétrocompatibilité dès l'ajout des colonnes
+  (`ALTER TABLE ... DEFAULT` rétroactif de Postgres) — aucune valeur
+  existante (images, dégradé, sous-titre, hauteur, position) n'a été
+  modifiée ou perdue.
+
+## 3. Garde-fous respectés
+
+- Aucune reconstruction du système : les tables, routes, hooks et composant
+  partagé existants ont été étendus, jamais remplacés.
+- Aucune statistique ni contenu de service codé en dur — la ligne SHOP
+  garde ses propres données réelles (`stores.length`/`packs.length`/
+  `allProducts.length`), les autres services gardent leur propre contenu.
+- Aucune configuration existante supprimée ou écrasée (vérifié en base,
+  §2.5).
+- Aucune route, permission, taxonomie ou logique métier marketplace
+  modifiée.
+- Mise à jour d'un service vérifiée comme n'affectant jamais un autre
+  service (voir §4).
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- `npm run db:push` → changements appliqués ; les 6 nouvelles colonnes et
+  leurs valeurs par défaut vérifiées directement en base
+  (`information_schema.columns`) : `subtitle_enabled=true`,
+  `subtitle_color_light=''`, `subtitle_color_dark=''`,
+  `overlay_enabled=true`, `overlay_color='#000000'`, `overlay_opacity=30`.
+- Redémarrage du serveur de dev pour charger les nouvelles routes/colonnes ;
+  aucune erreur dans les logs serveur après redémarrage (hors 401/404
+  attendus pour des requêtes non authentifiées).
+- `GET /api/service-hero-config` : confirmé que SHOP avait réellement
+  `infoRowEnabled: false` déjà enregistré en base (configuration réelle
+  issue de tests précédents) — reproduction directe du bug avant correction.
+- `PATCH /api/admin/service-hero-config/SHOP` sans authentification → 401
+  (garde Admin toujours active, inchangée).
+- Script temporaire (`scratch-test-hero2.ts`, supprimé après usage) appelant
+  directement `storage.setServiceHeroConfig` : mise à jour de MAINTENANCE
+  (sous-titre masqué, couleurs clair/sombre, calque couleur/opacité
+  personnalisés) confirmée persistée, **SHOP strictement inchangé**
+  (y compris sa configuration réelle préexistante) après cette mise à jour,
+  puis restauration de MAINTENANCE à son état antérieur confirmée exacte,
+  SHOP toujours inchangé — confirme à nouveau le scoping strict par
+  service.
+- `git status --short` final : uniquement les fichiers attendus pour cette
+  tâche.
+
+## 5. Résumé des livrables
+
+1. **Correction SHOP** : la ligne de statistiques (magasins/packs/produits)
+   était codée pour s'afficher sans condition ; elle respecte maintenant
+   `heroConfig.infoRowEnabled` comme les 5 autres services, sans changer ses
+   données, icônes ni styles.
+2. **Sous-titre** : toggle de visibilité indépendant du toggle ligne d'info,
+   + couleur dédiée par thème (clair/sombre) et par service, avec défauts
+   rétrocompatibles (visible, couleur par défaut du service inchangée).
+3. **Calque transparent** : activable/désactivable, couleur et opacité
+   (0-100%) configurables par service, appliqué uniquement en mode image
+   (jamais en dégradé/couleur unie), défauts reproduisant exactement
+   l'ancien comportement codé en dur.
+4. **Persistance** : 6 nouvelles colonnes additives sur la table existante,
+   même route/validation/garde Admin déjà en place, rétrocompatibilité
+   vérifiée sur des données réelles déjà enregistrées.
+
+## 6. Limites connues
+
+- Aucun navigateur réel disponible pour vérifier visuellement le rendu
+  exact des couleurs/calque sur les 6 heros et dans l'aperçu Admin ;
+  vérifié par lecture de code, type-checking strict, et tests
+  fonctionnels directs sur la couche `storage`/API (persistance, scoping,
+  rétrocompatibilité). Une vérification visuelle manuelle reste
+  recommandée avant mise en production.

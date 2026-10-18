@@ -1317,10 +1317,20 @@ export const serviceHeroConfigs = pgTable("service_hero_configs", {
   gradientTo: text("gradient_to").notNull().default(""),
   gradientDirection: text("gradient_direction").notNull().default("to bottom right"),
   subtitle: text("subtitle"),
+  subtitleEnabled: boolean("subtitle_enabled").notNull().default(true),
+  subtitleColorLight: text("subtitle_color_light").notNull().default(""),
+  subtitleColorDark: text("subtitle_color_dark").notNull().default(""),
   height: text("height").notNull().default("medium"),
   horizontalAlign: text("horizontal_align").notNull().default("center"),
   verticalAlign: text("vertical_align").notNull().default("center"),
   infoRowEnabled: boolean("info_row_enabled").notNull().default(true),
+  // Image-mode overlay (Part 3) — defaults (enabled, black, 30%) reproduce
+  // the overlay that was previously hardcoded in ServiceHeroBackground, so
+  // every service already configured before this field existed keeps the
+  // exact same rendered appearance.
+  overlayEnabled: boolean("overlay_enabled").notNull().default(true),
+  overlayColor: text("overlay_color").notNull().default("#000000"),
+  overlayOpacity: integer("overlay_opacity").notNull().default(30),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -1337,10 +1347,16 @@ export type ServiceHeroConfig = {
   gradientTo: string;
   gradientDirection: string;
   subtitle: string | null;
+  subtitleEnabled: boolean;
+  subtitleColorLight: string;
+  subtitleColorDark: string;
   height: ServiceHeroHeight;
   horizontalAlign: ServiceHeroHAlign;
   verticalAlign: ServiceHeroVAlign;
   infoRowEnabled: boolean;
+  overlayEnabled: boolean;
+  overlayColor: string;
+  overlayOpacity: number;
 };
 export type ServiceHeroConfigMap = Record<HeroService, ServiceHeroConfig>;
 

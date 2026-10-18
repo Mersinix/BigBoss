@@ -507,10 +507,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         gradientTo: z.string().trim().max(32).optional(),
         gradientDirection: z.string().trim().max(32).optional(),
         subtitle: z.string().trim().max(240).nullable().optional(),
+        subtitleEnabled: z.boolean().optional(),
+        subtitleColorLight: z.string().trim().regex(/^(#[0-9a-fA-F]{6})?$/, "Couleur invalide").optional(),
+        subtitleColorDark: z.string().trim().regex(/^(#[0-9a-fA-F]{6})?$/, "Couleur invalide").optional(),
         height: z.enum(["compact", "medium", "large"]).optional(),
         horizontalAlign: z.enum(["left", "center", "right"]).optional(),
         verticalAlign: z.enum(["top", "center", "bottom"]).optional(),
         infoRowEnabled: z.boolean().optional(),
+        overlayEnabled: z.boolean().optional(),
+        overlayColor: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "Couleur invalide").optional(),
+        overlayOpacity: z.number().int().min(0).max(100).optional(),
       }).parse(req.body);
       const settings = await storage.setServiceHeroConfig(service as any, body);
       broadcast("service_hero_config_updated", settings);

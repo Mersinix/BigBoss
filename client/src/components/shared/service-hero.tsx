@@ -46,6 +46,28 @@ const V_JUSTIFY: Record<ServiceHeroConfig["verticalAlign"], string> = {
   bottom: "justify-end",
 };
 
+function isValidHexColor(c: string): boolean {
+  return /^#[0-9a-fA-F]{6}$/.test(c.trim());
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const clean = isValidHexColor(hex) ? hex.trim() : "#000000";
+  const r = parseInt(clean.slice(1, 3), 16);
+  const g = parseInt(clean.slice(3, 5), 16);
+  const b = parseInt(clean.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha))})`;
+}
+
+// Subtitle text color override (Part 2.2) — each page renders its own
+// subtitle <p>, so this just computes the style to merge onto it; an
+// invalid/empty saved color safely falls back to the page's own existing
+// Tailwind text-color classes (no inline style applied at all).
+export function getHeroSubtitleColorStyle(config: ServiceHeroConfig, isDark: boolean): React.CSSProperties {
+  const raw = isDark ? config.subtitleColorDark : config.subtitleColorLight;
+  if (raw && isValidHexColor(raw)) return { color: raw.trim() };
+  return {};
+}
+
 export function ServiceHeroBackground({ config, defaultBackground }: { config: ServiceHeroConfig; defaultBackground: React.ReactNode }) {
   const images = (config.backgroundImages ?? []).filter((u) => !!u && u.trim().length > 0);
   const [index, setIndex] = useState(0);
@@ -71,6 +93,11 @@ export function ServiceHeroBackground({ config, defaultBackground }: { config: S
   }
 
   if (images.length > 0) {
+    // Configurable overlay (Part 3) — defaults (enabled, black, 30%) match
+    // the overlay this branch previously always rendered unconditionally,
+    // so an unconfigured service's appearance is unchanged.
+    const overlayOn = config.overlayEnabled !== false;
+    const overlayAlpha = (config.overlayOpacity ?? 30) / 100;
     return (
       <>
         {images.map((url, i) => (
@@ -80,7 +107,9 @@ export function ServiceHeroBackground({ config, defaultBackground }: { config: S
             style={{ backgroundImage: `url("${url}")`, opacity: i === index ? 1 : 0 }}
           />
         ))}
-        <div className="absolute inset-0 bg-black/30" />
+        {overlayOn && (
+          <div className="absolute inset-0" style={{ backgroundColor: hexToRgba(config.overlayColor || "#000000", overlayAlpha) }} />
+        )}
       </>
     );
   }

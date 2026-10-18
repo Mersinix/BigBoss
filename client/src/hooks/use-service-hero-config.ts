@@ -21,10 +21,16 @@ export type ServiceHeroConfig = {
   gradientTo: string;
   gradientDirection: string;
   subtitle: string | null;
+  subtitleEnabled: boolean;
+  subtitleColorLight: string;
+  subtitleColorDark: string;
   height: ServiceHeroHeight;
   horizontalAlign: ServiceHeroHAlign;
   verticalAlign: ServiceHeroVAlign;
   infoRowEnabled: boolean;
+  overlayEnabled: boolean;
+  overlayColor: string;
+  overlayOpacity: number;
 };
 
 export type ServiceHeroConfigMap = Record<HeroService, ServiceHeroConfig>;
@@ -38,10 +44,16 @@ export const DEFAULT_SERVICE_HERO_CONFIG: ServiceHeroConfig = {
   gradientTo: "",
   gradientDirection: "to bottom right",
   subtitle: null,
+  subtitleEnabled: true,
+  subtitleColorLight: "",
+  subtitleColorDark: "",
   height: "medium",
   horizontalAlign: "center",
   verticalAlign: "center",
   infoRowEnabled: true,
+  overlayEnabled: true,
+  overlayColor: "#000000",
+  overlayOpacity: 30,
 };
 
 const ALL_SERVICES: HeroService[] = ["SHOP", "BARISTA", "ACADEMY", "MAINTENANCE", "PRINT", "MARKETING"];

@@ -101,6 +101,7 @@ export default function OrdersPage() {
   const [mainView, setMainView] = useState<"active" | "historique">("active");
   const [activeSubView, setActiveSubView] = useState<"old" | "today" | "future">("today");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [priorityFilter, setPriorityFilter] = useState("ALL");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [cafeSearch, setCafeSearch] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
@@ -123,9 +124,9 @@ export default function OrdersPage() {
   const isSupplier = user?.role === "SUPPLIER";
 
   // Supplier workflow "Next" hop (task: "Connect the Complete Order → Delivery Workflow"):
-  // a ?focus=<orderId> query param, set by the Order Requests page's own Next button, singles
-  // out the exact related order regardless of whatever tab/filter/sort/page this page was last
-  // left on — the Supplier should never have to hunt for it manually.
+  // a ?focus=<orderId> query param (same generic deep-link pattern used across the app, e.g.
+  // /driver/deliveries, /delivery/my-deliveries) singles out the exact related order
+  // regardless of whatever tab/filter/sort/page this page was last left on.
   const [, setLocation] = useLocation();
   const searchStr = useSearch();
   const focusOrderId = useMemo(() => {
@@ -172,6 +173,7 @@ export default function OrdersPage() {
       // column only advances once every sub-order completes, so comparing against it directly
       // hid a multi-supplier order under any status besides its slowest supplier's.
       if (!orderMatchesStatus(o, statusFilter)) return false;
+      if (priorityFilter !== "ALL" && ((o as any).priority ?? "NORMAL") !== priorityFilter) return false;
       if (cafeSearch && !o.cafe?.name.toLowerCase().includes(cafeSearch.toLowerCase())) return false;
       if (supplierSearch) {
         const match = (o.subOrders ?? []).some((so: any) => so.supplierName?.toLowerCase().includes(supplierSearch.toLowerCase()));
@@ -192,7 +194,7 @@ export default function OrdersPage() {
       }
       return true;
     });
-  }, [filteredByView, statusFilter, cafeSearch, supplierSearch, productSearch, dateFilter]);
+  }, [filteredByView, statusFilter, priorityFilter, cafeSearch, supplierSearch, productSearch, dateFilter]);
 
   // Default + user-selectable ordering (task: "Default Order Sorting — Newest First" + "Add a
   // Sort Filter"): sorts by each order's actual creation timestamp — the same date/time already
@@ -207,11 +209,11 @@ export default function OrdersPage() {
   }, [filtered, sortOrder]);
 
   const pagination = usePagination(sorted.length);
-  useEffect(() => { pagination.resetPage(); }, [mainView, activeSubView, statusFilter, cafeSearch, supplierSearch, productSearch, dateFilter, sortOrder]);
+  useEffect(() => { pagination.resetPage(); }, [mainView, activeSubView, statusFilter, priorityFilter, cafeSearch, supplierSearch, productSearch, dateFilter, sortOrder]);
   const pageOrders = sorted.slice(pagination.start, pagination.end);
 
-  const clearFilters = () => { setStatusFilter("ALL"); setCafeSearch(""); setSupplierSearch(""); setProductSearch(""); setDateFilter(""); setSortOrder("desc"); };
-  const hasFilters = statusFilter !== "ALL" || cafeSearch || supplierSearch || productSearch || dateFilter || sortOrder !== "desc";
+  const clearFilters = () => { setStatusFilter("ALL"); setPriorityFilter("ALL"); setCafeSearch(""); setSupplierSearch(""); setProductSearch(""); setDateFilter(""); setSortOrder("desc"); };
+  const hasFilters = statusFilter !== "ALL" || priorityFilter !== "ALL" || cafeSearch || supplierSearch || productSearch || dateFilter || sortOrder !== "desc";
 
   const mainViews = [
     { id: "active" as const,     label: "Active Orders", icon: ListChecks, count: buckets.old.length + buckets.today.length + buckets.future.length },
@@ -419,7 +421,17 @@ export default function OrdersPage() {
           </SelectContent>
         </Select>
 
-        {isAdmin && (
+        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+          <SelectTrigger className="w-36 shrink-0" data-testid="select-orders-priority"><SelectValue placeholder="Priorité" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Toute priorité</SelectItem>
+            <SelectItem value="NORMAL">Normale</SelectItem>
+            <SelectItem value="HIGH">Haute</SelectItem>
+            <SelectItem value="URGENT">Urgente</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {(isAdmin || isSupplier) && (
           <div className="relative shrink-0 sm:flex-1 sm:min-w-40">
             {!cafeSearchOpen && (
               <button

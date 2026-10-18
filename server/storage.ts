@@ -1498,9 +1498,16 @@ export class DatabaseStorage implements IStorage {
    * (id, supplierId=caller, status=<the row's own current status>) — reuses the same Delivery
    * row, never creates a second one.
    *
-   * Two entry states are supported:
+   * Four entry states are supported:
    *  - PENDING → a fresh, first-ever dispatch decision (the only case that existed before this
    *    doc's redispatch extension — completely unchanged in behavior/values).
+   *  - AVAILABLE / ACCEPTED, DELIVERY_COMPANY mode only in practice (task: "Update Supplier
+   *    Delivery Reassignment Actions" — "Réassigner" for an external delivery company that
+   *    hasn't accepted yet, or has accepted but not yet assigned its own driver). No driver has
+   *    ever been assigned at this point (assignDriver only runs after ACCEPTED), so nothing is
+   *    frozen yet: isRedispatch stays false for these two, exactly like a fresh PENDING
+   *    dispatch — no ledger void, no pricing-field reset, because there is nothing to void or
+   *    reset.
    *  - ASSIGNED → REDISPATCH (task: "Supplier redispatch before driver confirmation"). The
    *    Supplier can reopen the exact same dispatch decision — Delivery Company / choose a
    *    company / own drivers — while the currently-assigned driver has not yet progressed
@@ -1526,7 +1533,7 @@ export class DatabaseStorage implements IStorage {
   // reproduces today's exact broadcast-to-all behavior.
   async dispatchDelivery(deliveryId: number, supplierId: number, mode: DeliveryMode, targetDeliveryCompanyId?: number): Promise<Delivery> {
     const [current] = await db.select().from(deliveries).where(eq(deliveries.id, deliveryId));
-    if (!current || current.supplierId !== supplierId || !['PENDING', 'ASSIGNED'].includes(current.status)) {
+    if (!current || current.supplierId !== supplierId || !['PENDING', 'AVAILABLE', 'ACCEPTED', 'ASSIGNED'].includes(current.status)) {
       throw new Error('Delivery is not awaiting dispatch, or does not belong to you');
     }
     const isRedispatch = current.status === 'ASSIGNED';

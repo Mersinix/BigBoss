@@ -3519,3 +3519,608 @@ jusqu'au rendu réel :
   fonctionnels directs sur la couche `storage`/API (persistance, scoping,
   rétrocompatibilité). Une vérification visuelle manuelle reste
   recommandée avant mise en production.
+
+---
+
+# Analyse — Consolidate Supplier Order Management
+
+## 1. Audit préalable
+
+### 1.1 Navigation
+
+- `client/src/components/layout/app-sidebar.tsx:184` (avant modification) :
+  entrée « Order Requests » → `/supplier/order-requests`, juste au-dessus de
+  « Orders » → `/orders` dans le même groupe « ORDERS ».
+- `client/src/App.tsx:19` (import) et `:377-379` (route, avant
+  modification) : `/supplier/order-requests` → `OrderRequestsPage`,
+  `allowedRoles=["SUPPLIER"]`, `requireApproved`.
+- Aucune autre page (dashboard fournisseur, notifications, barre mobile)
+  ne pointe vers `/supplier/order-requests` — seule la sidebar y menait.
+- `client/src/pages/supplier/dashboard.tsx` : son lien « Voir tout » pointe
+  déjà vers `/orders`, confirmant que `/orders` est déjà traité comme la
+  destination canonique.
+- Un troisième fichier, `client/src/pages/supplier/orders-page.tsx` (route
+  `/supplier/orders`), existe mais n'est relié à **aucune** entrée de
+  navigation — hors périmètre de cette tâche (non mentionné par la demande,
+  non touché, voir §5).
+
+### 1.2 Comparaison des deux pages
+
+- `client/src/pages/supplier/order-requests-page.tsx` (avant suppression) :
+  utilisait le même hook `useOrders()`/`useUpdateSubOrderStatus()` que tout
+  le reste de l'app, filtrait côté client les sous-commandes du fournisseur
+  connecté (`so.supplierId === user.id`), avec deux onglets (« En attente »
+  = `status==="PENDING"` avec boutons Approuver/Refuser directement sur la
+  carte, et « Historique »). Un bouton « Suivant » renvoyait vers
+  `/orders?focus={orderId}`.
+- `client/src/pages/shared/orders-page.tsx` (`/orders`) : même hook, mêmes
+  données, inclut déjà PENDING dans `STATUS_OPTS` et dans la liste (aucune
+  commande n'est masquée). Cliquer sur une carte PENDING ouvre
+  `SupplierOrderDetailsModal` **sans** `readOnly` (donc `readOnly=false`
+  par défaut) — le picklist complet `SUPPLIER_NEXT_STATUSES`
+  (PENDING → Accepter/Refuser inclus) y est donc déjà pleinement
+  fonctionnel, juste un clic plus profond (carte → modal) que le bouton
+  direct de l'ancien onglet.
+- Deux capacités UI existaient sur Order Requests et étaient absentes de
+  `/orders` : un filtre de priorité (NORMAL/HIGH/URGENT) et la recherche
+  par nom de café, réservée à `isAdmin` sur `/orders` alors qu'Order
+  Requests l'exposait aussi au Fournisseur.
+
+### 1.3 Backend / API / hooks / permissions / schéma
+
+- Aucun hook dédié : pas de `use-order-requests.ts` — les deux pages
+  utilisent le même `client/src/hooks/use-orders.ts`.
+- Aucune route ni méthode `storage` dédiée : `GET /api/orders`
+  (`server/routes.ts`, filtre `supplierId = user.id` pour le rôle
+  SUPPLIER) et `PATCH /api/suborders/:id/status` (vérifie
+  `subOrder.supplierId !== user.id → 403`) sont les deux seuls points
+  utilisés par les deux pages — aucun n'est exclusif à Order Requests,
+  tous deux restent utilisés par `/orders` et par d'autres pages.
+- Aucune table `order_requests` dans `shared/schema.ts` — uniquement
+  `orders`/`sub_orders`, les mêmes que `/orders` lit. « Order Requests »
+  n'était qu'un filtre d'affichage côté client (`status === "PENDING"`)
+  sur les mêmes lignes.
+- Permissions identiques des deux côtés : même filtrage
+  `supplierId = user.id` côté lecture, même garde `403` côté écriture —
+  aucun chemin d'autorisation séparé.
+- **Conclusion de l'audit** : rien côté backend/schéma/hooks ne deviendrait
+  du code mort — seule la page frontend et sa route/entrée de navigation
+  sont concernées par la suppression.
+
+## 2. Implémentation
+
+### 2.1 Suppression de l'onglet et de la page
+
+- Entrée « Order Requests » retirée de `app-sidebar.tsx` (groupe
+  « ORDERS »), import `ClipboardCheck` devenu inutile retiré avec elle.
+- `client/src/pages/supplier/order-requests-page.tsx` supprimé (vérifié
+  par grep qu'aucun autre fichier ne l'importait avant suppression).
+- La route `/supplier/order-requests` est conservée mais ne rend plus la
+  page retirée : un nouveau composant `SupplierOrderRequestsRedirect`
+  (`App.tsx`) redirige vers `/orders`. Il est rendu par `ProtectedRoute`
+  avec les mêmes `allowedRoles={["SUPPLIER"]}`/`requireApproved` qu'avant —
+  un utilisateur non autorisé est donc toujours redirigé vers `/` par
+  `ProtectedRoute` lui-même, avant même d'atteindre le composant de
+  redirection ; impossible de contourner l'authentification ou les
+  restrictions d'accès fournisseur via cette route retirée.
+
+### 2.2 Capacités migrées vers `/orders` (`pages/shared/orders-page.tsx`)
+
+- Ajout d'un filtre de priorité (`priorityFilter`, state + `<Select>`
+  Toute priorité/Normale/Haute/Urgente) dans la barre de filtres, intégré
+  à `filtered`/`clearFilters`/`hasFilters`/réinitialisation de pagination —
+  exactement le même traitement que les filtres déjà existants, sans
+  nouvelle architecture.
+- La recherche par nom de café (`cafeSearch`), auparavant réservée à
+  `isAdmin`, est désormais aussi visible pour `isSupplier` (recherche
+  fournisseur par nom reste réservée à l'Admin, inchangée — un fournisseur
+  n'a pas besoin de chercher par son propre nom).
+- Commentaire du mécanisme `?focus=<orderId>` mis à jour pour ne plus
+  nommer la page retirée (le mécanisme lui-même est un motif générique déjà
+  réutilisé ailleurs dans l'app — `/driver/deliveries`,
+  `/delivery/my-deliveries` — donc conservé tel quel, sans modification de
+  comportement).
+- Aucune autre partie de `/orders` modifiée : cartes, statuts, pagination,
+  tri, recherche produit, actions Admin (suppression), workflow de
+  livraison — tous inchangés.
+
+## 3. Garde-fous respectés
+
+- Aucune donnée ni table de commande supprimée ou modifiée ; `GET
+  /api/orders` et `PATCH /api/suborders/:id/status` sont restés
+  totalement intacts (aucun fichier serveur touché, confirmé par
+  `git status`).
+- `/orders` n'a pas été redessiné — uniquement deux filtres ajoutés dans
+  la même barre de filtres existante, selon le même style que les filtres
+  déjà présents.
+- Les rôles Admin, Coffee Owner (page dédiée inchangée), Driver et
+  Delivery Company ne sont pas affectés — seules les lignes concernant le
+  Fournisseur dans le filtre de recherche café ont changé de condition de
+  garde (`isAdmin` → `isAdmin || isSupplier`).
+- `/supplier/orders` (troisième page orpheline, non reliée à la navigation)
+  explicitement laissée inchangée — hors périmètre de cette tâche.
+- Les permissions d'accès aux commandes (lecture et écriture) n'ont subi
+  aucune modification — uniquement des champs/filtres d'affichage ajoutés
+  côté client sur des données déjà correctement scoping.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur) ; taille du bundle
+  légèrement réduite (un module de moins).
+- Grep final : zéro référence restante à `order-requests-page`/
+  `OrderRequestsPage` dans tout le dépôt (client + serveur).
+- Redémarrage du serveur de dev ; `GET /api/orders` répond toujours (401
+  attendu sans authentification, confirmant que la route existe toujours
+  et n'a pas été supprimée par erreur).
+- Script temporaire (`scratch-test-orders.ts`, supprimé après usage)
+  appelant directement `storage.getOrders({ supplierId: 9 })` : confirme
+  que la couche de données partagée (incluant les statuts de
+  sous-commande) reste pleinement fonctionnelle après le retrait de la
+  page Order Requests.
+- `git status --short` final : uniquement `App.tsx`,
+  `app-sidebar.tsx`, `orders-page.tsx` modifiés et
+  `order-requests-page.tsx` supprimé — aucun fichier serveur, schéma, ou
+  rôle non lié touché.
+
+## 5. Résumé des livrables
+
+1. **Navigation/page supprimées** : entrée « Order Requests » dans
+   `app-sidebar.tsx` ; fichier `pages/supplier/order-requests-page.tsx` ;
+   import correspondant dans `App.tsx`. La route reste présente mais
+   redirige désormais vers `/orders` (`SupplierOrderRequestsRedirect`),
+   protégée par les mêmes contrôles de rôle/approbation qu'avant.
+2. **Fonctionnalités migrées vers `/orders`** : filtre de priorité
+   (NORMAL/HIGH/URGENT) et recherche par nom de café désormais disponible
+   pour le rôle Fournisseur (déjà disponible pour Admin) — Accepter/Refuser
+   une commande PENDING restait déjà possible via la modale de détails de
+   `/orders`, aucune migration nécessaire pour cette action.
+3. **APIs/dépendances backend conservées** : `GET /api/orders`, `PATCH
+   /api/suborders/:id/status`, `storage.getOrders`/`storage` associé,
+   `client/src/hooks/use-orders.ts`, `SupplierOrderDetailsModal` — tous
+   partagés avec `/orders` et d'autres pages, aucun n'était exclusif à
+   Order Requests, aucun supprimé.
+4. **Hors périmètre, signalé sans être modifié** : `/supplier/orders`
+   (troisième page, non reliée à la navigation) et le routage des
+   notifications fournisseur vers cette même page orpheline — un détail
+   préexistant, indépendant de cette tâche, relevé par l'audit mais non
+   traité ici (aucune instruction ne le demandait, et le traiter aurait
+   dépassé le périmètre strict de consolidation demandé).
+
+## 6. Limites connues
+
+- Aucun navigateur réel disponible pour vérifier visuellement la
+  redirection de `/supplier/order-requests` ou le nouveau filtre de
+  priorité/recherche café dans l'UI réelle de `/orders` ; vérifié par
+  lecture de code, type-checking strict, build de production réussi, et
+  test fonctionnel direct de la couche de données partagée. Une
+  vérification visuelle manuelle (navigation fournisseur, actions
+  Accepter/Refuser depuis la modale) reste recommandée avant mise en
+  production.
+
+---
+
+# Analyse — Unify Supplier Delivery Management
+
+## 1. Audit préalable
+
+### 1.1 Navigation
+
+- `client/src/App.tsx:396-398` : `/supplier/delivery-status` → `DeliveryStatusPage`
+  directement, `allowedRoles=["SUPPLIER"]`.
+- `client/src/App.tsx:858-860` (avant modification) : `/delivery/my-deliveries` →
+  `MyDeliveriesRoute`, `allowedRoles=["DELIVERY_COMPANY","SUPPLIER"]` — route
+  **partagée**, branchée par rôle à l'exécution : `SUPPLIER` →
+  `SupplierMyDeliveriesPage` (la page à retirer) ; tout autre rôle (en
+  pratique `DELIVERY_COMPANY`) → redirection vers
+  `/delivery/business?tab=my-deliveries`, qui rend un fichier **totalement
+  différent** (`pages/delivery/my-deliveries-page.tsx`, rôle Entreprise de
+  livraison) — fichier non concerné par cette tâche, non touché.
+- `client/src/components/delivery/supplier-delivery-tabs.tsx` : switcher à 4
+  onglets partagé par les 4 pages fournisseur de livraison (Delivery
+  Status/My Deliveries/Drivers/Véhicules) — seule l'entrée « My Deliveries »
+  retirée, le composant lui-même conservé (toujours utilisé par Drivers et
+  Véhicules).
+- `client/src/pages/supplier/delivery-status-page.tsx` (avant modification),
+  ligne ~494-503 : seul lien restant vers My Deliveries — un bouton
+  « Suivant » sur toute carte `deliveryMode === "SUPPLIER"` non annulée,
+  menant à `/delivery/my-deliveries?focus={orderId}`.
+- Aucune entrée de sidebar, aucune navigation de notification, aucun widget
+  de dashboard ne pointait vers My Deliveries — confirmé par recherche
+  exhaustive dans le client.
+
+### 1.2 Comparaison des deux pages
+
+- `/supplier/delivery-status` (avant modification) : récupère **toutes**
+  les livraisons du fournisseur via `useDeliveries()`, affiche déjà chaque
+  carte avec son mode (« Chauffeurs du fournisseur » / « Entreprise de
+  livraison », champ `deliveryMode` lu tel qu'enregistré en base, jamais
+  déduit côté client), le chauffeur assigné s'il existe
+  (`Chauffeur: {d.driver.name}`), et déjà deux actions : « Dispatcher »
+  (status PENDING) et « Changer de chauffeur » (status ASSIGNED, **toute
+  mode confondu** — rouvre déjà le même `DispatchDialog` complet, incluant
+  la ré-sélection « Mes chauffeurs »).
+- `/delivery/my-deliveries` (Fournisseur, avant suppression) : sous-
+  ensemble strict des mêmes données (`deliveryMode === "SUPPLIER"`
+  uniquement), avec `AssignDriverControl` (Select chauffeur +
+  bouton « Assigner », status ACCEPTED) et un bouton « Réassigner » (status
+  ASSIGNED) qui ouvrait **déjà** le même `DispatchDialog` importé de
+  Delivery Status — confirmé par le commentaire du fichier lui-même : l'
+  ancien contrôle de réassignation dédié avait déjà été remplacé par ce
+  `DispatchDialog` partagé.
+- **Conclusion** : la seule capacité réellement absente de Delivery Status
+  était `AssignDriverControl` (status ACCEPTED) — la réassignation était
+  déjà unifiée des deux côtés.
+
+### 1.3 Traçage assignation/réassignation (frontend → backend)
+
+- `useAssignDriver()`/`useDispatchDelivery()`/`useSupplierDrivers`
+  (`client/src/hooks/use-deliveries.ts`) → `PATCH /api/deliveries/:id/assign`
+  / `PATCH /api/deliveries/:id/dispatch` / `GET /api/supplier/drivers` —
+  tous partagés avec la page Delivery Company équivalente
+  (`pages/delivery/my-deliveries-page.tsx`), aucun n'est exclusif au
+  Fournisseur.
+- `useReassignDriver()` (`use-delivery-ecosystem.ts`) →
+  `PATCH /api/deliveries/:id/reassign` — confirmé **non utilisé** par
+  l'UI Fournisseur actuelle (le bouton « Réassigner » ouvre `DispatchDialog`
+  à la place) mais toujours utilisé par la page Delivery Company — route et
+  méthode `storage.reassignDriver` à conserver intactes malgré ce non-usage
+  côté Fournisseur.
+- `server/storage.ts` : `dispatchDelivery` (mise à jour atomique
+  `WHERE (id, supplierId, status)`, transaction unique, void des entrées de
+  ledger `CALCULATED` en cas de redispatch), `assignDriver` (vérifie la
+  propriété du chauffeur par le fournisseur, compatibilité véhicule,
+  sécurité météo, mise à jour atomique `WHERE status='ACCEPTED'`, écrit les
+  entrées financières dans la même transaction, clé d'idempotence basée sur
+  `assignmentSequence`), `reassignDriver` (garde `status==='ASSIGNED'`
+  uniquement, no-op explicite sur le ledger si le chauffeur ne change pas
+  réellement) — **aucune de ces méthodes n'a été modifiée** par cette
+  tâche (confirmé par `git status`, zéro fichier serveur touché).
+
+### 1.4 Dépendances partagées à préserver vs. exclusives à My Deliveries
+
+- À préserver (utilisées ailleurs) : `useDeliveries`, `useAssignDriver`,
+  `useDispatchDelivery`, `useSupplierDrivers`, `useReassignDriver`,
+  `DispatchDialog`/`CompanyBrowseView` (restent définis et utilisés dans
+  `delivery-status-page.tsx`), `DeliveryDetails`/`DELIVERY_STATUS_META`/
+  `DELIVERY_MODE_LABEL`, `SupplierDeliveryTabs` (composant conservé, seule
+  son entrée éditée), toutes les routes/méthodes backend d'assignation et
+  le code de ledger financier.
+- Exclusif à My Deliveries (candidats réels à la suppression) :
+  `client/src/pages/supplier/my-deliveries-page.tsx` (fichier entier),
+  l'instance de `AssignDriverControl` qui y était définie (migrée, pas
+  dupliquée), la branche `SUPPLIER` de `MyDeliveriesRoute`, l'entrée « My
+  Deliveries » du switcher, le bouton « Suivant » de Delivery Status qui y
+  menait.
+
+## 2. Implémentation
+
+### 2.1 Migration de l'assignation sur les cartes Delivery Status
+
+- `client/src/pages/supplier/delivery-status-page.tsx` : `AssignDriverControl`
+  migré tel quel (mêmes hooks `useSupplierDrivers`/`useAssignDriver`, même
+  mutation `PATCH /api/deliveries/:id/assign`) depuis l'ancienne page, rendu
+  désormais directement sur la carte quand `d.status === "ACCEPTED" &&
+  d.deliveryMode === "SUPPLIER"` — condition vérifiée sur des données
+  réelles en base (voir §4) couvrant exactement les livraisons
+  précédemment affichées sur My Deliveries dans cet état.
+- Le contrôle est enveloppé dans un `<div onClick={(e) =>
+  e.stopPropagation()}>` pour empêcher l'ouverture de la modale de détails
+  (ajoutée récemment sur cette page, absente de l'ancienne) quand on
+  interagit avec le sélecteur/bouton — même technique que les boutons
+  existants (`e.stopPropagation()` dans leurs handlers).
+- Affichage du nom du chauffeur assigné : **déjà présent** sur Delivery
+  Status (`Chauffeur: {d.driver.name}`), aucune modification nécessaire.
+- Réassignation : **déjà unifiée** avant cette tâche (les deux pages
+  ouvraient déjà le même `DispatchDialog`) — le bouton existant « Changer
+  de chauffeur » (status ASSIGNED) a été conservé sans renommage ni
+  changement de comportement, pour rester la plus petite modification
+  sûre possible (même action, déjà fonctionnelle, déjà correctement
+  habilitée indépendamment du mode).
+- Le bouton « Suivant » qui renvoyait vers My Deliveries a été retiré (plus
+  de page de destination) ; l'import `ArrowRight` (devenu inutile) retiré
+  avec lui.
+
+### 2.2 Retrait de My Deliveries (Partie 4)
+
+- `client/src/pages/supplier/my-deliveries-page.tsx` supprimé (vérifié par
+  grep qu'aucun autre fichier ne l'importait avant suppression, hors
+  commentaires).
+- `client/src/App.tsx` : import retiré ; `MyDeliveriesRoute` modifié pour
+  que la branche `SUPPLIER` redirige désormais vers
+  `/supplier/delivery-status` au lieu de rendre la page retirée — la
+  branche `DELIVERY_COMPANY` (redirection vers
+  `/delivery/business?tab=my-deliveries`) reste inchangée. La route
+  `/delivery/my-deliveries` elle-même reste enregistrée avec les mêmes
+  `allowedRoles={["DELIVERY_COMPANY","SUPPLIER"]}`/`requireApproved` via
+  `ProtectedRoute`, donc un utilisateur non autorisé est toujours redirigé
+  vers `/` avant même d'atteindre la redirection — impossible de contourner
+  l'authentification ou les restrictions d'accès via cette route retirée.
+- `client/src/components/delivery/supplier-delivery-tabs.tsx` : entrée
+  « My Deliveries » retirée du tableau `TABS` ; composant lui-même
+  conservé (toujours utilisé par Drivers/Véhicules).
+
+## 3. Garde-fous respectés
+
+- **Aucun fichier serveur touché** (`git status` confirme zéro diff sous
+  `server/`) : `storage.assignDriver`/`reassignDriver`/`dispatchDelivery`,
+  les routes `PATCH /api/deliveries/:id/{assign,reassign,dispatch}`, les
+  vérifications de propriété chauffeur/livraison, les transitions d'état,
+  les écritures de ledger financier et les clés d'idempotence sont restés
+  strictement inchangés — l'intégrité financière est garantie par
+  construction, pas seulement par test.
+- Aucun enregistrement de livraison dupliqué : l'assignation migrée appelle
+  exactement la même mutation `useAssignDriver` sur le même `delivery.id`.
+- Aucune permission affaiblie : la page reste protégée par le même
+  `ProtectedRoute allowedRoles={["SUPPLIER"]}` qu'avant ; les vérifications
+  de propriété chauffeur/livraison restent côté serveur, jamais dupliquées
+  côté client.
+- Distinction Chauffeurs du fournisseur / Entreprise de livraison
+  entièrement préservée : la nouvelle condition d'affichage teste
+  explicitement `d.deliveryMode === "SUPPLIER"`, jamais inférée du badge de
+  statut affiché — aucune action d'assignation fournisseur n'apparaît sur
+  une livraison `DELIVERY_COMPANY` (vérifié sur données réelles, §4).
+- Rôles Driver/Delivery Company/Admin non affectés : `pages/delivery/my-
+  deliveries-page.tsx` (Entreprise de livraison, fichier différent) non
+  touché ; ses propres hooks (`useReassignDriver`, `useDeliveryCompanyDrivers`)
+  non modifiés.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- `git status --short` final : uniquement `App.tsx`,
+  `supplier-delivery-tabs.tsx`, `delivery-status-page.tsx` modifiés et
+  `my-deliveries-page.tsx` (Fournisseur) supprimé — **zéro fichier serveur,
+  schéma, ou page Delivery Company/Driver touché**.
+- Grep final : zéro référence restante à `SupplierMyDeliveriesPage`/
+  `supplier/my-deliveries-page` en dehors de commentaires explicatifs ;
+  toutes les autres occurrences de « My Deliveries »/`my-deliveries-page`
+  restantes dans le dépôt pointent vers le fichier distinct de l'Entreprise
+  de livraison (`pages/delivery/my-deliveries-page.tsx`), confirmé non
+  concerné par cette tâche.
+- Redémarrage du serveur de dev ; `GET /api/deliveries` répond toujours
+  (401 attendu sans authentification, confirmant que la route existe
+  toujours).
+- **Vérification sur données réelles** (lecture seule, via
+  `storage.getDeliveries(2, "SUPPLIER")`, script temporaire supprimé après
+  usage) : confirmé que les 46 livraisons réelles du fournisseur #2
+  produisent exactement le comportement attendu avec la nouvelle
+  condition —
+  - Livraisons #44/#45 (`ACCEPTED`, `SUPPLIER`, aucun chauffeur) →
+    `AssignDriverControl` s'affiche, comme sur l'ancienne page My
+    Deliveries.
+  - Livraison #53 (`ACCEPTED`, `DELIVERY_COMPANY`) → aucune action
+    d'assignation fournisseur affichée (correct — ce n'est pas au
+    fournisseur d'assigner un chauffeur pour une livraison gérée par une
+    entreprise externe).
+  - Livraisons #17/#10 (`ASSIGNED`, `SUPPLIER`, chauffeur « Ahmed ») →
+    nom du chauffeur affiché + bouton « Changer de chauffeur » disponible.
+  - Toutes les livraisons `ASSIGNED` en mode `DELIVERY_COMPANY` → bouton
+    « Changer de chauffeur » toujours disponible, comportement inchangé.
+  - Aucune requête d'écriture exécutée pendant cette vérification —
+    lecture seule, aucune donnée réelle modifiée.
+
+## 5. Résumé des livrables
+
+1. **Fichiers modifiés** : `client/src/App.tsx`,
+   `client/src/components/delivery/supplier-delivery-tabs.tsx`,
+   `client/src/pages/supplier/delivery-status-page.tsx`. **Fichier
+   supprimé** : `client/src/pages/supplier/my-deliveries-page.tsx`.
+2. **Intégration assignation/réassignation** : `AssignDriverControl` migré
+   sur les cartes Delivery Status (condition `ACCEPTED` + mode
+   `SUPPLIER`) ; la réassignation (« Changer de chauffeur ») était déjà
+   unifiée entre les deux pages avant cette tâche et reste inchangée.
+3. **Retrait de My Deliveries** : page supprimée, route
+   `/delivery/my-deliveries` conservée mais redirige désormais la branche
+   Fournisseur vers `/supplier/delivery-status` (via `ProtectedRoute`,
+   mêmes contrôles de rôle/approbation qu'avant) ; entrée de switcher
+   retirée ; bouton « Suivant » obsolète retiré.
+4. **APIs/dépendances backend conservées** : `PATCH
+   /api/deliveries/:id/{assign,reassign,dispatch}`, `storage.assignDriver`/
+   `reassignDriver`/`dispatchDelivery`, tout le code de ledger financier et
+   d'idempotence, `useReassignDriver` (toujours utilisé par la page
+   Entreprise de livraison) — aucun fichier serveur modifié.
+5. **Tests financiers/autorisation** : confirmés par construction (zéro
+   diff serveur) plutôt que par mutation de données réelles — aucune
+   écriture de test effectuée sur `assignDriver`/`reassignDriver`/ledger
+   pour ne jamais risquer de données financières réelles ; la couverture
+   fonctionnelle a porté sur la lecture de données réelles (§4) pour
+   confirmer la logique d'affichage des cartes.
+
+## 6. Limites connues
+
+- Aucun navigateur réel disponible pour cliquer effectivement sur
+  « Assigner »/« Changer de chauffeur » dans l'UI ; vérifié par lecture de
+  code, type-checking strict, build de production réussi, et lecture
+  directe de données réelles confirmant que chaque état de livraison
+  existant produit la bonne action sur la carte. Une vérification
+  manuelle en conditions réelles (assignation effective, retour
+  utilisateur, absence d'erreurs console) reste recommandée avant mise en
+  production.
+- Aucune écriture de test effectuée sur les mutations d'assignation elles-
+  mêmes (délibéré, pour ne pas risquer de créer de vraies entrées de
+  ledger/notifications sur des comptes réels) — la garantie d'intégrité
+  financière repose sur le fait qu'aucun fichier serveur n'a été modifié,
+  pas sur un test d'exécution de la mutation.
+
+---
+
+# Analyse — Update Supplier Delivery Reassignment Actions
+
+## 1. Audit préalable
+
+### 1.1 État actuel de la carte (avant modification)
+
+- Fichier concerné : `client/src/pages/supplier/delivery-status-page.tsx`,
+  fonction `renderDeliveryCard`.
+- Libellés de statut (`DELIVERY_STATUS_META`,
+  `components/delivery/delivery-details.tsx:15-17`) :
+  `AVAILABLE` → « Disponible », `ACCEPTED` → « Acceptée », `ASSIGNED` →
+  « Assignée ».
+- Avant cette tâche, la zone d'actions ne s'affichait que pour :
+  `PENDING` (bouton Dispatcher), `ASSIGNED` (bouton « Changer de
+  chauffeur », ouvre `DispatchDialog`), et `ACCEPTED` **uniquement** en
+  mode `SUPPLIER` (contrôle `AssignDriverControl`, migré lors de la tâche
+  précédente). **Aucune action n'existait pour `AVAILABLE`, ni pour
+  `ACCEPTED` en mode `DELIVERY_COMPANY`.**
+
+### 1.2 Cause du vide fonctionnel — `storage.dispatchDelivery`
+
+- `server/storage.ts:1527-1531` (avant modification) : la garde de statut
+  n'acceptait que `['PENDING', 'ASSIGNED']`. Appeler cette méthode depuis
+  `AVAILABLE` ou `ACCEPTED` aurait donc levé l'erreur « Delivery is not
+  awaiting dispatch, or does not belong to you » — il n'existe **aucun
+  autre** mécanisme de réassignation vers une entreprise de livraison
+  externe ailleurs dans le code (confirmé par recherche exhaustive de
+  `reassign` dans `server/routes.ts` : la seule route `/reassign`
+  existante, `PATCH /api/deliveries/:id/reassign`, appelle
+  `storage.reassignDriver`, qui ne gère que le changement de **chauffeur**
+  sur une livraison déjà `ASSIGNED`, jamais le changement d'entreprise de
+  livraison).
+- Conclusion : le bouton « Réassigner » demandé pour `Disponible`/
+  `Acceptée` (entreprise de livraison) ne pouvait fonctionner qu'en
+  réutilisant le même `DispatchDialog`/`dispatchDelivery` déjà utilisé pour
+  `PENDING`/`ASSIGNED`, ce qui nécessite d'élargir la garde de statut de
+  cette méthode — changement backend minimal mais réel, nécessaire pour
+  que le bouton demandé soit fonctionnel plutôt qu'une simple façade
+  renvoyant une erreur à chaque clic.
+
+### 1.3 Pourquoi ce changement est sûr financièrement
+
+- `isRedispatch` (ligne `const isRedispatch = current.status === 'ASSIGNED'`)
+  reste **inchangé** — seul `status === 'ASSIGNED'` déclenche le
+  nettoyage du ledger (`updateLedgerEntriesStatus(..., 'CALCULATED',
+  'VOID', tx)`) et la réinitialisation des champs de prix/paiement figés.
+  Pour `AVAILABLE`/`ACCEPTED`, aucun chauffeur n'a jamais été assigné à ce
+  stade (`assignDriver` ne s'exécute qu'après `ACCEPTED`), donc aucune
+  entrée de ledger n'existe encore pour cette livraison — rien à annuler,
+  rien à réinitialiser. Le chemin « nouvelle dispatch » (sans réinitialiser
+  les champs de prix) s'applique simplement une seconde fois, exactement
+  comme pour une livraison `PENDING` qui n'a jamais été dispatchée.
+- Le contrôle de propriété (`current.supplierId !== supplierId`) et la
+  mise à jour atomique par comparaison-et-échange
+  (`WHERE (id, supplierId, status=current.status)`) restent identiques et
+  s'appliquent de la même manière, quel que soit le statut de départ.
+
+## 2. Implémentation
+
+### 2.1 Backend (`server/storage.ts`, `server/routes.ts`)
+
+- `storage.dispatchDelivery` : garde de statut élargie de
+  `['PENDING', 'ASSIGNED']` à `['PENDING', 'AVAILABLE', 'ACCEPTED',
+  'ASSIGNED']`. Aucune autre ligne de la méthode modifiée — `isRedispatch`,
+  la transaction, la mise à jour atomique, et toute la logique de
+  réinitialisation restent exactement comme avant.
+- Docstring de la méthode (`server/storage.ts`, juste au-dessus) et
+  commentaire de la route `PATCH /api/deliveries/:id/dispatch`
+  (`server/routes.ts`) mis à jour pour documenter les deux nouveaux états
+  d'entrée.
+- Aucune autre route, aucun autre endpoint, aucune logique de ledger/
+  notification modifiée.
+
+### 2.2 Frontend (`client/src/pages/supplier/delivery-status-page.tsx`)
+
+- Condition d'affichage de la zone d'actions élargie pour inclure
+  `ACCEPTED` (tout mode) et `AVAILABLE` + mode `DELIVERY_COMPANY`.
+- Nouveau bouton « Réassigner » (`data-testid="button-reassign-available-
+  ${d.id}"`) pour `status === "AVAILABLE" && deliveryMode ===
+  "DELIVERY_COMPANY"` — appelle `setDispatchTarget(d)`, exactement le même
+  handler que les boutons Dispatcher/Changer de chauffeur existants, ouvre
+  le même `DispatchDialog` partagé.
+- Nouveau bouton « Réassigner » (`data-testid="button-reassign-accepted-
+  ${d.id}"`) pour `status === "ACCEPTED" && deliveryMode ===
+  "DELIVERY_COMPANY"` — même mécanisme. Le cas `ACCEPTED && deliveryMode
+  === "SUPPLIER"` (déjà `AssignDriverControl`, tâche précédente) reste
+  totalement inchangé et distinct — les deux branches ne peuvent jamais
+  se chevaucher puisque `deliveryMode` ne prend qu'une seule valeur par
+  livraison.
+- Bouton existant `ASSIGNED` : libellé changé de « Changer de chauffeur »
+  à « Réassigner » — aucune autre modification (même `onClick`, même
+  `data-testid`, même position/style).
+- Aucun autre élément de la page (filtres, compteurs, pagination, détails,
+  navigation) modifié.
+
+## 3. Garde-fous respectés
+
+- Aucune donnée ni table de livraison supprimée ; aucun historique modifié.
+- Aucun enregistrement dupliqué : le bouton « Réassigner » agit toujours
+  sur `d.id`, la même ligne `deliveries`.
+- Aucune permission affaiblie : le contrôle de propriété
+  (`current.supplierId !== supplierId`) et `requireApprovedSupplier` sur la
+  route restent inchangés.
+- Distinction Chauffeurs du fournisseur / Entreprise de livraison
+  préservée : les nouveaux boutons ne s'affichent que pour
+  `deliveryMode === "DELIVERY_COMPANY"`, jamais pour les livraisons
+  gérées par les propres chauffeurs du fournisseur à ces statuts
+  (`ACCEPTED && SUPPLIER` garde son propre contrôle `AssignDriverControl`,
+  distinct et inchangé).
+- Aucun changement de tarification, de frais, de paiement chauffeur, ni
+  d'entrée de ledger (voir §1.3) — confirmé par lecture de code ET par
+  test fonctionnel réversible (voir §4).
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- Redémarrage du serveur de dev ; aucune erreur dans les logs serveur
+  après redémarrage.
+- **Test fonctionnel réversible sur donnée réelle** (livraison #53,
+  fournisseur #2, `status=ACCEPTED`, `deliveryMode=DELIVERY_COMPANY`,
+  `deliveryCompanyId=29`) :
+  1. Capture de l'état exact de la ligne avant modification.
+  2. Appel direct de `storage.dispatchDelivery(53, 2, "DELIVERY_COMPANY")`
+     (sans cible précise — équivalent du choix « Entreprise de livraison »
+     du dialogue) depuis le statut `ACCEPTED` — **confirmé réussi** (ne
+     levait plus d'erreur comme avant le changement) : la ligne passe à
+     `status="AVAILABLE"`, `deliveryCompanyId=null`, exactement le
+     comportement attendu du bouton « Réassigner ».
+  3. Ligne restaurée explicitement à son état exact d'origine
+     (`status`, `deliveryMode`, `deliveryCompanyId`, `acceptedAt`) via une
+     requête SQL ciblée sur les 4 colonnes modifiées, confirmée par la
+     clause `RETURNING` de la requête elle-même.
+  4. Aucune entrée de ledger créée ou modifiée pendant ce test (confirmé
+     par construction : `isRedispatch` est resté `false` sur ce chemin,
+     donc `updateLedgerEntriesStatus` n'a jamais été appelée).
+- Le cas `AVAILABLE` n'a pas été testé séparément en écriture (même chemin
+  de code exact que `ACCEPTED`, seule la valeur testée dans le même
+  tableau de statuts autorisés change) — jugé redondant par rapport au
+  test ci-dessus pour un risque équivalent sur des données réelles ;
+  confirmé uniquement par lecture de code et par la présence de
+  livraisons réelles `AVAILABLE`/`DELIVERY_COMPANY` en base (fournisseur
+  #2, 2 lignes, constaté lors de l'audit de la tâche précédente).
+- `git status --short` final : uniquement `server/storage.ts`,
+  `server/routes.ts` (commentaires + garde de statut élargie) et
+  `client/src/pages/supplier/delivery-status-page.tsx` modifiés.
+
+## 5. Résumé des livrables
+
+1. **Fichiers modifiés** : `server/storage.ts` (garde de statut de
+   `dispatchDelivery` élargie, docstring mise à jour),
+   `server/routes.ts` (commentaire de route mis à jour),
+   `client/src/pages/supplier/delivery-status-page.tsx` (deux nouveaux
+   boutons « Réassigner », un libellé renommé).
+2. **Changement backend nécessaire** : la garde de statut de
+   `storage.dispatchDelivery` a dû être élargie de
+   `['PENDING','ASSIGNED']` à `['PENDING','AVAILABLE','ACCEPTED','ASSIGNED']`
+   — sans cela, les boutons demandés auraient échoué à chaque clic. Aucune
+   autre logique (ledger, notifications, transactions, contrôle de
+   propriété) modifiée.
+3. **Réutilisation** : les trois boutons « Réassigner » (Disponible/
+   Acceptée pour entreprise externe, Assignée pour chauffeur) ouvrent tous
+   le même `DispatchDialog` déjà existant — aucun second système de
+   réassignation créé.
+4. **Tests financiers/autorisation** : vérifiés par lecture de code (zéro
+   changement du chemin ledger) et par un test fonctionnel réversible en
+   base réelle, restauré explicitement à l'identique après coup.
+
+## 6. Limites connues
+
+- Aucun navigateur réel disponible pour cliquer effectivement sur les
+  nouveaux boutons dans l'UI ; vérifié par lecture de code, type-checking
+  strict, build de production réussi, et test fonctionnel direct
+  (réversible) de la méthode backend concernée.
+- Le cas `AVAILABLE` a été vérifié uniquement par lecture de code et
+  données réelles existantes, pas par une mutation réversible dédiée
+  (voir §4) — risque jugé négligeable étant le même chemin de code que le
+  cas `ACCEPTED` testé.

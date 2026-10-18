@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useSearch } from "wouter";
-import { useDeliveries, useDispatchDelivery } from "@/hooks/use-deliveries";
+import { useDeliveries, useDispatchDelivery, useAssignDriver, useSupplierDrivers } from "@/hooks/use-deliveries";
 import { useDeliveryCompanyProfiles } from "@/hooks/use-delivery-company-marketplace";
 import { DeliveryCompanyDetailModal } from "@/components/delivery/delivery-company-detail-modal";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
-import { Truck, CheckCircle, Clock, MapPin, Package, Search, X, Building2, User as UserIcon, Star, ChevronLeft, Users as UsersIcon, ArrowRight } from "lucide-react";
+import { Truck, CheckCircle, Clock, MapPin, Package, Search, X, Building2, User as UserIcon, Star, ChevronLeft, Users as UsersIcon } from "lucide-react";
 import { formatDate } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import SupplierDeliveryTabs from "@/components/delivery/supplier-delivery-tabs";
@@ -108,11 +108,46 @@ function CompanyBrowseView({ delivery, onBack, onClose }: { delivery: DeliveryWi
   );
 }
 
-// Also reused by supplier/my-deliveries-page.tsx (task: "Supplier redispatch before driver
-// confirmation") — the exact same "Comment livrer cette commande ?" choice now doubles as the
-// redispatch flow when opened for an ASSIGNED-but-not-yet-picked-up delivery (see
-// storage.dispatchDelivery's isRedispatch branch). Exported rather than duplicated so both
-// pages share one modal implementation, never a second dispatch system.
+// Migrated from the retired supplier/my-deliveries-page.tsx (task: "Unify Supplier Delivery
+// Management" — move driver assignment onto the Delivery Status card itself). Same hooks
+// (useSupplierDrivers/useAssignDriver → PATCH /api/deliveries/:id/assign) as before, not a new
+// assignment workflow — only the card it renders on changed.
+function AssignDriverControl({ delivery }: { delivery: DeliveryWithDetails }) {
+  const { data: drivers = [] } = useSupplierDrivers();
+  const assignDriver = useAssignDriver();
+  const { toast } = useToast();
+  const [selected, setSelected] = useState<string>("");
+
+  return (
+    <div className="flex items-center gap-2 w-full" onClick={(e) => e.stopPropagation()}>
+      <Select value={selected} onValueChange={setSelected}>
+        <SelectTrigger className="h-8 flex-1 min-w-0 text-xs" data-testid={`select-assign-driver-${delivery.id}`}><SelectValue placeholder="Choisir un chauffeur" /></SelectTrigger>
+        <SelectContent>
+          {drivers.length === 0 && <div className="px-2 py-1.5 text-xs text-muted-foreground">Aucun chauffeur — ajoutez-en un</div>}
+          {drivers.map((d) => <SelectItem key={d.id} value={String(d.id)} className="text-xs">{d.name}</SelectItem>)}
+        </SelectContent>
+      </Select>
+      <Button
+        size="sm"
+        className="h-8 text-xs shrink-0"
+        disabled={!selected || assignDriver.isPending}
+        data-testid={`button-assign-driver-${delivery.id}`}
+        onClick={() => assignDriver.mutate({ deliveryId: delivery.id, driverId: Number(selected) }, {
+          onSuccess: () => toast({ title: "Chauffeur assigné" }),
+          onError: (err: any) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
+        })}
+      >
+        Assigner
+      </Button>
+    </div>
+  );
+}
+
+// Also reused by the (now retired) supplier/my-deliveries-page.tsx's redispatch button — the
+// exact same "Comment livrer cette commande ?" choice now doubles as the redispatch flow when
+// opened for an ASSIGNED-but-not-yet-picked-up delivery (see storage.dispatchDelivery's
+// isRedispatch branch). Exported in case another page needs it later; this page remains its
+// single owner/implementation — never a second dispatch system.
 export function DispatchDialog({ delivery, onClose }: { delivery: DeliveryWithDetails; onClose: () => void }) {
   const dispatch = useDispatchDelivery();
   const { toast } = useToast();
@@ -476,30 +511,43 @@ export default function SupplierDeliveryStatusPage() {
 
           {/* Actions — the card itself now opens Details on click, so these stop
               their own click from bubbling up and re-triggering that. */}
-          {(d.status === "PENDING" || d.status === "ASSIGNED" || (d.deliveryMode === "SUPPLIER" && d.status !== "CANCELLED")) && (
+          {(d.status === "PENDING" || d.status === "ASSIGNED" || d.status === "ACCEPTED" || (d.status === "AVAILABLE" && d.deliveryMode === "DELIVERY_COMPANY")) && (
             <div className="flex items-center justify-end gap-2 pt-1">
               {d.status === "PENDING" && (
                 <Button size="sm" onClick={(e) => { e.stopPropagation(); setDispatchTarget(d); }}>Dispatcher</Button>
               )}
-              {/* Redispatch (task: "Supplier redispatch before driver confirmation") — the
-                  driver is assigned but has not yet progressed past ASSIGNED (i.e. not yet
-                  picked up), so the Supplier can still reopen the full dispatch choice,
-                  regardless of which mode is currently assigned. */}
-              {d.status === "ASSIGNED" && (
-                <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setDispatchTarget(d); }} data-testid={`button-reassign-status-${d.id}`}>Changer de chauffeur</Button>
+              {/* Réassigner — AVAILABLE, external delivery company (task: "Update Supplier
+                  Delivery Reassignment Actions"): the company pool hasn't accepted it yet, so
+                  the Supplier can reopen the same dispatch choice to pick a different company
+                  or own drivers. Reuses DispatchDialog/storage.dispatchDelivery as-is — no
+                  driver was ever assigned at this point, so nothing is voided/reset. */}
+              {d.status === "AVAILABLE" && d.deliveryMode === "DELIVERY_COMPANY" && (
+                <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setDispatchTarget(d); }} data-testid={`button-reassign-available-${d.id}`}>Réassigner</Button>
               )}
-              {/* Next: Supplier workflow hop to My Deliveries, once this delivery has been
-                  dispatched to the Supplier's own drivers ("Mes chauffeurs"). The outer
-                  condition above already guarantees d.status isn't CANCELLED here. */}
-              {d.deliveryMode === "SUPPLIER" && (
-                <Button
-                  size="sm"
-                  className="h-8 text-xs gap-1"
-                  onClick={(e) => { e.stopPropagation(); setLocation(`/delivery/my-deliveries?focus=${d.orderId}`); }}
-                  data-testid={`button-next-delivery-${d.id}`}
-                >
-                  Suivant <ArrowRight className="w-3.5 h-3.5" />
-                </Button>
+              {/* Driver assignment (migrated from the retired supplier/my-deliveries-page.tsx,
+                  task: "Unify Supplier Delivery Management") — only once dispatched to the
+                  Supplier's own drivers ("Mes chauffeurs") and still awaiting one. Same
+                  AssignDriverControl/hooks as before, now rendered directly on this card
+                  instead of requiring a hop to a separate page. */}
+              {d.status === "ACCEPTED" && d.deliveryMode === "SUPPLIER" && (
+                <AssignDriverControl delivery={d} />
+              )}
+              {/* Réassigner — ACCEPTED, external delivery company (task: "Update Supplier
+                  Delivery Reassignment Actions"): that company has accepted but hasn't yet
+                  assigned its own driver, so the Supplier can still take it back. Same reuse as
+                  the AVAILABLE case above. */}
+              {d.status === "ACCEPTED" && d.deliveryMode === "DELIVERY_COMPANY" && (
+                <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setDispatchTarget(d); }} data-testid={`button-reassign-accepted-${d.id}`}>Réassigner</Button>
+              )}
+              {/* Réassigner — ASSIGNED (task: "Supplier redispatch before driver confirmation",
+                  label updated by "Update Supplier Delivery Reassignment Actions" from "Changer
+                  de chauffeur" to "Réassigner" — same handler/behavior, label only). The driver
+                  is assigned but has not yet progressed past ASSIGNED (i.e. not yet picked up),
+                  so the Supplier can still reopen the full dispatch choice (including re-picking
+                  a different own driver via "Mes chauffeurs"), regardless of which mode is
+                  currently assigned. */}
+              {d.status === "ASSIGNED" && (
+                <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); setDispatchTarget(d); }} data-testid={`button-reassign-status-${d.id}`}>Réassigner</Button>
               )}
             </div>
           )}

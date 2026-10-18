@@ -6050,8 +6050,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Supplier's dispatch decision — a PENDING delivery's first-ever dispatch, OR (task:
   // "Supplier redispatch before driver confirmation") an ASSIGNED-but-not-yet-picked-up
-  // delivery being redispatched to a different mode/company/own-drivers via the exact same
-  // "Comment livrer cette commande ?" choice. See storage.dispatchDelivery().
+  // delivery being redispatched, OR (task: "Update Supplier Delivery Reassignment Actions") an
+  // AVAILABLE/ACCEPTED external-delivery-company delivery being reassigned before it has a
+  // driver — all via the exact same "Comment livrer cette commande ?" choice. See
+  // storage.dispatchDelivery().
   app.patch('/api/deliveries/:id/dispatch', requireApprovedSupplier, async (req: any, res) => {
     try {
       const deliveryId = parseInt(req.params.id);

@@ -16,7 +16,6 @@ import CategoriesPage from "@/pages/supplier/categories-page";
 import StorePage from "@/pages/supplier/store-page";
 import StoreDetailPage from "@/pages/cafe/store-detail-page";
 import InventoryPage from "@/pages/supplier/inventory-page";
-import OrderRequestsPage from "@/pages/supplier/order-requests-page";
 import SupplierOrdersPage from "@/pages/supplier/orders-page";
 import ReturnsPage from "@/pages/supplier/returns-page";
 import DeliveryStatusPage from "@/pages/supplier/delivery-status-page";
@@ -48,7 +47,6 @@ import DeliveryDashboard from "@/pages/delivery/dashboard";
 import DeliveryCompanySettingsPage from "@/pages/delivery/settings-page";
 import DeliveryCompanyBusiness from "@/pages/delivery/business";
 import DriverDeliveriesPage from "@/pages/delivery/driver-deliveries-page";
-import SupplierMyDeliveriesPage from "@/pages/supplier/my-deliveries-page";
 import SupplierDeliveryDriversPage from "@/pages/supplier/delivery-drivers-page";
 import SupplierVehiclesPage from "@/pages/supplier/vehicles-page";
 import { DriverAccountShell } from "@/components/layout/driver-account-shell";
@@ -215,6 +213,17 @@ function CafeMessagesRedirect() {
   return <Spinner />;
 }
 
+// Retired: /supplier/order-requests (the "Order Requests" tab) was a client-side
+// PENDING-only filter over the same /orders data a Supplier already manages in full
+// (accept/reject included, via the order's own Details modal) — consolidated into
+// /orders so there is a single supplier order-management entry point. Kept as a
+// redirect (not deleted outright) so old bookmarks/links land somewhere useful;
+// ProtectedRoute's own allowedRoles/requireApproved checks below still run first,
+// so this cannot be used to bypass authentication or supplier access restrictions.
+function SupplierOrderRequestsRedirect() {
+  return <Redirect to="/orders" />;
+}
+
 function GatedServiceRoute({ service, component: Component }: { service: ServiceKey; component: any }) {
   const { states, isLoading } = useServiceStates();
   const { user, isLoading: authLoading } = useAuth();
@@ -253,9 +262,15 @@ function SmartDashboard() {
 // Business (business.tsx's internal switcher) instead of directly at these
 // URLs — Supplier's branch is completely untouched, still rendered at the
 // exact same path via DashboardLayout as before.
+// Supplier's "My Deliveries" page was retired (task: "Unify Supplier Delivery Management") —
+// its driver-assignment/reassignment actions now live directly on Delivery Status's cards, so
+// a Supplier hitting this URL (old bookmark/link) lands there instead. ProtectedRoute's own
+// allowedRoles={["DELIVERY_COMPANY","SUPPLIER"]}/requireApproved checks below still run first,
+// so this cannot be used to bypass authentication or supplier access restrictions. Delivery
+// Company's own branch (redirect into Business → Mes livraisons) is untouched.
 function MyDeliveriesRoute() {
   const { user } = useAuth();
-  if (user?.role === "SUPPLIER") return <SupplierMyDeliveriesPage />;
+  if (user?.role === "SUPPLIER") return <Redirect to="/supplier/delivery-status" />;
   return <Redirect to="/delivery/business?tab=my-deliveries" />;
 }
 function DriversRoute() {
@@ -375,7 +390,7 @@ function Router() {
         {() => (<DashboardLayout><ProtectedRoute component={InventoryPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/order-requests">
-        {() => (<DashboardLayout><ProtectedRoute component={OrderRequestsPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
+        {() => (<DashboardLayout><ProtectedRoute component={SupplierOrderRequestsRedirect} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
       <Route path="/supplier/orders">
         {() => (<DashboardLayout><ProtectedRoute component={SupplierOrdersPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}

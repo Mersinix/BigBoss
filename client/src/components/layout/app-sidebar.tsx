@@ -8,7 +8,7 @@ import {
   ClipboardList, Truck, Users, LogOut, Coffee,
   ShieldCheck, DollarSign, FileText, BarChart2,
   MessageCircle, Settings,
-  Folder, Warehouse, ClipboardCheck, RotateCcw,
+  Folder, Warehouse, RotateCcw,
   MapPin, Wallet, Tag, Ticket, HelpCircle,
   Printer, Megaphone, GraduationCap, Image, Briefcase,
    BookOpen, UserCheck, Sliders, Target, Wrench, PanelLeftIcon, Activity
@@ -181,7 +181,6 @@ export function AppSidebar() {
         {
           label: "ORDERS",
           items: [
-            { title: "Order Requests", url: "/supplier/order-requests", icon: ClipboardCheck },
             { title: "Orders", url: "/orders", icon: ClipboardList },
             { title: "Order Delivery", url: "/supplier/delivery-status", icon: MapPin },
             { title: "Returns", url: "/supplier/returns", icon: RotateCcw },

@@ -4124,3 +4124,449 @@ jusqu'au rendu réel :
   données réelles existantes, pas par une mutation réversible dédiée
   (voir §4) — risque jugé négligeable étant le même chemin de code que le
   cas `ACCEPTED` testé.
+
+---
+
+# Analyse — Admin Services Hero Personalization Reorganization
+
+## 1. Audit préalable
+
+### 1.1 Les deux composants actuels
+
+- `HeroActionsSection` (`client/src/pages/admin/system-management-page.tsx:356-433`) :
+  carte indépendante listant les 6 services (`HERO_SERVICES`), chacun avec
+  2 switches (Recherche rapide / Signaler). Persistance : table
+  `heroActionSettings` (une ligne par service, `shared/schema.ts`), lue via
+  `GET /api/hero-actions` (`useHeroActionSettings()`,
+  `client/src/hooks/use-hero-actions.ts`), écrite via
+  `PATCH /api/admin/hero-actions/:service` (`requireAdmin`). Application
+  **immédiate** à chaque bascule de switch (pas de brouillon/Enregistrer —
+  `updateMutation.mutate` part dès `onCheckedChange`).
+- `ServiceHeroCustomizationSection` (lignes 461-856 avant modification) :
+  carte séparée avec sélecteur des 6 services, puis pour le service
+  sélectionné : brouillon local (`draft`, distinct de la valeur enregistrée
+  `saved`) couvrant arrière-plan (images/rotation/calque), dégradé,
+  sous-titre (texte/visibilité/couleurs clair-sombre), hauteur/position,
+  ligne d'info, plus un aperçu en direct et des boutons Enregistrer/
+  Réinitialiser explicites. Persistance : table `serviceHeroConfigs`
+  (`GET /api/service-hero-config`, `PATCH
+  /api/admin/service-hero-config/:service`) — **table et route
+  entièrement distinctes** de celles de `HeroActionsSection`.
+- **Les deux composants sont déjà rendus à la suite dans l'onglet
+  « Services »** (`<HeroActionsSection /><ServiceHeroCustomizationSection
+  />`, ~ligne 2528-2529) — doublon d'interface explicitement visé par
+  cette tâche, pas de doublon de données (les deux tables restent
+  distinctes et nécessaires).
+
+### 1.2 Mécanique de persistance — ce qui doit rester séparé
+
+- Les deux tables (`heroActionSettings` et `serviceHeroConfigs`) sont
+  **volontairement distinctes** dans l'implémentation existante (commentaire
+  explicite dans `shared/schema.ts` : « Separate table/key set again (same
+  reasoning as heroActionSettings above) »). Aucune preuve que les fusionner
+  apporterait un bénéfice ; la tâche demande explicitement de ne pas
+  renommer/supprimer de champs sans nécessité prouvée. **Décision : fusion
+  de l'interface uniquement, les deux tables/routes/hooks backend restent
+  inchangés.**
+- Conséquence directe : Recherche rapide/Signaler continuent de
+  s'appliquer **immédiatement** au clic (comme avant), indépendamment du
+  brouillon/bouton Enregistrer du reste du hero (arrière-plan/sous-titre/
+  position) — ce sont deux mécanismes de sauvegarde différents, rendus
+  dans la même carte mais gardant chacun son propre comportement existant.
+  Mélanger les deux dans un seul brouillon aurait changé le comportement
+  observable (un admin pourrait s'attendre à ce que Recherche rapide se
+  sauvegarde immédiatement, comme aujourd'hui) — risque explicitement à
+  éviter par la tâche (« preserve existing behavior »).
+
+### 1.3 Partage entre services
+
+- Aucun champ n'est partagé entre services : chaque ligne des deux tables
+  est scoping par `service` (clé unique), et chaque composant ne lit/écrit
+  jamais qu'un seul service à la fois (`selected`). Changer de service
+  dans le sélecteur ne fait que changer quelle ligne est lue/affichée —
+  aucune fuite de configuration entre services possible par construction
+  (confirmé par le test de la tâche "Unify Supplier Delivery Management"
+  et par simple lecture : `draft`/`local` sont toujours réinitialisés
+  depuis la valeur serveur du service nouvellement sélectionné).
+
+### 1.4 Aperçu — fidélité actuelle
+
+- `ServiceHeroCustomizationSection`'s preview utilise déjà le même
+  composant partagé `ServiceHeroShell`/`ServiceHeroBackground` que les 6
+  vraies pages (pas de logique de rendu dupliquée) — arrière-plan/calque/
+  dégradé/sous-titre/couleur/ligne d'info déjà fidèles au brouillon en
+  cours d'édition.
+- **Absent avant cette tâche** : aucune représentation des actions Hero
+  (Recherche rapide/Signaler) dans l'aperçu — logique, puisque ces
+  réglages vivaient dans un composant séparé, sans lien avec `draft`.
+
+### 1.5 Risques identifiés
+
+- Risque de régression de persistance si les 2 switches sont absorbés
+  dans le `draft`/`saveMutation` existant (nécessiterait un appel API
+  combiné, inexistant, ou deux appels dont un seul serait fiable) — évité
+  en gardant leur mutation immédiate indépendante (§1.2).
+  Risque de confusion si la carte entière devient trop longue sur mobile —
+  traité en §2 (disposition en une seule colonne empilée, aperçu avant les
+  réglages).
+- Risque de faux sentiment de fonctionnement si l'aperçu affichait des
+  icônes cliquables pour Recherche rapide/Signaler — traité en rendant ces
+  icônes purement visuelles (`<div>`, pas `<button>`, aucun gestionnaire
+  de clic).
+- Aucun risque de compatibilité arrière identifié : aucune table, route,
+  champ ni valeur par défaut n'est modifiée par cette tâche — uniquement
+  la disposition et l'emplacement des contrôles dans l'interface Admin.
+
+## 2. Implémentation
+
+### 2.1 Fusion de l'interface
+
+- `HeroActionsSection` (fonction entière, lignes 356-433) supprimée après
+  migration de sa logique dans `ServiceHeroCustomizationSection` : mêmes
+  hooks (`useHeroActionSettings`), même mutation
+  (`PATCH /api/admin/hero-actions/:service`), même pattern de state local
+  optimiste (`local`/`value`) — recopié à l'identique, simplement reciblé
+  sur le service actuellement sélectionné (`selected`) au lieu d'itérer
+  les 6 services dans sa propre carte.
+- Les deux switches (Recherche rapide/Signaler) rendus dans une nouvelle
+  sous-section « Actions Hero » clairement séparée (`border
+  border-border/50 rounded-xl p-4`, même style que les autres blocs),
+  placée dans la colonne de gauche sous Arrière-plan/Dégradé.
+- Appel `<HeroActionsSection />` retiré de l'onglet Services.
+
+### 2.2 Nouvelle disposition
+
+- Structure reconstruite dans l'ordre exact demandé : titre (inchangé,
+  description complétée pour mentionner les actions) → sélecteur de
+  service (inchangé, pleine largeur) → **aperçu pleine largeur avec
+  boutons Enregistrer/Réinitialiser juste en dessous** (déplacé hors de la
+  grille à deux colonnes) → grille à deux colonnes :
+  - **Colonne gauche** : Images d'arrière-plan (+ rotation + calque),
+    Dégradé personnalisé, puis Actions Hero (Recherche rapide/Signaler).
+  - **Colonne droite** : Sous-titre (texte/défaut/visibilité/couleurs
+    clair-sombre), Hauteur & Position, Ligne d'info.
+- Sur mobile (`grid-cols-1` hérité, aucune classe ajoutée en dessous de
+  `lg:`), l'ordre source place déjà l'aperçu avant les deux colonnes de
+  réglages, qui s'empilent verticalement — satisfait "preview before
+  configuration controls" sans code responsive supplémentaire.
+- Aperçu enrichi : nouveau `controlsRow` (prop déjà supportée par
+  `ServiceHeroShell`, utilisée par les vraies pages) affichant une icône
+  Recherche rapide/Signaler **uniquement si activée** pour le service
+  sélectionné — rendu en `<div>` simples (jamais `<button>`), sans
+  `onClick`, pour qu'une interaction ne déclenche jamais d'action réelle.
+
+## 3. Garde-fous respectés
+
+- Aucune table, route, ou champ backend modifié — `heroActionSettings`
+  et `serviceHeroConfigs` restent deux mécanismes de persistance distincts
+  et inchangés (vérifié par `git status`, zéro fichier serveur touché).
+- Aucune configuration existante réinitialisée : chaque service continue
+  de charger sa propre ligne dans chacune des deux tables, exactement
+  comme avant.
+- Aucune synchronisation involontaire entre services : la mutation des
+  actions Hero cible explicitement `selected`, jamais une boucle sur les 6
+  services.
+- Comportement de sauvegarde préservé à l'identique : Recherche rapide/
+  Signaler restent à application immédiate (pas de brouillon), le reste du
+  hero reste à brouillon + Enregistrer explicite — aucun changement de
+  comportement observable pour un admin déjà familier avec l'un ou
+  l'autre mécanisme.
+- Authentification/autorisation inchangées : mêmes routes
+  `requireAdmin`/`PATCH .../:service` qu'avant.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- `git status --short` final : **un seul fichier applicatif modifié**
+  (`client/src/pages/admin/system-management-page.tsx`) + `analyse.md` —
+  aucun fichier serveur, schéma, route ou hook touché, confirmant que la
+  persistance des deux fonctionnalités (`heroActionSettings` et
+  `serviceHeroConfigs`) est restée strictement inchangée.
+- Redémarrage du serveur de dev ; `GET /api/hero-actions` et
+  `GET /api/service-hero-config` répondent tous les deux avec leurs
+  données réelles existantes (ex. SHOP affiche toujours ses images
+  d'arrière-plan et son `infoRowEnabled: false` déjà enregistrés par une
+  tâche précédente), confirmant qu'aucune configuration existante n'a été
+  réinitialisée ou perdue par la réorganisation de l'interface.
+- Grep final : zéro référence restante à `HeroActionsSection` en dehors
+  des commentaires explicatifs mis à jour ; `HERO_SERVICES`, `Zap`,
+  `Search`, `Flag` et les autres identifiants partagés confirmés toujours
+  utilisés ailleurs dans le fichier (aucun import désormais mort).
+- Relecture manuelle de la nouvelle structure JSX : titre → sélecteur
+  (pleine largeur) → aperçu pleine largeur + boutons Enregistrer/
+  Réinitialiser → grille à deux colonnes (gauche : Arrière-plan, Dégradé,
+  Actions Hero ; droite : Sous-titre, Hauteur & Position, Ligne d'info) —
+  conforme à la hiérarchie demandée. Sur mobile, l'absence de classes
+  `lg:` sur les wrappers fait retomber l'ensemble en une seule colonne
+  dans l'ordre source (aperçu avant les réglages), sans code responsive
+  dédié supplémentaire.
+- Revue des gestionnaires d'aperçu : les icônes Recherche rapide/Signaler
+  de l'aperçu sont des `<div>` sans `onClick` — confirmé par relecture
+  qu'aucune interaction ne peut déclencher la vraie mutation ou une action
+  de service réelle.
+
+## 5. Résumé des livrables
+
+1. **Fichier modifié** : `client/src/pages/admin/system-management-page.tsx`
+   uniquement. Aucun fichier serveur, schéma, route ou hook touché.
+2. **Fusion réalisée** : les switches Recherche rapide/Signaler de
+   l'ancienne carte « Actions Hero Services » sont désormais dans une
+   sous-section « Actions Hero » à l'intérieur de « Personnalisation des
+   Hero Services » (colonne gauche), scopée au service actuellement
+   sélectionné. La carte séparée et sa fonction `HeroActionsSection` ont
+   été supprimées une fois la migration vérifiée.
+3. **Persistance inchangée** : `heroActionSettings`/`GET+PATCH
+   /api/(admin/)hero-actions` (Recherche rapide/Signaler, application
+   immédiate) et `serviceHeroConfigs`/`GET+PATCH
+   /api/(admin/)service-hero-config` (le reste, brouillon + Enregistrer)
+   restent deux mécanismes totalement distincts et inchangés — confirmé
+   par l'absence de tout diff serveur.
+4. **Nouvelle disposition** : titre → sélecteur pleine largeur → aperçu
+   pleine largeur (avec Enregistrer/Réinitialiser) → deux colonnes de
+   réglages, conforme point par point à la hiérarchie demandée dans la
+   tâche.
+5. **Aperçu enrichi** : reflète désormais aussi l'état Recherche
+   rapide/Signaler du service sélectionné, sans jamais pouvoir déclencher
+   une action réelle (icônes non interactives).
+
+## 6. Risques restants / limites connues
+
+- Aucun navigateur réel disponible pour valider visuellement la
+  disposition responsive exacte (colonnes/empilement mobile) ; vérifié
+  par lecture de code (classes Tailwind `grid-cols-1 lg:grid-cols-2`
+  déjà utilisées ailleurs dans ce même fichier pour un résultat
+  identique) et par build de production réussi.
+- Léger changement de timing non fonctionnel : les switches Recherche
+  rapide/Signaler attendent désormais le même état de chargement
+  (`isLoading`) que le reste du hero (puisqu'ils sont rendus dans le même
+  bloc conditionnel) au lieu d'avoir leur propre état de chargement
+  indépendant comme avant. Les deux requêtes sont rapides et mises en
+  cache ; aucun impact fonctionnel constaté, mais signalé par exhaustivité
+  puisque ce n'est pas un comportement strictement identique au pixel/
+  milliseconde près.
+
+---
+
+# Analyse — Hero Personalization UI Reorganization and Theme Consistency
+
+## 1. Audit préalable
+
+### 1.1 Le toggle clair/sombre réel du Coffee Owner
+
+- `client/src/components/cafe/marketplace-layout.tsx` (navbar réelle,
+  ~ligne 3231-3243) : bouton unique, pas deux boutons séparés —
+  `onClick={() => toggle()}` (store global), `aria-label="Toggle theme"`,
+  classes `w-8 h-8 rounded-full flex items-center justify-center
+  transition-colors shrink-0`, fond `bg-gray-800 hover:bg-gray-700` (sombre)
+  / `bg-gray-100 hover:bg-gray-200` (clair), icône `Sun` `text-amber-400`
+  quand sombre actif / `Moon` `text-gray-500` quand clair actif.
+- `client/src/store/theme-store.ts` : **store Zustand global unique**,
+  explicitement documenté comme partagé par « l'ensemble de l'application
+  Coffee Owner ». **Risque identifié** : appeler `toggle()` directement
+  depuis l'aperçu Admin modifierait ce même état global partagé — exactement
+  le risque que la tâche interdit explicitement (« must not unexpectedly
+  change... the coffee owner's saved theme preference »). **Décision** :
+  réutiliser l'icône/les classes exactes du bouton réel, mais le câbler sur
+  l'état local `previewDark` déjà existant dans le composant Admin, jamais
+  sur `useThemeStore`/`toggle()`.
+
+### 1.2 Icônes réelles des actions Hero (Recherche rapide / Signaler)
+
+Vérifié directement dans les 5 pages réelles qui les affichent déjà
+(Maintenance/Barista/Academy/Print/Marketing — SHOP n'en a pas encore,
+voir §1.4) :
+
+- **Signaler** (`reportEnabled`) → icône `Ban`, uniforme sur les 5
+  services : `w-8 h-8 rounded-full flex items-center justify-center
+  transition-all`, sombre = `bg-gray-800 hover:bg-gray-700 text-red-400`,
+  clair = `bg-white/20 hover:bg-white/30 text-white`.
+- **Recherche rapide** (`fastSearchEnabled`) → icône `Zap`, même fond,
+  couleur d'accent **spécifique à chaque service en mode sombre** (blanc
+  uniforme en mode clair) : Maintenance=`orange-400`, Barista=`green-400`,
+  Academy=`indigo-400`, Print=`blue-400`, Marketing=`purple-400`.
+- L'ancien composant utilisait des icônes génériques (`Search`/`Flag`),
+  sans rapport avec les vraies icônes (`Zap`/`Ban`) — écart identifié et
+  corrigé (voir §2).
+
+### 1.3 Comment le vrai hero applique les thèmes — éléments vérifiés un par un
+
+- **Icône de service** (boîte arrondie) : sombre = `bg-gray-800/80 border
+  border-gray-700` + icône `text-amber-400` ; clair = `bg-white/20` + icône
+  `text-white`. L'aperçu codait en dur le traitement clair, sans jamais
+  basculer avec `previewDark` — corrigé.
+- **Titre** : "BigBoss" toujours `text-white` (confirmé identique sur les
+  6 services) ; le nom du service (span) suit `text-amber-400`
+  (sombre)/`text-amber-200` (clair), uniforme sur les 6 — l'aperçu codait
+  en dur `text-amber-200` sans branchement — corrigé.
+- **Sous-titre et ligne d'info (couleur par défaut)** : sombre = `text-
+  white` sur les 6 services (vérifié par grep direct) ; clair = une teinte
+  pastel **spécifique à chaque service** (`amber-100` Shop, `orange-100`
+  Maintenance, `green-100` Barista, `indigo-100` Academy, `blue-100`
+  Print, `purple-100` Marketing) — l'aperçu codait en dur `text-amber-
+  50/90`/`text-amber-50/80` indépendamment du service et du thème —
+  corrigé via une nouvelle table `SERVICE_LIGHT_TEXT`.
+- **Arrière-plan par défaut (quand aucune image/dégradé personnalisé
+  n'est configuré)** : radicalement différent par service — Shop et
+  Maintenance utilisent un dégradé CSS pur (couleurs différentes entre
+  eux) ; Barista et Academy partagent la même image réelle
+  (`baristaHeroImg`) avec un calque de couleur différent (vert vs indigo) ;
+  Print et Marketing utilisent chacun leur propre image
+  (`printBannerImg`/`marketingHeroImg`). **L'aperçu utilisait un dégradé
+  gris/ambre générique identique pour les 6 services, sans aucun rapport
+  avec le vrai arrière-plan par défaut de chacun** — écart majeur, corrigé
+  en réimportant les mêmes fichiers image que les vraies pages et en
+  reproduisant exactement chaque branche JSX (voir §2).
+- **Calque transparent, dégradé personnalisé, rotation d'images** : déjà
+  fidèles avant cette tâche — l'aperçu utilise déjà le composant partagé
+  réel `ServiceHeroBackground`/`ServiceHeroShell` pour tout ce qui est
+  **configuré par l'admin** ; seul le **repli par défaut** (`
+  defaultBackground`, utilisé quand rien n'est configuré) était un
+  générique non fidèle.
+
+### 1.4 Cas particulier : Shop
+
+- SHOP n'a aujourd'hui aucune icône Recherche rapide/Signaler réelle sur
+  sa page (commentaire existant dans `HERO_SERVICES` : « SHOP has no Fast
+  Search/Report icons yet »). Son seul bouton d'action réel est « Flash
+  Mode » (`Zap` rempli `text-amber-400 fill-amber-400`, non branché par
+  thème). En l'absence d'équivalent réel pour Recherche rapide/Signaler,
+  la table `SERVICE_FASTSEARCH_ACCENT_DARK`/`SERVICE_LIGHT_TEXT` utilise
+  `amber` pour Shop — la couleur déjà établie et réellement utilisée par
+  Shop ailleurs sur sa propre page, plutôt qu'une couleur inventée.
+
+### 1.5 Risques identifiés avant implémentation
+
+- Risque de fuite du thème global si le bouton d'aperçu appelait
+  `useThemeStore`/`toggle()` — évité en gardant `previewDark` strictement
+  local au composant (§1.1).
+- Risque de classes Tailwind non générées si des noms de classes étaient
+  construits dynamiquement par interpolation de chaîne (ex.
+  `` `to-${accent}-950/90` ``) — évité en écrivant chaque branche par
+  service en JSX explicite et littéral, copié verbatim depuis le fichier
+  réel correspondant, plutôt qu'en templating les noms de classes.
+- Aucun risque de régression de données : aucune table, route, champ ou
+  comportement de sauvegarde n'est concerné par cette tâche — uniquement
+  la fidélité visuelle de l'aperçu et l'ordre d'affichage des panneaux de
+  configuration.
+
+## 2. Implémentation
+
+### 2.1 Réorganisation de la colonne droite
+
+- `client/src/pages/admin/system-management-page.tsx` : la section
+  « Actions Hero » déplacée de la colonne gauche vers la colonne droite,
+  nouvel ordre exact dans la colonne droite : **Actions Hero → Hauteur &
+  Position → Sous-titre → Ligne d'info sous le sous-titre**. Colonne
+  gauche inchangée dans son contenu (Images d'arrière-plan, Rotation,
+  Calque transparent, Couleur/Opacité du calque, Dégradé personnalisé) —
+  seule son commentaire a été mis à jour pour ne plus mentionner Actions
+  Hero.
+- Aucun réglage supprimé, renommé ou dont le comportement a changé —
+  uniquement leur position dans le DOM/la grille.
+
+### 2.2 Remplacement des boutons Clair/Sombre
+
+- Les deux `Button` « Clair »/« Sombre » remplacés par un bouton unique
+  reproduisant exactement le markup/les classes du vrai toggle de la
+  navbar Coffee Owner (`marketplace-layout.tsx`), câblé sur l'état local
+  `previewDark` existant (jamais sur `useThemeStore`). `aria-label` et
+  `title` distincts de ceux du vrai bouton (« Aperçu — basculer... » / «
+  Aperçu uniquement — n'affecte pas le thème réel ») pour que
+  l'utilisateur comprenne sans ambiguïté qu'il s'agit d'un contrôle
+  d'aperçu, pas du vrai sélecteur de thème de l'application.
+- Conservé à son emplacement d'origine (ligne d'en-tête au-dessus de la
+  boîte d'aperçu, à côté du libellé « Aperçu — {service} ») — satisfait
+  « dans la zone d'aperçu du hero », « ne doit pas perturber la
+  disposition existante de l'aperçu », et reste trivialement « facile à
+  trouver sur desktop et mobile » puisqu'aucune nouvelle position/
+  mécanique de superposition n'a été introduite.
+
+### 2.3 Icônes des actions Hero — panneau de configuration et aperçu
+
+- Dans le panneau de configuration « Actions Hero » (colonne droite) :
+  icônes des libellés remplacées par `Zap` (Recherche rapide, au lieu de
+  `Search`) et `Ban` (Signaler, au lieu de `Flag`) — mêmes couleurs
+  `text-muted-foreground` qu'avant pour une icône de libellé de formulaire
+  (traitement de bouton circulaire complet réservé à l'aperçu, voir
+  ci-dessous).
+- Dans l'aperçu (`controlsRow` du `ServiceHeroShell`) : icônes remplacées
+  par les boutons circulaires `w-8 h-8 rounded-full` exacts du vrai hero —
+  `Ban` rouge-400 (sombre)/blanc (clair) pour Signaler, `Zap` avec l'accent
+  du service sélectionné (sombre)/blanc (clair) pour Recherche rapide —
+  toujours rendus en `<div>` sans `onClick`, jamais en élément interactif.
+
+### 2.4 Fidélité complète de l'aperçu au vrai hero (Partie 5)
+
+- `defaultBackground` : nouveau composant `PreviewDefaultBackground({
+  service, isDark })` reproduisant exactement la branche par défaut de
+  chacune des 6 vraies pages (dégradés CSS pour Shop/Maintenance, images
+  réelles réimportées pour Barista/Academy/Print/Marketing) — remplace le
+  dégradé générique gris/ambre précédent.
+- Boîte d'icône du service : branchée sur `previewDark` (`bg-gray-800/80
+  border border-gray-700` + icône ambre en sombre, `bg-white/20` + icône
+  blanche en clair) au lieu du traitement clair codé en dur.
+- Span coloré du nom de service dans le titre : branché
+  `previewDark ? "text-amber-400" : "text-amber-200"` au lieu de la
+  valeur fixe précédente.
+- Couleur par défaut du sous-titre et de la ligne d'info : désormais
+  `previewDark ? "text-white" : SERVICE_LIGHT_TEXT[selected]` (nouvelle
+  table par service) au lieu d'une teinte ambre générique fixe — la
+  surcharge de couleur personnalisée (`getHeroSubtitleColorStyle`) reste
+  strictement inchangée et continue de primer quand une couleur valide
+  est enregistrée pour le thème actif.
+- Calque transparent, dégradé personnalisé, rotation d'images : déjà
+  fidèles (§1.3), aucun changement de code nécessaire au-delà du nouveau
+  `defaultBackground` ci-dessus.
+
+## 3. Garde-fous respectés
+
+- Aucun fichier serveur, route, schéma ou hook touché (confirmé par
+  `git status`) — uniquement `system-management-page.tsx`.
+- Aucune configuration existante réinitialisée, aucune valeur par défaut
+  modifiée au niveau des données — uniquement la fidélité visuelle de
+  l'aperçu et l'ordre d'affichage des panneaux.
+- `useThemeStore`/`toggle()` jamais appelé depuis l'aperçu — confirmé par
+  lecture de code : `previewDark` reste un `useState` local au composant,
+  totalement isolé du store global et de toute préférence réelle
+  sauvegardée.
+- Aucune icône dupliquée ni changement d'icône ailleurs dans
+  l'application : `Zap`/`Ban`/`Sun`/`Moon` sont les icônes déjà utilisées
+  par les vraies pages — seules leurs occurrences génériques
+  (`Search`/`Flag`, boutons Clair/Sombre) dans ce composant Admin ont été
+  remplacées ; aucun fichier de page réelle n'a été modifié.
+- Comportement de sauvegarde/réinitialisation entièrement inchangé
+  (aucune ligne touchée dans `saveMutation`/`resetMutation`).
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès ; taille du CSS légèrement réduite (185.47 Ko
+  contre 186.02 Ko avant), cohérent avec la suppression de classes
+  désormais inutiles plutôt qu'un ajout net.
+- Vérifié que les 6 couleurs d'accent dynamiquement référencées
+  (`text-amber-400`, `text-green-400`, `text-indigo-400`,
+  `text-orange-400`, `text-blue-400`, `text-purple-400`) apparaissent
+  chacune déjà comme chaîne littérale dans au moins un fichier réel déjà
+  scanné par Tailwind (confirmé par les greps du §1.2/1.3) — aucune classe
+  manquante au moment du build.
+- `git status --short` final : uniquement
+  `client/src/pages/admin/system-management-page.tsx` + `analyse.md`.
+- Grep final : zéro référence restante aux icônes `Search`/`Flag` dans ce
+  fichier en dehors de commentaires.
+- Redémarrage du serveur de dev ; aucune erreur dans les logs serveur
+  après redémarrage.
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour valider visuellement le rendu
+  pixel-exact (positionnement du nouveau bouton toggle, rendu des 6
+  arrière-plans par défaut, couleurs des icônes) ; vérifié par lecture de
+  code comparant chaque classe/valeur à son équivalent exact dans la page
+  réelle correspondante, type-checking strict, et build de production
+  réussi.
+- La taille/les proportions de l'aperçu restent délibérément plus
+  compactes que le vrai hero (contrainte `max-h-72` existante, non
+  modifiée par cette tâche) — seules les couleurs/traitements visuels ont
+  été alignés, pas les dimensions absolues, conformément au périmètre
+  demandé (cohérence visuelle, pas réplique pixel-perfect de la taille).

@@ -478,7 +478,7 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark,
           <Select value={filters.brandId || "__all__"} onValueChange={(v) => onChange("brandId", v === "__all__" ? "" : v)}>
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Société d'impression" /></SelectTrigger>
             <SelectContent className={t.selectContent}>
-              <SelectItem value="__all__">Toutes sociétés</SelectItem>
+              <SelectItem value="__all__">Sociétés</SelectItem>
               {printers.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -487,7 +487,7 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark,
           <Select value={filters.material || "__all__"} onValueChange={(v) => onChange("material", v === "__all__" ? "" : v)}>
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Matière" /></SelectTrigger>
             <SelectContent className={t.selectContent}>
-              <SelectItem value="__all__">Toutes matières</SelectItem>
+              <SelectItem value="__all__">Matières</SelectItem>
               {materials.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -496,7 +496,7 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark,
           <Select value={filters.deliveryTime || "__all__"} onValueChange={(v) => onChange("deliveryTime", v === "__all__" ? "" : v)}>
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Livraison" /></SelectTrigger>
             <SelectContent className={t.selectContent}>
-              <SelectItem value="__all__">Toutes livraisons</SelectItem>
+              <SelectItem value="__all__">Livraisons</SelectItem>
               {deliveryBuckets.map((d) => <SelectItem key={d} value={d}>{d}</SelectItem>)}
             </SelectContent>
           </Select>

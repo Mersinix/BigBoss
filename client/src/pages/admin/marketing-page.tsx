@@ -927,24 +927,24 @@ export default function MarketingAdminPage() {
           </div>
           <Select value={serviceCategory} onValueChange={setServiceCategory}>
             <SelectTrigger className="w-[160px] shrink-0" data-testid="select-service-filter-category"><SelectValue placeholder="Catégorie" /></SelectTrigger>
-            <SelectContent><SelectItem value="all">Toutes catégories</SelectItem>{serviceFilterOptions.categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+            <SelectContent><SelectItem value="all">Catégories</SelectItem>{serviceFilterOptions.categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
           </Select>
           <Select value={serviceAgency} onValueChange={setServiceAgency}>
             <SelectTrigger className="w-[160px] shrink-0" data-testid="select-service-filter-agency"><SelectValue placeholder="Agence" /></SelectTrigger>
-            <SelectContent><SelectItem value="all">Toutes agences</SelectItem>{serviceFilterOptions.agencies.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+            <SelectContent><SelectItem value="all">Agences</SelectItem>{serviceFilterOptions.agencies.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
           </Select>
           <Select value={serviceStatus} onValueChange={setServiceStatus}>
             <SelectTrigger className="w-[150px] shrink-0" data-testid="select-service-filter-status"><SelectValue placeholder="Statut" /></SelectTrigger>
-            <SelectContent><SelectItem value="all">Tous statuts</SelectItem><SelectItem value="published">Publié</SelectItem><SelectItem value="draft">Brouillon</SelectItem></SelectContent>
+            <SelectContent><SelectItem value="all">Statuts</SelectItem><SelectItem value="published">Publié</SelectItem><SelectItem value="draft">Brouillon</SelectItem></SelectContent>
           </Select>
           <Select value={serviceAvailability} onValueChange={setServiceAvailability}>
             <SelectTrigger className="w-[160px] shrink-0" data-testid="select-service-filter-availability"><SelectValue placeholder="Disponibilité" /></SelectTrigger>
-            <SelectContent><SelectItem value="all">Toutes disponibilités</SelectItem><SelectItem value="available">Agence disponible</SelectItem><SelectItem value="unavailable">Agence indisponible</SelectItem></SelectContent>
+            <SelectContent><SelectItem value="all">Disponibilités</SelectItem><SelectItem value="available">Agence disponible</SelectItem><SelectItem value="unavailable">Agence indisponible</SelectItem></SelectContent>
           </Select>
           <Select value={serviceRating} onValueChange={setServiceRating}>
             <SelectTrigger className="w-[130px] shrink-0" data-testid="select-service-filter-rating"><SelectValue placeholder="Note" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes notes</SelectItem>
+              <SelectItem value="all">Notes</SelectItem>
               <SelectItem value="rated">Avec avis</SelectItem>
               <SelectItem value="4.5">4.5+</SelectItem>
               <SelectItem value="4.7">4.7+</SelectItem>

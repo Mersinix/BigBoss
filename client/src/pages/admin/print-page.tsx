@@ -878,20 +878,20 @@ export default function AdminPrintPage() {
             </Select>
             <Select value={servicePrinter} onValueChange={setServicePrinter}>
               <SelectTrigger className="w-[160px] shrink-0" data-testid="select-service-filter-printer"><SelectValue placeholder="Imprimerie" /></SelectTrigger>
-              <SelectContent><SelectItem value="all">Toutes imprimeries</SelectItem>{serviceFilterOptions.printers.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+              <SelectContent><SelectItem value="all">Imprimeries</SelectItem>{serviceFilterOptions.printers.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={serviceStatus} onValueChange={setServiceStatus}>
               <SelectTrigger className="w-[150px] shrink-0" data-testid="select-service-filter-status"><SelectValue placeholder="Statut" /></SelectTrigger>
-              <SelectContent><SelectItem value="all">Tous statuts</SelectItem><SelectItem value="active">Actif</SelectItem><SelectItem value="inactive">Inactif</SelectItem></SelectContent>
+              <SelectContent><SelectItem value="all">Statuts</SelectItem><SelectItem value="active">Actif</SelectItem><SelectItem value="inactive">Inactif</SelectItem></SelectContent>
             </Select>
             <Select value={serviceAvailability} onValueChange={setServiceAvailability}>
               <SelectTrigger className="w-[160px] shrink-0" data-testid="select-service-filter-availability"><SelectValue placeholder="Disponibilité" /></SelectTrigger>
-              <SelectContent><SelectItem value="all">Toutes disponibilités</SelectItem><SelectItem value="available">Imprimerie disponible</SelectItem><SelectItem value="unavailable">Imprimerie indisponible</SelectItem></SelectContent>
+              <SelectContent><SelectItem value="all">Disponibilités</SelectItem><SelectItem value="available">Imprimerie disponible</SelectItem><SelectItem value="unavailable">Imprimerie indisponible</SelectItem></SelectContent>
             </Select>
             <Select value={serviceRating} onValueChange={setServiceRating}>
               <SelectTrigger className="w-[130px] shrink-0" data-testid="select-service-filter-rating"><SelectValue placeholder="Note" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Toutes notes</SelectItem>
+                <SelectItem value="all">Notes</SelectItem>
                 <SelectItem value="rated">Avec avis</SelectItem>
                 <SelectItem value="4.5">4.5+</SelectItem>
                 <SelectItem value="4.7">4.7+</SelectItem>

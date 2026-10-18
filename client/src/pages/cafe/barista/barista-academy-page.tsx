@@ -403,7 +403,7 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
                 <SelectValue placeholder="Niveau" />
               </SelectTrigger>
               <SelectContent className={t.selectContent}>
-                <SelectItem value="__all__">Tous niveaux</SelectItem>
+                <SelectItem value="__all__">Niveaux</SelectItem>
                 <SelectItem value="BEGINNER">Débutant</SelectItem>
                 <SelectItem value="ADVANCED">Avancé</SelectItem>
                 <SelectItem value="EXPERT">Expert</SelectItem>
@@ -417,7 +417,7 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
                 <SelectValue placeholder="Certification" />
               </SelectTrigger>
               <SelectContent className={t.selectContent}>
-                <SelectItem value="__all__">Toutes formations</SelectItem>
+                <SelectItem value="__all__">Formations</SelectItem>
                 <SelectItem value="true">Avec certification</SelectItem>
                 <SelectItem value="false">Sans certification</SelectItem>
               </SelectContent>

@@ -713,7 +713,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                   <SelectValue placeholder="Niveau" />
                 </SelectTrigger>
                 <SelectContent className={t.selectContent}>
-                  <SelectItem value="__all__">Tous niveaux</SelectItem>
+                  <SelectItem value="__all__">Niveaux</SelectItem>
                   <SelectItem value="BEGINNER">Débutant</SelectItem>
                   <SelectItem value="ADVANCED">Avancé</SelectItem>
                   <SelectItem value="EXPERT">Expert</SelectItem>
@@ -727,7 +727,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                   <SelectValue placeholder="Disponibilité" />
                 </SelectTrigger>
                 <SelectContent className={t.selectContent}>
-                  <SelectItem value="__all__">Toutes disponibilités</SelectItem>
+                  <SelectItem value="__all__">Disponibilités</SelectItem>
                   <SelectItem value="available">Disponible</SelectItem>
                   <SelectItem value="unavailable">Indisponible</SelectItem>
                 </SelectContent>
@@ -740,7 +740,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                   <SelectValue placeholder="Ville" />
                 </SelectTrigger>
                 <SelectContent className={t.selectContent}>
-                  <SelectItem value="__all__">Toutes villes</SelectItem>
+                  <SelectItem value="__all__">Villes</SelectItem>
                   {allLocations.map((loc) => (
                     <SelectItem key={loc} value={loc}>{loc}</SelectItem>
                   ))}
@@ -754,7 +754,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                   <SelectValue placeholder="Niveau d'étude" />
                 </SelectTrigger>
                 <SelectContent className={t.selectContent}>
-                  <SelectItem value="__all__">Tous niveaux d'étude</SelectItem>
+                  <SelectItem value="__all__">Niveaux</SelectItem>
                   {educationOptions.map((e) => (
                     <SelectItem key={e.id} value={e.name}>{e.name}</SelectItem>
                   ))}

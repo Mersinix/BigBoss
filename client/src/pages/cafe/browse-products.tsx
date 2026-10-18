@@ -906,7 +906,7 @@ function FilterBar({
               <SelectValue placeholder="Sous-catégorie" />
             </SelectTrigger>
             <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
-              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Toutes les sous-catégories</SelectItem>
+              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Sous-catégories</SelectItem>
               {subCategories.map((sc) => (
                 <SelectItem key={sc.id} value={sc.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>
                   {/* Fallback "📦" only when the subcategory has no admin-configured icon
@@ -923,7 +923,7 @@ function FilterBar({
               <SelectValue placeholder="Marque" />
             </SelectTrigger>
             <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
-              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Toutes les marques</SelectItem>
+              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Marques</SelectItem>
               {brands.map((b) => <SelectItem key={b.id} value={b.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{b.name}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -934,7 +934,7 @@ function FilterBar({
               <SelectValue placeholder="Saveur" />
             </SelectTrigger>
             <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
-              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Toutes les saveurs</SelectItem>
+              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Saveurs</SelectItem>
               {flavors.map((f) => <SelectItem key={f.id} value={f.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{f.name}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -945,7 +945,7 @@ function FilterBar({
               <SelectValue placeholder="Taille" />
             </SelectTrigger>
             <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
-              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Toutes les tailles</SelectItem>
+              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Tailles</SelectItem>
               {sizes.map((s) => <SelectItem key={s.id} value={s.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{s.name}</SelectItem>)}
             </SelectContent>
           </Select>

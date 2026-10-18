@@ -707,7 +707,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
                 <SelectValue placeholder="Type" />
               </SelectTrigger>
               <SelectContent className={t.selectContent}>
-                <SelectItem value="__all__">Tous types</SelectItem>
+                <SelectItem value="__all__">Types</SelectItem>
                 <SelectItem value="Agency">Agence</SelectItem>
                 <SelectItem value="Freelancer">Freelancer</SelectItem>
                 <SelectItem value="Studio">Studio</SelectItem>
@@ -718,7 +718,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
                 <SelectValue placeholder="Note min." />
               </SelectTrigger>
               <SelectContent className={t.selectContent}>
-                <SelectItem value="__all__">Toutes notes</SelectItem>
+                <SelectItem value="__all__">Notes</SelectItem>
                 <SelectItem value="4.5">4.5+</SelectItem>
                 <SelectItem value="4.7">4.7+</SelectItem>
                 <SelectItem value="4.9">4.9+</SelectItem>
@@ -729,7 +729,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
                 <SelectValue placeholder="Ville" />
               </SelectTrigger>
               <SelectContent className={t.selectContent}>
-                <SelectItem value="__all__">Toutes villes</SelectItem>
+                <SelectItem value="__all__">Villes</SelectItem>
                 {allLocations.map((loc) => <SelectItem key={loc} value={loc}>{loc}</SelectItem>)}
               </SelectContent>
             </Select>

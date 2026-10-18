@@ -152,7 +152,7 @@ function FormationsTab({ myRegistrations, onGoToMyFormations, isDark }: { myRegi
           <Select value={level || "__all__"} onValueChange={(v) => setLevel(v === "__all__" ? "" : v)}>
             <SelectTrigger className="h-8 text-xs w-auto min-w-[120px]" data-testid="select-academy-level"><SelectValue placeholder="Niveau" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">Tous niveaux</SelectItem>
+              <SelectItem value="__all__">Niveaux</SelectItem>
               <SelectItem value="BEGINNER">Débutant</SelectItem>
               <SelectItem value="ADVANCED">Avancé</SelectItem>
               <SelectItem value="EXPERT">Expert</SelectItem>
@@ -161,7 +161,7 @@ function FormationsTab({ myRegistrations, onGoToMyFormations, isDark }: { myRegi
           <Select value={certification || "__all__"} onValueChange={(v) => setCertification(v === "__all__" ? "" : v)}>
             <SelectTrigger className="h-8 text-xs w-auto min-w-[140px]" data-testid="select-academy-cert"><SelectValue placeholder="Certification" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">Toutes formations</SelectItem>
+              <SelectItem value="__all__">Formations</SelectItem>
               <SelectItem value="true">Avec certification</SelectItem>
               <SelectItem value="false">Sans certification</SelectItem>
             </SelectContent>

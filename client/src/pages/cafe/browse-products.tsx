@@ -22,7 +22,7 @@ import { calculateDistance, formatDistance } from "@/lib/distance";
 import { useSearchLocationStore } from "@/store/search-location-store";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
-import type { MarketplaceProduct, CategoryWithCount, StoreCard, PackDetail, TaxonomyLabel } from "@shared/schema";
+import type { MarketplaceProduct, CategoryWithCount, StoreCard, PackDetail, TaxonomyLabel, SubCategoryWithDetails } from "@shared/schema";
 import { FlashMode } from "@/components/flash-mode";
 import { useServiceHeroConfig } from "@/hooks/use-service-hero-config";
 import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY, getHeroSubtitleColorStyle } from "@/components/shared/service-hero";
@@ -102,7 +102,7 @@ function CategoryStrip({
               data-testid="button-cat-all"
             >
               <span className="text-base leading-none">🛍️</span>
-              <span>All</span>
+              <span>Tout</span>
             </button>
           </div>
           {active.map((cat) => (
@@ -112,8 +112,11 @@ function CategoryStrip({
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-[11px] font-semibold ${selected === String(cat.id) ? t.switcherActive : t.switcherInactive}`}
                 data-testid={`button-cat-${cat.id}`}
               >
-                <span className="text-base leading-none">{cat.icon || "📦"}</span>
-                <span className="max-w-[72px] truncate">{cat.name}</span>
+                <span className="text-base leading-none shrink-0">{cat.icon || "📦"}</span>
+                {/* Full name, task "Display Complete Category Names" — allow wrapping
+                    onto up to 2 lines instead of the previous single-line truncate, so
+                    long names (incl. Arabic/longer English) stay fully readable. */}
+                <span className="max-w-[110px] whitespace-normal break-words leading-tight text-left">{cat.name}</span>
               </button>
             </div>
           ))}
@@ -797,7 +800,7 @@ function PacksSection({
 interface FilterState { subCategoryId: string; brandId: string; flavorId: string; sizeId: string; sortBy: string; }
 
 function FilterBar({
-  categoryProducts, filters, onChange, onReset, hasSearchLocation, isDark, search, onSearchChange,
+  categoryProducts, filters, onChange, onReset, hasSearchLocation, isDark, search, onSearchChange, subCategoryIconMap,
 }: {
   categoryProducts: MarketplaceProduct[];
   filters: FilterState;
@@ -812,6 +815,10 @@ function FilterBar({
   // like /academy's own trainingSearchOpen.
   search: string;
   onSearchChange: (value: string) => void;
+  // Admin-configured per-subcategory icon (id → emoji/icon string), resolved
+  // from the full /api/subcategories records in the parent — see that
+  // query's own comment for why this can't come from categoryProducts alone.
+  subCategoryIconMap: Map<number, string>;
 }) {
   const t = useTheme(isDark);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -824,8 +831,8 @@ function FilterBar({
       if (p.subCategoryLabel?.id && p.subCategoryLabel?.name)
         map.set(String(p.subCategoryLabel.id), p.subCategoryLabel.name);
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [categoryProducts]);
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name, icon: subCategoryIconMap.get(Number(id)) ?? null }));
+  }, [categoryProducts, subCategoryIconMap]);
 
   const brands = useMemo(() => {
     const map = new Map<string, string>();
@@ -874,7 +881,7 @@ function FilterBar({
               type="button"
               className={`sm:hidden h-7 w-7 rounded-full border flex items-center justify-center shrink-0 ${t.inputBg}`}
               onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
-              aria-label="Search"
+              aria-label="Rechercher"
               data-testid="button-open-products-search"
             >
               <Search className="w-3.5 h-3.5" />
@@ -887,7 +894,7 @@ function FilterBar({
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
               onBlur={() => { if (!search) setSearchOpen(false); }}
-              placeholder="Search products…"
+              placeholder="Rechercher des produits…"
               className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
               data-testid="input-products-search"
             />
@@ -896,21 +903,27 @@ function FilterBar({
         {subCategories.length > 0 && (
           <Select value={filters.subCategoryId || "__all__"} onValueChange={(v) => onChange("subCategoryId", v === "__all__" ? "" : v)}>
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`}>
-              <SelectValue placeholder="Sub-Category" />
+              <SelectValue placeholder="Sous-catégorie" />
             </SelectTrigger>
             <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
-              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>All Sub-Categories</SelectItem>
-              {subCategories.map((sc) => <SelectItem key={sc.id} value={sc.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{sc.name}</SelectItem>)}
+              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Toutes les sous-catégories</SelectItem>
+              {subCategories.map((sc) => (
+                <SelectItem key={sc.id} value={sc.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>
+                  {/* Fallback "📦" only when the subcategory has no admin-configured icon
+                      yet — same generic fallback already used by CategoryStrip above. */}
+                  <span className="mr-1.5">{sc.icon || "📦"}</span>{sc.name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         )}
         {brands.length > 0 && (
           <Select value={filters.brandId || "__all__"} onValueChange={(v) => onChange("brandId", v === "__all__" ? "" : v)}>
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] shrink-0 ${t.selectTrigger}`}>
-              <SelectValue placeholder="Brand" />
+              <SelectValue placeholder="Marque" />
             </SelectTrigger>
             <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
-              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>All Brands</SelectItem>
+              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Toutes les marques</SelectItem>
               {brands.map((b) => <SelectItem key={b.id} value={b.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{b.name}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -918,10 +931,10 @@ function FilterBar({
         {flavors.length > 0 && (
           <Select value={filters.flavorId || "__all__"} onValueChange={(v) => onChange("flavorId", v === "__all__" ? "" : v)}>
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] shrink-0 ${t.selectTrigger}`}>
-              <SelectValue placeholder="Flavor" />
+              <SelectValue placeholder="Saveur" />
             </SelectTrigger>
             <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
-              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>All Flavors</SelectItem>
+              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Toutes les saveurs</SelectItem>
               {flavors.map((f) => <SelectItem key={f.id} value={f.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{f.name}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -929,26 +942,26 @@ function FilterBar({
         {sizes.length > 0 && (
           <Select value={filters.sizeId || "__all__"} onValueChange={(v) => onChange("sizeId", v === "__all__" ? "" : v)}>
             <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] shrink-0 ${t.selectTrigger}`}>
-              <SelectValue placeholder="Size" />
+              <SelectValue placeholder="Taille" />
             </SelectTrigger>
             <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
-              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>All Sizes</SelectItem>
+              <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Toutes les tailles</SelectItem>
               {sizes.map((s) => <SelectItem key={s.id} value={s.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{s.name}</SelectItem>)}
             </SelectContent>
           </Select>
         )}
         <Select value={filters.sortBy || "recommended"} onValueChange={(v) => onChange("sortBy", v === "recommended" ? "" : v)}>
           <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`}>
-            <SelectValue placeholder="Sort by" />
+            <SelectValue placeholder="Trier par" />
           </SelectTrigger>
           <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
-            <SelectItem value="recommended" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Recommended</SelectItem>
-            <SelectItem value="price_asc" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Price: Low to High</SelectItem>
-            <SelectItem value="price_desc" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Price: High to Low</SelectItem>
-            <SelectItem value="suppliers" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Most Suppliers</SelectItem>
+            <SelectItem value="recommended" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Recommandé</SelectItem>
+            <SelectItem value="price_asc" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Prix croissant</SelectItem>
+            <SelectItem value="price_desc" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Prix décroissant</SelectItem>
+            <SelectItem value="suppliers" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Plus de fournisseurs</SelectItem>
             {hasSearchLocation && (
               <SelectItem value="nearest" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>
-                <span className="flex items-center gap-1"><Navigation className="w-3 h-3 inline" /> Nearest First</span>
+                <span className="flex items-center gap-1"><Navigation className="w-3 h-3 inline" /> Les plus proches</span>
               </SelectItem>
             )}
           </SelectContent>
@@ -958,7 +971,7 @@ function FilterBar({
             onClick={onReset}
             className={`flex items-center gap-1 text-xs transition-colors ml-1 shrink-0 whitespace-nowrap ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}
           >
-            <RotateCcw className="w-3 h-3" /> Reset
+            <RotateCcw className="w-3 h-3" /> Réinitialiser
           </button>
         )}
       </div>
@@ -1014,6 +1027,19 @@ export default function BrowseProducts() {
   const listingPromotions = useListingPromotions(allListingIds);
 
   const { data: categories = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
+
+  // Subcategory icons (task: "Correctly Map Subcategory Icons") — /api/marketplace's own
+  // product.subCategoryLabel only carries {id, name} (icon stripped server-side in
+  // enrichProduct), so the icon is fetched the same way store-detail-page.tsx already
+  // resolves its OWN category icons: a separate query for the full admin-managed records,
+  // reduced to an id→icon map. Reused by FilterBar below instead of a second/conflicting
+  // icon source.
+  const { data: allSubCategories = [] } = useQuery<SubCategoryWithDetails[]>({ queryKey: ["/api/subcategories"] });
+  const subCategoryIconMap = useMemo(() => {
+    const map = new Map<number, string>();
+    allSubCategories.forEach((sc) => { if (sc.icon) map.set(sc.id, sc.icon); });
+    return map;
+  }, [allSubCategories]);
 
   const { data: stores = [], isLoading: storesLoading } = useQuery<StoreCard[]>({
     queryKey: ["/api/stores"],
@@ -1195,6 +1221,7 @@ export default function BrowseProducts() {
           isDark={isDark}
           search={search}
           onSearchChange={setSearch}
+          subCategoryIconMap={subCategoryIconMap}
         />
       </div>
 
@@ -1225,14 +1252,14 @@ export default function BrowseProducts() {
           <div>
             {categoryId ? (
               <h1 className={`font-bold text-lg ${t.textPrimary}`}>
-                {categories.find((c) => String(c.id) === categoryId)?.name ?? "Products"}
+                {categories.find((c) => String(c.id) === categoryId)?.name ?? "Produits"}
               </h1>
             ) : (
-              <h1 className={`font-bold text-lg ${t.textPrimary}`}>All Products</h1>
+              <h1 className={`font-bold text-lg ${t.textPrimary}`}>Tous les produits</h1>
             )}
             {!isLoading && (
               <p className={`text-sm mt-0.5 ${t.textMuted}`}>
-                {filtered.length} product{filtered.length !== 1 ? "s" : ""} available
+                {filtered.length} produit{filtered.length !== 1 ? "s" : ""} disponible{filtered.length !== 1 ? "s" : ""}
               </p>
             )}
           </div>
@@ -1249,9 +1276,9 @@ export default function BrowseProducts() {
           <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
             <Package className={`w-14 h-14 ${t.emptyIcon}`} />
             <div>
-              <p className={`font-semibold ${t.emptyText}`}>No products found</p>
+              <p className={`font-semibold ${t.emptyText}`}>Aucun produit trouvé</p>
               <p className={`text-sm mt-1 ${t.emptySubText}`}>
-                {activeFilterCount > 0 ? "Try adjusting your filters." : "Suppliers haven't listed any products yet."}
+                {activeFilterCount > 0 ? "Essayez d'ajuster vos filtres." : "Aucun fournisseur n'a encore publié de produits."}
               </p>
             </div>
             {activeFilterCount > 0 && (
@@ -1261,7 +1288,7 @@ export default function BrowseProducts() {
                 className={t.dk ? "border-gray-700 text-gray-300 hover:bg-gray-800" : ""}
                 onClick={() => { setSearch(""); setCategoryId(""); resetFilters(); navigate("/products"); }}
               >
-                Clear all filters
+                Effacer tous les filtres
               </Button>
             )}
           </div>

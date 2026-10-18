@@ -4570,3 +4570,195 @@ voir §1.4) :
   modifiée par cette tâche) — seules les couleurs/traitements visuels ont
   été alignés, pas les dimensions absolues, conformément au périmètre
   demandé (cohérence visuelle, pas réplique pixel-perfect de la taille).
+
+---
+
+# Analyse — SHOP Filters: Category Names, Subcategory Icons, and French Localization
+
+## 1. Audit préalable
+
+### 1.1 Pourquoi certains noms de catégories apparaissaient tronqués
+
+- `client/src/pages/cafe/browse-products.tsx` — composant `CategoryStrip`
+  (défini dans ce même fichier), nom de catégorie rendu via
+  `<span className="max-w-[72px] truncate">{cat.name}</span>`. **Confirmé
+  par lecture de code et vérification directe en base** : `cat.name`
+  provient tel quel de la table `categories` (`shared/schema.ts`), aucune
+  troncature ni substitution côté JS — uniquement une largeur fixe de
+  72px + ellipsis CSS. Requête SQL directe sur la table `categories` :
+  les noms réels correspondent exactement aux exemples cités par la
+  tâche (`CAFE`, `مشروبات`, `العاب`, `شيشا`, `النظافة`, `Dairy &
+  Alternatives`, `BeIN`, `آلات`, `ديكور`, `Syrups & Flavors`, `Tea &
+  Herbal`, `Snacks & Food`) — la donnée est déjà complète et correcte,
+  seul l'affichage la coupait.
+
+### 1.2 Pourquoi les icônes de sous-catégories étaient absentes
+
+- `categories`/`subCategories` (`shared/schema.ts`) ont bien chacune leur
+  propre colonne `icon: text("icon")`. `GET /api/categories` et
+  `GET /api/subcategories` renvoient déjà cette colonne intégralement
+  (vérifié en base : plusieurs sous-catégories réelles ont un `icon`
+  configuré, ex. `Arabica Beans` → `☕`, `Gazouz` → `🥤`, `Cleaning` →
+  `🧹`).
+- Mais `browse-products.tsx` ne charge **jamais** `/api/subcategories` —
+  sa liste de sous-catégories est entièrement dérivée de
+  `product.subCategoryLabel` (venant de `/api/marketplace`), qui ne
+  contient que `{ id, name }` : `server/storage.ts`, fonction
+  `enrichProduct`, construit volontairement ce label réduit (type
+  `TaxonomyLabel`, `shared/schema.ts`, qui n'a pas de champ `icon`) —
+  l'icône est donc perdue à cette étape serveur précise, avant même
+  d'atteindre le client. **Ce n'est pas un bug de mapping (mauvaise clé,
+  icône de catégorie réutilisée par erreur) — l'icône n'arrive
+  simplement jamais côté client pour les sous-catégories.** Le
+  `SelectItem` de sous-catégorie (`browse-products.tsx`) ne rendait donc
+  que `{sc.name}`, aucune icône.
+- `client/src/pages/cafe/store-detail-page.tsx` (page sœur) résout déjà
+  ses propres icônes de **catégorie** exactement de cette façon : une
+  requête séparée vers `/api/categories` réduite en `Map<number,
+  string>` (`categoryIconMap`, lignes 644-648), appliquée ensuite à sa
+  liste de catégories dérivée des produits. **Aucun mapping équivalent
+  n'existe pour les sous-catégories nulle part dans le code** — ni dans
+  ce fichier, ni dans `store-detail-page.tsx`, ni dans `client/src/lib`
+  (seuls des mappings PRINT/Marketing spécifiques existent là, sans
+  rapport avec SHOP).
+- **Décision** : reproduire exactement le même motif que
+  `store-detail-page.tsx` utilise déjà pour les catégories, appliqué aux
+  sous-catégories — une requête `GET /api/subcategories` (déjà publique,
+  déjà complète) réduite en `Map<number, string>`, sans toucher au
+  serveur ni au type `TaxonomyLabel` (qui reste utilisé ailleurs pour
+  catégories/marques/saveurs/tailles — y ajouter un champ aurait un rayon
+  d'impact plus large qu'une requête client supplémentaire, strictement
+  additive et sans risque).
+
+### 1.3 Inventaire de l'anglais dans la zone de filtres SHOP
+
+Relevé exhaustif (fourni en détail par l'audit, avec références
+fichier:ligne) : `"All"` (pilule catégorie), `aria-label="Search"`,
+`"Search products…"`, `"Sub-Category"`/`"All Sub-Categories"`,
+`"Brand"`/`"All Brands"`, `"Flavor"`/`"All Flavors"`,
+`"Size"`/`"All Sizes"`, `"Sort by"`, `"Recommended"`, `"Price: Low to
+High"`, `"Price: High to Low"`, `"Most Suppliers"`, `"Nearest First"`,
+`"Reset"`, et dans la zone de résultats immédiatement adjacente (même
+section de filtrage produit) : `"All Products"`/`"Products"` (titre),
+`"{n} product(s) available"`, `"No products found"`, `"Try adjusting
+your filters."`, `"Suppliers haven't listed any products yet."`,
+`"Clear all filters"`.
+
+### 1.4 Confirmation : aucun impact sur la logique de filtrage
+
+- Le clic sur une catégorie utilise `cat.id` (numérique), jamais
+  `cat.name` — `categoryId` filtre ensuite par comparaison d'id strict
+  (`String(p.categoryId) === categoryId`). Relâcher la classe CSS de
+  troncature ne peut donc pas changer ce qui est filtré.
+- Le `value` de chaque `SelectItem` de sous-catégorie reste `sc.id`,
+  inchangé ; ajouter une icône décorative à côté du texte n'affecte en
+  rien `filters.subCategoryId` ni la comparaison d'id qui filtre
+  `allProducts`. Confirmé par lecture complète des deux `useMemo` de
+  filtrage (`categoryFiltered`/`filtered`) : aucun ne dépend de `name`
+  ni `icon`.
+
+## 2. Implémentation
+
+### 2.1 Noms de catégories complets
+
+- `CategoryStrip` : `max-w-[72px] truncate` remplacé par `max-w-[110px]
+  whitespace-normal break-words leading-tight text-left`, autorisant le
+  nom à s'enrouler sur 2 lignes au lieu d'être coupé avec une ellipse.
+  Icône (`cat.icon || "📦"`) marquée `shrink-0` pour rester alignée
+  verticalement même quand le libellé passe sur 2 lignes. Aucune donnée
+  modifiée — uniquement l'affichage.
+
+### 2.2 Icônes de sous-catégories
+
+- Nouvelle requête `useQuery<SubCategoryWithDetails[]>(["/api/subcategories"])`
+  dans le composant principal de `browse-products.tsx`, réduite en
+  `subCategoryIconMap: Map<number, string>` via `useMemo` — motif
+  identique à `categoryIconMap` de `store-detail-page.tsx`.
+  `FilterBar` reçoit cette map en prop ; son `useMemo` `subCategories`
+  attache désormais `icon: subCategoryIconMap.get(Number(id)) ?? null`
+  à chaque entrée.
+- Chaque `SelectItem` de sous-catégorie affiche maintenant
+  `{sc.icon || "📦"} {sc.name}` — icône admin-configurée quand elle
+  existe, repli générique `"📦"` sinon (même repli que `CategoryStrip`,
+  pas un second système d'icônes).
+- Zéro changement serveur, zéro changement de `TaxonomyLabel`, zéro
+  changement aux identifiants/relations catégorie↔sous-catégorie —
+  uniquement une requête client supplémentaire et un rendu d'icône en
+  plus dans le `SelectItem` existant.
+
+### 2.3 Traduction française complète
+
+Tous les textes listés en §1.3 traduits dans
+`client/src/pages/cafe/browse-products.tsx` (`CategoryStrip` et
+`FilterBar`, plus la zone de résultats adjacente) :
+`Tout`, `Rechercher`, `Rechercher des produits…`, `Sous-catégorie`/
+`Toutes les sous-catégories`, `Marque`/`Toutes les marques`, `Saveur`/
+`Toutes les saveurs`, `Taille`/`Toutes les tailles`, `Trier par`,
+`Recommandé`, `Prix croissant`, `Prix décroissant`, `Plus de
+fournisseurs`, `Les plus proches`, `Réinitialiser`, `Tous les
+produits`/`Produits`, `{n} produit(s) disponible(s)` (accord pluriel
+correct sur le nom ET l'adjectif), `Aucun produit trouvé`, `Essayez
+d'ajuster vos filtres.`, `Aucun fournisseur n'a encore publié de
+produits.`, `Effacer tous les filtres`. Aucune valeur de données
+(nom de catégorie/sous-catégorie/marque/produit) traduite — uniquement
+les libellés d'interface statiques de ce composant.
+
+## 3. Garde-fous respectés
+
+- Aucune donnée modifiée en base : vérifié en lisant directement les
+  tables `categories`/`sub_categories` avant et après implémentation —
+  aucune écriture effectuée par cette tâche.
+- Aucun identifiant de filtre changé : `categoryId`,
+  `filters.subCategoryId`, `brandId`, `flavorId`, `sizeId` restent tous
+  comparés par id numérique, jamais par nom ou icône (confirmé §1.4).
+- Aucune route serveur, schéma ou règle de visibilité/approbation
+  fournisseur touchée — `git status` confirme zéro fichier serveur
+  modifié.
+- Aucun second système de mapping d'icônes créé : le même repli
+  générique (`"📦"`) et le même motif de requête (`Map<id, icon>` dérivée
+  d'un fetch séparé) que `CategoryStrip`/`store-detail-page.tsx`
+  utilisent déjà pour les catégories sont réutilisés à l'identique pour
+  les sous-catégories.
+- Texte arabe préservé exactement tel qu'enregistré (`مشروبات`, `العاب`,
+  `شيشا`, `النظافة`, `آلات`, `ديكور`) — jamais traduit, jamais modifié.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- Vérification en base réelle (lecture seule) : les 12 catégories
+  actives retournées par `GET /api/categories` correspondent exactement,
+  caractère pour caractère, aux exemples cités par la tâche — confirme
+  que la donnée était déjà complète avant toute modification.
+- Vérification en base réelle (lecture seule) : `GET /api/subcategories`
+  retourne bien la colonne `icon` peuplée pour plusieurs sous-catégories
+  réelles (`Arabica Beans`→`☕`, `Gazouz`→`🥤`, `Cleaning`→`🧹`,
+  `Tableaux`→`T`, `Rami`→`R`) — confirme que la nouvelle requête client
+  recevra des icônes réelles, pas seulement des `null`.
+- Redémarrage du serveur de dev ; `GET /api/categories` et
+  `GET /api/subcategories` répondent tous les deux correctement, aucune
+  erreur dans les logs serveur après redémarrage.
+- Grep final : zéro occurrence restante des chaînes anglaises ciblées
+  (`"Search"`, `"All Sub-Categories"`, `"All Brands"`, `"All Flavors"`,
+  `"All Sizes"`, `"Recommended"`, `"Sub-Category"`, `"Brand"`, `"Flavor"`,
+  `"Size"`, `"Sort by"`, `"Reset"`, `"All Products"`, `"No products
+  found"`, `"Clear all filters"`) dans `browse-products.tsx`.
+- `git status --short` final : uniquement
+  `client/src/pages/cafe/browse-products.tsx`.
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour vérifier visuellement
+  l'enroulement sur 2 lignes des noms longs, l'alignement de l'icône sur
+  les pilules à texte multi-ligne, ou le rendu RTL potentiel du texte
+  arabe dans ce contexte précis ; vérifié par lecture de code et
+  confirmation que les données réelles (noms/icônes) sont correctement
+  transmises jusqu'au composant. Une vérification visuelle manuelle
+  (desktop + mobile, catégories à noms longs et texte arabe) reste
+  recommandée avant mise en production.
+- Plusieurs sous-catégories réelles ont un `icon` configuré comme une
+  simple lettre (ex. `"T"`, `"R"`, `"C"`) plutôt qu'un emoji — ce n'est
+  pas corrigé par cette tâche (il s'agit de données saisies par l'admin,
+  affichées telles quelles conformément à la consigne « use those
+  configured icons consistently », pas une erreur de mapping côté
+  Shop).

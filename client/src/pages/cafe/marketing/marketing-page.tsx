@@ -412,6 +412,10 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   const [filterRating, setFilterRating] = useState("");
   const [filterLocation, setFilterLocation] = useState("");
   const [filterType, setFilterType] = useState("");
+  // "Recommandé" sort (task: "Academy, Print & Marketing Filter
+  // Consistency") — same Recommandé/Prix croissant/Prix décroissant pattern
+  // already on the Marketing store page, applied client-side here too.
+  const [sortBy, setSortBy] = useState("");
   // Keep Sous-compétences/Sous-catégories Filters Always Visible — selected subcategory
   // NAMES (unlike Maintenance's parent-qualified keys, a Marketing service's own
   // subCategories list is already scoped to that service's single parent category, so
@@ -470,8 +474,10 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
     // Multiple selected subcategories use OR semantics (match any one of them) — same
     // convention as the Maintenance marketplace's own multi-select Sous-compétences filter.
     if (filterSubCategories.length > 0) list = list.filter((s) => filterSubCategories.some((name) => s.subCategories?.includes(name)));
+    if (sortBy === "price_asc") list = [...list].sort((a, b) => a.startingPriceInCents - b.startingPriceInCents);
+    if (sortBy === "price_desc") list = [...list].sort((a, b) => b.startingPriceInCents - a.startingPriceInCents);
     return list;
-  }, [services, filterRating, filterSubCategories]);
+  }, [services, filterRating, filterSubCategories, sortBy]);
 
   // Resolved via the one shared lib/marketing-category-icon.ts helper — reused
   // here, by the filter strip below, and by the Store Details page, so no page
@@ -493,10 +499,10 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
     return rows.filter((s) => s.isActive && !s.isFrozen);
   }, [subcategoryTaxonomy, taxonomy, selectedService]);
 
-  const hasFilters = !!(selectedService || search || filterRating || filterLocation || filterType || filterSubCategories.length > 0);
+  const hasFilters = !!(selectedService || search || filterRating || filterLocation || filterType || filterSubCategories.length > 0 || sortBy);
 
   const resetFilters = () => {
-    setSelectedService(""); setSearch(""); setFilterRating(""); setFilterLocation(""); setFilterType(""); setFilterSubCategories([]);
+    setSelectedService(""); setSearch(""); setFilterRating(""); setFilterLocation(""); setFilterType(""); setFilterSubCategories([]); setSortBy("");
   };
 
   // Selecting (or switching) a parent category keeps only the selected subcategories
@@ -731,6 +737,18 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               <SelectContent className={t.selectContent}>
                 <SelectItem value="__all__">Villes</SelectItem>
                 {allLocations.map((loc) => <SelectItem key={loc} value={loc}>{loc}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {/* "Recommandé" sort (task: "Academy, Print & Marketing Filter
+                Consistency") — same pattern already on the store page. */}
+            <Select value={sortBy || "recommended"} onValueChange={(v) => setSortBy(v === "recommended" ? "" : v)}>
+              <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`} data-testid="select-provider-sort">
+                <SelectValue placeholder="Trier par" />
+              </SelectTrigger>
+              <SelectContent className={t.selectContent}>
+                <SelectItem value="recommended">Recommandé</SelectItem>
+                <SelectItem value="price_asc">Prix croissant</SelectItem>
+                <SelectItem value="price_desc">Prix décroissant</SelectItem>
               </SelectContent>
             </Select>
             {hasFilters && (

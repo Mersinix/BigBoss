@@ -157,7 +157,8 @@ export function MaintenanceJobManagementModal({ open, onClose, initialJobId = nu
     <>
       <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
         <DialogContent
-          className={`sm:max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg} ${isDark ? "[&>button]:text-gray-400" : ""}`}
+          hideClose
+          className={`sm:max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}
         >
           {selectedJob ? (
             <JobDetailView
@@ -165,24 +166,50 @@ export function MaintenanceJobManagementModal({ open, onClose, initialJobId = nu
               isDark={isDark}
               t={t}
               onBack={() => setSelectedJobId(null)}
+              onClose={handleClose}
               actions={statusActions(selectedJob)}
             />
           ) : selectedJobId != null && isLoading ? (
             <div className="space-y-3" data-testid="loading-maintenance-job-detail">
               <DialogHeader className="sr-only"><DialogTitle>Chargement…</DialogTitle></DialogHeader>
+              {/* Custom close button (task: "Modal Close Button Consistency") — DialogContent
+                  now hides the default Radix close via hideClose, so every branch of this
+                  modal (including this transient loading one) needs its own. */}
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  aria-label="Close"
+                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
               <Skeleton className={`h-8 w-2/3 rounded-lg ${t.skeleton}`} />
               {[0, 1].map((i) => <Skeleton key={i} className={`h-28 w-full rounded-xl ${t.skeleton}`} />)}
             </div>
           ) : (
             <>
               <DialogHeader>
-                <div className="flex items-center justify-between gap-3 pr-6">
+                {/* Close button appended last (task: "Modal Close Button Consistency") to
+                    match the Pack Details modal's reference position. */}
+                <div className="flex items-center justify-between gap-3">
                   <DialogTitle className={`flex items-center gap-2 ${t.textPrimary}`}>
                     <Wrench className="w-5 h-5 text-orange-600" /> Mes interventions
                   </DialogTitle>
-                  <Button size="sm" className="bg-orange-600 hover:bg-orange-700 text-white gap-1.5" onClick={openCreate} data-testid="button-maintenance-job-create">
-                    <Plus className="w-4 h-4" /> Publier une intervention
-                  </Button>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button size="sm" className="bg-orange-600 hover:bg-orange-700 text-white gap-1.5" onClick={openCreate} data-testid="button-maintenance-job-create">
+                      <Plus className="w-4 h-4" /> Publier une intervention
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={handleClose}
+                      aria-label="Close"
+                      className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </DialogHeader>
 
@@ -302,12 +329,13 @@ function JobRow({
 }
 
 function JobDetailView({
-  job, isDark, t, onBack, actions,
+  job, isDark, t, onBack, onClose, actions,
 }: {
   job: MaintenanceJobPostWithStats;
   isDark: boolean;
   t: Tokens;
   onBack: () => void;
+  onClose: () => void;
   actions: ReactNode;
 }) {
   const { data: targets = [], isLoading: targetsLoading } = useMaintenanceJobTargets(job.publicationMode === "MANUAL" ? job.id : null);
@@ -329,18 +357,30 @@ function JobDetailView({
   return (
     <div className="space-y-5">
       <DialogHeader>
-        <div className="flex items-center gap-2 pr-6">
+        {/* Close button appended last (task: "Modal Close Button Consistency") —
+            distinct from "Retour" (back to the list, stays within this modal). */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Retour"
+              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}
+              data-testid="button-maintenance-job-detail-back"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <DialogTitle className={`truncate ${t.textPrimary}`}>{job.title}</DialogTitle>
+            <Badge variant="secondary" className={`border-0 shrink-0 ${jobStatusColors(isDark)[job.status]}`}>{JOB_STATUS_LABELS[job.status]}</Badge>
+          </div>
           <button
             type="button"
-            onClick={onBack}
-            aria-label="Retour"
-            className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}
-            data-testid="button-maintenance-job-detail-back"
+            onClick={onClose}
+            aria-label="Close"
+            className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
           >
-            <ArrowLeft className="w-4 h-4" />
+            <X className="w-4 h-4" />
           </button>
-          <DialogTitle className={`truncate ${t.textPrimary}`}>{job.title}</DialogTitle>
-          <Badge variant="secondary" className={`border-0 shrink-0 ${jobStatusColors(isDark)[job.status]}`}>{JOB_STATUS_LABELS[job.status]}</Badge>
         </div>
       </DialogHeader>
 

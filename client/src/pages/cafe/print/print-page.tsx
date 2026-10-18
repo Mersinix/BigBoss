@@ -376,6 +376,7 @@ interface PrintFilters {
   brandId: string;
   material: string;
   deliveryTime: string;
+  sortBy: string;
 }
 
 function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark, subcategoryIconByName, search, onSearchChange }: {
@@ -501,6 +502,17 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark,
             </SelectContent>
           </Select>
         )}
+        {/* "Recommandé" sort (task: "Academy, Print & Marketing Filter
+            Consistency") — same price-based pattern already on the store
+            page, applied via the existing filters/onChange plumbing. */}
+        <Select value={filters.sortBy || "recommended"} onValueChange={(v) => onChange("sortBy", v === "recommended" ? "" : v)}>
+          <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Trier par" /></SelectTrigger>
+          <SelectContent className={t.selectContent}>
+            <SelectItem value="recommended">Recommandé</SelectItem>
+            <SelectItem value="price_asc">Prix croissant</SelectItem>
+            <SelectItem value="price_desc">Prix décroissant</SelectItem>
+          </SelectContent>
+        </Select>
         {hasActive && (
           <button onClick={onReset} className={`flex items-center gap-1 text-xs transition-colors ml-1 shrink-0 whitespace-nowrap ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}>
             <RotateCcw className="w-3 h-3" /> Reset
@@ -562,7 +574,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
   const initialCategory = urlParams.get("categoryId") ?? "";
 
   const [categoryId, setCategoryId] = useState(initialCategory);
-  const [filters, setFilters] = useState<PrintFilters>({ subCategoryId: "", brandId: "", material: "", deliveryTime: "" });
+  const [filters, setFilters] = useState<PrintFilters>({ subCategoryId: "", brandId: "", material: "", deliveryTime: "", sortBy: "" });
   // Add a Search Input to /print — editable search text lives here (was
   // previously only settable via the ?q= URL param, with no visible input at
   // all); seeded from that same param so existing deep links keep working.
@@ -595,6 +607,8 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
     if (filters.brandId) list = list.filter((c) => String(c.printerId) === filters.brandId);
     if (filters.material) list = list.filter((c) => c.materials.includes(filters.material));
     if (filters.deliveryTime) list = list.filter((c) => bucketLabelFor(c.productionTimeDays) === filters.deliveryTime);
+    if (filters.sortBy === "price_asc") list = [...list].sort((a, b) => a.priceInCents - b.priceInCents);
+    if (filters.sortBy === "price_desc") list = [...list].sort((a, b) => b.priceInCents - a.priceInCents);
 
     return list;
   }, [cards, searchQuery, categoryId, filters]);
@@ -603,11 +617,13 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
   // Resets only the facet filters — kept separate from search on purpose: the
   // category chip strip's own onSelect calls this while deliberately carrying
   // the current search text over into the new category (see its own comment
-  // below), so resetFilters must never clear it.
-  const resetFilters = () => setFilters({ subCategoryId: "", brandId: "", material: "", deliveryTime: "" });
-  // The Reset button (PrintFilterBar) clears everything, including search —
-  // same "Reset clears search too" behavior as /academy's own Reset.
-  const resetAll = () => { resetFilters(); setPrintSearch(""); };
+  // below), so resetFilters must never clear it. Sort preference is kept for
+  // the same reason search is — it's a "how do you want to view this list"
+  // choice, not scoped to a particular category.
+  const resetFilters = () => setFilters((p) => ({ subCategoryId: "", brandId: "", material: "", deliveryTime: "", sortBy: p.sortBy }));
+  // The Reset button (PrintFilterBar) clears everything, including search and
+  // sort — same "Reset clears search too" behavior as /academy's own Reset.
+  const resetAll = () => { setFilters({ subCategoryId: "", brandId: "", material: "", deliveryTime: "", sortBy: "" }); setPrintSearch(""); };
 
   const isLoading = cardsLoading || categoriesLoading;
   const distinctPrinterCount = useMemo(() => new Set(cards.map((c) => c.printerId)).size, [cards]);

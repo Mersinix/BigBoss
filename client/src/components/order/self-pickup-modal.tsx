@@ -90,15 +90,18 @@ export default function SelfPickupModal({ open, onClose, subOrderId, orderId, su
       <DialogContent className={`max-w-sm w-[calc(100%-2rem)] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden ${t.modalBg}`}>
         <DialogTitle className="sr-only">Self Pickup — Commande #{String(orderId).padStart(6, "0")}</DialogTitle>
 
+        {/* Spacer / title / close (task: "Modal Close Button Consistency" — close
+            moved to the rightmost position to match the Pack Details modal's
+            reference order; spacer keeps the title centered as before) */}
         <div className={`shrink-0 border-b px-6 pt-5 pb-4 flex items-center justify-between ${t.headerBg}`}>
-          <button onClick={onClose} aria-label="Fermer" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${t.iconBtn}`}>
-            <X className="w-4 h-4" />
-          </button>
+          <div className="w-8" />
           <div className="flex items-center gap-2">
             <ShoppingBag className="w-4 h-4 text-amber-500" />
             <span className={`text-[15px] font-bold tracking-tight ${t.textPrimary}`}>Self Pickup</span>
           </div>
-          <div className="w-8" />
+          <button onClick={onClose} aria-label="Fermer" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${t.iconBtn}`}>
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
         <div className="px-6 py-5 space-y-4">

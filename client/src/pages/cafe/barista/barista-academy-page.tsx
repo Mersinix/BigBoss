@@ -199,6 +199,11 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
   const trainingSearchInputRef = useRef<HTMLInputElement>(null);
   const [trainingLevel, setTrainingLevel] = useState("");
   const [trainingCert, setTrainingCert] = useState("");
+  // "Recommandé" sort (task: "Academy, Print & Marketing Filter Consistency")
+  // — same Recommandé/Prix croissant/Prix décroissant pattern already added
+  // to the Academy store page in a previous task; applied client-side on
+  // top of the already-fetched/filtered course list, same as there.
+  const [trainingSortBy, setTrainingSortBy] = useState("");
   const [enrollTarget, setEnrollTarget] = useState<AcademyCourseCard | null>(null);
   const [detailCourseId, setDetailCourseId] = useState<number | null>(null);
   const [fastSearchOpen, setFastSearchOpen] = useState(false);
@@ -224,8 +229,13 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
     return academyCompanies.filter((c) => c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q));
   }, [academyCompanies, trainingSearch]);
 
-  const filteredTraining = useMemo(() => courses, [courses]);
-  const hasTrainingFilters = !!(trainingSearch || trainingLevel || trainingCert);
+  const filteredTraining = useMemo(() => {
+    let list = courses;
+    if (trainingSortBy === "price_asc") list = [...list].sort((a, b) => a.priceInCents - b.priceInCents);
+    if (trainingSortBy === "price_desc") list = [...list].sort((a, b) => b.priceInCents - a.priceInCents);
+    return list;
+  }, [courses, trainingSortBy]);
+  const hasTrainingFilters = !!(trainingSearch || trainingLevel || trainingCert || trainingSortBy);
   const certifiedCount = useMemo(() => courses.filter((c) => c.hasCertification).length, [courses]);
 
   const canAct = !!user && user.role === "CAFE_OWNER" && accessLevel === "approved";
@@ -422,14 +432,25 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
                 <SelectItem value="false">Sans certification</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={trainingSortBy || "recommended"} onValueChange={(v) => setTrainingSortBy(v === "recommended" ? "" : v)}>
+              <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.inputBg}`} data-testid="select-training-sort">
+                <SelectValue placeholder="Trier par" />
+              </SelectTrigger>
+              <SelectContent className={t.selectContent}>
+                <SelectItem value="recommended">Recommandé</SelectItem>
+                <SelectItem value="price_asc">Prix croissant</SelectItem>
+                <SelectItem value="price_desc">Prix décroissant</SelectItem>
+              </SelectContent>
+            </Select>
             {hasTrainingFilters && (
               <button
                 onClick={() => {
                   setTrainingSearch("");
                   setTrainingLevel("");
                   setTrainingCert("");
+                  setTrainingSortBy("");
                 }}
-                className="flex items-center gap-1 text-xs text-destructive hover:text-destructive/80 transition-colors shrink-0 whitespace-nowrap"
+                className={`flex items-center gap-1 text-xs transition-colors shrink-0 whitespace-nowrap ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}
                 data-testid="button-reset-training-filters"
               >
                 <RotateCcw className="w-3 h-3" /> Reset

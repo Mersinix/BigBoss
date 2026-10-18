@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useThemeStore } from "@/store/theme-store";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -13,11 +13,13 @@ import { ReviewsModal } from "@/components/account/reviews-modal";
 import { EnrollDialog } from "@/pages/cafe/barista/barista-academy-page";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
-  GraduationCap, ChevronLeft, Heart, Sun, Moon, Star, MapPin, Award, Clock, Flag, X,
+  GraduationCap, ChevronLeft, Heart, Star, MapPin, Award, Clock, Flag, X, Search, SlidersHorizontal, RotateCcw,
 } from "lucide-react";
 import type { AcademyCourseCard, AcademyCourseLevel } from "@/hooks/use-barista-academy";
 import { AcademyMappedCourseCard } from "@/components/academy/academy-mapped-course-card";
@@ -58,6 +60,8 @@ function useTheme(isDark: boolean) {
     switcherActive: isDark ? "bg-gray-700 text-white shadow-sm" : "bg-white text-indigo-600 shadow-sm",
     switcherInactive: isDark ? "text-gray-400 hover:text-gray-200" : "text-gray-500 hover:text-gray-700",
     stripBg: isDark ? "bg-gray-900/95 border-gray-800" : "bg-white border-gray-100",
+    inputBg: isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
+    selectTrigger: isDark ? "border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700" : "border-gray-200 bg-gray-50",
   };
 }
 
@@ -68,7 +72,6 @@ export default function AcademyStoreDetailPage() {
   const academyUserId = params?.academyUserId ? Number(params.academyUserId) : null;
 
   const isDark = useThemeStore((s) => s.isDark);
-  const toggleTheme = useThemeStore((s) => s.toggle);
   const t = useTheme(isDark);
 
   const { data, isLoading } = useAcademyProfileDetail(academyUserId);
@@ -81,6 +84,19 @@ export default function AcademyStoreDetailPage() {
   const toggleAcademy = useFavorites((s) => s.toggleAcademyCourse);
 
   const [levelId, setLevelId] = useState<AcademyCourseLevel | "">("");
+  // Search + sort (task: "Complete Store Page Filters") — courses have no
+  // subcategory/brand/flavor/size columns (see schema.ts's academyCourses:
+  // only title/description/level/category/priceInCents exist), so only the
+  // facets genuinely backed by real data are added: free-text search over
+  // title/description, and price-based sort (recommended = no sort applied).
+  const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [sortBy, setSortBy] = useState("");
+  // Certification ("Formations") filter — same facet as /academy's own main
+  // page "Certification" Select (task: "Academy, Print & Marketing Filter
+  // Consistency"), added here for full parity.
+  const [certFilter, setCertFilter] = useState("");
   const [infoOpen, setInfoOpen] = useState(false);
   const [previewCourseId, setPreviewCourseId] = useState<number | null>(null);
   const [enrollTarget, setEnrollTarget] = useState<AcademyCourseCard | null>(null);
@@ -115,8 +131,19 @@ export default function AcademyStoreDetailPage() {
   // dimension /academy's own main-page filter bar already uses (Academy
   // courses have no `category` field the way Print/Marketing services do)
   // (docs/academy_print_marketing_store_previous_work_audit.md Section F).
-  const availableLevels = useMemo(() => Array.from(new Set(courses.map((c) => c.level))), [courses]);
-  const filtered = useMemo(() => (levelId ? courses.filter((c) => c.level === levelId) : courses), [courses, levelId]);
+  const filtered = useMemo(() => {
+    let list = levelId ? courses.filter((c) => c.level === levelId) : courses;
+    if (certFilter) list = list.filter((c) => String(c.hasCertification) === certFilter);
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((c) => c.title.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q));
+    }
+    if (sortBy === "price_asc") list = [...list].sort((a, b) => a.priceInCents - b.priceInCents);
+    if (sortBy === "price_desc") list = [...list].sort((a, b) => b.priceInCents - a.priceInCents);
+    return list;
+  }, [courses, levelId, certFilter, search, sortBy]);
+  const hasActiveFilters = !!levelId || !!certFilter || !!search.trim() || !!sortBy;
+  const resetFilters = () => { setLevelId(""); setCertFilter(""); setSearch(""); setSortBy(""); };
 
   // A Coffee Owner must not be able to reach a Store the marketplace itself
   // wouldn't show — same visibility intent as /print's/marketing's Store
@@ -165,14 +192,10 @@ export default function AcademyStoreDetailPage() {
           <ChevronLeft className="w-4.5 h-4.5 text-white" />
         </button>
 
+        {/* Task: "Hero Theme Toggle Cleanup" — the redundant Dark/Light toggle that
+            used to be here was removed; the navbar's own toggle, calling the same
+            useThemeStore, remains the single theme control for this page. */}
         <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
-          <button
-            onClick={() => toggleTheme()}
-            aria-label="Toggle theme"
-            className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center hover:scale-105 transition-transform"
-          >
-            {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-white" />}
-          </button>
           <button
             className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
             onClick={() => toggleAcademyOrganisation({
@@ -246,31 +269,82 @@ export default function AcademyStoreDetailPage() {
         {card.description && <p className={`text-sm mt-6 ml-20 line-clamp-1 break-words ${t.textMuted}`}>{card.description}</p>}
       </div>
 
-      {availableLevels.length > 0 && (
+      {/* Task: "Academy, Print & Marketing Filter Consistency" — the separate
+          level-shortcut pill group (Tout/Expert/Avancé/Débutant) that used to
+          live here is removed; level filtering is still available, now via
+          the same "Niveaux" Select /academy's own main page uses, alongside
+          the same Certification ("Formations") Select and search, so this
+          store page's filter set matches /academy exactly. */}
+      {courses.length > 0 && (
         <div className={`sticky top-14 z-30 border-b mt-4 transition-colors ${t.stripBg}`}>
           <div className="max-w-7xl mx-auto px-4">
-            <div className="flex gap-1.5 overflow-x-auto py-3" style={{ scrollbarWidth: "none" }}>
-              <div className={`flex rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
-                <button
-                  onClick={() => setLevelId("")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl shrink-0 transition-all text-[11px] font-semibold ${levelId === "" ? t.switcherActive : t.switcherInactive}`}
-                  data-testid="button-academy-store-level-all"
-                >
-                  <span className="text-base leading-none"><GraduationCap className="w-4 h-4" /></span>
-                  <span>Tout</span>
-                </button>
-              </div>
-              {availableLevels.map((lvl) => (
-                <div key={lvl} className={`flex rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
+            <div className="flex items-center gap-2 flex-wrap py-2">
+              <SlidersHorizontal className={`w-3.5 h-3.5 shrink-0 ${t.textMuted}`} />
+              <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px] sm:max-w-xs">
+                {!searchOpen && (
                   <button
-                    onClick={() => setLevelId(levelId === lvl ? "" : lvl)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-[11px] font-semibold ${levelId === lvl ? t.switcherActive : t.switcherInactive}`}
-                    data-testid={`button-academy-store-level-${lvl}`}
+                    type="button"
+                    className={`sm:hidden h-7 w-7 rounded-full border flex items-center justify-center shrink-0 ${t.inputBg}`}
+                    onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
+                    aria-label="Rechercher"
+                    data-testid="button-open-academy-store-search"
                   >
-                    <span className="whitespace-nowrap">{LEVEL_LABELS[lvl]}</span>
+                    <Search className="w-3.5 h-3.5" />
                   </button>
+                )}
+                <div className={`${searchOpen ? "flex" : "hidden"} sm:flex items-center relative w-44 sm:w-full`}>
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                  <Input
+                    ref={searchInputRef}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onBlur={() => { if (!search) setSearchOpen(false); }}
+                    placeholder="Rechercher une formation..."
+                    className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
+                    data-testid="input-academy-store-search"
+                  />
                 </div>
-              ))}
+              </div>
+              <Select value={levelId || "__all__"} onValueChange={(v) => setLevelId(v === "__all__" ? "" : v as AcademyCourseLevel)}>
+                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`} data-testid="select-academy-store-level">
+                  <SelectValue placeholder="Niveau" />
+                </SelectTrigger>
+                <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+                  <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Niveaux</SelectItem>
+                  <SelectItem value="BEGINNER" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Débutant</SelectItem>
+                  <SelectItem value="ADVANCED" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Avancé</SelectItem>
+                  <SelectItem value="EXPERT" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Expert</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={certFilter || "__all__"} onValueChange={(v) => setCertFilter(v === "__all__" ? "" : v)}>
+                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] shrink-0 ${t.selectTrigger}`} data-testid="select-academy-store-cert">
+                  <SelectValue placeholder="Certification" />
+                </SelectTrigger>
+                <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+                  <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Formations</SelectItem>
+                  <SelectItem value="true" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Avec certification</SelectItem>
+                  <SelectItem value="false" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Sans certification</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sortBy || "recommended"} onValueChange={(v) => setSortBy(v === "recommended" ? "" : v)}>
+                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`} data-testid="select-academy-store-sort">
+                  <SelectValue placeholder="Trier par" />
+                </SelectTrigger>
+                <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+                  <SelectItem value="recommended" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Recommandé</SelectItem>
+                  <SelectItem value="price_asc" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Prix croissant</SelectItem>
+                  <SelectItem value="price_desc" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Prix décroissant</SelectItem>
+                </SelectContent>
+              </Select>
+              {hasActiveFilters && (
+                <button
+                  onClick={resetFilters}
+                  className={`flex items-center gap-1 text-xs transition-colors ml-1 shrink-0 whitespace-nowrap ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}
+                  data-testid="button-reset-academy-store-filters"
+                >
+                  <RotateCcw className="w-3 h-3" /> Réinitialiser
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -287,9 +361,9 @@ export default function AcademyStoreDetailPage() {
             <GraduationCap className={`w-14 h-14 ${t.emptyIcon}`} />
             <div>
               <p className={`font-semibold ${t.textPrimary}`}>{courses.length === 0 ? "Aucune formation disponible" : "Aucune formation trouvée"}</p>
-              <p className={`text-sm mt-1 ${t.textMuted}`}>{courses.length === 0 ? "Cette académie n'a pas encore de formation publiée." : "Essayez un autre niveau."}</p>
+              <p className={`text-sm mt-1 ${t.textMuted}`}>{courses.length === 0 ? "Cette académie n'a pas encore de formation publiée." : "Essayez d'ajuster vos filtres."}</p>
             </div>
-            {levelId && courses.length > 0 && <Button size="sm" variant="outline" onClick={() => setLevelId("")}>Effacer le filtre</Button>}
+            {hasActiveFilters && courses.length > 0 && <Button size="sm" variant="outline" onClick={resetFilters}>Effacer tous les filtres</Button>}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">

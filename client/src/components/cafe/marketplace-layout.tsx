@@ -385,20 +385,24 @@ function AccountPanel({
       <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
         {/* Title row */}
         <div className="flex items-center justify-between mb-5">
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
-          >
-            <X className="w-4 h-4" />
-          </button>
-          <h2 className={`text-[15px] font-semibold tracking-tight ${textPrimary}`}>My Account</h2>
+          {/* Close button moved to the right side (task: "Modal Close Button
+              Consistency") to match the Pack Details modal's reference order
+              (close is always the rightmost control); theme toggle moved left
+              of it — same two buttons, same onClick handlers, position only. */}
           <button
             onClick={() => toggle()}
             aria-label="Toggle theme"
             className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-100 hover:bg-gray-200"}`}
           >
             {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
+          </button>
+          <h2 className={`text-[15px] font-semibold tracking-tight ${textPrimary}`}>My Account</h2>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
 
@@ -917,8 +921,20 @@ function AccountPanel({
         {/* PRINT order details — resolved live from the same printOrders query so a
             realtime status update shows immediately if this dialog is left open. */}
         <Dialog open={!!detailPrintOrder} onOpenChange={(o) => !o && setDetailPrintOrder(null)}>
-          <DialogContent className={`sm:max-w-md ${bg} ${textPrimary}`}>
-            <DialogTitle className={textPrimary}>Commande PRINT {detailPrintOrder ? `#${detailPrintOrder.id}` : ""}</DialogTitle>
+          <DialogContent hideClose className={`sm:max-w-md ${bg} ${textPrimary}`}>
+            {/* Custom close button (task: "Modal Close Button Consistency") replacing
+                the unstyled default Radix close, matching the Pack Details modal's
+                circular button exactly — position/style only, same dismissal. */}
+            <div className="flex items-center justify-between">
+              <DialogTitle className={textPrimary}>Commande PRINT {detailPrintOrder ? `#${detailPrintOrder.id}` : ""}</DialogTitle>
+              <button
+                onClick={() => setDetailPrintOrder(null)}
+                aria-label="Close"
+                className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
             <DialogDescription className="sr-only">Détails de la commande PRINT</DialogDescription>
             {(() => {
               const order = detailPrintOrder ? (printOrders.find((o) => o.id === detailPrintOrder.id) ?? detailPrintOrder) : null;
@@ -964,8 +980,20 @@ function AccountPanel({
         {/* Marketing project details (Part 15) — resolved live from the same
             marketingProjects query, same status vocabulary/meta as the card above. */}
         <Dialog open={detailMarketingProjectId != null} onOpenChange={(o) => !o && setDetailMarketingProjectId(null)}>
-          <DialogContent className={`sm:max-w-md ${bg} ${textPrimary}`}>
-            <DialogTitle className={textPrimary}>Projet Marketing {detailMarketingProjectId ? `#${detailMarketingProjectId}` : ""}</DialogTitle>
+          <DialogContent hideClose className={`sm:max-w-md ${bg} ${textPrimary}`}>
+            {/* Custom close button (task: "Modal Close Button Consistency") replacing
+                the unstyled default Radix close, matching the Pack Details modal's
+                circular button exactly — position/style only, same dismissal. */}
+            <div className="flex items-center justify-between">
+              <DialogTitle className={textPrimary}>Projet Marketing {detailMarketingProjectId ? `#${detailMarketingProjectId}` : ""}</DialogTitle>
+              <button
+                onClick={() => setDetailMarketingProjectId(null)}
+                aria-label="Close"
+                className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
             <DialogDescription className="sr-only">Détails du projet Marketing</DialogDescription>
             {(() => {
               const project = marketingProjectsForOwner.find((p) => p.id === detailMarketingProjectId);
@@ -1033,8 +1061,20 @@ function AccountPanel({
             academyRegistrations query, same status vocabulary/meta as the card
             above. Mirrors the Maintenance/Marketing detail dialogs exactly. */}
         <Dialog open={detailAcademyRegistrationId != null} onOpenChange={(o) => !o && setDetailAcademyRegistrationId(null)}>
-          <DialogContent className={`sm:max-w-md ${bg} ${textPrimary}`}>
-            <DialogTitle className={textPrimary}>Inscription Academy {detailAcademyRegistrationId ? `#${detailAcademyRegistrationId}` : ""}</DialogTitle>
+          <DialogContent hideClose className={`sm:max-w-md ${bg} ${textPrimary}`}>
+            {/* Custom close button (task: "Modal Close Button Consistency") replacing
+                the unstyled default Radix close, matching the Pack Details modal's
+                circular button exactly — position/style only, same dismissal. */}
+            <div className="flex items-center justify-between">
+              <DialogTitle className={textPrimary}>Inscription Academy {detailAcademyRegistrationId ? `#${detailAcademyRegistrationId}` : ""}</DialogTitle>
+              <button
+                onClick={() => setDetailAcademyRegistrationId(null)}
+                aria-label="Close"
+                className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
             <DialogDescription className="sr-only">Détails de l'inscription Academy</DialogDescription>
             {(() => {
               const registration = academyRegistrations.find((r) => r.id === detailAcademyRegistrationId);
@@ -1613,14 +1653,10 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
 
         {/* Title row */}
         <div className="flex items-center justify-between mb-5">
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
-          >
-            <X className="w-4 h-4" />
-          </button>
-          <h2 className={`text-[15px] font-semibold tracking-tight ${textPrimary}`}>My Favorites</h2>
+          {/* Close button moved to the right side (task: "Modal Close Button
+              Consistency") to match the Pack Details modal's reference order
+              (close is always the rightmost control); theme toggle moved left
+              of it — same two buttons, same onClick handlers, position only. */}
           <button
             onClick={() => toggle()}
             aria-label="Toggle theme"
@@ -1630,6 +1666,14 @@ function FavoritesPanel({ onClose }: { onClose: () => void }) {
               ? <Sun className="w-4 h-4 text-amber-400" />
               : <Moon className="w-4 h-4 text-gray-500" />
             }
+          </button>
+          <h2 className={`text-[15px] font-semibold tracking-tight ${textPrimary}`}>My Favorites</h2>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
 

@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Check, Globe, UserCheck } from "lucide-react";
+import { Check, Globe, UserCheck, X } from "lucide-react";
 
 const URGENCY_OPTIONS: { value: string; label: string }[] = [
   { value: "LOW", label: "Faible" },
@@ -279,12 +279,27 @@ export function MaintenanceJobPostFormModal({
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v && !isPending) onClose(); }}>
       <DialogContent
-        className={`sm:max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full ${t.modalBg} ${isDark ? "[&>button]:text-gray-400" : ""}`}
+        hideClose
+        className={`sm:max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full ${t.modalBg}`}
       >
+        {/* Custom close button (task: "Modal Close Button Consistency") replacing
+            the unstyled default Radix close, matching the Pack Details modal's
+            circular button exactly — same dismissal guard as the dialog's own
+            onOpenChange above (disabled while a submit is pending). */}
         <DialogHeader>
-          <DialogTitle className={t.textPrimary}>
-            {isEditing ? "Modifier l'intervention" : "Publier une intervention"}
-          </DialogTitle>
+          <div className="flex items-center justify-between gap-3">
+            <DialogTitle className={t.textPrimary}>
+              {isEditing ? "Modifier l'intervention" : "Publier une intervention"}
+            </DialogTitle>
+            <button
+              type="button"
+              onClick={() => { if (!isPending) onClose(); }}
+              aria-label="Close"
+              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </DialogHeader>
 
         <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); submit("PUBLISHED"); }}>

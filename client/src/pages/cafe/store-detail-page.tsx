@@ -25,7 +25,7 @@ import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import { FlashMode } from "@/components/flash-mode";
 import { PackCardTile } from "@/pages/cafe/browse-products";
-import type { StoreDetail, ProductWithTaxonomy, OpeningHoursMap, PackDetail, CategoryWithCount, ListingPromotion } from "@shared/schema";
+import type { StoreDetail, ProductWithTaxonomy, OpeningHoursMap, PackDetail, CategoryWithCount, ListingPromotion, SubCategoryWithDetails } from "@shared/schema";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -545,7 +545,7 @@ function StoreProductCard({
 
 // ── Filter state ──────────────────────────────────────────────────────────────
 
-interface FilterState { subCategoryId: string; brandId: string; }
+interface FilterState { subCategoryId: string; brandId: string; flavorId: string; sizeId: string; sortBy: string; }
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
@@ -564,11 +564,10 @@ export default function StoreDetailPage() {
 
   // ── Dark / light mode (dark by default — matches Favorites modal + /products page) ──
   const isDark = useThemeStore((s) => s.isDark);
-  const toggle = useThemeStore((s) => s.toggle);
   const t = useTheme(isDark);
 
   const [categoryId, setCategoryId] = useState("");
-  const [filters, setFilters] = useState<FilterState>({ subCategoryId: "", brandId: "" });
+  const [filters, setFilters] = useState<FilterState>({ subCategoryId: "", brandId: "", flavorId: "", sizeId: "", sortBy: "" });
   // Add Product and Pack Search to Individual Store Pages — same pattern as
   // /products' own `search` state, scoped here to this store's own products/
   // packs (store?.products / storePacks below are already fetched for just
@@ -669,13 +668,26 @@ export default function StoreDetailPage() {
     return list;
   }, [products, search, categoryId]);
 
+  // Subcategory icons (task: "Match Shop Store Subcategory Icons With the
+  // Products Page") — p.subCategoryLabel only carries {id, name} (icon
+  // stripped server-side), so the icon is resolved the same way /products
+  // (browse-products.tsx) already does: a separate query for the full
+  // admin-managed records, reduced to an id→icon map. Reused here instead of
+  // a second/conflicting icon source.
+  const { data: allSubCategories = [] } = useQuery<SubCategoryWithDetails[]>({ queryKey: ["/api/subcategories"] });
+  const subCategoryIconMap = useMemo(() => {
+    const map = new Map<number, string>();
+    allSubCategories.forEach((sc) => { if (sc.icon) map.set(sc.id, sc.icon); });
+    return map;
+  }, [allSubCategories]);
+
   const subCategories = useMemo(() => {
     const map = new Map<string, string>();
     categoryFiltered.forEach((p) => {
       if (p.subCategoryLabel?.id && p.subCategoryLabel?.name) map.set(String(p.subCategoryLabel.id), p.subCategoryLabel.name);
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [categoryFiltered]);
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name, icon: subCategoryIconMap.get(Number(id)) ?? null }));
+  }, [categoryFiltered, subCategoryIconMap]);
 
   const brands = useMemo(() => {
     const map = new Map<string, string>();
@@ -685,10 +697,36 @@ export default function StoreDetailPage() {
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [categoryFiltered]);
 
+  // Flavor/size filters (task: "Complete Store Page Filters") — same derivation
+  // pattern as subCategories/brands above, from the same real flavorLabels/
+  // sizeLabels fields the reference /products FilterBar already uses.
+  const flavors = useMemo(() => {
+    const map = new Map<string, string>();
+    categoryFiltered.forEach((p) => {
+      (p.flavorLabels ?? []).forEach((fl) => { if (fl.id && fl.name) map.set(String(fl.id), fl.name); });
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [categoryFiltered]);
+
+  const sizes = useMemo(() => {
+    const map = new Map<string, string>();
+    categoryFiltered.forEach((p) => {
+      (p.sizeLabels ?? []).forEach((sl) => { if (sl.id && sl.name) map.set(String(sl.id), sl.name); });
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [categoryFiltered]);
+
   const filtered = useMemo(() => {
     let list = categoryFiltered;
     if (filters.subCategoryId) list = list.filter((p) => String(p.subCategoryId) === filters.subCategoryId);
     if (filters.brandId) list = list.filter((p) => p.brandLabel && String(p.brandLabel.id) === filters.brandId);
+    if (filters.flavorId) list = list.filter((p) => (p.flavorLabels ?? []).some((fl) => String(fl.id) === filters.flavorId));
+    if (filters.sizeId) list = list.filter((p) => (p.sizeLabels ?? []).some((sl) => String(sl.id) === filters.sizeId));
+    // Single-store page — "most suppliers"/"nearest" sort options from the
+    // multi-supplier reference page don't apply here (every item belongs to
+    // this same store), so only price sort is offered, same bestPrice field.
+    if (filters.sortBy === "price_asc") list = [...list].sort((a, b) => ((a as any).bestPrice ?? Infinity) - ((b as any).bestPrice ?? Infinity));
+    if (filters.sortBy === "price_desc") list = [...list].sort((a, b) => ((b as any).bestPrice ?? 0) - ((a as any).bestPrice ?? 0));
     return list;
   }, [categoryFiltered, filters]);
 
@@ -698,7 +736,7 @@ export default function StoreDetailPage() {
   // setCategoryId directly), so Reset can safely clear search too — matching
   // the one existing resetFilters used by both the filter bar's own Reset and
   // the empty-state "reset" button.
-  const resetFilters = () => { setFilters({ subCategoryId: "", brandId: "" }); setCategoryId(""); setSearch(""); };
+  const resetFilters = () => { setFilters({ subCategoryId: "", brandId: "", flavorId: "", sizeId: "", sortBy: "" }); setCategoryId(""); setSearch(""); };
   const hasActive = !!categoryId || !!search || Object.values(filters).some(Boolean);
 
   // Derived media fields (with backward-compat for old coverUrl)
@@ -773,19 +811,11 @@ export default function StoreDetailPage() {
           <ChevronLeft className="w-4.5 h-4.5 text-white" />
         </button>
 
-         {/* Top-right cluster: Dark/Light toggle + Flash + Favorite */}
+         {/* Top-right cluster: Flash + Favorite (task: "Hero Theme Toggle Cleanup" —
+             the redundant Dark/Light toggle that used to be here was removed; the
+             navbar's own toggle, calling the same useThemeStore, remains the single
+             theme control for this page). */}
         <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
-          <button
-            onClick={() => toggle()}
-            aria-label="Toggle theme"
-            className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center hover:scale-105 transition-transform"
-          >
-            {isDark
-              ? <Sun className="w-4 h-4 text-amber-400" />
-              : <Moon className="w-4 h-4 text-white" />
-            }
-          </button>
-          
           <button
             className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
             onClick={() => toggleStore(store.id)}
@@ -896,26 +926,26 @@ export default function StoreDetailPage() {
                 className="flex gap-1.5 overflow-x-auto py-3"
                 style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
               >
-                {/* "All" pill */}
+                {/* "Tout" pill */}
                 <div className={`flex rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
                   <button
-                    onClick={() => { setCategoryId(""); setFilters({ subCategoryId: "", brandId: "" }); }}
+                    onClick={() => { setCategoryId(""); setFilters({ subCategoryId: "", brandId: "", flavorId: "", sizeId: "", sortBy: "" }); }}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl shrink-0 transition-all text-[11px] font-semibold ${categoryId === "" ? t.switcherActive : t.switcherInactive}`}
                     data-testid="button-cat-all"
                   >
                     <span className="text-base leading-none">🛍️</span>
-                    <span>All</span>
+                    <span>Tout</span>
                   </button>
                 </div>
                 {categories.map((cat) => (
                   <div key={cat.id} className={`flex rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
                     <button
-                      onClick={() => { setCategoryId(categoryId === cat.id ? "" : cat.id); setFilters({ subCategoryId: "", brandId: "" }); }}
+                      onClick={() => { setCategoryId(categoryId === cat.id ? "" : cat.id); setFilters({ subCategoryId: "", brandId: "", flavorId: "", sizeId: "", sortBy: "" }); }}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-[11px] font-semibold ${categoryId === cat.id ? t.switcherActive : t.switcherInactive}`}
                       data-testid={`button-cat-${cat.id}`}
                     >
                       {cat.icon && <span className="text-base leading-none">{cat.icon}</span>}
-                      <span className="max-w-[72px] truncate">{cat.name}</span>
+                      <span className="max-w-[110px] whitespace-normal break-words leading-tight text-left">{cat.name}</span>
                     </button>
                   </div>
                 ))}
@@ -935,7 +965,7 @@ export default function StoreDetailPage() {
                     type="button"
                     className={`sm:hidden h-7 w-7 rounded-full border flex items-center justify-center shrink-0 ${t.inputBg}`}
                     onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
-                    aria-label="Search"
+                    aria-label="Rechercher"
                     data-testid="button-open-store-search"
                   >
                     <Search className="w-3.5 h-3.5" />
@@ -948,7 +978,7 @@ export default function StoreDetailPage() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     onBlur={() => { if (!search) setSearchOpen(false); }}
-                    placeholder="Search products…"
+                    placeholder="Rechercher des produits…"
                     className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
                     data-testid="input-store-search"
                   />
@@ -957,31 +987,72 @@ export default function StoreDetailPage() {
               {subCategories.length > 0 && (
                 <Select value={filters.subCategoryId || "__all__"} onValueChange={(v) => updateFilter("subCategoryId", v === "__all__" ? "" : v)}>
                   <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] ${t.selectTrigger}`}>
-                    <SelectValue placeholder="Sub-Category" />
+                    <SelectValue placeholder="Sous-catégorie" />
                   </SelectTrigger>
                   <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
-                    <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>All Sub-Categories</SelectItem>
-                    {subCategories.map((sc) => <SelectItem key={sc.id} value={sc.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{sc.name}</SelectItem>)}
+                    <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Sous-catégories</SelectItem>
+                    {subCategories.map((sc) => (
+                      <SelectItem key={sc.id} value={sc.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>
+                        {/* Same fallback "📦" as /products when no admin-configured icon exists yet. */}
+                        <span className="mr-1.5">{sc.icon || "📦"}</span>{sc.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               )}
               {brands.length > 0 && (
                 <Select value={filters.brandId || "__all__"} onValueChange={(v) => updateFilter("brandId", v === "__all__" ? "" : v)}>
                   <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] ${t.selectTrigger}`}>
-                    <SelectValue placeholder="Brand" />
+                    <SelectValue placeholder="Marque" />
                   </SelectTrigger>
                   <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
-                    <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>All Brands</SelectItem>
+                    <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Marques</SelectItem>
                     {brands.map((b) => <SelectItem key={b.id} value={b.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{b.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               )}
+              {flavors.length > 0 && (
+                <Select value={filters.flavorId || "__all__"} onValueChange={(v) => updateFilter("flavorId", v === "__all__" ? "" : v)}>
+                  <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] ${t.selectTrigger}`}>
+                    <SelectValue placeholder="Saveur" />
+                  </SelectTrigger>
+                  <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+                    <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Saveurs</SelectItem>
+                    {flavors.map((f) => <SelectItem key={f.id} value={f.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{f.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+              {sizes.length > 0 && (
+                <Select value={filters.sizeId || "__all__"} onValueChange={(v) => updateFilter("sizeId", v === "__all__" ? "" : v)}>
+                  <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[100px] ${t.selectTrigger}`}>
+                    <SelectValue placeholder="Taille" />
+                  </SelectTrigger>
+                  <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+                    <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Tailles</SelectItem>
+                    {sizes.map((s) => <SelectItem key={s.id} value={s.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{s.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+              {/* Sort — "Plus de fournisseurs"/"Les plus proches" from the
+                  multi-supplier reference page are omitted here: every item on
+                  this page already belongs to the same single store, so
+                  supplier-count/distance sorting wouldn't distinguish anything. */}
+              <Select value={filters.sortBy || "recommended"} onValueChange={(v) => updateFilter("sortBy", v === "recommended" ? "" : v)}>
+                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`}>
+                  <SelectValue placeholder="Trier par" />
+                </SelectTrigger>
+                <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+                  <SelectItem value="recommended" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Recommandé</SelectItem>
+                  <SelectItem value="price_asc" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Prix croissant</SelectItem>
+                  <SelectItem value="price_desc" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Prix décroissant</SelectItem>
+                </SelectContent>
+              </Select>
               {hasActive && (
                 <button
                   onClick={resetFilters}
                   className={`flex items-center gap-1 text-xs transition-colors ml-1 ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}
                 >
-                  <RotateCcw className="w-3 h-3" /> Reset
+                  <RotateCcw className="w-3 h-3" /> Réinitialiser
                 </button>
               )}
             </div>
@@ -1005,9 +1076,9 @@ export default function StoreDetailPage() {
       {/* ── Products grid ─────────────────────────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="mb-4">
-          <h2 className={`font-bold text-lg ${t.textPrimary}`}>Products</h2>
+          <h2 className={`font-bold text-lg ${t.textPrimary}`}>Produits</h2>
           <p className={`text-sm mt-0.5 ${t.textMuted}`}>
-            {filtered.length} product{filtered.length !== 1 ? "s" : ""} available
+            {filtered.length} produit{filtered.length !== 1 ? "s" : ""} disponible{filtered.length !== 1 ? "s" : ""}
           </p>
         </div>
 
@@ -1015,9 +1086,9 @@ export default function StoreDetailPage() {
           <div className="flex flex-col items-center justify-center py-24 gap-4 text-center">
             <Package className={`w-14 h-14 ${t.emptyIcon}`} />
             <div>
-              <p className={`font-semibold ${t.emptyText}`}>No products found</p>
+              <p className={`font-semibold ${t.emptyText}`}>Aucun produit trouvé</p>
               <p className={`text-sm mt-1 ${t.emptySubText}`}>
-                {hasActive ? "Try adjusting your filters." : "This store hasn't listed any products yet."}
+                {hasActive ? "Essayez d'ajuster vos filtres." : "Ce magasin n'a pas encore publié de produits."}
               </p>
             </div>
             {hasActive && (
@@ -1027,7 +1098,7 @@ export default function StoreDetailPage() {
                 className={t.dk ? "border-gray-700 text-gray-300 hover:bg-gray-800" : ""}
                 onClick={resetFilters}
               >
-                Clear all filters
+                Effacer tous les filtres
               </Button>
             )}
           </div>

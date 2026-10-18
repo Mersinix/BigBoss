@@ -4762,3 +4762,718 @@ les libellés d'interface statiques de ce composant.
   affichées telles quelles conformément à la consigne « use those
   configured icons consistently », pas une erreur de mapping côté
   Shop).
+
+---
+
+# Analyse — Modal Close Button Consistency and Hero Theme Toggle Cleanup
+
+## 1. Audit préalable
+
+### 1.1 Référence — modale Pack Details
+
+`client/src/components/pack-quick-view-modal.tsx` : `DialogContent` avec
+`[&>button:last-child]:hidden`, en-tête dans l'ordre **Favori → titre →
+bascule thème → Fermer** — le bouton Fermer est toujours le **dernier**
+élément de la rangée (`w-8 h-8 rounded-full`, icône `X` `w-4 h-4`,
+`t.iconBtn` = `bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white`
+(sombre) / `bg-gray-100 hover:bg-gray-200 text-gray-500` (clair)).
+
+### 1.2 Constat — presque toutes les autres modales inversent l'ordre
+
+Vérification directe de chaque modale listée par la tâche :
+
+- **My Favorites**, **My Account** (`marketplace-layout.tsx`) : ordre
+  actuel `[Fermer, Titre, Bascule thème]` — Fermer **premier**, inversé
+  par rapport à Pack Details.
+- **Order Details** (`order-details-modal.tsx`) : même inversion
+  (`[Fermer, Titre, Bascule]`), avec en plus `aria-label="Fermer"` au
+  lieu de `"Close"`.
+- **Product Detail** (`product-detail-content.tsx`, `ModalHeader` local) :
+  même inversion (`[Fermer, Nom produit, Bascule]`).
+- **PRINT/Marketing/Academy — détails** (dialogues inline dans
+  `marketplace-layout.tsx`, ouverts depuis My Account → Réservations) :
+  **aucun bouton Fermer personnalisé du tout** — uniquement le bouton par
+  défaut Radix (`absolute right-4 top-4`, non stylé, aucune gestion
+  clair/sombre).
+- **Offres/Missions Baristas** (`job-management-modal.tsx`) et
+  **Interventions Maintenance** (`maintenance-job-management-modal.tsx`) :
+  même constat — bouton Radix par défaut uniquement, juste une teinte de
+  couleur en mode sombre (`[&>button]:text-gray-400`), pas de bouton
+  personnalisé.
+- **Modales imbriquées plus profondément** (ouvertes depuis Order
+  Details/Job Management) : `CancelSubOrderModal`,
+  `JobPostFormModal`/`MaintenanceJobPostFormModal` — bouton Radix par
+  défaut uniquement ; `OrderInvoiceModal`/`PayoutInfoModal`/
+  `SelfPickupModal` — bouton personnalisé déjà présent mais positionné en
+  **premier** (même inversion que My Account/My Favorites).
+- **AddressDetailsModal (Localisation)** : déjà positionnée à droite, pas
+  de bouton de bascule à côté pour comparer — considérée déjà conforme,
+  non modifiée.
+- **Aucun composant `ModalCloseButton` partagé n'existe** dans le code —
+  chaque modale duplique le même balisage inline. Pas de second système
+  créé pour cette tâche : le même balisage exact (classes, icône) continue
+  d'être dupliqué, uniquement réordonné/ajouté, conformément à « do not
+  introduce a new modal system ».
+
+### 1.3 Audit de la bascule thème dupliquée dans les heros
+
+- Les 4 pages de **découverte** citées littéralement par la tâche
+  (`/products` [Shop], `/academy`, `/print`, `/marketing`) **n'ont déjà
+  plus** de bascule dans leur hero — confirmé par grep direct (aucune
+  icône `Sun`/`Moon`), avec un commentaire existant confirmant qu'un
+  nettoyage antérieur l'avait déjà retirée de ces pages précises.
+- La bascule dupliquée existe en réalité sur un **niveau de page
+  différent** : la page de détail d'**un fournisseur/prestataire
+  individuel** pour chacun des 4 services — `store-detail-page.tsx`
+  (Shop), `academy-store-detail-page.tsx`, `print-store-detail-page.tsx`,
+  `marketing-store-detail-page.tsx`. Les 4 utilisent le bouton **identique**
+  (`w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full`, icône `Sun`/`Moon`),
+  chacun appelant `useThemeStore((s) => s.isDark)`/`useThemeStore((s) =>
+  s.toggle)` — **le même store Zustand global que la navbar**.
+- Confirmé : aucun état local propre à ce bouton — c'est un doublon pur
+  d'interface. Le retirer ne peut affecter ni le store global, ni la
+  préférence sauvegardée, puisque le bouton de la navbar
+  (`marketplace-layout.tsx`, ligne ~3231-3243) lit/écrit exactement le
+  même état et reste totalement intact.
+
+## 2. Implémentation
+
+### 2.1 Standardisation des boutons Fermer
+
+Pour chaque modale listée, Fermer déplacé à la position la plus à droite
+(ou ajouté, stylé à l'identique de Pack Details, là où il manquait) :
+
+- **My Favorites**, **My Account** (`marketplace-layout.tsx`) : ordre
+  inversé en `[Bascule thème, Titre, Fermer]` — mêmes deux boutons, mêmes
+  gestionnaires `onClick`, position uniquement.
+- **Order Details** (`order-details-modal.tsx`) : même inversion
+  `[Bascule, Numéro de commande, Fermer]`.
+- **Product Detail** (`product-detail-content.tsx`) : même inversion
+  `[Bascule, Nom produit, Fermer]`.
+- **PRINT/Marketing/Academy — détails** (`marketplace-layout.tsx`) :
+  `DialogContent` reçoit `hideClose` ; chaque titre enveloppé dans une
+  rangée `flex justify-between` avec un nouveau bouton Fermer circulaire
+  identique à Pack Details, à droite.
+- **Offres/Missions Baristas**, **Interventions Maintenance**
+  (`job-management-modal.tsx`, `maintenance-job-management-modal.tsx`) :
+  `hideClose` ajouté ; bouton Fermer ajouté dans les **trois** états de
+  rendu (liste principale, écran de chargement du deep-link, vue détail
+  d'une offre/intervention) — un nouveau prop `onClose` ajouté à
+  `JobDetailView` pour le distinguer de `onBack` (« Retour à la liste »,
+  qui reste une navigation interne à la modale, pas une fermeture).
+- **CancelSubOrderModal** (`order-details-modal.tsx`),
+  **JobPostFormModal**/**MaintenanceJobPostFormModal** : `hideClose`
+  ajouté + bouton Fermer personnalisé ajouté ; pour les deux formulaires,
+  le clic respecte la même garde `!isPending` déjà utilisée par la
+  fermeture automatique de la modale (`onOpenChange`), pour ne jamais
+  fermer pendant un enregistrement en cours.
+- **OrderInvoiceModal**, **PayoutInfoModal**, **SelfPickupModal**
+  (`client/src/components/financial/`, `client/src/components/order/`) :
+  ordre inversé (le bouton Imprimer, ou l'espaceur invisible qui centrait
+  le titre, passe en premier ; Fermer passe en dernier) — layout/centrage
+  du titre inchangé.
+- **AddressDetailsModal** : non modifiée (déjà conforme, voir §1.2).
+
+### 2.2 Retrait de la bascule thème dupliquée (4 pages de détail fournisseur)
+
+- `store-detail-page.tsx`, `academy-store-detail-page.tsx`,
+  `print-store-detail-page.tsx`, `marketing-store-detail-page.tsx` :
+  bouton de bascule retiré du cluster haut-droite du hero (Favori/Flash/
+  autres boutons du même cluster conservés tels quels) ; la destructuration
+  `toggle`/`toggleTheme` devenue inutilisée retirée avec lui (confirmé par
+  grep qu'elle n'était plus appelée nulle part ailleurs dans chaque
+  fichier) ; imports `Sun`/`Moon` retirés des 3 fichiers où ils devenaient
+  inutilisés (conservés dans `store-detail-page.tsx`, où ils restent
+  utilisés par la bascule légitime de sa propre modale « Horaires
+  d'ouverture », hors périmètre de cette tâche).
+
+## 3. Garde-fous respectés
+
+- Aucun comportement de fermeture modifié : chaque bouton déplacé/ajouté
+  appelle exactement le même gestionnaire `onClose`/équivalent qu'avant —
+  uniquement la position et, pour les modales qui n'en avaient pas, le
+  style du bouton.
+- Aucune logique de formulaire, de validation ou de soumission touchée
+  (`JobPostFormModal`/`MaintenanceJobPostFormModal` : seule la zone d'en-
+  tête a été modifiée, le `<form>` et tous ses champs restent identiques).
+- Navbar non modifiée : son propre bouton de bascule
+  (`marketplace-layout.tsx`, ~ligne 3231-3243) reste la seule source
+  intacte, non touchée par cette tâche.
+- Retrait de la bascule dupliquée strictement limité à 4 fichiers précis
+  (pages de détail fournisseur), jamais aux 4 pages de découverte
+  (`/products`, `/academy`, `/print`, `/marketing`) qui n'en avaient déjà
+  plus — confirmé par l'audit avant toute modification.
+- Aucune table, route, ou donnée de thème persistée modifiée — le store
+  `useThemeStore` lui-même (`client/src/store/theme-store.ts`) n'a reçu
+  aucune modification.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- Redémarrage du serveur de dev ; aucune erreur dans les logs serveur
+  après redémarrage.
+- Grep final : confirmé qu'aucune des 4 pages de détail fournisseur ne
+  contient plus d'icône `Sun`/`Moon` à l'exception de
+  `store-detail-page.tsx` (dont les 2 occurrences restantes appartiennent
+  à sa modale « Horaires d'ouverture », distincte et hors périmètre) ;
+  confirmé qu'aucune des destructurations `toggle`/`toggleTheme` retirées
+  n'était plus référencée ailleurs dans chacun des 4 fichiers avant
+  suppression.
+- `git status --short` final : 14 fichiers modifiés, tous explicitement
+  dans le périmètre de la tâche (modales listées + modales imbriquées
+  identifiées par l'audit + les 4 pages de détail fournisseur) — aucun
+  fichier serveur, schéma, route ou page sans rapport touché.
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour vérifier visuellement
+  l'alignement exact des boutons réordonnés, l'absence de chevauchement
+  avec le titre, ou le comportement au clic dans chacune des 14 modales/
+  pages ; vérifié par lecture de code comparant chaque modale au balisage
+  exact de la référence Pack Details, type-checking strict, et build de
+  production réussi. Une vérification manuelle (desktop + mobile, chaque
+  modale listée, les 4 pages de détail fournisseur en clair et en sombre)
+  reste recommandée avant mise en production.
+- Portée volontairement étendue au-delà de la liste littérale de la tâche
+  pour couvrir les modales imbriquées à un niveau de profondeur
+  supplémentaire (`CancelSubOrderModal`, `JobPostFormModal`,
+  `MaintenanceJobPostFormModal`, `OrderInvoiceModal`, `PayoutInfoModal`,
+  `SelfPickupModal`), conformément à l'insistance explicite de la tâche
+  sur l'exhaustivité des modales imbriquées — signalé ici par transparence
+  puisque ce n'était pas nommé explicitement dans la liste initiale.
+- Aucun composant `ModalCloseButton` partagé n'a été créé pour factoriser
+  le balisage désormais dupliqué dans ~14 endroits — l'audit avait
+  recommandé cette extraction, mais la créer aurait dépassé le périmètre
+  « changements minimaux » de cette tâche (qui demande de réutiliser
+  l'existant, pas de refactoriser l'architecture des modales). Signalé
+  comme amélioration future possible, non traitée ici.
+
+---
+
+# Analyse — Complete Store Page Filters and French Localization
+
+## 1. Audit préalable
+
+### 1.1 Page de référence déjà complète
+
+`client/src/pages/cafe/browse-products.tsx` (`/products`, SHOP) possède
+déjà, depuis une tâche précédente de cette session, un `FilterBar`
+complet et entièrement français : recherche (« Rechercher des produits… »),
+sous-catégorie, marque, saveur, taille, tri (« Recommandé » + options prix/
+fournisseurs/proximité). C'est la référence explicite de cette tâche.
+
+### 1.2 Quatre pages concernées — pas les pages de découverte
+
+Les « store pages » visées par la tâche sont les pages de détail d'**un
+seul fournisseur/prestataire** (route `/.../stores/:id`), pas les pages de
+découverte multi-fournisseurs (`/academy`, `/print`, `/marketing`
+eux-mêmes, déjà traités dans des tâches antérieures) :
+
+1. `client/src/pages/cafe/store-detail-page.tsx` (Shop)
+2. `client/src/pages/cafe/barista/academy-store-detail-page.tsx`
+3. `client/src/pages/cafe/print/print-store-detail-page.tsx`
+4. `client/src/pages/cafe/marketing/marketing-store-detail-page.tsx`
+
+### 1.3 Constat clé — les facettes disponibles diffèrent réellement par service
+
+Vérification directe des tables `shared/schema.ts` et des types retournés
+par chaque hook de données (pas une supposition) :
+
+- **Shop** (`store-detail-page.tsx`) : les produits sont des
+  `ProductWithTaxonomy`, avec les **mêmes champs** `categoryLabel`/
+  `subCategoryLabel`/`brandLabel`/`flavorLabels`/`sizeLabels` que la page
+  de référence. Recherche/sous-catégorie/marque existaient déjà (en
+  anglais) ; **saveur, taille et tri étaient absents**, pas parce que la
+  donnée manque, mais parce que ces deux blocs n'avaient simplement jamais
+  été ajoutés sur cette page précise — un vrai écart par rapport à la
+  référence, pas une limite de données.
+- **Academy** (`academy-store-detail-page.tsx`) : `academyCourses`
+  (`shared/schema.ts:1984-2008`) n'a **aucune** colonne marque/saveur/
+  taille/sous-catégorie — uniquement `title`, `description`, `level`
+  (déjà filtré via les pastilles existantes), `category` (texte libre,
+  affiché sur chaque carte mais jamais filtré), `priceInCents`. Aucune
+  recherche n'existait du tout.
+- **Print** (`print-store-detail-page.tsx`) : `printCatalogItems`
+  (`shared/schema.ts:2819-2841`) a `category` (déjà filtré) et
+  `subCategory` (texte libre, valeur unique, colonne réelle avec données
+  réelles — vérifié en base) mais **aucune** colonne marque/saveur/taille.
+  Aucune recherche n'existait.
+- **Marketing** (`marketing-store-detail-page.tsx`) : `marketingServices`
+  (`shared/schema.ts:2688-2718`) a `category` (déjà filtré) et
+  `subCategories` (tableau texte **multi-valeur** — un service peut
+  appartenir à plusieurs sous-catégories à la fois, structurellement
+  différent du `subCategory` à valeur unique de Print/Shop) mais aucune
+  colonne marque/saveur/taille. Aucune recherche n'existait.
+
+**Conclusion directement actionnable** : marque/saveur/taille sont des
+concepts propres aux produits Shop (`TaxonomyLabel` sur `brandLabel`/
+`flavorLabels`/`sizeLabels`), sans équivalent sur `academyCourses`,
+`printCatalogItems` ou `marketingServices` — les ajouter ailleurs aurait
+fabriqué une interface sans donnée réelle derrière, explicitement interdit
+par la tâche. La facette manquante réellement exploitable est différente
+par service : saveur/taille pour Shop, rien pour Academy (seule la
+recherche s'applique), sous-catégorie pour Print (sélection simple) et
+Marketing (sélection multiple, calquée sur le motif existant de sa page de
+découverte).
+
+### 1.4 Tri — choix du périmètre
+
+Aucune des 3 pages non-Shop n'avait de tri existant. Un tri par prix
+(`priceInCents`/`startingPriceInCents`, colonnes réelles sur les 3) a été
+ajouté par cohérence avec la facette « Tri » explicitement demandée par la
+tâche « partout où applicable ». Les options « Plus de fournisseurs » et
+« Les plus proches » de la page de référence ont été délibérément omises
+sur les 4 pages de détail fournisseur : chaque page liste les éléments
+d'un **seul** fournisseur/prestataire, donc ces deux tris ne
+distingueraient rien (même fournisseur, même distance pour chaque ligne).
+
+### 1.5 Libellé de recherche — choix de cohérence littérale
+
+Le tableau de la tâche prescrit explicitement `"Rechercher des produits…"`
+comme libellé de recherche à utiliser « de manière cohérente » sur les
+4 pages — malgré le fait que les pages sœurs existantes (`/academy`,
+`/print`, `/marketing`) utilisent des libellés contextuels (« Rechercher
+une formation... », « Rechercher un service... »). Décision : suivre la
+consigne explicite et répétée de la tâche à la lettre plutôt que
+d'improviser un libellé "plus juste" — `"Rechercher des produits…"` est
+utilisé mot pour mot sur les 4 pages de détail fournisseur.
+
+## 2. Implémentation
+
+### 2.1 Shop (`store-detail-page.tsx`)
+
+- Traduction des libellés déjà existants : "All"→"Tout", "Search"→
+  "Rechercher", "Search products…"→"Rechercher des produits…",
+  "Sub-Category"/"All Sub-Categories"→"Sous-catégorie"/"Toutes les
+  sous-catégories", "Brand"/"All Brands"→"Marque"/"Toutes les marques",
+  "Reset"→"Réinitialiser", "Products"→"Produits", "{n} product(s)
+  available"→"{n} produit(s) disponible(s)", "No products found"→"Aucun
+  produit trouvé", messages vides et "Clear all filters"→"Effacer tous
+  les filtres".
+- `FilterState` étendu avec `flavorId`/`sizeId`/`sortBy` ; nouveaux
+  `useMemo` `flavors`/`sizes` dérivés de `categoryFiltered` exactement
+  comme `subCategories`/`brands` existants ; `filtered` étendu pour
+  appliquer ces filtres + le tri prix, mêmes prédicats que la page de
+  référence (`browse-products.tsx`).
+- Nouveaux `Select` Saveur/Taille/Trier par ajoutés dans la barre, même
+  style/`data-testid` convention que les filtres existants de cette même
+  page.
+- Bonus de cohérence (déjà flagué comme écart connu par un audit
+  antérieur) : la troncature `max-w-[72px] truncate` du nom de catégorie
+  remplacée par le même enroulement sur 2 lignes déjà appliqué à
+  `/products` dans une tâche précédente.
+
+### 2.2 Academy (`academy-store-detail-page.tsx`)
+
+- Ajout d'un champ de recherche (titre/description) et d'un tri prix —
+  seules facettes réellement applicables (voir §1.3). Aucune
+  sous-catégorie/marque/saveur/taille ajoutée (aucune colonne
+  correspondante n'existe). Le filtre par niveau existant reste
+  totalement inchangé.
+- Jetons `inputBg`/`selectTrigger` ajoutés au helper `useTheme` local du
+  fichier (absents auparavant, nécessaires pour les nouveaux contrôles).
+- Page déjà 100 % française avant cette tâche (confirmé par l'audit) —
+  aucune traduction nécessaire, uniquement de la complétion.
+
+### 2.3 Print (`print-store-detail-page.tsx`)
+
+- Ajout d'un champ de recherche (nom/description) et d'un filtre
+  sous-catégorie (sélection simple, valeurs réelles dérivées de
+  `service.subCategory`, vérifiées non vides en base) et d'un tri prix.
+  Libellés « Sous-catégorie »/« Sous-catégories » repris mot pour mot de
+  la page sœur `/print` pour cohérence totale avec le reste de
+  l'application.
+- Sélection d'une catégorie réinitialise désormais la sous-catégorie
+  (cohérent avec le motif déjà utilisé sur `/products` et
+  `store-detail-page.tsx` : changer de catégorie ne doit pas laisser une
+  sous-catégorie orpheline sélectionnée).
+- Page déjà 100 % française avant cette tâche — uniquement de la
+  complétion.
+
+### 2.4 Marketing (`marketing-store-detail-page.tsx`)
+
+- Ajout d'un champ de recherche (titre/catégorie/description) et d'un
+  tri prix. Sous-catégorie ajoutée en **sélection multiple**
+  (`DropdownMenu`/`DropdownMenuCheckboxItem`, pas un `Select` simple) —
+  calqué sur le motif déjà utilisé par la page sœur `/marketing`, parce
+  que `marketingServices.subCategories` est un tableau multi-valeur réel
+  (un service peut appartenir à plusieurs sous-catégories), pas une
+  valeur unique comme Print — utiliser un `Select` simple aurait caché
+  cette nuance de données réelle.
+- Options de sous-catégories dérivées directement des services déjà
+  chargés sur cette page (pas une requête supplémentaire vers la table de
+  taxonomie admin complète, pour rester minimal).
+- Page déjà 100 % française avant cette tâche — uniquement de la
+  complétion.
+
+## 3. Garde-fous respectés
+
+- Aucune table, route ou API modifiée — toutes les nouvelles facettes
+  utilisent des données déjà chargées par chaque page (aucune nouvelle
+  requête réseau, sauf les `useMemo` de dérivation côté client).
+- Aucune facette fabriquée : vérifié en base réelle que `print_catalog_
+  items.sub_category`, `marketing_services.sub_categories`,
+  `academy_courses.category`, `flavors`, et `sizes` contiennent toutes
+  des données réelles non vides avant d'ajouter leurs filtres respectifs.
+- Combinaison de filtres préservée : chaque nouveau filtre s'ajoute à la
+  chaîne de `useMemo` existante sans remplacer les prédicats déjà en
+  place (catégorie, niveau, marque, etc.) — vérifié par relecture de
+  chaque fichier modifié.
+- Effacer un filtre n'efface que ce filtre : les nouveaux contrôles
+  (saveur/taille/tri/sous-catégorie) ont chacun leur propre setter d'état
+  ; seul le bouton « Réinitialiser »/« Effacer tous les filtres » remet
+  tout à zéro, comportement identique à l'existant.
+- Aucune règle de visibilité produit, d'approbation fournisseur, de prix
+  ou d'accès modifiée — uniquement des filtres d'affichage côté client
+  sur des données déjà exposées par les endpoints existants.
+- Navigation vers le détail produit/service, panier et favoris
+  totalement inchangés (aucune ligne de ce code touchée).
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- Vérification en base réelle (lecture seule) : sous-catégories Print
+  avec données réelles (« Gobelets en carton », « Flyers », etc.),
+  services Marketing avec tableaux de sous-catégories réels (« Montage
+  vidéo », « Google Ads », etc.), catégories Academy avec données
+  réelles (« Espresso », « COMPTOIRIST »), et 18 saveurs / 19 tailles
+  réelles en base pour Shop — confirme que chaque nouveau filtre aura de
+  vraies options à afficher, pas des listes vides.
+- Redémarrage du serveur de dev ; aucune erreur dans les logs serveur
+  après redémarrage.
+- Grep final sur les 4 fichiers : zéro chaîne anglaise restante parmi les
+  libellés de filtre ciblés ("All", "Search", "Sub-Category", "All
+  Sub-Categories", "Brand", "All Brands", "Reset", "Products", "No
+  products found", "Clear all filters").
+- `git status --short` final : uniquement les 4 pages de détail
+  fournisseur modifiées (+ `analyse.md`) — aucun fichier serveur, schéma,
+  ou route touché.
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour vérifier visuellement
+  l'alignement des nouveaux contrôles (Saveur/Taille/Tri sur Shop,
+  recherche/tri sur Academy, sous-catégorie simple sur Print, menu
+  déroulant à cases sur Marketing) sur desktop et mobile, ni le
+  comportement exact du menu à cases à cocher Marketing au clic ;
+  vérifié par lecture de code comparant chaque nouvel ajout au motif
+  exact déjà utilisé par la page de référence ou la page sœur
+  correspondante, type-checking strict, build de production réussi, et
+  vérification des données réelles en base. Une vérification manuelle
+  (desktop + mobile, chacune des 4 pages, combinaisons de filtres) reste
+  recommandée avant mise en production.
+- Le filtre par catégorie d'Academy (donnée réelle existante,
+  `academyCourses.category`, déjà affichée sur chaque carte mais jamais
+  filtrable) n'a pas été ajouté : la tâche ne le nommait pas explicitement
+  parmi ses 6 facettes de référence, et l'ajouter aurait dépassé le
+  périmètre « changements ciblés » — signalé ici comme amélioration
+  possible, non traitée.
+
+---
+
+# Tâche : Academy, Print & Marketing — Cohérence des filtres (page principale ↔ page boutique)
+
+## 1. Audit préalable
+
+- Confirmé que les 3 pages principales (`/academy`, `/print`,
+  `/marketing`) possédaient déjà toutes leurs facettes de filtre sauf un
+  tri « Recommandé » — absent des 3.
+- Confirmé que la page boutique Academy (`/academy/stores/:id`)
+  utilisait encore une rangée de pastilles de niveau séparée
+  (Tout/Expert/Avancé/Débutant), distincte du filtre « Niveau » déjà
+  présent sur `/academy`, créant deux façons différentes de filtrer par
+  niveau entre les deux pages.
+- Confirmé que les pages boutique Print (`/print/stores/:id`) et
+  Marketing (`/marketing/stores/:id`) n'avaient pas encore les facettes
+  Sociétés/Matières/Livraisons (Print) ni Types/Notes/Villes (Marketing)
+  présentes sur leurs pages principales respectives.
+- Confirmé, lecture directe de `shared/schema.ts` et des hooks
+  `use-marketing.ts`, que les champs sources de ces nouvelles facettes
+  existent réellement :
+  - `academyCourses.hasCertification` (déjà utilisé par `/academy` via
+    son filtre « Certification »).
+  - `printCatalogItems.materials: text[]` et
+    `.productionTimeDays: integer` (déjà utilisés par `/print` via un
+    regroupement fixe à 3 paliers ≤3/4-7/8+ jours) + le nom du
+    fournisseur (identité de la carte, pas une colonne séparée).
+  - `marketingProfiles.profileType` / `.rating` + l'adresse de
+    localisation du compte (déjà utilisés par `/marketing` via ses
+    filtres Types/Notes/Villes).
+- Vérifié en base réelle (lecture seule) que ces champs sont bien
+  renseignés et non vides pour les comptes de test cités dans la tâche :
+  cours Academy avec `has_certification = true` (ids 1, 2, 3) ; articles
+  du catalogue de l'imprimeur `contact@coffeeprintstudio.tn`
+  (`printer_id = 53`) avec matières réelles (« Coton », « Toile »,
+  « Carton », etc.) et délais couvrant les 3 paliers (3, 4, 7 jours) ;
+  profil Marketing `user_id = 19` avec `profile_type = 'Agency'`,
+  `rating = 50` (4.5+/4.7+ non atteint mais filtre fonctionnel) et une
+  adresse de localisation réelle.
+- Confirmé que la page boutique Print utilisait déjà une table de
+  correspondance icône-sous-catégorie restreinte (icône base de données
+  uniquement, sans repli) alors que le helper exporté
+  `printSubCategoryIcon` (avec repli) existe déjà dans
+  `print-category-icons.ts` — retenu ce helper plutôt qu'une
+  duplication de la logique plus étroite de la page principale, pour
+  une couverture d'icônes égale ou meilleure tout en réutilisant un
+  mapping déjà existant (pas un nouveau).
+- Repéré la cause exacte du bug de contraste en mode sombre du menu
+  « Sous-catégories » de la page boutique Marketing : son
+  `DropdownMenuContent` fixait un fond sombre (`bg-gray-800`) sans
+  jamais surcharger la couleur de texte, qui retombe alors sur la
+  variable CSS par défaut de Radix (texte sombre sur fond sombre). La
+  page principale `/marketing`, elle, utilise déjà un jeton
+  `t.selectContent` qui fixe explicitement un texte clair en mode
+  sombre — absent du `useTheme()` local de la page boutique.
+
+## 2. Implémentation
+
+**Pages principales — ajout du tri « Recommandé » (3 fichiers) :**
+- `barista-academy-page.tsx` : nouvel état `trainingSortBy`, tri
+  client sur `priceInCents` appliqué après le chargement/filtrage
+  serveur existant, nouveau `Select` (Recommandé / Prix croissant /
+  Prix décroissant) juste avant le bouton de réinitialisation, dont le
+  gestionnaire a été étendu pour aussi réinitialiser le tri.
+- `print-page.tsx` : `PrintFilters` étendu avec `sortBy`, tri appliqué
+  en fin de la chaîne de filtrage client existante, nouveau `Select`
+  juste avant le bouton de réinitialisation ; la réinitialisation par
+  la bande de catégories (qui préserve volontairement la recherche)
+  préserve désormais aussi le tri, tandis que le bouton Réinitialiser
+  complet efface les deux.
+- `marketing-page.tsx` : nouvel état `sortBy`, tri sur
+  `startingPriceInCents`, nouveau `Select` juste après le filtre
+  « Villes ».
+
+**Page boutique Academy — remplacement des pastilles de niveau :**
+- Suppression de la rangée de pastilles Tout/Expert/Avancé/Débutant et
+  du `useMemo` `availableLevels` associé, devenu inutile.
+- Ajout d'un état `certFilter` et de son application dans le filtrage.
+- Remplacement par la même rangée de filtres que `/academy` : recherche
+  → `Select` Niveau (Niveaux/Débutant/Avancé/Expert) → `Select`
+  Certification (Formations/Avec certification/Sans certification) →
+  `Select` Recommandé → bouton Réinitialiser (icône `RotateCcw` ajoutée
+  pour cohérence visuelle, libellé inchangé).
+- Placeholder de recherche corrigé en « Rechercher une formation... »
+  pour correspondre exactement à la page principale.
+
+**Page boutique Print — ajout des 3 facettes manquantes :**
+- Ajout des états `brandId`/`material`/`deliveryTime` (le tri et la
+  recherche existaient déjà depuis la tâche précédente).
+- Nouveaux `useMemo` : `printers` (identité du fournisseur de cette
+  page), `materials` (union des matières des articles déjà chargés),
+  `deliveryBuckets` (sous-ensemble des 3 paliers fixes de `/print`
+  réellement présents parmi les articles de ce fournisseur).
+- Ajout des 3 `Select` correspondants (Sociétés/Matières/Livraisons)
+  dans le même ordre et avec les mêmes classes que `/print`, juste
+  après le `Select` Sous-catégorie existant.
+- Le `Select` Sous-catégorie utilise désormais le helper exporté
+  `printSubCategoryIcon` (import ajouté) au lieu d'un nom brut, en
+  réutilisant la même table de sous-catégories déjà chargée par
+  `/api/print/taxonomy` (élargie pour inclure `subcategories`, sans
+  requête réseau supplémentaire).
+- Placeholder de recherche corrigé en « Rechercher un service... ».
+
+**Page boutique Marketing — ajout des 3 facettes manquantes + correctif
+contraste sombre :**
+- Ajout des états `filterType`/`filterRating`/`filterLocation`.
+- Ces champs étant au niveau du prestataire (identiques pour tous les
+  services de cette page), chacun agit comme un filtre « tout ou rien »
+  sur la liste entière plutôt qu'un prédicat par service — toujours une
+  donnée réelle, simplement à une seule valeur à l'échelle d'une page
+  boutique.
+- Ajout des 3 `Select` (Types/Notes/Villes) dans le même ordre et avec
+  les mêmes libellés/valeurs que `/marketing`, juste après le menu
+  Sous-catégories existant et avant le tri Recommandé.
+- Import de `useMarketingSubCategoryTaxonomy` et
+  `resolveMarketingSubCategoryIcon` ; le menu Sous-catégories affiche
+  désormais l'icône résolue via ce helper partagé (au lieu du nom brut
+  seul), exactement comme `/marketing`.
+- **Correctif contraste mode sombre** : ajout d'un jeton
+  `selectContent` au `useTheme()` local de cette page, identique à
+  celui de `/marketing` (texte clair + survol sur fond sombre, texte
+  sombre + fond clair en mode clair), puis application de ce jeton au
+  `DropdownMenuContent` des Sous-catégories (qui n'avait auparavant
+  aucune surcharge de couleur de texte) et aux 3 nouveaux `Select`. Le
+  `Select` de tri, qui fixait déjà une couleur de texte explicite par
+  élément, n'a pas été touché (déjà fonctionnel, hors périmètre du
+  correctif).
+- Placeholder de recherche corrigé en « Rechercher un prestataire... ».
+
+**Bouton Réinitialiser (transversal, 6 pages) :** chaque gestionnaire de
+réinitialisation déjà existant a été étendu pour effacer également les
+nouveaux filtres ajoutés par cette tâche (tri sur les 3 pages
+principales ; niveau/certification/tri sur la page boutique Academy ;
+société/matière/livraison sur la page boutique Print ;
+type/note/ville sur la page boutique Marketing) — aucun libellé ni
+aucune icône de bouton existant n'a été renommé, le texte « Réinitialiser »
+de la tâche désignant ce bouton de façon descriptive, pas une consigne
+de renommage (les 3 pages principales disent toujours « Reset », les 4
+pages boutique disent toujours « Réinitialiser », comme avant cette
+tâche).
+
+## 3. Garde-fous respectés
+
+- Aucune nouvelle colonne, migration, ni table ajoutée — toutes les
+  nouvelles facettes utilisent des champs déjà existants en base.
+- Aucune donnée inventée : chaque nouvelle option de filtre (certification,
+  matière, délai, société, type, note, ville) a été vérifiée en base
+  réelle avant implémentation (section 1).
+- Aucun mélange entre les données Academy/Print/Marketing : chaque page
+  reste alimentée par son propre hook/sa propre requête existante.
+- Aucune API, schéma, route, permission, navigation ou page de détail
+  modifiée.
+- Réutilisation des mappings d'icônes déjà exportés
+  (`printSubCategoryIcon`, `resolveMarketingSubCategoryIcon`) plutôt
+  que duplication d'une seconde table de correspondance.
+- Le correctif de contraste Marketing ne force aucun thème unique et ne
+  fixe aucune couleur codée en dur qui entrerait en conflit avec le
+  système de thème existant — il reprend exactement le jeton déjà
+  utilisé par la page principale correspondante.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` sur l'ensemble du projet → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- Vérification en base réelle (lecture seule, voir section 1) : chaque
+  nouvelle facette dispose d'au moins une valeur réelle et non vide
+  pour les comptes de test cités par la tâche (cours Academy certifiés,
+  articles de l'imprimeur `contact@coffeeprintstudio.tn` avec matières/
+  délais variés, profil Marketing `user_id = 19` avec type/note/adresse
+  renseignés).
+- `git status --short` final : les 6 fichiers attendus par cette tâche
+  (`barista-academy-page.tsx`, `print-page.tsx`, `marketing-page.tsx`,
+  `academy-store-detail-page.tsx`, `print-store-detail-page.tsx`,
+  `marketing-store-detail-page.tsx`) sont les seuls fichiers de code
+  modifiés pour cette tâche (les autres fichiers listés par `git
+  status` proviennent de tâches précédentes déjà en cours, non commitées,
+  et restent intacts).
+- Vérification manuelle du serveur de développement déjà actif
+  (`http://localhost:5000`) : réponses normales des endpoints
+  `/api/print/marketplace` et `/api/marketing/profile/:id` (401
+  attendu sans session pour ce second, confirmant qu'il est bien protégé
+  et répond normalement).
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour confirmer visuellement le
+  correctif de contraste du menu Sous-catégories Marketing en mode
+  sombre, ni l'alignement des nouveaux `Select` sur les 6 pages
+  (desktop + mobile) — vérifié par lecture de code comparant chaque
+  ajout au jeton/motif exact déjà utilisé par la page de référence,
+  type-checking strict et build de production réussi. Une vérification
+  visuelle manuelle reste recommandée avant mise en production.
+- Sur la page boutique Print, le filtre « Sociétés » n'a par
+  construction qu'une seule option possible (le fournisseur de cette
+  page) — fonctionnel mais peu utile à cette échelle ; conservé car
+  explicitement demandé par la tâche pour la parité des facettes avec
+  `/print`.
+- Sur la page boutique Marketing, les filtres Types/Notes/Villes
+  n'ont également qu'une seule option possible chacun (le prestataire
+  de cette page) — même raisonnement, parité des facettes demandée
+  explicitement par la tâche.
+
+---
+
+# Tâche : Shop — Icônes des sous-catégories sur la page boutique alignées sur `/products`
+
+## 1. Audit préalable
+
+- `/products` (`browse-products.tsx`) résout l'icône de chaque
+  sous-catégorie via une requête dédiée `/api/subcategories` (données
+  admin complètes, l'icône étant retirée côté serveur des objets
+  produit eux-mêmes), réduite à une `Map<number, string>` id→icône
+  (`subCategoryIconMap`), puis affichée dans le `SelectItem` du filtre
+  `Sous-catégories` sous la forme `<span>{icon || "📦"}</span>{name}`
+  (repli générique « 📦 » uniquement si la sous-catégorie n'a pas
+  encore d'icône configurée côté admin).
+- `/stores/:storeId` (`store-detail-page.tsx`) construit déjà la même
+  logique pour ses **catégories** (`categoryIconMap`, à partir de
+  `/api/categories`), mais son `useMemo` `subCategories` ne récupérait
+  que `{id, name}` depuis `p.subCategoryLabel` — aucune résolution
+  d'icône — et son `SelectItem` affichait uniquement `{sc.name}`, sans
+  aucun span d'icône. Résultat : le filtre Sous-catégories de la page
+  boutique n'affichait jamais d'icône, contrairement à `/products`.
+- Confirmé qu'aucun second mapping d'icônes n'existe : la seule source
+  réelle est la table admin des sous-catégories, déjà exposée par
+  `/api/subcategories` et déjà consommée par `/products` exactement
+  selon le même motif que celui utilisé par `store-detail-page.tsx`
+  pour ses propres icônes de catégorie — il suffisait de dupliquer ce
+  motif existant pour les sous-catégories.
+- Vérifié en base réelle/API live que le cas n'est pas théorique : la
+  sous-catégorie id 25 (« Gazouz ») a une icône réelle 🥤 dans
+  `/api/subcategories`, et le store #9 (« FANTA ») a des produits
+  réels appartenant à cette même sous-catégorie 25 — donc avant le
+  correctif, cette icône n'apparaissait jamais sur `/stores/9` alors
+  qu'elle apparaît déjà sur `/products`.
+
+## 2. Implémentation
+
+Dans `client/src/pages/cafe/store-detail-page.tsx` :
+- Ajout de l'import du type `SubCategoryWithDetails` (déjà exporté par
+  `@shared/schema`, déjà utilisé par `/products`).
+- Ajout d'une requête `useQuery<SubCategoryWithDetails[]>({ queryKey:
+  ["/api/subcategories"] })` et d'un `subCategoryIconMap` (id→icône),
+  copie exacte du motif déjà en place sur cette même page pour
+  `categoryIconMap`/`allCategories`.
+- `subCategories` (le `useMemo` qui alimente le filtre) inclut
+  désormais `icon: subCategoryIconMap.get(Number(id)) ?? null` pour
+  chaque entrée.
+- Le `SelectItem` du filtre Sous-catégories affiche désormais
+  `<span className="mr-1.5">{sc.icon || "📦"}</span>{sc.name}` — motif
+  identique à celui de `/products`, y compris le même repli « 📦 ».
+
+Aucun autre filtre (recherche, marque, saveur, taille, tri), aucune
+donnée de produit, aucune API, et aucune relation catégorie/
+sous-catégorie n'a été modifiée.
+
+## 3. Garde-fous respectés
+
+- Aucune nouvelle table, colonne ni migration — réutilisation exacte
+  de `/api/subcategories`, déjà appelée par `/products` pour le même
+  besoin.
+- Aucun second mapping d'icônes introduit : une seule source
+  (`/api/subcategories`), un seul motif de résolution, copié tel quel
+  depuis `/products` (et depuis le `categoryIconMap` déjà présent sur
+  cette page pour les catégories).
+- Noms, identifiants, ordre et relations parent-catégorie des
+  sous-catégories inchangés — seul l'affichage de l'icône a été
+  ajouté.
+- Filtrage par sous-catégorie, résultats produits, et toutes les
+  autres facettes (marque, saveur, taille, tri) laissés intacts (aucune
+  ligne de leur logique n'a été touchée).
+- Les classes de thème clair/sombre existantes du `SelectItem`
+  (`t.dk ? "text-gray-200 ..." : ""`) sont conservées sans changement ;
+  seul un `<span>` a été inséré à l'intérieur.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- Vérification via l'API réelle du serveur de développement déjà actif
+  (`http://localhost:5000`) : `/api/subcategories` renvoie bien
+  `{id: 25, name: "Gazouz", icon: "🥤"}`, et `/api/stores/9` renvoie des
+  produits réels dont `subCategoryLabel = {id: 25, name: "Gazouz"}` —
+  confirme que la même icône que `/products` s'affichera désormais pour
+  la même sous-catégorie sur `/stores/9`.
+- `git status --short` final : seul `store-detail-page.tsx` a été
+  modifié par cette tâche (en plus de `analyse.md`) ; les autres
+  fichiers listés proviennent de tâches précédentes déjà en cours, non
+  commitées, et restent intacts.
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour confirmer visuellement le
+  rendu du span d'icône (alignement, espacement) en mode clair/sombre
+  et sur mobile — vérifié par lecture de code comparant le JSX ajouté
+  au motif exact déjà utilisé par `/products`, et par les données
+  réelles ci-dessus confirmant qu'une icône non vide sera bien
+  affichée pour au moins un cas réel (sous-catégorie 25 du store #9).
+  Une vérification visuelle manuelle reste recommandée avant mise en
+  production.
+- La plupart des sous-catégories n'ont pas encore d'icône configurée
+  côté admin (`icon: null` en base pour la majorité des lignes
+  observées) — ces entrées afficheront le repli « 📦 », exactement
+  comme sur `/products` ; ce n'est pas une régression du correctif,
+  seulement un reflet fidèle du même état de configuration admin déjà
+  visible sur la page de référence.

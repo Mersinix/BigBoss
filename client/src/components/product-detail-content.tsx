@@ -720,13 +720,16 @@ export function ProductDetailContent({
   // ── Shared modal header (loading + error states reuse this) ───────────────
   const ModalHeader = () => (
     <div className={`shrink-0 ${bg} px-3 sm:px-5 pt-5 pb-0`}>
+      {/* Theme toggle / name / close (task: "Modal Close Button Consistency" —
+          close moved to the rightmost position to match the Pack Details
+          modal's reference order; same two buttons/handlers, position only) */}
       <div className="flex items-center justify-between mb-4">
         <button
-          onClick={onBack}
-          aria-label="Close"
-          className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
+          onClick={toggleTheme}
+          aria-label="Toggle theme"
+          className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-100 hover:bg-gray-200"}`}
         >
-          <X className="w-4 h-4" />
+          {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
         </button>
         {/* Product name + categories fade in when scrolled */}
         <div className={`flex-1 px-2 transition-opacity duration-200 ${scrolled ? "opacity-100" : "opacity-0"}`}>
@@ -746,11 +749,11 @@ export function ProductDetailContent({
           )}
         </div>
         <button
-          onClick={toggleTheme}
-          aria-label="Toggle theme"
-          className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-100 hover:bg-gray-200"}`}
+          onClick={onBack}
+          aria-label="Close"
+          className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
         >
-          {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
+          <X className="w-4 h-4" />
         </button>
       </div>
       <div className={`h-px ${dividerColor}`} />

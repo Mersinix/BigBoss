@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useThemeStore } from "@/store/theme-store";
@@ -6,21 +6,24 @@ import { useFavorites } from "@/hooks/use-favorites";
 import { useToast } from "@/hooks/use-toast";
 import {
   useMarketingProfileDetail, useMarketingReviews, useCreateMarketingReview, useReportMarketingProvider,
-  useMarketingProjects, useMarketingTaxonomy,
+  useMarketingProjects, useMarketingTaxonomy, useMarketingSubCategoryTaxonomy,
 } from "@/hooks/use-marketing";
 import { MarketingMappedServiceCard } from "@/components/marketing/marketing-mapped-service-card";
-import { resolveMarketingCategoryIcon } from "@/lib/marketing-category-icon";
+import { resolveMarketingCategoryIcon, resolveMarketingSubCategoryIcon } from "@/lib/marketing-category-icon";
 import { MarketingAvailabilityModal } from "@/components/marketing/marketing-detail-modal";
 import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
 import { ReviewsModal } from "@/components/account/reviews-modal";
 import { QuoteRequestDialog } from "@/pages/cafe/marketing/marketing-page";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
-  Megaphone, ChevronLeft, Heart, Sun, Moon, Star, MapPin, Users, Clock, Flag, X,
+  Megaphone, ChevronLeft, Heart, Star, MapPin, Users, Clock, Flag, X, Search, SlidersHorizontal,
 } from "lucide-react";
 import type { MarketingMarketplaceCard } from "@/hooks/use-marketing";
 import { formatDistance } from "@/lib/distance";
@@ -64,6 +67,15 @@ function useTheme(isDark: boolean) {
     stripBg: isDark ? "bg-gray-900/95 border-gray-800" : "bg-white border-gray-100",
     skeletonBg: isDark ? "bg-gray-800" : "bg-gray-100",
     emptyIcon: isDark ? "text-gray-700" : "text-gray-200",
+    inputBg: isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
+    selectTrigger: isDark ? "border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700" : "border-gray-200 bg-gray-50",
+    // Same token as /marketing's own main page (t.selectContent) — fixes the
+    // Sous-catégories dropdown's dark-mode contrast bug (it previously had no
+    // text-color override, falling back to an unreadable default) and keeps
+    // every select/dropdown panel on this page legible in both themes.
+    selectContent: isDark
+      ? "bg-gray-800 border-gray-700 text-gray-100 [&_[data-highlighted]]:bg-gray-700 [&_[data-highlighted]]:text-white"
+      : "bg-white border-gray-200 text-gray-900",
   };
 }
 
@@ -76,7 +88,6 @@ export default function MarketingStoreDetailPage() {
   const { toast } = useToast();
 
   const isDark = useThemeStore((s) => s.isDark);
-  const toggleTheme = useThemeStore((s) => s.toggle);
   const t = useTheme(isDark);
 
   const { data, isLoading } = useMarketingProfileDetail(agencyId);
@@ -91,8 +102,37 @@ export default function MarketingStoreDetailPage() {
   // service cards use — never a second icon mapping
   // (docs/marketing_cards_final_layout_synchronization_audit.md).
   const { data: taxonomy = [] } = useMarketingTaxonomy();
+  // Same subcategory icon source as /marketing's own main page (task:
+  // "Academy, Print & Marketing Filter Consistency") — reused, not a second
+  // mapping.
+  const { data: subcategoryTaxonomy = [] } = useMarketingSubCategoryTaxonomy();
 
   const [categoryId, setCategoryId] = useState("");
+  // Search + subcategory + sort (task: "Complete Store Page Filters") —
+  // marketing services have no brand/flavor/size columns (only category/
+  // subCategories/startingPriceInCents exist, see schema.ts's
+  // marketingServices), so only the facets genuinely backed by real data
+  // are added here. subCategories is a real multi-value array per service
+  // (a service can belong to several subcategories at once), so this uses
+  // the same checkbox multi-select pattern the main /marketing page already
+  // uses for the same reason, instead of a single-select.
+  const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [filterSubCategories, setFilterSubCategories] = useState<string[]>([]);
+  // Types/Notes/Villes (task: "Academy, Print & Marketing Filter
+  // Consistency") — same facets as /marketing's own main page. Type/rating/
+  // location are provider-level fields here (every service on this page
+  // already belongs to the same agency), so each acts as an all-or-nothing
+  // gate on the whole list rather than a per-service predicate — still real
+  // data, just single-valued at this page's scope.
+  const [filterType, setFilterType] = useState("");
+  const [filterRating, setFilterRating] = useState("");
+  const [filterLocation, setFilterLocation] = useState("");
+  const [sortBy, setSortBy] = useState("");
+  const toggleSubCategoryFilter = (name: string) => {
+    setFilterSubCategories((prev) => prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]);
+  };
   const [infoOpen, setInfoOpen] = useState(false);
   const [previewServiceId, setPreviewServiceId] = useState<number | null>(null);
   const [quoteProvider, setQuoteProvider] = useState<MarketingMarketplaceCard | null>(null);
@@ -149,7 +189,33 @@ export default function MarketingStoreDetailPage() {
 
   const services = card?.services ?? [];
   const categories = useMemo(() => Array.from(new Set(services.map((s) => s.category).filter(Boolean))), [services]);
-  const filtered = useMemo(() => (categoryId ? services.filter((s) => s.category === categoryId) : services), [services, categoryId]);
+  const categoryFiltered = useMemo(() => (categoryId ? services.filter((s) => s.category === categoryId) : services), [services, categoryId]);
+  const subCategoryOptions = useMemo(() => {
+    const set = new Set<string>();
+    categoryFiltered.forEach((s) => (s.subCategories ?? []).forEach((name) => { if (name) set.add(name); }));
+    return Array.from(set);
+  }, [categoryFiltered]);
+  // Type/Note/Ville options — same real fields as /marketing's own main page
+  // (card.profileType/rating/location), single-valued here since this page
+  // is scoped to one agency (task: "Academy, Print & Marketing Filter
+  // Consistency").
+  const allLocations = useMemo(() => (card?.location ? [card.location] : []), [card]);
+  const filtered = useMemo(() => {
+    let list = categoryFiltered;
+    if (filterSubCategories.length > 0) list = list.filter((s) => filterSubCategories.some((name) => (s.subCategories ?? []).includes(name)));
+    if (filterType && card?.profileType !== filterType) list = [];
+    if (filterRating) { const min = parseFloat(filterRating) * 10; if (!card || card.rating < min) list = []; }
+    if (filterLocation && card?.location !== filterLocation) list = [];
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((s) => (s.title?.trim() || s.category || "").toLowerCase().includes(q) || (s.description ?? "").toLowerCase().includes(q));
+    }
+    if (sortBy === "price_asc") list = [...list].sort((a, b) => a.startingPriceInCents - b.startingPriceInCents);
+    if (sortBy === "price_desc") list = [...list].sort((a, b) => b.startingPriceInCents - a.startingPriceInCents);
+    return list;
+  }, [categoryFiltered, filterSubCategories, filterType, filterRating, filterLocation, card, search, sortBy]);
+  const hasActiveFilters = !!categoryId || filterSubCategories.length > 0 || !!filterType || !!filterRating || !!filterLocation || !!search.trim() || !!sortBy;
+  const resetFilters = () => { setCategoryId(""); setFilterSubCategories([]); setFilterType(""); setFilterRating(""); setFilterLocation(""); setSearch(""); setSortBy(""); };
 
   // A Coffee Owner must not be able to reach a Store the marketplace itself
   // wouldn't show — same visibility intent as /print's Store page
@@ -198,14 +264,10 @@ export default function MarketingStoreDetailPage() {
           <ChevronLeft className="w-4.5 h-4.5 text-white" />
         </button>
 
+        {/* Task: "Hero Theme Toggle Cleanup" — the redundant Dark/Light toggle that
+            used to be here was removed; the navbar's own toggle, calling the same
+            useThemeStore, remains the single theme control for this page. */}
         <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
-          <button
-            onClick={() => toggleTheme()}
-            aria-label="Toggle theme"
-            className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center hover:scale-105 transition-transform"
-          >
-            {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-white" />}
-          </button>
           <button
             className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
             onClick={() => toggleMarketingAgency({
@@ -279,13 +341,18 @@ export default function MarketingStoreDetailPage() {
         {card.description && <p className={`text-sm mt-6 ml-20 line-clamp-1 break-words ${t.textMuted}`}>{card.description}</p>}
       </div>
 
-      {categories.length > 0 && (
+      {/* Sticky strip rendered whenever there's at least one service to search/
+          sort, even if this agency happens to have no category taxonomy at
+          all — same widened gating as store-detail-page.tsx's own search row
+          (task: "Add Product and Pack Search to Individual Store Pages"). */}
+      {(categories.length > 0 || services.length > 0) && (
         <div className={`sticky top-14 z-30 border-b mt-4 transition-colors ${t.stripBg}`}>
           <div className="max-w-7xl mx-auto px-4">
+            {categories.length > 0 && (
             <div className="flex gap-1.5 overflow-x-auto py-3" style={{ scrollbarWidth: "none" }}>
               <div className={`flex rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
                 <button
-                  onClick={() => setCategoryId("")}
+                  onClick={() => { setCategoryId(""); setFilterSubCategories([]); }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl shrink-0 transition-all text-[11px] font-semibold ${categoryId === "" ? t.switcherActive : t.switcherInactive}`}
                   data-testid="button-marketing-store-cat-all"
                 >
@@ -296,7 +363,7 @@ export default function MarketingStoreDetailPage() {
               {categories.map((cat) => (
                 <div key={cat} className={`flex rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
                   <button
-                    onClick={() => setCategoryId(categoryId === cat ? "" : cat)}
+                    onClick={() => { setCategoryId(categoryId === cat ? "" : cat); setFilterSubCategories([]); }}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-[11px] font-semibold ${categoryId === cat ? t.switcherActive : t.switcherInactive}`}
                     data-testid={`button-marketing-store-cat-${cat}`}
                   >
@@ -305,6 +372,117 @@ export default function MarketingStoreDetailPage() {
                   </button>
                 </div>
               ))}
+            </div>
+            )}
+
+            {/* Search + subcategories (multi-select, real array data per
+                service) + sort (task: "Complete Store Page Filters"). */}
+            <div className="flex items-center gap-2 flex-wrap py-2">
+              <SlidersHorizontal className={`w-3.5 h-3.5 shrink-0 ${t.textMuted}`} />
+              <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px] sm:max-w-xs">
+                {!searchOpen && (
+                  <button
+                    type="button"
+                    className={`sm:hidden h-7 w-7 rounded-full border flex items-center justify-center shrink-0 ${t.inputBg}`}
+                    onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
+                    aria-label="Rechercher"
+                    data-testid="button-open-marketing-store-search"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <div className={`${searchOpen ? "flex" : "hidden"} sm:flex items-center relative w-44 sm:w-full`}>
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                  <Input
+                    ref={searchInputRef}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onBlur={() => { if (!search) setSearchOpen(false); }}
+                    placeholder="Rechercher un prestataire..."
+                    className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
+                    data-testid="input-marketing-store-search"
+                  />
+                </div>
+              </div>
+              {subCategoryOptions.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className={`h-7 text-xs rounded-full px-3 w-auto min-w-[150px] shrink-0 inline-flex items-center justify-between gap-1.5 border ${t.selectTrigger}`}
+                      data-testid="select-marketing-store-subcategory"
+                    >
+                      {filterSubCategories.length > 0 ? `Sous-catégories (${filterSubCategories.length})` : "Sous-catégories"}
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    className={`${t.selectContent} max-h-56 overflow-y-auto [&::-webkit-scrollbar]:hidden`}
+                    style={{ scrollbarWidth: "none" }}
+                    align="start"
+                  >
+                    {subCategoryOptions.map((name) => (
+                      <DropdownMenuCheckboxItem
+                        key={name}
+                        checked={filterSubCategories.includes(name)}
+                        onCheckedChange={() => toggleSubCategoryFilter(name)}
+                        data-testid={`checkbox-marketing-store-subcategory-${name}`}
+                      >
+                        {resolveMarketingSubCategoryIcon(name, subcategoryTaxonomy)} {name}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              <Select value={filterType || "__all__"} onValueChange={(v) => setFilterType(v === "__all__" ? "" : v)}>
+                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] shrink-0 ${t.selectTrigger}`} data-testid="select-marketing-store-type">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent className={t.selectContent}>
+                  <SelectItem value="__all__">Types</SelectItem>
+                  <SelectItem value="Agency">Agence</SelectItem>
+                  <SelectItem value="Freelancer">Freelancer</SelectItem>
+                  <SelectItem value="Studio">Studio</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filterRating || "__all__"} onValueChange={(v) => setFilterRating(v === "__all__" ? "" : v)}>
+                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`} data-testid="select-marketing-store-rating">
+                  <SelectValue placeholder="Note min." />
+                </SelectTrigger>
+                <SelectContent className={t.selectContent}>
+                  <SelectItem value="__all__">Notes</SelectItem>
+                  <SelectItem value="4.5">4.5+</SelectItem>
+                  <SelectItem value="4.7">4.7+</SelectItem>
+                  <SelectItem value="4.9">4.9+</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={filterLocation || "__all__"} onValueChange={(v) => setFilterLocation(v === "__all__" ? "" : v)}>
+                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] shrink-0 ${t.selectTrigger}`} data-testid="select-marketing-store-location">
+                  <SelectValue placeholder="Ville" />
+                </SelectTrigger>
+                <SelectContent className={t.selectContent}>
+                  <SelectItem value="__all__">Villes</SelectItem>
+                  {allLocations.map((loc) => <SelectItem key={loc} value={loc}>{loc}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Select value={sortBy || "recommended"} onValueChange={(v) => setSortBy(v === "recommended" ? "" : v)}>
+                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`}>
+                  <SelectValue placeholder="Trier par" />
+                </SelectTrigger>
+                <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+                  <SelectItem value="recommended" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Recommandé</SelectItem>
+                  <SelectItem value="price_asc" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Prix croissant</SelectItem>
+                  <SelectItem value="price_desc" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Prix décroissant</SelectItem>
+                </SelectContent>
+              </Select>
+              {hasActiveFilters && (
+                <button
+                  onClick={resetFilters}
+                  className={`flex items-center gap-1 text-xs transition-colors ml-1 ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}
+                  data-testid="button-reset-marketing-store-filters"
+                >
+                  Réinitialiser
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -321,9 +499,9 @@ export default function MarketingStoreDetailPage() {
             <Users className={`w-14 h-14 ${t.emptyIcon}`} />
             <div>
               <p className={`font-semibold ${t.textPrimary}`}>Aucun service trouvé</p>
-              <p className={`text-sm mt-1 ${t.textMuted}`}>{categoryId ? "Essayez une autre catégorie." : "Cette agence n'a pas encore de service publié."}</p>
+              <p className={`text-sm mt-1 ${t.textMuted}`}>{hasActiveFilters ? "Essayez d'ajuster vos filtres." : "Cette agence n'a pas encore de service publié."}</p>
             </div>
-            {categoryId && <Button size="sm" variant="outline" onClick={() => setCategoryId("")}>Effacer le filtre</Button>}
+            {hasActiveFilters && <Button size="sm" variant="outline" onClick={resetFilters}>Effacer tous les filtres</Button>}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">

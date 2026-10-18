@@ -50,15 +50,18 @@ export default function PayoutInfoModal({
         <DialogTitle className="sr-only">Informations de paiement — Commande #{String(order.id).padStart(6, "0")}</DialogTitle>
 
         <div className={`flex flex-col max-h-[85vh] overflow-hidden ${t.modalBg}`}>
+          {/* Spacer / title / close (task: "Modal Close Button Consistency" — close
+              moved to the rightmost position to match the Pack Details modal's
+              reference order; spacer keeps the title centered as before) */}
           <div className={`shrink-0 border-b px-6 pt-5 pb-4 flex items-center justify-between ${t.headerBg}`}>
-            <button onClick={onClose} aria-label="Fermer" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${t.iconBtn}`}>
-              <X className="w-4 h-4" />
-            </button>
+            <span className="w-8 h-8" />
             <div className="flex items-center gap-2">
               <Wallet className="w-4 h-4 text-amber-500" />
               <span className={`text-[15px] font-bold tracking-tight ${t.textPrimary}`}>Paiement fournisseur</span>
             </div>
-            <span className="w-8 h-8" />
+            <button onClick={onClose} aria-label="Fermer" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${t.iconBtn}`}>
+              <X className="w-4 h-4" />
+            </button>
           </div>
 
           {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own

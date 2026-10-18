@@ -104,16 +104,19 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
 
         <div className={`flex flex-col max-h-[90vh] overflow-hidden transition-colors duration-200 ${t.modalBg}`}>
           {/* Header */}
+          {/* Print / title / close (task: "Modal Close Button Consistency" — close
+              moved to the rightmost position to match the Pack Details modal's
+              reference order; same handlers, position only) */}
           <div className={`shrink-0 border-b px-4 sm:px-6 pt-5 pb-4 flex items-center justify-between ${t.headerBg}`}>
-            <button onClick={onClose} aria-label="Fermer" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors print:hidden ${t.iconBtn}`}>
-              <X className="w-4 h-4" />
+            <button onClick={() => window.print()} aria-label="Imprimer" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors print:hidden ${t.iconBtn}`}>
+              <Printer className="w-4 h-4" />
             </button>
             <div className="flex items-center gap-2">
               <FileText className="w-4 h-4 text-amber-500" />
               <span className={`font-mono text-[15px] font-bold tracking-tight ${t.textPrimary}`}>{number}</span>
             </div>
-            <button onClick={() => window.print()} aria-label="Imprimer" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors print:hidden ${t.iconBtn}`}>
-              <Printer className="w-4 h-4" />
+            <button onClick={onClose} aria-label="Fermer" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors print:hidden ${t.iconBtn}`}>
+              <X className="w-4 h-4" />
             </button>
           </div>
 

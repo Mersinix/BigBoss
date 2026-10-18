@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useRoute, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
@@ -9,21 +9,37 @@ import { useToast } from "@/hooks/use-toast";
 import {
   usePrintCompanyDetail, usePrintReviews, useCreatePrintReview, useReportPrinter,
 } from "@/hooks/use-print-marketplace";
-import { printCategoryIcon } from "@/lib/print-category-icons";
+import { printCategoryIcon, printSubCategoryIcon } from "@/lib/print-category-icons";
 import { PrintCompanyAvailabilityModal } from "@/components/print/print-company-detail-modal";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
 import { ReviewsModal } from "@/components/account/reviews-modal";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
-  Printer, ChevronLeft, Heart, Sun, Moon, Star, MapPin, Package, Clock, Flag, X,
+  Printer, ChevronLeft, Heart, Star, MapPin, Package, Clock, Flag, X, Search, SlidersHorizontal,
 } from "lucide-react";
 import type { PrintCatalogCard, PrintOrderWithParties } from "@shared/schema";
 import { PrintMappedServiceCard } from "@/components/print/print-mapped-service-card";
 import { formatDistance } from "@/lib/distance";
+
+// "Livraisons" — same fixed production-time buckets as /print's own main
+// page (print-page.tsx), reproduced here rather than imported since they're
+// not exported there (task: "Academy, Print & Marketing Filter Consistency").
+// Not a real delivery-method/company field — there isn't one in the schema —
+// just a client-side bucketing of each service's own productionTimeDays.
+const PRODUCTION_TIME_BUCKETS = [
+  { label: "≤ 3 jours", test: (d: number) => d <= 3 },
+  { label: "4-7 jours", test: (d: number) => d >= 4 && d <= 7 },
+  { label: "8+ jours", test: (d: number) => d >= 8 },
+];
+function bucketLabelFor(days: number): string {
+  return PRODUCTION_TIME_BUCKETS.find((b) => b.test(days))?.label ?? "";
+}
 
 function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -61,6 +77,8 @@ function useTheme(isDark: boolean) {
     stripBg: isDark ? "bg-gray-900/95 border-gray-800" : "bg-white border-gray-100",
     skeletonBg: isDark ? "bg-gray-800" : "bg-gray-100",
     emptyIcon: isDark ? "text-gray-700" : "text-gray-200",
+    inputBg: isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
+    selectTrigger: isDark ? "border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700" : "border-gray-200 bg-gray-50",
   };
 }
 
@@ -73,7 +91,6 @@ export default function PrintStoreDetailPage() {
   const { toast } = useToast();
 
   const isDark = useThemeStore((s) => s.isDark);
-  const toggleTheme = useThemeStore((s) => s.toggle);
   const t = useTheme(isDark);
 
   const { data, isLoading } = usePrintCompanyDetail(printerId);
@@ -85,6 +102,22 @@ export default function PrintStoreDetailPage() {
   const togglePrintProduct = useFavorites((s) => s.togglePrintProduct);
 
   const [categoryId, setCategoryId] = useState("");
+  // Search + subcategory + sort (task: "Complete Store Page Filters") — print
+  // services have no brand/flavor/size columns (only category/subCategory/
+  // priceInCents exist, see schema.ts's printCatalogItems), so only the
+  // facets genuinely backed by real data are added here.
+  const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [subCategoryId, setSubCategoryId] = useState("");
+  // Sociétés/Matières/Livraisons (task: "Academy, Print & Marketing Filter
+  // Consistency") — same facets as /print's own main page, added here for
+  // full parity even though "Sociétés" only ever resolves to this one
+  // printer at store-page scope (real data, just low-cardinality here).
+  const [brandId, setBrandId] = useState("");
+  const [material, setMaterial] = useState("");
+  const [deliveryTime, setDeliveryTime] = useState("");
+  const [sortBy, setSortBy] = useState("");
   const [infoOpen, setInfoOpen] = useState(false);
   const [previewServiceId, setPreviewServiceId] = useState<number | null>(null);
 
@@ -139,7 +172,7 @@ export default function PrintStoreDetailPage() {
     );
   };
 
-  const { data: taxonomy } = useQuery<{ categories: { name: string; icon: string | null }[] }>({
+  const { data: taxonomy } = useQuery<{ categories: { name: string; icon: string | null }[]; subcategories: { name: string; icon: string | null }[] }>({
     queryKey: ["/api/print/taxonomy"],
   });
   const categoryIconByName = useMemo(() => {
@@ -147,12 +180,49 @@ export default function PrintStoreDetailPage() {
     for (const row of taxonomy?.categories ?? []) if (row.icon) map.set(row.name, row.icon);
     return map;
   }, [taxonomy?.categories]);
+  // Same source/shape as /print's own subcategoryIconByName (print-page.tsx)
+  // — admin-configured icons, matched by name, falling back to
+  // printSubCategoryIcon's static map when no DB icon is configured.
+  const subcategoryIconByName = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const row of taxonomy?.subcategories ?? []) if (row.icon && !map.has(row.name)) map.set(row.name, row.icon);
+    return map;
+  }, [taxonomy?.subcategories]);
 
   useEffect(() => { window.scrollTo(0, 0); }, [printerId]);
 
   const services = card?.services ?? [];
   const categories = useMemo(() => Array.from(new Set(services.map((s) => s.category).filter(Boolean))), [services]);
-  const filtered = useMemo(() => (categoryId ? services.filter((s) => s.category === categoryId) : services), [services, categoryId]);
+  const categoryFiltered = useMemo(() => (categoryId ? services.filter((s) => s.category === categoryId) : services), [services, categoryId]);
+  const subCategories = useMemo(() => Array.from(new Set(categoryFiltered.map((s) => s.subCategory).filter(Boolean))), [categoryFiltered]);
+  // Sociétés — single-valued at store-page scope (every service here already
+  // belongs to this one printer), but still real data, not fabricated.
+  const printers = useMemo(() => (card ? [{ id: String(card.userId), name: card.name }] : []), [card]);
+  const materials = useMemo(() => {
+    const set = new Set<string>();
+    categoryFiltered.forEach((s) => (s.materials ?? []).forEach((m) => { if (m) set.add(m); }));
+    return Array.from(set);
+  }, [categoryFiltered]);
+  const deliveryBuckets = useMemo(() => {
+    const present = new Set(categoryFiltered.map((s) => bucketLabelFor(s.productionTimeDays)));
+    return PRODUCTION_TIME_BUCKETS.map((b) => b.label).filter((label) => present.has(label));
+  }, [categoryFiltered]);
+  const filtered = useMemo(() => {
+    let list = categoryFiltered;
+    if (subCategoryId) list = list.filter((s) => s.subCategory === subCategoryId);
+    if (brandId) list = list.filter(() => brandId === String(card?.userId));
+    if (material) list = list.filter((s) => (s.materials ?? []).includes(material));
+    if (deliveryTime) list = list.filter((s) => bucketLabelFor(s.productionTimeDays) === deliveryTime);
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((s) => s.name.toLowerCase().includes(q) || (s.description ?? "").toLowerCase().includes(q));
+    }
+    if (sortBy === "price_asc") list = [...list].sort((a, b) => a.priceInCents - b.priceInCents);
+    if (sortBy === "price_desc") list = [...list].sort((a, b) => b.priceInCents - a.priceInCents);
+    return list;
+  }, [categoryFiltered, subCategoryId, brandId, material, deliveryTime, search, sortBy, card?.userId]);
+  const hasActiveFilters = !!categoryId || !!subCategoryId || !!brandId || !!material || !!deliveryTime || !!search.trim() || !!sortBy;
+  const resetFilters = () => { setCategoryId(""); setSubCategoryId(""); setBrandId(""); setMaterial(""); setDeliveryTime(""); setSearch(""); setSortBy(""); };
 
   // A Coffee Owner must not be able to reach a Store that the marketplace
   // itself wouldn't show — same visibility intent as getStoreDetail's
@@ -201,14 +271,10 @@ export default function PrintStoreDetailPage() {
           <ChevronLeft className="w-4.5 h-4.5 text-white" />
         </button>
 
+        {/* Task: "Hero Theme Toggle Cleanup" — the redundant Dark/Light toggle that
+            used to be here was removed; the navbar's own toggle, calling the same
+            useThemeStore, remains the single theme control for this page. */}
         <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
-          <button
-            onClick={() => toggleTheme()}
-            aria-label="Toggle theme"
-            className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center hover:scale-105 transition-transform"
-          >
-            {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-white" />}
-          </button>
           <button
             className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
             onClick={() => togglePrintCompany({
@@ -285,13 +351,18 @@ export default function PrintStoreDetailPage() {
         {card.description && <p className={`text-sm mt-6 ml-20 line-clamp-1 break-words ${t.textMuted}`}>{card.description}</p>}
       </div>
 
-      {categories.length > 0 && (
+      {/* Sticky strip rendered whenever there's at least one service to search/
+          sort, even if this printer happens to have no category taxonomy at
+          all — same widened gating as store-detail-page.tsx's own search row
+          (task: "Add Product and Pack Search to Individual Store Pages"). */}
+      {(categories.length > 0 || services.length > 0) && (
         <div className={`sticky top-14 z-30 border-b mt-4 transition-colors ${t.stripBg}`}>
           <div className="max-w-7xl mx-auto px-4">
+            {categories.length > 0 && (
             <div className="flex gap-1.5 overflow-x-auto py-3" style={{ scrollbarWidth: "none" }}>
               <div className={`flex rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
                 <button
-                  onClick={() => setCategoryId("")}
+                  onClick={() => { setCategoryId(""); setSubCategoryId(""); }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl shrink-0 transition-all text-[11px] font-semibold ${categoryId === "" ? t.switcherActive : t.switcherInactive}`}
                   data-testid="button-print-store-cat-all"
                 >
@@ -302,7 +373,7 @@ export default function PrintStoreDetailPage() {
               {categories.map((cat) => (
                 <div key={cat} className={`flex rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
                   <button
-                    onClick={() => setCategoryId(categoryId === cat ? "" : cat)}
+                    onClick={() => { setCategoryId(categoryId === cat ? "" : cat); setSubCategoryId(""); }}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-[11px] font-semibold ${categoryId === cat ? t.switcherActive : t.switcherInactive}`}
                     data-testid={`button-print-store-cat-${cat}`}
                   >
@@ -311,6 +382,106 @@ export default function PrintStoreDetailPage() {
                   </button>
                 </div>
               ))}
+            </div>
+            )}
+
+            {/* Search + Sous-catégories + Sociétés + Matières + Livraisons +
+                Recommandé (task: "Academy, Print & Marketing Filter
+                Consistency") — same filter set/order/labels/icons as
+                /print's own main page, for full parity. */}
+            <div className="flex items-center gap-2 flex-wrap py-2">
+              <SlidersHorizontal className={`w-3.5 h-3.5 shrink-0 ${t.textMuted}`} />
+              <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px] sm:max-w-xs">
+                {!searchOpen && (
+                  <button
+                    type="button"
+                    className={`sm:hidden h-7 w-7 rounded-full border flex items-center justify-center shrink-0 ${t.inputBg}`}
+                    onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
+                    aria-label="Rechercher"
+                    data-testid="button-open-print-store-search"
+                  >
+                    <Search className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <div className={`${searchOpen ? "flex" : "hidden"} sm:flex items-center relative w-44 sm:w-full`}>
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                  <Input
+                    ref={searchInputRef}
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onBlur={() => { if (!search) setSearchOpen(false); }}
+                    placeholder="Rechercher un service..."
+                    className={`h-7 text-xs pl-8 rounded-full ${t.inputBg}`}
+                    data-testid="input-print-store-search"
+                  />
+                </div>
+              </div>
+              {subCategories.length > 0 && (
+                <Select value={subCategoryId || "__all__"} onValueChange={(v) => setSubCategoryId(v === "__all__" ? "" : v)}>
+                  <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] shrink-0 ${t.selectTrigger}`}>
+                    <SelectValue placeholder="Sous-catégorie" />
+                  </SelectTrigger>
+                  <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+                    <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Sous-catégories</SelectItem>
+                    {subCategories.map((sc) => {
+                      const icon = printSubCategoryIcon(sc, subcategoryIconByName.get(sc));
+                      return <SelectItem key={sc} value={sc} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{icon ? `${icon} ${sc}` : sc}</SelectItem>;
+                    })}
+                  </SelectContent>
+                </Select>
+              )}
+              {printers.length > 0 && (
+                <Select value={brandId || "__all__"} onValueChange={(v) => setBrandId(v === "__all__" ? "" : v)}>
+                  <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`}>
+                    <SelectValue placeholder="Société d'impression" />
+                  </SelectTrigger>
+                  <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+                    <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Sociétés</SelectItem>
+                    {printers.map((p) => <SelectItem key={p.id} value={p.id} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+              {materials.length > 0 && (
+                <Select value={material || "__all__"} onValueChange={(v) => setMaterial(v === "__all__" ? "" : v)}>
+                  <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] shrink-0 ${t.selectTrigger}`}>
+                    <SelectValue placeholder="Matière" />
+                  </SelectTrigger>
+                  <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+                    <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Matières</SelectItem>
+                    {materials.map((m) => <SelectItem key={m} value={m} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{m}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+              {deliveryBuckets.length > 0 && (
+                <Select value={deliveryTime || "__all__"} onValueChange={(v) => setDeliveryTime(v === "__all__" ? "" : v)}>
+                  <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] shrink-0 ${t.selectTrigger}`}>
+                    <SelectValue placeholder="Livraison" />
+                  </SelectTrigger>
+                  <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+                    <SelectItem value="__all__" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Livraisons</SelectItem>
+                    {deliveryBuckets.map((d) => <SelectItem key={d} value={d} className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>{d}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
+              <Select value={sortBy || "recommended"} onValueChange={(v) => setSortBy(v === "recommended" ? "" : v)}>
+                <SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`}>
+                  <SelectValue placeholder="Trier par" />
+                </SelectTrigger>
+                <SelectContent className={t.dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : ""}>
+                  <SelectItem value="recommended" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Recommandé</SelectItem>
+                  <SelectItem value="price_asc" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Prix croissant</SelectItem>
+                  <SelectItem value="price_desc" className={t.dk ? "text-gray-200 focus:bg-gray-700 focus:text-white" : ""}>Prix décroissant</SelectItem>
+                </SelectContent>
+              </Select>
+              {hasActiveFilters && (
+                <button
+                  onClick={resetFilters}
+                  className={`flex items-center gap-1 text-xs transition-colors ml-1 ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}
+                  data-testid="button-reset-print-store-filters"
+                >
+                  Réinitialiser
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -327,9 +498,9 @@ export default function PrintStoreDetailPage() {
             <Package className={`w-14 h-14 ${t.emptyIcon}`} />
             <div>
               <p className={`font-semibold ${t.textPrimary}`}>Aucun service trouvé</p>
-              <p className={`text-sm mt-1 ${t.textMuted}`}>{categoryId ? "Essayez une autre catégorie." : "Cette imprimerie n'a pas encore de service actif."}</p>
+              <p className={`text-sm mt-1 ${t.textMuted}`}>{hasActiveFilters ? "Essayez d'ajuster vos filtres." : "Cette imprimerie n'a pas encore de service actif."}</p>
             </div>
-            {categoryId && <Button size="sm" variant="outline" onClick={() => setCategoryId("")}>Effacer le filtre</Button>}
+            {hasActiveFilters && <Button size="sm" variant="outline" onClick={resetFilters}>Effacer tous les filtres</Button>}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">

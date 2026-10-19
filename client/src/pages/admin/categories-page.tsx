@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Folder, Tag, Ruler, Award, Layers, ToggleLeft, ToggleRight, Search, CheckCircle, XCircle, Clock, Building2, ChevronDown, ChevronUp, Snowflake, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Folder, Tag, Ruler, Award, Layers, ToggleLeft, ToggleRight, Search, CheckCircle, XCircle, Clock, Building2, ChevronDown, ChevronUp, Snowflake, X, GripVertical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { CategoryWithCount, SubCategoryWithDetails, FlavorWithCount, SizeWithCount, BrandWithCount, CatalogSuggestion, AdminSupplierCategoryOverview, SupplierCategoryMapping } from "@shared/schema";
@@ -85,6 +85,60 @@ function MultiSelectList({ label, items, selected, onChange, badgeItems }: { lab
   );
 }
 
+// Shared drag-and-drop reorder behavior — same interaction/persistence pattern as
+// Admin Stores' card grid (client/src/pages/admin/stores-page.tsx: orderedIds local
+// override + dragIdRef + native HTML5 drag events + a bulk displayOrder PATCH),
+// factored into one hook since all three taxonomy tabs below need it (task: "Admin
+// Category Management Redesign"). `base`/`sorted` always reflect the FULL item list
+// (never just the current page), so a drop's from/to indices — and therefore the
+// persisted order — stay correct across pagination and any active filter, exactly
+// like the Stores reference.
+function useDragReorder<T extends { id: number; displayOrder?: number | null }>(
+  items: T[],
+  onReorder: (orders: { id: number; displayOrder: number }[]) => void,
+) {
+  const [orderedIds, setOrderedIds] = useState<number[] | null>(null);
+  const dragIdRef = useRef<number | null>(null);
+
+  const sorted = orderedIds
+    ? [...items].sort((a, b) => orderedIds.indexOf(a.id) - orderedIds.indexOf(b.id))
+    : [...items].sort((a, b) => ((a.displayOrder ?? 0) - (b.displayOrder ?? 0)) || (a.id - b.id));
+
+  const handleDragStart = (e: React.DragEvent, id: number) => {
+    dragIdRef.current = id;
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: number) => {
+    e.preventDefault();
+    const fromId = dragIdRef.current;
+    dragIdRef.current = null;
+    if (fromId === null || fromId === targetId) return;
+    const base = orderedIds ?? sorted.map((s) => s.id);
+    const from = base.indexOf(fromId);
+    const to = base.indexOf(targetId);
+    if (from === -1 || to === -1) return;
+    const next = [...base];
+    next.splice(from, 1);
+    next.splice(to, 0, fromId);
+    setOrderedIds(next);
+    onReorder(next.map((id, idx) => ({ id, displayOrder: idx })));
+  };
+
+  return { sorted, handleDragStart, handleDragOver, handleDrop };
+}
+
+// Scrollbar standardization (task: "Admin Category Management Redesign") — exact
+// thin-scrollbar classes already used by Admin Stores' Store Details modal
+// (client/src/pages/admin/stores-page.tsx StoreDetailDialog), reused verbatim so
+// every scrollable taxonomy modal matches that same reference look.
+const MODAL_SCROLLBAR = "max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600";
+
 // ── CATEGORIES TAB ────────────────────────────────────────────────────────────
 
 function CategoriesTab() {
@@ -126,39 +180,23 @@ function CategoriesTab() {
 
   const remove = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/categories/${id}`),
-    onSuccess: () => { invalidateCats(); toast({ title: "Deleted" }); setDeleting(null); },
+    onSuccess: () => { invalidateCats(); toast({ title: "Deleted" }); setDeleting(null); setDialogOpen(false); setEditing(null); },
     onError: () => toast({ title: "Error", variant: "destructive" }),
   });
 
   const openAdd = () => { setEditing(null); setForm({ name: "", icon: "", description: "", isActive: true }); setDialogOpen(true); };
   const openEdit = (c: CategoryWithCount) => { setEditing(c); setForm({ name: c.name, icon: c.icon ?? "", description: c.description ?? "", isActive: c.isActive }); setDialogOpen(true); };
 
-  const [reordering, setReordering] = useState(false);
-
-  const sortedCats = useMemo(() =>
-    [...cats].sort((a, b) => ((a.displayOrder ?? 0) || a.id) - ((b.displayOrder ?? 0) || b.id)),
-    [cats]
-  );
+  const bulkOrder = useMutation({
+    mutationFn: (orders: { id: number; displayOrder: number }[]) => apiRequest("PATCH", "/api/categories/bulk-order", { orders }),
+    onSuccess: () => invalidateCats(),
+    onError: () => toast({ title: "Failed to save order", variant: "destructive" }),
+  });
+  const { sorted: sortedCats, handleDragStart, handleDragOver, handleDrop } = useDragReorder(cats, (orders) => bulkOrder.mutate(orders));
 
   const pagination = usePagination(sortedCats.length);
-  useEffect(() => { pagination.resetPage(); }, [sortedCats.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const moveCategory = async (idx: number, dir: "up" | "down") => {
-    const targetIdx = dir === "up" ? idx - 1 : idx + 1;
-    if (targetIdx < 0 || targetIdx >= sortedCats.length || reordering) return;
-    setReordering(true);
-    try {
-      const normalized = sortedCats.map((c, i) => ({ id: c.id, order: i + 1 }));
-      [normalized[idx].order, normalized[targetIdx].order] = [normalized[targetIdx].order, normalized[idx].order];
-      await Promise.all([
-        apiRequest("PATCH", `/api/categories/${normalized[idx].id}`, { displayOrder: normalized[idx].order }),
-        apiRequest("PATCH", `/api/categories/${normalized[targetIdx].id}`, { displayOrder: normalized[targetIdx].order }),
-      ]);
-      invalidateCats();
-    } finally {
-      setReordering(false);
-    }
-  };
+  useEffect(() => { pagination.resetPage(); }, [cats.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageCats = sortedCats.slice(pagination.start, pagination.end);
 
   const handleSave = () => {
     if (!form.name.trim()) return toast({ title: "Name is required", variant: "destructive" });
@@ -166,69 +204,63 @@ function CategoriesTab() {
     upsert.mutate(form);
   };
 
+  const closeDialog = () => { setDialogOpen(false); setEditing(null); };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <p className="text-sm text-muted-foreground">{cats.length} categories defined</p>
+        <p className="text-sm text-muted-foreground">{cats.length} categories defined · drag cards to reorder</p>
         <Button size="sm" onClick={openAdd} data-testid="button-add-category"><Plus className="w-4 h-4 mr-1.5" />Add Category</Button>
       </div>
 
       {isLoading ? (
-        <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-36 rounded-2xl" />)}
+        </div>
+      ) : cats.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground border rounded-lg">
+          <Folder className="w-8 h-8 mx-auto mb-2 opacity-30" />
+          <p className="text-sm">No categories yet. Add one to get started.</p>
+        </div>
       ) : (
-        <div className="rounded-lg border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16" />
-                <TableHead className="w-24 text-center">Order</TableHead>
-                <TableHead>Icon</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead className="text-center">Sub-cats</TableHead>
-                <TableHead className="text-center">Products</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created By</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedCats.map((c, idx) => {
-                // Reorder up/down (moveCategory) operates on the GLOBAL index within
-                // sortedCats, so idx must stay computed from the full array — only
-                // which ROWS render is limited to the current page window.
-                if (idx < pagination.start || idx >= pagination.end) return null;
-                return (
-                <TableRow key={c.id} data-testid={`row-category-${c.id}`} className={!c.isActive ? "opacity-60" : ""}>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(c)} data-testid={`button-edit-cat-${c.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setDeleting(c)} data-testid={`button-delete-cat-${c.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex flex-col items-center gap-0.5">
-                      <Button size="icon" variant="ghost" className="h-6 w-6" disabled={idx === 0 || reordering} onClick={() => moveCategory(idx, "up")} data-testid={`button-order-up-${c.id}`}><ChevronUp className="w-3.5 h-3.5" /></Button>
-                      <span className="text-xs font-mono text-muted-foreground">{idx + 1}</span>
-                      <Button size="icon" variant="ghost" className="h-6 w-6" disabled={idx === sortedCats.length - 1 || reordering} onClick={() => moveCategory(idx, "down")} data-testid={`button-order-down-${c.id}`}><ChevronDown className="w-3.5 h-3.5" /></Button>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xl">{c.icon || <Folder className="w-5 h-5 text-muted-foreground" />}</TableCell>
-                  <TableCell className="font-medium">{c.name}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{c.description || "—"}</TableCell>
-                  <TableCell className="text-center"><Badge variant="secondary">{c.subCategoryCount}</Badge></TableCell>
-                  <TableCell className="text-center"><Badge variant="outline">{c.productCount}</Badge></TableCell>
-                  <TableCell>
-                    <ActiveToggle active={c.isActive} onChange={v => toggleActive.mutate({ id: c.id, isActive: v })} />
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{c.createdBy || "—"}</TableCell>
-                </TableRow>
-                );
-              })}
-              {cats.length === 0 && (
-                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">No categories yet. Add one to get started.</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {pageCats.map((c) => (
+            <div
+              key={c.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, c.id)}
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, c.id)}
+              onClick={() => openEdit(c)}
+              className={`relative bg-card rounded-2xl border shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow group select-none ${!c.isActive ? "opacity-60" : ""}`}
+              data-testid={`card-category-${c.id}`}
+            >
+              <div className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
+                <div className="w-6 h-6 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                  <GripVertical className="w-3.5 h-3.5 text-white" />
+                </div>
+              </div>
+              <div className="p-4 flex flex-col gap-2">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-2xl leading-none">{c.icon || <Folder className="w-6 h-6 text-muted-foreground" />}</span>
+                  {/* stopPropagation — this toggle sits inside the card's own onClick-to-edit
+                      area, so a tap on it must not also open the edit modal. */}
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <ActiveToggle active={c.isActive} onChange={(v) => toggleActive.mutate({ id: c.id, isActive: v })} />
+                  </div>
+                </div>
+                <div>
+                  <p className="font-semibold text-sm truncate" data-testid={`text-category-name-${c.id}`}>{c.name}</p>
+                  {c.description && <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{c.description}</p>}
+                </div>
+                <div className="flex items-center gap-2 flex-wrap mt-1">
+                  <Badge variant="secondary" className="text-[11px]">{c.subCategoryCount} sub-cats</Badge>
+                  <Badge variant="outline" className="text-[11px]">{c.productCount} products</Badge>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-1">{c.createdBy || "—"}</p>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -246,9 +278,9 @@ function CategoriesTab() {
         />
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent hideClose className="sm:max-w-md">
-          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setDialogOpen(false)} aria-label="Close" data-testid="button-close-category-dialog">
+      <Dialog open={dialogOpen} onOpenChange={(v) => !v && closeDialog()}>
+        <DialogContent hideClose className={`sm:max-w-md ${MODAL_SCROLLBAR}`}>
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={closeDialog} aria-label="Close" data-testid="button-close-category-dialog">
             <X className="w-4 h-4" />
           </button>
           <DialogHeader><DialogTitle>{editing ? "Edit Category" : "New Category"}</DialogTitle></DialogHeader>
@@ -272,8 +304,18 @@ function CategoriesTab() {
               <Label>Active</Label>
               <ActiveToggle active={form.isActive} onChange={v => setForm(f => ({ ...f, isActive: v }))} />
             </div>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <div className="flex gap-2 justify-end items-center">
+              {editing && (
+                <Button
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive mr-auto"
+                  onClick={() => setDeleting(editing)}
+                  data-testid="button-delete-category"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+                </Button>
+              )}
+              <Button variant="outline" onClick={closeDialog}>Cancel</Button>
               <Button onClick={handleSave} disabled={!form.name.trim() || isDuplicate(form.name) || upsert.isPending} data-testid="button-save-category">
                 {upsert.isPending ? "Saving…" : editing ? "Save Changes" : "Create"}
               </Button>
@@ -311,8 +353,6 @@ function SubCategoriesTab() {
   const { data: subs = [], isLoading } = useQuery<SubCategoryWithDetails[]>({ queryKey: ["/api/subcategories"] });
   const { data: cats = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
 
-  const filtered = filterCat === "all" ? subs : subs.filter(s => String(s.categoryId) === filterCat);
-
   const isDuplicate = (name: string) =>
     subs.some(s => s.name.toLowerCase() === name.toLowerCase().trim() && String(s.categoryId) === form.categoryId && s.id !== editing?.id);
 
@@ -343,7 +383,7 @@ function SubCategoriesTab() {
 
   const remove = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/subcategories/${id}`),
-    onSuccess: () => { invalidateSubs(); toast({ title: "Deleted" }); setDeleting(null); },
+    onSuccess: () => { invalidateSubs(); toast({ title: "Deleted" }); setDeleting(null); setDialogOpen(false); setEditing(null); },
     onError: () => toast({ title: "Error", variant: "destructive" }),
   });
 
@@ -361,11 +401,28 @@ function SubCategoriesTab() {
     upsert.mutate(form);
   };
 
+  const closeDialog = () => { setDialogOpen(false); setEditing(null); };
+
+  const bulkOrder = useMutation({
+    mutationFn: (orders: { id: number; displayOrder: number }[]) => apiRequest("PATCH", "/api/subcategories/bulk-order", { orders }),
+    onSuccess: () => invalidateSubs(),
+    onError: () => toast({ title: "Failed to save order", variant: "destructive" }),
+  });
+  // Order is global across all sub-categories (not re-scoped per parent-category
+  // filter) — sort the FULL list first, then apply the filter, same as Admin
+  // Stores sorts before filtering.
+  const { sorted: sortedSubs, handleDragStart, handleDragOver, handleDrop } = useDragReorder(subs, (orders) => bulkOrder.mutate(orders));
+  const filtered = filterCat === "all" ? sortedSubs : sortedSubs.filter(s => String(s.categoryId) === filterCat);
+
+  const pagination = usePagination(filtered.length);
+  useEffect(() => { pagination.resetPage(); }, [filterCat, subs.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageSubs = filtered.slice(pagination.start, pagination.end);
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2 min-w-0 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
-          <p className="text-sm text-muted-foreground shrink-0">{subs.length} sub-categories</p>
+          <p className="text-sm text-muted-foreground shrink-0">{subs.length} sub-categories · drag to reorder</p>
           <Select value={filterCat} onValueChange={setFilterCat}>
             <SelectTrigger className="h-8 w-44 text-sm shrink-0" data-testid="select-filter-cat">
               <SelectValue placeholder="All categories" />
@@ -385,57 +442,72 @@ function SubCategoriesTab() {
       </div>
 
       {isLoading ? (
-        <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-36 rounded-2xl" />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground border rounded-lg">
+          <Layers className="w-8 h-8 mx-auto mb-2 opacity-30" />
+          <p className="text-sm">No sub-categories found.</p>
+        </div>
       ) : (
-        <div className="rounded-lg border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16" />
-                <TableHead className="w-12">Icon</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Parent Category</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created By</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map(s => (
-                <TableRow key={s.id} data-testid={`row-subcat-${s.id}`} className={!s.isActive ? "opacity-60" : ""}>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(s)} data-testid={`button-edit-subcat-${s.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setDeleting(s)} data-testid={`button-delete-subcat-${s.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xl">
-                    {(s as any).icon ? <span>{(s as any).icon}</span> : <Layers className="w-4 h-4 text-muted-foreground" />}
-                  </TableCell>
-                  <TableCell className="font-medium">{s.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className="gap-1">
-                      {cats.find(c => c.id === s.categoryId)?.icon} {s.categoryName}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{s.description || "—"}</TableCell>
-                  <TableCell>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {pageSubs.map((s) => (
+            <div
+              key={s.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, s.id)}
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, s.id)}
+              onClick={() => openEdit(s)}
+              className={`relative bg-card rounded-2xl border shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow group select-none ${!s.isActive ? "opacity-60" : ""}`}
+              data-testid={`card-subcat-${s.id}`}
+            >
+              <div className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
+                <div className="w-6 h-6 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                  <GripVertical className="w-3.5 h-3.5 text-white" />
+                </div>
+              </div>
+              <div className="p-4 flex flex-col gap-2">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-2xl leading-none">
+                    {(s as any).icon ? <span>{(s as any).icon}</span> : <Layers className="w-6 h-6 text-muted-foreground" />}
+                  </span>
+                  <div onClick={(e) => e.stopPropagation()}>
                     <ActiveToggle active={s.isActive} onChange={v => toggleActive.mutate({ id: s.id, isActive: v })} />
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{s.createdBy || "—"}</TableCell>
-                </TableRow>
-              ))}
-              {filtered.length === 0 && (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No sub-categories found.</TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
+                  </div>
+                </div>
+                <div>
+                  <p className="font-semibold text-sm truncate" data-testid={`text-subcat-name-${s.id}`}>{s.name}</p>
+                  {s.description && <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{s.description}</p>}
+                </div>
+                <Badge variant="secondary" className="gap-1 w-fit text-[11px]">
+                  {cats.find(c => c.id === s.categoryId)?.icon} {s.categoryName}
+                </Badge>
+                <p className="text-[11px] text-muted-foreground mt-1">{s.createdBy || "—"}</p>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent hideClose className="sm:max-w-md">
-          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setDialogOpen(false)} aria-label="Close" data-testid="button-close-subcategory-dialog">
+      {filtered.length > 0 && (
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={filtered.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel="sub-categories"
+        />
+      )}
+
+      <Dialog open={dialogOpen} onOpenChange={(v) => !v && closeDialog()}>
+        <DialogContent hideClose className={`sm:max-w-md ${MODAL_SCROLLBAR}`}>
+          <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={closeDialog} aria-label="Close" data-testid="button-close-subcategory-dialog">
             <X className="w-4 h-4" />
           </button>
           <DialogHeader><DialogTitle>{editing ? "Edit Sub-category" : "New Sub-category"}</DialogTitle></DialogHeader>
@@ -468,8 +540,18 @@ function SubCategoriesTab() {
               <Label>Active</Label>
               <ActiveToggle active={form.isActive} onChange={v => setForm(f => ({ ...f, isActive: v }))} />
             </div>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <div className="flex gap-2 justify-end items-center">
+              {editing && (
+                <Button
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive mr-auto"
+                  onClick={() => setDeleting(editing)}
+                  data-testid="button-delete-subcat"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+                </Button>
+              )}
+              <Button variant="outline" onClick={closeDialog}>Cancel</Button>
               <Button onClick={handleSave} disabled={!form.name.trim() || !form.categoryId || isDuplicate(form.name) || upsert.isPending} data-testid="button-save-subcat">
                 {upsert.isPending ? "Saving…" : editing ? "Save Changes" : "Create"}
               </Button>
@@ -530,18 +612,32 @@ function TaxonomyCrudTab({
     [filterCatId, subs]
   );
 
-  // Table filter: items filtered by subcategory
+  const bulkOrder = useMutation({
+    mutationFn: (orders: { id: number; displayOrder: number }[]) => apiRequest("PATCH", `${apiPath}/bulk-order`, { orders }),
+    onSuccess: () => invalidateTaxonomy(),
+    onError: () => toast({ title: "Failed to save order", variant: "destructive" }),
+  });
+  // Order is global across all items of this entity (not re-scoped per category/
+  // sub-category filter) — sort the FULL list first, then apply filters, same as
+  // Admin Stores sorts before filtering.
+  const { sorted: sortedItems, handleDragStart, handleDragOver, handleDrop } = useDragReorder(items, (orders) => bulkOrder.mutate(orders));
+
+  // Filter: items filtered by subcategory
   const filteredItems = useMemo(() => {
     if (filterSubCatId !== "all") {
       const subId = parseInt(filterSubCatId);
-      return items.filter(i => (i.subCategoryIds ?? []).includes(subId));
+      return sortedItems.filter(i => (i.subCategoryIds ?? []).includes(subId));
     }
     if (filterCatId !== "all") {
       const catSubIds = subs.filter(s => String(s.categoryId) === filterCatId).map(s => s.id);
-      return items.filter(i => (i.subCategoryIds ?? []).some(sid => catSubIds.includes(sid)));
+      return sortedItems.filter(i => (i.subCategoryIds ?? []).some(sid => catSubIds.includes(sid)));
     }
-    return items;
-  }, [items, filterSubCatId, filterCatId, subs]);
+    return sortedItems;
+  }, [sortedItems, filterSubCatId, filterCatId, subs]);
+
+  const pagination = usePagination(filteredItems.length);
+  useEffect(() => { pagination.resetPage(); }, [filterCatId, filterSubCatId, items.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pageItems = filteredItems.slice(pagination.start, pagination.end);
 
   const isDuplicate = (name: string) =>
     items.some(i => i.name.toLowerCase() === name.toLowerCase().trim() && i.id !== editing?.id);
@@ -570,7 +666,7 @@ function TaxonomyCrudTab({
 
   const remove = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `${apiPath}/${id}`),
-    onSuccess: () => { invalidateTaxonomy(); toast({ title: "Deleted" }); setDeleting(null); },
+    onSuccess: () => { invalidateTaxonomy(); toast({ title: "Deleted" }); setDeleting(null); setDialogOpen(false); setEditing(null); },
     onError: () => toast({ title: "Error", variant: "destructive" }),
   });
 
@@ -629,7 +725,7 @@ function TaxonomyCrudTab({
       {/* Table header with filter */}
       <div className="flex justify-between items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2 min-w-0 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
-          <p className="text-sm text-muted-foreground shrink-0">{items.length} {title.toLowerCase()}s defined</p>
+          <p className="text-sm text-muted-foreground shrink-0">{items.length} {title.toLowerCase()}s defined · drag to reorder</p>
           <Select value={filterCatId} onValueChange={v => { setFilterCatId(v); setFilterSubCatId("all"); }}>
             <SelectTrigger className="h-8 w-36 text-sm shrink-0">
               <SelectValue placeholder="All categories" />
@@ -658,68 +754,81 @@ function TaxonomyCrudTab({
       </div>
 
       {isLoading ? (
-        <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
-      ) : (
-        <div className="rounded-lg border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-16" />
-                <TableHead className="w-12">Icon</TableHead>
-                <TableHead>Name</TableHead>
-                {extraFields?.map(f => <TableHead key={f.key}>{f.label}</TableHead>)}
-                <TableHead>Sub-categories</TableHead>
-                <TableHead className="text-center">Products</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created By</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredItems.map(item => (
-                <TableRow key={item.id} data-testid={`row-${testPrefix}-${item.id}`} className={!item.isActive ? "opacity-60" : ""}>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(item)} data-testid={`button-edit-${testPrefix}-${item.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setDeleting(item)} data-testid={`button-delete-${testPrefix}-${item.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-xl">
-                    {item.icon ? <span>{item.icon}</span> : <Icon className="w-4 h-4 text-muted-foreground" />}
-                  </TableCell>
-                  <TableCell className="font-medium">{item.name}</TableCell>
-                  {extraFields?.map(f => (
-                    <TableCell key={f.key} className="text-sm text-muted-foreground">
-                      {(item as any)[f.key] || "—"}
-                    </TableCell>
-                  ))}
-                  <TableCell>
-                    <div className="flex flex-wrap gap-1">
-                      {(item.subCategoryNames ?? []).length > 0
-                        ? item.subCategoryNames!.map((n, i) => <Badge key={i} variant="outline" className="text-xs">{n}</Badge>)
-                        : <span className="text-xs text-muted-foreground">—</span>
-                      }
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center"><Badge variant="outline">{item.productCount}</Badge></TableCell>
-                  <TableCell>
-                    <ActiveToggle active={item.isActive} onChange={v => toggleActive.mutate({ id: item.id, isActive: v })} />
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{item.createdBy || "—"}</TableCell>
-                </TableRow>
-              ))}
-              {filteredItems.length === 0 && (
-                <TableRow><TableCell colSpan={7 + (extraFields?.length ?? 0)} className="text-center py-8 text-muted-foreground">
-                  {items.length === 0 ? `No ${title.toLowerCase()}s yet.` : "No results match the selected filter."}
-                </TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-40 rounded-2xl" />)}
         </div>
+      ) : filteredItems.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground border rounded-lg">
+          <Icon className="w-8 h-8 mx-auto mb-2 opacity-30" />
+          <p className="text-sm">{items.length === 0 ? `No ${title.toLowerCase()}s yet.` : "No results match the selected filter."}</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {pageItems.map((item) => (
+            <div
+              key={item.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, item.id)}
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, item.id)}
+              onClick={() => openEdit(item)}
+              className={`relative bg-card rounded-2xl border shadow-sm overflow-hidden cursor-pointer hover:shadow-md transition-shadow group select-none ${!item.isActive ? "opacity-60" : ""}`}
+              data-testid={`card-${testPrefix}-${item.id}`}
+            >
+              <div className="absolute top-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing">
+                <div className="w-6 h-6 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                  <GripVertical className="w-3.5 h-3.5 text-white" />
+                </div>
+              </div>
+              <div className="p-4 flex flex-col gap-2">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-2xl leading-none">
+                    {item.icon ? <span>{item.icon}</span> : <Icon className="w-6 h-6 text-muted-foreground" />}
+                  </span>
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <ActiveToggle active={item.isActive} onChange={v => toggleActive.mutate({ id: item.id, isActive: v })} />
+                  </div>
+                </div>
+                <div>
+                  <p className="font-semibold text-sm truncate" data-testid={`text-${testPrefix}-name-${item.id}`}>{item.name}</p>
+                  {extraFields?.map(f => (item as any)[f.key] ? (
+                    <p key={f.key} className="text-xs text-muted-foreground mt-0.5">{f.label}: {(item as any)[f.key]}</p>
+                  ) : null)}
+                  {(item as any).description && <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{(item as any).description}</p>}
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {(item.subCategoryNames ?? []).length > 0
+                    ? item.subCategoryNames!.map((n, i) => <Badge key={i} variant="outline" className="text-[11px]">{n}</Badge>)
+                    : <span className="text-xs text-muted-foreground">—</span>
+                  }
+                </div>
+                <div className="flex items-center justify-between mt-1">
+                  <Badge variant="outline" className="text-[11px]">{item.productCount} products</Badge>
+                  <p className="text-[11px] text-muted-foreground">{item.createdBy || "—"}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {filteredItems.length > 0 && (
+        <DataPagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          totalItems={filteredItems.length}
+          totalPages={pagination.totalPages}
+          start={pagination.start}
+          end={pagination.end}
+          onPageChange={pagination.setPage}
+          onPageSizeChange={pagination.setPageSize}
+          itemLabel={`${title.toLowerCase()}s`}
+        />
       )}
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={v => { setDialogOpen(v); if (!v) { setEditing(null); resetForm(); } }}>
-        <DialogContent hideClose className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent hideClose className={`sm:max-w-md ${MODAL_SCROLLBAR}`}>
           <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => { setDialogOpen(false); setEditing(null); resetForm(); }} aria-label="Close" data-testid="button-close-flavor-size-brand-dialog">
             <X className="w-4 h-4" />
           </button>
@@ -797,7 +906,17 @@ function TaxonomyCrudTab({
               <Label>Active</Label>
               <ActiveToggle active={formIsActive} onChange={setFormIsActive} />
             </div>
-            <div className="flex gap-2 justify-end">
+            <div className="flex gap-2 justify-end items-center">
+              {editing && (
+                <Button
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive mr-auto"
+                  onClick={() => setDeleting(editing)}
+                  data-testid={`button-delete-${testPrefix}`}
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+                </Button>
+              )}
               <Button variant="outline" onClick={() => { setDialogOpen(false); setEditing(null); resetForm(); }}>Cancel</Button>
               <Button onClick={handleSave} disabled={!formName.trim() || isDuplicate(formName) || upsert.isPending} data-testid={`button-save-${testPrefix}`}>
                 {upsert.isPending ? "Saving…" : editing ? "Save Changes" : "Create"}

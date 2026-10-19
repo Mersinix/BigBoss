@@ -7868,6 +7868,19 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Registered before /:id (task: "Admin Category Management Redesign" —
+  // mirrors /api/admin/stores/bulk-order) so Express doesn't match "bulk-order"
+  // against :id first.
+  app.patch("/api/categories/bulk-order", requireAdmin, async (req, res) => {
+    try {
+      const orders: { id: number; displayOrder: number }[] = req.body?.orders;
+      if (!Array.isArray(orders)) return res.status(400).json({ message: "Invalid payload" });
+      await storage.bulkUpdateCategoryOrder(orders);
+      broadcast("taxonomy_updated", {});
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
   app.patch("/api/categories/:id", requireAdmin, async (req, res) => {
     try {
       const user = await storage.getUser(req.session.userId!);
@@ -7914,6 +7927,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.patch("/api/subcategories/bulk-order", requireAdmin, async (req, res) => {
+    try {
+      const orders: { id: number; displayOrder: number }[] = req.body?.orders;
+      if (!Array.isArray(orders)) return res.status(400).json({ message: "Invalid payload" });
+      await storage.bulkUpdateSubCategoryOrder(orders);
+      broadcast("taxonomy_updated", {});
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
   app.patch("/api/subcategories/:id", requireAdmin, async (req, res) => {
     try {
       const result = await storage.updateSubCategory(parseInt(req.params.id), insertSubCategorySchema.partial().parse(req.body));
@@ -7956,6 +7979,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.patch("/api/flavors/bulk-order", requireAdmin, async (req, res) => {
+    try {
+      const orders: { id: number; displayOrder: number }[] = req.body?.orders;
+      if (!Array.isArray(orders)) return res.status(400).json({ message: "Invalid payload" });
+      await storage.bulkUpdateFlavorOrder(orders);
+      broadcast("taxonomy_updated", {});
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
   app.patch("/api/flavors/:id", requireAdmin, async (req, res) => {
     try { const result = await storage.updateFlavor(parseInt(req.params.id), insertFlavorSchema.partial().parse(req.body)); broadcast("taxonomy_updated", {}); res.json(result); }
     catch { res.status(400).json({ message: "Invalid" }); }
@@ -7991,6 +8024,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  app.patch("/api/sizes/bulk-order", requireAdmin, async (req, res) => {
+    try {
+      const orders: { id: number; displayOrder: number }[] = req.body?.orders;
+      if (!Array.isArray(orders)) return res.status(400).json({ message: "Invalid payload" });
+      await storage.bulkUpdateSizeOrder(orders);
+      broadcast("taxonomy_updated", {});
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Error" }); }
+  });
+
   app.patch("/api/sizes/:id", requireAdmin, async (req, res) => {
     try { const result = await storage.updateSize(parseInt(req.params.id), insertSizeSchema.partial().parse(req.body)); broadcast("taxonomy_updated", {}); res.json(result); }
     catch { res.status(400).json({ message: "Invalid" }); }
@@ -8024,6 +8067,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (err instanceof z.ZodError) res.status(400).json({ message: err.errors[0].message });
       else res.status(500).json({ message: "Error" });
     }
+  });
+
+  app.patch("/api/brands/bulk-order", requireAdmin, async (req, res) => {
+    try {
+      const orders: { id: number; displayOrder: number }[] = req.body?.orders;
+      if (!Array.isArray(orders)) return res.status(400).json({ message: "Invalid payload" });
+      await storage.bulkUpdateBrandOrder(orders);
+      broadcast("taxonomy_updated", {});
+      res.json({ ok: true });
+    } catch { res.status(500).json({ message: "Error" }); }
   });
 
   app.patch("/api/brands/:id", requireAdmin, async (req, res) => {

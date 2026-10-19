@@ -195,30 +195,35 @@ export interface IStorage {
   createCategory(cat: Partial<InsertCategory>): Promise<Category>;
   updateCategory(id: number, updates: Partial<InsertCategory>): Promise<Category>;
   deleteCategory(id: number): Promise<void>;
+  bulkUpdateCategoryOrder(orders: { id: number; displayOrder: number }[]): Promise<void>;
 
   // SubCategories
   getSubCategories(categoryId?: number, opts?: { includeAll?: boolean }): Promise<SubCategoryWithDetails[]>;
   createSubCategory(sub: Partial<InsertSubCategory>): Promise<SubCategory>;
   updateSubCategory(id: number, updates: Partial<InsertSubCategory>): Promise<SubCategory>;
   deleteSubCategory(id: number): Promise<void>;
+  bulkUpdateSubCategoryOrder(orders: { id: number; displayOrder: number }[]): Promise<void>;
 
   // Flavors
   getFlavors(filters?: { categoryId?: number; subCategoryId?: number; includeAll?: boolean }): Promise<FlavorWithCount[]>;
   createFlavor(f: Partial<InsertFlavor>): Promise<Flavor>;
   updateFlavor(id: number, updates: Partial<InsertFlavor>): Promise<Flavor>;
   deleteFlavor(id: number): Promise<void>;
+  bulkUpdateFlavorOrder(orders: { id: number; displayOrder: number }[]): Promise<void>;
 
   // Sizes
   getSizes(filters?: { categoryId?: number; subCategoryId?: number; includeAll?: boolean }): Promise<SizeWithCount[]>;
   createSize(s: Partial<InsertSize>): Promise<Size>;
   updateSize(id: number, updates: Partial<InsertSize>): Promise<Size>;
   deleteSize(id: number): Promise<void>;
+  bulkUpdateSizeOrder(orders: { id: number; displayOrder: number }[]): Promise<void>;
 
   // Brands
   getBrands(filters?: { categoryId?: number; subCategoryId?: number; includeAll?: boolean }): Promise<BrandWithCount[]>;
   createBrand(b: Partial<InsertBrand>): Promise<Brand>;
   updateBrand(id: number, updates: Partial<InsertBrand>): Promise<Brand>;
   deleteBrand(id: number): Promise<void>;
+  bulkUpdateBrandOrder(orders: { id: number; displayOrder: number }[]): Promise<void>;
 
   // Favorites (shop/product favorites, persisted per-user)
   getFavoritesByUser(userId: number): Promise<ShopFavoriteItem[]>;
@@ -10962,6 +10967,7 @@ export class DatabaseStorage implements IStorage {
         ? await db.select().from(subCategories).where(and(eq(subCategories.categoryId, categoryId), eq(subCategories.status, 'ACTIVE'), eq(subCategories.isActive, true)))
         : await db.select().from(subCategories).where(and(eq(subCategories.status, 'ACTIVE'), eq(subCategories.isActive, true)));
     }
+    subs = [...subs].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.id - b.id);
     const cats = await db.select().from(categories);
     const prods = await db.select().from(products);
     const catMap = new Map(cats.map((c) => [c.id, c.name]));
@@ -11005,6 +11011,7 @@ export class DatabaseStorage implements IStorage {
     const subMap = new Map(subs.map((s) => [s.id, s.name]));
     let filtered = all;
     if (filters?.subCategoryId) filtered = filtered.filter((f) => f.subCategoryIds?.includes(filters.subCategoryId!));
+    filtered = [...filtered].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.id - b.id);
     return filtered.map((f) => ({
       ...f,
       productCount: prods.filter((p) => p.flavorId === f.id || p.flavorIds?.includes(f.id)).length,
@@ -11040,6 +11047,7 @@ export class DatabaseStorage implements IStorage {
     const subMap = new Map(subs.map((s) => [s.id, s.name]));
     let filtered = all;
     if (filters?.subCategoryId) filtered = filtered.filter((s) => s.subCategoryIds?.includes(filters.subCategoryId!));
+    filtered = [...filtered].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.id - b.id);
     return filtered.map((s) => ({
       ...s,
       productCount: prods.filter((p) => p.sizeId === s.id || p.sizeIds?.includes(s.id)).length,
@@ -11075,6 +11083,7 @@ export class DatabaseStorage implements IStorage {
     const subMap = new Map(subs.map((s) => [s.id, s.name]));
     let filtered = all;
     if (filters?.subCategoryId) filtered = filtered.filter((b) => b.subCategoryIds?.includes(filters.subCategoryId!));
+    filtered = [...filtered].sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.id - b.id);
     return filtered.map((b) => ({
       ...b,
       productCount: prods.filter((p) => p.brandId === b.id).length,
@@ -11094,6 +11103,39 @@ export class DatabaseStorage implements IStorage {
 
   async deleteBrand(id: number) {
     await db.delete(brands).where(eq(brands.id, id));
+  }
+
+  // Admin Category Management drag-and-drop order (task: "Admin Category
+  // Management Redesign") — mirrors bulkUpdateStoreOrder's independent-per-row pattern,
+  // one method per taxonomy entity since each keeps its own independent order.
+  async bulkUpdateCategoryOrder(orders: { id: number; displayOrder: number }[]): Promise<void> {
+    await Promise.all(orders.map(({ id, displayOrder }) =>
+      db.update(categories).set({ displayOrder, updatedAt: new Date() }).where(eq(categories.id, id))
+    ));
+  }
+
+  async bulkUpdateSubCategoryOrder(orders: { id: number; displayOrder: number }[]): Promise<void> {
+    await Promise.all(orders.map(({ id, displayOrder }) =>
+      db.update(subCategories).set({ displayOrder, updatedAt: new Date() }).where(eq(subCategories.id, id))
+    ));
+  }
+
+  async bulkUpdateFlavorOrder(orders: { id: number; displayOrder: number }[]): Promise<void> {
+    await Promise.all(orders.map(({ id, displayOrder }) =>
+      db.update(flavors).set({ displayOrder, updatedAt: new Date() }).where(eq(flavors.id, id))
+    ));
+  }
+
+  async bulkUpdateSizeOrder(orders: { id: number; displayOrder: number }[]): Promise<void> {
+    await Promise.all(orders.map(({ id, displayOrder }) =>
+      db.update(sizes).set({ displayOrder, updatedAt: new Date() }).where(eq(sizes.id, id))
+    ));
+  }
+
+  async bulkUpdateBrandOrder(orders: { id: number; displayOrder: number }[]): Promise<void> {
+    await Promise.all(orders.map(({ id, displayOrder }) =>
+      db.update(brands).set({ displayOrder, updatedAt: new Date() }).where(eq(brands.id, id))
+    ));
   }
 
   // ── Supplier mappings ───────────────────────────────────────────────────────

@@ -1190,6 +1190,9 @@ export const subCategories = pgTable("sub_categories", {
   description: text("description"),
   icon: text("icon"),
   isActive: boolean("is_active").notNull().default(true),
+  // Admin Category Management drag-and-drop order — mirrors categories.displayOrder
+  // / supplierStores.displayOrder (task: "Admin Category Management Redesign").
+  displayOrder: integer("display_order").notNull().default(0),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -1207,6 +1210,9 @@ export const flavors = pgTable("flavors", {
   icon: text("icon"),
   subCategoryIds: integer("sub_category_ids").array(),
   isActive: boolean("is_active").notNull().default(true),
+  // Admin Category Management drag-and-drop order (task: "Admin Category
+  // Management Redesign") — mirrors categories.displayOrder.
+  displayOrder: integer("display_order").notNull().default(0),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -1224,6 +1230,9 @@ export const sizes = pgTable("sizes", {
   icon: text("icon"),
   subCategoryIds: integer("sub_category_ids").array(),
   isActive: boolean("is_active").notNull().default(true),
+  // Admin Category Management drag-and-drop order (task: "Admin Category
+  // Management Redesign") — mirrors categories.displayOrder.
+  displayOrder: integer("display_order").notNull().default(0),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -1242,6 +1251,9 @@ export const brands = pgTable("brands", {
   icon: text("icon"),
   subCategoryIds: integer("sub_category_ids").array(),
   isActive: boolean("is_active").notNull().default(true),
+  // Admin Category Management drag-and-drop order (task: "Admin Category
+  // Management Redesign") — mirrors categories.displayOrder.
+  displayOrder: integer("display_order").notNull().default(0),
   createdBy: text("created_by"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

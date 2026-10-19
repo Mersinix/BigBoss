@@ -9,11 +9,11 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 // page/pageSize controller: the caller owns the actual data slicing (see buildPageWindow
 // below), so this component has no knowledge of what kind of records it's paginating.
 
-const PAGE_SIZE_PRESETS = [10, 25, 50, 100] as const;
+const PAGE_SIZE_PRESETS = [12, 24, 48, 96] as const;
 
 export type PageSize = number;
 
-export function usePagination(totalItems: number, initialPageSize: PageSize = 10) {
+export function usePagination(totalItems: number, initialPageSize: PageSize = 12) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(initialPageSize);
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));

@@ -5594,3 +5594,210 @@ les enveloppe a changé.
   sur les 4 routes `/stores/9`, `/academy/stores/55`,
   `/print/stores/53`, `/marketing/stores/19`) reste recommandée avant
   mise en production.
+
+---
+
+# Tâche : Refonte Admin Category Management — Cartes, drag-and-drop, pagination, scrollbars de modale
+
+## 1. Audit préalable
+
+**Page auditée** : `client/src/pages/admin/categories-page.tsx` (1722 lignes),
+onglets « Categories » (`CategoriesTab`), « Sub-categories » (`SubCategoriesTab`),
+« Flavors »/« Sizes »/« Brands » (tous les trois partagent un seul composant
+générique `TaxonomyCrudTab`, paramétré par `apiPath`/`queryKey`/`extraFields`).
+Les onglets « Category Requests » et « Supplier Categories » (sections distinctes,
+pas des `TabsTrigger` de ce `Tabs`) utilisent toujours leurs propres tableaux et
+n'étaient pas dans le périmètre de la tâche — non touchés.
+
+**Référence Admin Stores** (`client/src/pages/admin/stores-page.tsx`) :
+- Cartes glissables en HTML5 natif (`draggable` + `onDragStart`/`onDragOver`/`onDrop`),
+  aucune librairie de drag-and-drop externe — juste un état local `orderedIds`
+  (override optimiste après un drop) + une `ref` `dragIdRef` pour mémoriser l'id en
+  cours de glissement.
+- Le drop calcule `from`/`to` à partir du tableau **complet** et non filtré/paginé
+  (`sortedStores`), donc l'ordre reste cohérent même avec un filtre actif ou en
+  changeant de page — seules les cartes de la page courante sont réellement
+  glissables, mais les indices utilisés pour la réorganisation restent globaux.
+- Persistance via un unique PATCH `bulk-order` (`{ orders: [{id, displayOrder}] }`),
+  recalculant un `displayOrder` 0..n-1 pour TOUTE la liste à chaque drop — pas de
+  swap pair-à-pair comme l'ancien système de flèches haut/bas des Catégories.
+- Pagination déjà fournie par le composant partagé
+  `client/src/components/ui/data-pagination.tsx` (`usePagination`/`DataPagination`),
+  déjà utilisé par plus de 60 pages Admin/Supplier/etc. Préréglages de taille de
+  page déjà fixés à `[12, 24, 48, 96]` (+ option « Custom… ») — exactement les
+  valeurs demandées par la tâche, aucune nouvelle configuration introduite.
+- Scrollbar de référence : `StoreDetailDialog`'s `DialogContent` porte
+  `max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1
+  [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full
+  [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600` —
+  reproduite telle quelle.
+
+**État initial de chaque onglet Category Management** :
+- **Categories** (`CategoriesTab`) : tableau, colonne « Order » avec flèches
+  haut/bas (`moveCategory`, swap de `displayOrder` entre 2 lignes adjacentes via 2
+  PATCH individuels), boutons Edit/Delete séparés par ligne, pagination déjà
+  présente (`usePagination`/`DataPagination`), `categories.displayOrder` existait
+  déjà en base (colonne déjà utilisée).
+- **Sub-categories** (`SubCategoriesTab`) : tableau, aucune colonne d'ordre,
+  aucun champ `displayOrder` en base, boutons Edit/Delete séparés, **aucune
+  pagination**.
+- **Flavors/Sizes/Brands** (`TaxonomyCrudTab`) : tableau, aucune colonne d'ordre,
+  aucun champ `displayOrder` en base pour aucune des 3 tables, boutons
+  Edit/Delete séparés, **aucune pagination**. Tri actuel = ordre d'insertion
+  renvoyé tel quel par la requête SQL (aucun `ORDER BY` explicite).
+
+**Schéma (`shared/schema.ts`)** : `categories.displayOrder` existait déjà ;
+`sub_categories`, `flavors`, `sizes`, `brands` n'avaient **aucune** colonne
+d'ordre — confirmé par lecture directe des 4 définitions `pgTable`. C'est le cas
+explicitement anticipé par la tâche (« If persistent ordering is missing […]
+implement the smallest safe extension required ») : ajout additif d'une seule
+colonne `display_order integer not null default 0` à chacune des 4 tables.
+
+**API existante** (`server/routes.ts`) : `GET/POST/PATCH/DELETE` déjà présents
+pour les 5 entités ; aucune route `bulk-order` n'existait pour elles (seule
+`/api/admin/stores/bulk-order` et les 5 routes `/api/admin/<service>/accounts/bulk-order`
+existaient, toutes suivant exactement le même motif). Un commentaire existant
+dans le code avertit explicitement que la route `bulk-order` doit être déclarée
+**avant** la route `:id`, sinon Express matche `"bulk-order"` comme une valeur de
+`:id` (→ `NaN` → échec silencieux) — appliqué pour les 5 nouvelles routes.
+
+## 2. Implémentation
+
+### Schéma + migration (additive, aucune perte de données)
+
+Ajout de `displayOrder: integer("display_order").notNull().default(0)` à
+`subCategories`, `flavors`, `sizes`, `brands` (`shared/schema.ts`). Appliqué via
+`npx drizzle-kit push` (mécanisme de migration déjà utilisé dans ce projet,
+confirmé par `package.json`'s `db:push`) — confirmé par lecture directe du
+schéma PostgreSQL que les 4 colonnes existent désormais, chaque ligne existante
+récupérant `display_order = 0` par défaut (comptages de lignes inchangés avant/
+après : categories 13, sub_categories 30, flavors 19, sizes 19, brands 30).
+
+### Backend (`server/storage.ts`, `server/routes.ts`)
+
+- `getSubCategories`/`getFlavors`/`getSizes`/`getBrands` trient désormais
+  explicitement par `(displayOrder, id)` avant de renvoyer les résultats (tri
+  stable, les lignes existantes à `displayOrder = 0` restent dans leur ordre
+  d'insertion jusqu'à un premier glissement) — `getCategories` triait déjà ainsi.
+- 5 nouvelles méthodes `bulkUpdateCategoryOrder`/`bulkUpdateSubCategoryOrder`/
+  `bulkUpdateFlavorOrder`/`bulkUpdateSizeOrder`/`bulkUpdateBrandOrder`, copie
+  exacte du motif `bulkUpdateStoreOrder` (`Promise.all` de PATCH indépendants
+  par ligne) — chaque taxonomie garde son propre ordre indépendant, aucune
+  méthode partagée entre entités.
+- 5 nouvelles routes `PATCH /api/categories|subcategories|flavors|sizes|brands/bulk-order`
+  (`requireAdmin`), chacune déclarée **avant** sa route `:id` correspondante,
+  `broadcast("taxonomy_updated", {})` sur succès (même événement déjà utilisé par
+  toutes les autres routes de ces 5 entités).
+
+### Frontend (`client/src/pages/admin/categories-page.tsx`)
+
+- **Hook partagé `useDragReorder<T>`** (nouveau, factorisé une seule fois car les
+  3 onglets en ont besoin) : reproduit exactement l'état `orderedIds`/`dragIdRef`
+  + les handlers `handleDragStart`/`handleDragOver`/`handleDrop` d'Admin Stores,
+  paramétré par la liste d'items et un callback `onReorder`. `sorted` reflète
+  toujours la liste **complète**, jamais seulement la page courante — donc le
+  glisser-déposer reste cohérent avec la pagination et les filtres actifs,
+  exactement comme la référence.
+- **Constante partagée `MODAL_SCROLLBAR`** : les classes de scrollbar fines
+  exactes de `StoreDetailDialog`, réutilisées sur les 3 modales (Category,
+  Sub-category, Flavor/Size/Brand).
+- **`CategoriesTab`** : table → grille de cartes responsive
+  (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4`), chaque carte
+  affichant icône/nom/description/compteurs (sous-catégories, produits)/statut/
+  créateur ; carte cliquable → ouvre la modale d'édition ; glissée via
+  `useDragReorder` (remplace `moveCategory`/les flèches haut/bas, colonne
+  « Order » supprimée) ; bouton Delete déplacé dans la modale d'édition
+  (visible seulement en mode édition, ferme aussi la modale après suppression
+  réussie) ; pagination déjà présente, conservée à l'identique (mêmes
+  préréglages, même comportement de reset).
+- **`SubCategoriesTab`** : même refonte (cartes + DnD + delete-in-modal) +
+  **ajout de la pagination** (absente avant) ; le filtre par catégorie parente
+  s'applique **après** le tri global par `displayOrder`, donc l'ordre global
+  reste cohérent même catégorie filtrée.
+- **`TaxonomyCrudTab`** (sert Flavors/Sizes/Brands) : même refonte + **ajout de
+  la pagination** pour les 3 — un seul changement dans le composant générique
+  couvre les 3 onglets à la fois (pas de triplication) ; les filtres
+  catégorie/sous-catégorie s'appliquent après le tri global, même raisonnement
+  que Sub-categories.
+- Dans les 3 composants, un `<div onClick={(e) => e.stopPropagation()}>`
+  enveloppe le toggle Actif/Inactif à l'intérieur de chaque carte — sans cela,
+  cliquer sur le toggle aurait aussi déclenché l'ouverture de la modale d'édition
+  (le clic bouillonnant jusqu'au `onClick` de la carte).
+- Import ajouté : `GripVertical` (icône de poignée de glisser, déjà utilisée par
+  Admin Stores).
+
+## 3. Garde-fous respectés
+
+- Aucune donnée réelle supprimée, dupliquée ou réinitialisée — migration
+  strictement additive (nouvelle colonne, valeur par défaut 0, aucune ligne
+  modifiée par la migration elle-même).
+- Chaque taxonomie garde son ordre strictement indépendant — 5 méthodes/5 routes
+  bulk-order séparées, aucun couplage entre Categories/Sub-categories/Flavors/
+  Sizes/Brands ni avec l'ordre des Stores.
+- API existantes (`GET/POST/PATCH/DELETE` par entité) totalement inchangées —
+  seules des routes **additionnelles** (`bulk-order`) ont été ajoutées.
+- Permissions inchangées : les 5 nouvelles routes utilisent le même middleware
+  `requireAdmin` que toutes les routes de taxonomie existantes.
+- Category Requests / Supplier Categories / compteurs de résumé / recherche
+  globale (en haut de la page) non touchés.
+- Mode clair/sombre non modifié : les cartes réutilisent les classes
+  `bg-card`/`border`/`text-muted-foreground` déjà thémées globalement par le
+  design system Admin (mêmes tokens que les cartes de Stores), aucune couleur
+  codée en dur ajoutée.
+- Glisser une carte ne peut pas sélectionner un filtre, soumettre un formulaire
+  ni supprimer un enregistrement — seul le clic (distinct du glisser en HTML5
+  natif) ouvre la modale d'édition, et Delete est un bouton explicite à
+  l'intérieur de cette modale.
+- Aucune nouvelle dépendance npm ajoutée — le drag-and-drop réutilise l'API HTML5
+  native déjà utilisée par Admin Stores, pas de librairie tierce.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur, à chaque étape (schéma, backend, puis après
+  chacun des 3 composants réécrits).
+- `npm run build` → succès (client + serveur) après l'ensemble des changements.
+- `npx drizzle-kit push` → confirmé par lecture directe du schéma PostgreSQL que
+  `display_order` existe désormais sur les 4 tables, comptages de lignes
+  inchangés (13/30/19/19/30).
+- Redémarrage du serveur de dev (le process Node existant ne rechargeait pas
+  automatiquement les changements serveur — `tsx` sans `--watch`) pour charger
+  les nouvelles routes.
+- **Vérification bout-en-bout en conditions réelles d'authentification** : création
+  d'un compte Admin de test jetable (`qa.taxonomy.test@local.test`, mot de passe
+  hashé via `bcryptjs`, même mécanisme que les comptes réels), connexion via
+  `/api/auth/login`, puis :
+  - Confirmé que `displayOrder` apparaît bien dans les réponses des 5 `GET`.
+  - `PATCH /api/subcategories/bulk-order` avec un échange réel (sous-catégories
+    #1/#2) → `{ok:true}`, re-fetch confirme le nouvel ordre appliqué, puis
+    restauré à l'état d'origine.
+  - `PATCH /api/flavors|sizes|brands|categories/bulk-order` (no-op) → `{ok:true}`
+    sur les 4.
+  - Confirmé que `PATCH /api/categories/1` (route `:id` normale) fonctionne
+    toujours correctement après l'ajout de la route `bulk-order` juste avant
+    elle (aucun conflit de routage Express).
+  - Cycle de vie complet sur un enregistrement de test (`POST` création →
+    `PATCH` édition → `DELETE` suppression) sur Flavors → confirmé supprimé.
+  - Compte Admin de test et tout enregistrement de test supprimés après
+    vérification ; comptages finaux des 5 tables identiques à l'état initial.
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour confirmer visuellement le glisser-
+  déposer tactile/souris sur les nouvelles cartes, l'apparence exacte de la
+  grille responsive (desktop/tablette/mobile), ni le rendu de la scrollbar fine
+  dans les 3 modales — vérifié par comparaison de code strictement identique
+  aux motifs déjà en production sur Admin Stores (cartes, drag-and-drop,
+  scrollbar), par le cycle de vie CRUD + bulk-order réel en base ci-dessus, et
+  par `tsc`/`build` stricts. Une vérification manuelle (glisser une carte sur
+  desktop et sur mobile, changer de page pendant un glissement, ouvrir/fermer
+  les 3 modales en mode sombre) reste recommandée avant mise en production.
+- Le filtre « Category Requests » / « Supplier Categories » reste sur son
+  design en tableau d'origine (hors périmètre explicite de la tâche — seuls les
+  5 onglets Categories/Sub-categories/Flavors/Sizes/Brands étaient visés).
+- Comme pour Admin Stores (motif réutilisé à l'identique), si un filtre actif
+  masque certaines cartes pendant un glissement, la nouvelle position est
+  calculée sur l'ordre global (pas seulement les cartes visibles) — un
+  glissement entre deux cartes visuellement proches mais globalement éloignées
+  (à cause du filtre) peut déplacer l'élément au-delà d'éléments non visibles à
+  l'écran. Ce comportement existe déjà à l'identique sur Admin Stores ; aucune
+  régression introduite, juste un héritage assumé du motif réutilisé.

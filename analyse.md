@@ -5477,3 +5477,120 @@ sous-catégorie n'a été modifiée.
   comme sur `/products` ; ce n'est pas une régression du correctif,
   seulement un reflet fidèle du même état de configuration admin déjà
   visible sur la page de référence.
+
+---
+
+# Tâche : Uniformiser le comportement de défilement des filtres sur les pages boutique
+
+## 1. Audit préalable
+
+- Référence (`browse-products.tsx`, `FilterBar`, ligne ~872-876) : la
+  rangée de filtres (recherche + Sous-catégorie + Marque + Saveur +
+  Taille + Tri + Réinitialiser) est enveloppée dans un conteneur
+  `flex items-center gap-2 flex-nowrap overflow-x-auto sm:flex-wrap
+  sm:overflow-x-visible [&::-webkit-scrollbar]:hidden`, avec
+  `style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}`.
+  Comportement réel : sur mobile (`< sm`), les filtres ne passent jamais
+  à la ligne — ils défilent horizontalement avec une scrollbar masquée
+  et un défilement tactile natif (`-webkit-overflow-scrolling: touch`) ;
+  à partir de `sm:` (tablette/desktop), ils passent au contraire à la
+  ligne (`flex-wrap`) et le défilement horizontal est désactivé
+  (`overflow-x-visible`) — aucun défilement n'est donc nécessaire sur
+  grand écran, seulement sur mobile.
+- Un second widget, la bande de pastilles de catégorie (`CategoryStrip`,
+  ligne 78-109, et son équivalent sur chaque page boutique), utilise
+  délibérément un motif différent et plus simple :
+  `flex gap-1.5 overflow-x-auto py-3` (toujours en défilement
+  horizontal, sans variante `sm:flex-wrap`) — déjà strictement
+  identique entre `/products` et les 4 pages boutique. Ce widget n'est
+  pas concerné par cette tâche, aucune incohérence n'y a été trouvée.
+- Les 4 pages boutique (`store-detail-page.tsx`, `academy-store-
+  detail-page.tsx`, `print-store-detail-page.tsx`, `marketing-store-
+  detail-page.tsx`) partagent toutes la même implémentation séparée de
+  leur rangée de filtres (pas de composant `FilterBar` partagé avec
+  `/products` — chaque page a sa propre copie, confirmé par les audits
+  précédents de cette session), et les 4 utilisaient exactement le même
+  conteneur fautif : `flex items-center gap-2 flex-wrap py-2` — aucun
+  `overflow-x-auto`, aucune scrollbar masquée, aucun style de
+  défilement tactile. Résultat : sur mobile, les filtres passaient
+  directement à la ligne (plusieurs rangées) au lieu de défiler
+  horizontalement comme sur `/products`, cassant la cohérence demandée
+  par la tâche.
+- Les 4 rangées de filtres fautives sont déjà imbriquées dans un
+  conteneur parent `<div className="max-w-7xl mx-auto px-4">` (identique
+  à la référence), donc aucun ajustement de ce parent n'était
+  nécessaire — seul le conteneur interne de la rangée de filtres devait
+  changer.
+- Note sur le routage : la tâche désigne la page boutique Marketing par
+  `/stores/19`, mais cette URL correspond en réalité à la page boutique
+  Shop (`/stores/:storeId`, voir `App.tsx` ligne 363). La page boutique
+  Marketing existe à la route `/marketing/stores/:agencyId` (`App.tsx`
+  ligne 729). Traité comme une coquille dans l'énoncé de la tâche (le
+  même id "19" avait déjà été utilisé dans une tâche précédente de cette
+  session pour désigner l'agence Marketing #19) — la correction a donc
+  bien été appliquée à `marketing-store-detail-page.tsx`.
+
+## 2. Implémentation
+
+Dans les 4 fichiers (`store-detail-page.tsx`,
+`academy-store-detail-page.tsx`, `print-store-detail-page.tsx`,
+`marketing-store-detail-page.tsx`), remplacement identique du
+conteneur de la rangée de filtres :
+
+```tsx
+// Avant
+<div className="flex items-center gap-2 flex-wrap py-2">
+
+// Après
+<div
+  className="flex items-center gap-2 flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden py-2"
+  style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
+>
+```
+
+Copie exacte de la classe/du style déjà utilisés par `/products`
+(`t.dk`/thème non concerné ici, car ce conteneur ne porte aucune
+couleur). Aucun filtre, aucune icône, aucune logique de tri, de
+réinitialisation ou de sélection n'a été touché — seul le conteneur qui
+les enveloppe a changé.
+
+## 3. Garde-fous respectés
+
+- Aucun filtre supprimé, réordonné ou renommé sur aucune des 4 pages.
+- Aucune logique de filtrage, de tri ou de réinitialisation modifiée —
+  seule la classe CSS/le style inline du conteneur a changé.
+- Les menus déroulants (`Select` sur Shop/Academy/Print, `DropdownMenu`
+  à cases sur Marketing) sont rendus par Radix dans un portail attaché
+  à `document.body`, donc non affectés par le `overflow-x-auto` de leur
+  conteneur parent — ouverture/fermeture inchangée, aucun risque de
+  troncature visuelle.
+- Le défilement horizontal de la rangée ne peut pas sélectionner une
+  option, effacer un filtre ni soumettre un formulaire — c'est un
+  simple défilement de conteneur (`overflow-x-auto`), sans geste ni
+  gestionnaire d'événement ajouté.
+- Le mode clair/sombre n'est pas affecté : aucune classe de couleur
+  n'a été touchée, uniquement les classes de disposition/défilement.
+- La bande de pastilles de catégorie (déjà cohérente, voir section 1)
+  n'a pas été modifiée.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- `git diff --stat` sur les 4 fichiers : diff strictement identique et
+  minimal (10 insertions / 4 suppressions nettes par fichier — un seul
+  conteneur remplacé), confirmant qu'aucun autre changement n'a été
+  introduit par erreur.
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour confirmer visuellement le
+  défilement tactile sur mobile/tablette, le masquage effectif de la
+  scrollbar sur chaque moteur de rendu, ni l'absence de défilement de
+  page involontaire — vérifié par comparaison de code strictement
+  identique à la classe/au style déjà en production sur `/products`
+  (`browse-products.tsx`), qui produit ce comportement avec succès
+  aujourd'hui. Une vérification manuelle (desktop, tablette, mobile,
+  sur les 4 routes `/stores/9`, `/academy/stores/55`,
+  `/print/stores/53`, `/marketing/stores/19`) reste recommandée avant
+  mise en production.

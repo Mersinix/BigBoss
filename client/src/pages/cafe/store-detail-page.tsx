@@ -957,7 +957,15 @@ export default function StoreDetailPage() {
                 input stays available even when neither taxonomy has
                 entries. Search input placed first, same position/design as
                 /products' own FilterBar. */}
-            <div className="flex items-center gap-2 flex-wrap py-2">
+            {/* Task: "Standardize Store Page Filter Scrolling Behavior" — same
+                responsive scroll/wrap pattern as /products' own FilterBar:
+                horizontal scroll with a hidden scrollbar on mobile
+                (flex-nowrap overflow-x-auto), wraps to multiple lines with no
+                scroll on sm:+ (sm:flex-wrap sm:overflow-x-visible). */}
+            <div
+              className="flex items-center gap-2 flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden py-2"
+              style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
+            >
               <SlidersHorizontal className={`w-3.5 h-3.5 shrink-0 ${t.textMuted}`} />
               <div className="relative shrink-0 sm:flex-1 sm:min-w-[180px] sm:max-w-xs">
                 {!searchOpen && (

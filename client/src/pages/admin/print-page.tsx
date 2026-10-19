@@ -874,7 +874,7 @@ export default function AdminPrintPage() {
             </div>
             <Select value={serviceCategory} onValueChange={setServiceCategory}>
               <SelectTrigger className="w-[160px] shrink-0" data-testid="select-service-filter-category"><SelectValue placeholder="Catégorie" /></SelectTrigger>
-              <SelectContent><SelectItem value="all">Toutes catégories</SelectItem>{serviceFilterOptions.categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              <SelectContent><SelectItem value="all">Catégories</SelectItem>{serviceFilterOptions.categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={servicePrinter} onValueChange={setServicePrinter}>
               <SelectTrigger className="w-[160px] shrink-0" data-testid="select-service-filter-printer"><SelectValue placeholder="Imprimerie" /></SelectTrigger>

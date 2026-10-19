@@ -716,11 +716,11 @@ export default function AdminAcademyPage() {
             </div>
             <Select value={courseCategory} onValueChange={setCourseCategory}>
               <SelectTrigger className="w-[160px] shrink-0" data-testid="select-course-filter-category"><SelectValue placeholder="Catégorie" /></SelectTrigger>
-              <SelectContent><SelectItem value="all">Toutes catégories</SelectItem>{courseFilterOptions.categories.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent>
+              <SelectContent><SelectItem value="all">Catégories</SelectItem>{courseFilterOptions.categories.map((cat) => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={courseAcademy} onValueChange={setCourseAcademy}>
               <SelectTrigger className="w-[160px] shrink-0" data-testid="select-course-filter-academy"><SelectValue placeholder="Académie" /></SelectTrigger>
-              <SelectContent><SelectItem value="all">Toutes académies</SelectItem>{courseFilterOptions.academies.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
+              <SelectContent><SelectItem value="all">Académies</SelectItem>{courseFilterOptions.academies.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={courseStatus} onValueChange={setCourseStatus}>
               <SelectTrigger className="w-[150px] shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>

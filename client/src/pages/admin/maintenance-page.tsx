@@ -1054,7 +1054,7 @@ export default function MaintenanceAdminPage() {
           <Select value={jobPostPublicationMode} onValueChange={setJobPostPublicationMode}>
             <SelectTrigger className="w-[150px] shrink-0"><SelectValue placeholder="Publication" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes publications</SelectItem>
+              <SelectItem value="all">Publications</SelectItem>
               <SelectItem value="AUTOMATIC">Automatique</SelectItem>
               <SelectItem value="MANUAL">Manuelle</SelectItem>
             </SelectContent>
@@ -1062,14 +1062,14 @@ export default function MaintenanceAdminPage() {
           <Select value={jobPostCategory} onValueChange={setJobPostCategory}>
             <SelectTrigger className="w-[180px] shrink-0"><SelectValue placeholder="Compétence" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes compétences</SelectItem>
+              <SelectItem value="all">Compétences</SelectItem>
               {jobPostFilterOptions.categories.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={jobPostUrgency} onValueChange={setJobPostUrgency}>
             <SelectTrigger className="w-[140px] shrink-0"><SelectValue placeholder="Urgence" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes urgences</SelectItem>
+              <SelectItem value="all">Urgences</SelectItem>
               <SelectItem value="LOW">Faible</SelectItem>
               <SelectItem value="NORMAL">Normale</SelectItem>
               <SelectItem value="HIGH">Élevée</SelectItem>
@@ -1079,7 +1079,7 @@ export default function MaintenanceAdminPage() {
           <Select value={jobPostLocation} onValueChange={setJobPostLocation}>
             <SelectTrigger className="w-[160px] shrink-0"><SelectValue placeholder="Zone" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes les zones</SelectItem>
+              <SelectItem value="all">Zones</SelectItem>
               {jobPostFilterOptions.locations.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}
             </SelectContent>
           </Select>

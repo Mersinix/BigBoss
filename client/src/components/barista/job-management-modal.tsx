@@ -276,7 +276,7 @@ export function JobManagementModal({ open, onClose, initialJobId = null }: { ope
                   </DialogTitle>
                   <div className="flex items-center gap-2 shrink-0">
                     <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white gap-1.5" onClick={openCreate} data-testid="button-job-create">
-                      <Plus className="w-4 h-4" /> {section === "MISSION" ? "Publier une mission" : "Publier une offre"}
+                      <Plus className="w-4 h-4" /> {section === "MISSION" ? "Mission" : "Offre"}
                     </Button>
                     <button
                       type="button"

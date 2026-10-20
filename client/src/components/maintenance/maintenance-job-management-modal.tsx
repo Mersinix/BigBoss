@@ -199,7 +199,7 @@ export function MaintenanceJobManagementModal({ open, onClose, initialJobId = nu
                   </DialogTitle>
                   <div className="flex items-center gap-2 shrink-0">
                     <Button size="sm" className="bg-orange-600 hover:bg-orange-700 text-white gap-1.5" onClick={openCreate} data-testid="button-maintenance-job-create">
-                      <Plus className="w-4 h-4" /> Publier une intervention
+                      <Plus className="w-4 h-4" /> Intervention
                     </Button>
                     <button
                       type="button"

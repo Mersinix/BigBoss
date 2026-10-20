@@ -6961,3 +6961,125 @@ Un seul fichier modifié : `client/src/pages/cafe/maintenance/maintenance-page.t
   compétence orpheline n'existe aujourd'hui) — le comportement de filtrage
   n'a donc pu être vérifié que par simulation logique (section 4), pas par
   un cas réel actuellement reproductible dans l'interface.
+
+---
+
+# Tâche : Synchroniser les filtres Maintenance avec les compétences de la base de données et les affectations réelles des profils
+
+## 1. Audit préalable
+
+**Constat principal** : les deux tâches précédentes sur `/maintenance` avaient
+déjà corrigé (a) la dérivation des options de filtre depuis les profils
+éligibles plutôt qu'une liste admin globale, et (b) la fuite Caméras/Chicha
+(un sous-compétence listé sous la mauvaise catégorie parente) — mais
+**aucune des deux n'avait jamais validé qu'un nom de compétence/sous-
+compétence sauvegardé sur un profil correspond encore à un enregistrement
+réellement configuré** dans `maintenance_competencies`/
+`maintenance_sub_competencies`. C'est exactement la même lacune que la tâche
+précédente avait comblée pour `AgentDetailModal` (la modale de détail) — cette
+tâche étend la même logique aux **options de filtre** de la page principale
+`/maintenance`.
+
+**Schéma confirmé** (`shared/schema.ts`) : `maintenance_sub_competencies.competency_id`
+référence `maintenance_competencies.id` (relation parent-enfant réelle,
+jamais déduite par similarité de texte). `maintenance_profiles.skills`
+(`text[]`, noms de compétences) et `.subSkills` (`text[]` de clés encodées
+`"<Compétence>::<Sous-compétence>"`, voir
+`shared/maintenance-sub-skill-key.ts`) sont du texte libre sans FK — seule
+source de VERITÉ sur ce que CE profil revendique, mais jamais une garantie
+que ce nom existe encore dans la taxonomie.
+
+**Composants concernés** : les deux composants `AgentDetailModal` et
+`MaintenancePage` (export par défaut) vivent dans le **même fichier**
+(`client/src/pages/cafe/maintenance/maintenance-page.tsx`) et chargent
+chacun leur propre requête `/api/maintenance/taxonomy` (déjà filtrée
+`isActive && !isFrozen` côté serveur, voir
+`storage.getAvailableMaintenanceTaxonomy` — confirmé dans l'audit de la
+tâche précédente). Une factorisation en une fonction pure partagée était
+donc directement applicable sans toucher à aucun des 5 autres points
+d'appel de `AgentDetailModal`.
+
+## 2. Implémentation
+
+- Nouvelle fonction pure, au niveau module, `buildMaintenanceCompetencyValidity(taxonomy)`
+  — reprend exactement le calcul déjà écrit pour `AgentDetailModal` dans la
+  tâche précédente (`validNames`, `validSubNamesByParent` via le join
+  `competencyId → competencies.name`), maintenant partagée entre les deux
+  composants.
+- `AgentDetailModal` : ses deux `useMemo` dupliqués remplacés par un seul
+  appel à `buildMaintenanceCompetencyValidity(maintenanceTaxonomy)` —
+  comportement strictement identique, code factorisé.
+- `MaintenancePage` (page principale) : nouveau `useMemo` appelant
+  `buildMaintenanceCompetencyValidity(taxonomy)` sur sa propre requête
+  taxonomie déjà existante (aucune requête réseau supplémentaire).
+- `categories` (pastilles Catégorie) : la branche d'union
+  (`item.skills.forEach(...)`) ne retient désormais un nom que s'il est
+  dans `validCompetencyNames` ; la branche de résolution directe (quand une
+  sous-compétence est sélectionnée) vérifie en plus que la clé décodée
+  correspond à un couple compétence/sous-compétence réellement configuré
+  avant de résoudre la catégorie.
+- `subSkillFilterOptions` (picklist Sous-compétences) : chaque clé décodée
+  n'est retenue que si son couple `{competency, subSkill}` est à la fois (a)
+  cohérent avec `filterCategory` quand il est actif (déjà corrigé), ET (b)
+  réellement configuré dans la taxonomie (`validCompetencyNames` +
+  `validSubCompetencyNamesByParent`) — nouveau dans cette tâche.
+- `filtered` (cartes prestataires) et `withoutDim` restent inchangés : comme
+  `filterCategory`/`filterSubSkill` ne peuvent plus jamais être réglés sur
+  une valeur en dehors de `categories`/`subSkillFilterOptions` (désormais
+  validées en base) — garanti par les pastilles/le picklist qui ne rendent
+  que ces listes, et par l'effet de réconciliation déjà en place qui efface
+  toute sélection devenue invalide — les cartes restent automatiquement
+  cohérentes avec les filtres sans validation redondante.
+
+## 3. Garde-fous respectés
+
+- Aucun nouveau tableau, migration ou champ de profil introduit.
+- Aucune requête réseau supplémentaire : la page principale et la modale
+  utilisaient déjà chacune leur propre appel à `/api/maintenance/taxonomy`
+  (déjà dédupliqué par React Query entre les deux quand les deux sont
+  montés simultanément) ; seul le TRAITEMENT de cette donnée déjà chargée a
+  changé.
+- `maintenance_profiles.categories` (colonne dépréciée) toujours jamais lu.
+- Aucune relation inventée : toute résolution utilise exclusivement
+  `competencyId`, jamais une correspondance par nom.
+- Recherche, tri, pagination, filtres Type/Disponibilité/Ville, cartes
+  prestataires, Flash previews, favoris, authentification/autorisation,
+  édition de profil — tous inchangés.
+- Comportement de sélection unique du picklist Sous-compétences (tâche
+  précédente) préservé sans modification.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- `git status --short` final : uniquement `maintenance-page.tsx` modifié
+  pour cette tâche.
+- **Vérification en données réelles via l'API live** (serveur de dev actif,
+  lecture seule) :
+  - Croisement direct de `GET /api/maintenance/profiles` (4 profils réels)
+    contre `GET /api/maintenance/taxonomy` (12 compétences / 75
+    sous-compétences, toutes actives) : 0 compétence et 0 sous-compétence
+    orpheline détectée — confirme qu'aucune option de filtre actuellement
+    visible ne disparaît par erreur suite à ce correctif.
+  - Simulation complète de la nouvelle logique `subSkillFilterOptions` avec
+    `filterCategory = "Caméras"` contre les données réelles : renvoie
+    exactement les 7 clés `Caméras::*` attendues (Alarmes, Caméras IP,
+    Contrôle d'accès, Entretien, Installation, Réparation,
+    Vidéosurveillance), sans fuite de `Chicha::*` et sans perte due à la
+    nouvelle validation — confirme la composition correcte de l'ensemble
+    des trois couches de correctifs (éligibilité du profil, cohérence
+    parent-enfant, validité en base) sur l'exemple concret déjà utilisé
+    dans les tâches précédentes.
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour cliquer effectivement les pastilles
+  Catégorie et le picklist Sous-compétences et observer visuellement
+  l'absence de changement perceptible — vérifié par lecture de code,
+  `tsc`/`build` stricts, et les requêtes réelles ci-dessus. Une vérification
+  manuelle reste recommandée avant mise en production.
+- Comme pour la tâche précédente sur la modale de détail, aucune donnée
+  actuellement en base n'est orpheline — ce correctif est donc, comme
+  l'audit le documente explicitement, un filet de sécurité pour l'avenir
+  (aucun changement de comportement visible aujourd'hui), pas la résolution
+  d'un bug actuellement observable dans l'interface des filtres.

@@ -76,6 +76,34 @@ const TYPE_ICONS: Record<string, any> = { Freelance: User, Company: Building2, A
 // this only maps a present raw value to its existing display label.
 const TYPE_LABELS: Record<string, string> = { Freelance: "Freelance", Company: "Entreprise", Agency: "Agence" };
 
+// Shared competency-resolution utility (task: "Synchronize Maintenance
+// Filters With Database Competencies and Profile Assignments") — same
+// validity computation originally built for AgentDetailModal (task: "Use
+// Database-Backed Competencies and Subcompetencies in the Maintenance Detail
+// Modal"), factored out so the marketplace's own category/sub-competency
+// filter-option generation (MaintenancePage below) validates against the
+// exact same authoritative maintenance_competencies/
+// maintenance_sub_competencies relationship, rather than trusting a
+// profile's saved skills/subSkills name arrays unconditionally. Pure
+// function — no hooks — so either component just wraps it in its own
+// `useMemo` over its own already-fetched taxonomy query.
+type MaintenanceTaxonomy = {
+  competencies: { id: number; name: string; icon: string | null }[];
+  subCompetencies: { id: number; competencyId: number; name: string; icon: string | null }[];
+};
+function buildMaintenanceCompetencyValidity(taxonomy: MaintenanceTaxonomy | undefined) {
+  const validNames = new Set((taxonomy?.competencies ?? []).map((c) => c.name));
+  const nameById = new Map((taxonomy?.competencies ?? []).map((c) => [c.id, c.name]));
+  const validSubNamesByParent = new Map<string, Set<string>>();
+  for (const sub of taxonomy?.subCompetencies ?? []) {
+    const parentName = nameById.get(sub.competencyId);
+    if (!parentName) continue;
+    if (!validSubNamesByParent.has(parentName)) validSubNamesByParent.set(parentName, new Set());
+    validSubNamesByParent.get(parentName)!.add(sub.name);
+  }
+  return { validNames, validSubNamesByParent };
+}
+
 function useTheme(isDark: boolean) {
   return {
     dk: isDark,
@@ -377,25 +405,13 @@ export function AgentDetailModal({
   // to a real, currently-configured maintenance_competencies/
   // maintenance_sub_competencies record, so a renamed/deleted admin entry
   // can no longer linger in the modal as a stale, orphaned chip.
-  const { data: maintenanceTaxonomy } = useQuery<{
-    competencies: { id: number; name: string; icon: string | null }[];
-    subCompetencies: { id: number; competencyId: number; name: string; icon: string | null }[];
-  }>({ queryKey: ["/api/maintenance/taxonomy"], enabled: open && !!agent });
-  const validCompetencyNames = useMemo(
-    () => new Set((maintenanceTaxonomy?.competencies ?? []).map((c) => c.name)),
+  const { data: maintenanceTaxonomy } = useQuery<MaintenanceTaxonomy>({
+    queryKey: ["/api/maintenance/taxonomy"], enabled: open && !!agent,
+  });
+  const { validNames: validCompetencyNames, validSubNamesByParent: validSubCompetencyNamesByParent } = useMemo(
+    () => buildMaintenanceCompetencyValidity(maintenanceTaxonomy),
     [maintenanceTaxonomy],
   );
-  const validSubCompetencyNamesByParent = useMemo(() => {
-    const nameById = new Map((maintenanceTaxonomy?.competencies ?? []).map((c) => [c.id, c.name]));
-    const map = new Map<string, Set<string>>();
-    for (const sub of maintenanceTaxonomy?.subCompetencies ?? []) {
-      const parentName = nameById.get(sub.competencyId);
-      if (!parentName) continue;
-      if (!map.has(parentName)) map.set(parentName, new Set());
-      map.get(parentName)!.add(sub.name);
-    }
-    return map;
-  }, [maintenanceTaxonomy]);
   // Only this account's own selected competencies that still resolve to a
   // real, configured maintenance_competencies record — deduplicated, in the
   // profile's own saved order.
@@ -813,6 +829,20 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
     zones: any[];
     subCompetencies: { id: number; competencyId: number; name: string; icon: string | null }[];
   }>({ queryKey: ["/api/maintenance/taxonomy"] });
+  // Database-backed validity (task: "Synchronize Maintenance Filters With
+  // Database Competencies and Profile Assignments") — same shared utility
+  // AgentDetailModal uses, applied here so the CATEGORY/SOUS-COMPÉTENCE
+  // filter options (categories/subSkillFilterOptions below) require a name
+  // to resolve to a real, currently-configured maintenance_competencies/
+  // maintenance_sub_competencies record, in addition to already requiring at
+  // least one matching eligible profile (the cross-filter-aware part already
+  // fixed by prior tasks) — a profile's own skills/subSkills arrays are
+  // trusted for WHICH names it claims, never for whether those names are
+  // still valid taxonomy entries.
+  const { validNames: validCompetencyNames, validSubNamesByParent: validSubCompetencyNamesByParent } = useMemo(
+    () => buildMaintenanceCompetencyValidity(taxonomy),
+    [taxonomy],
+  );
   const categoryIcons = useMemo(() => {
     const map = new Map<string, string>();
     for (const c of taxonomy?.competencies ?? []) if (c.icon) map.set(c.name, c.icon);
@@ -875,38 +905,44 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
 
   // Category pills — real competencies actually offered by an eligible, currently
   // matching provider (root cause: previously the full admin taxonomy list,
-  // regardless of whether any provider had that competency). When a
-  // sub-skill IS selected, a provider's full `skills` list must not be
-  // unioned in wholesale — a provider can legitimately have several
-  // unrelated categories (e.g. Caméras AND Chicha), and only the sub-skill's
-  // OWN real parent (carried directly by its encoded key, see
-  // shared/maintenance-sub-skill-key.ts) is genuinely related (task: "Fix...
-  // Maintenance Category–Subcategory Mapping").
+  // regardless of whether any provider had that competency), AND now also
+  // required to resolve to a real, currently-configured maintenance_competencies
+  // record (task: "Synchronize Maintenance Filters With Database Competencies
+  // and Profile Assignments") — a profile's saved `skills` name is no longer
+  // trusted on its own. When a sub-skill IS selected, a provider's full
+  // `skills` list must not be unioned in wholesale — a provider can
+  // legitimately have several unrelated categories (e.g. Caméras AND Chicha),
+  // and only the sub-skill's OWN real parent (carried directly by its encoded
+  // key, see shared/maintenance-sub-skill-key.ts) is genuinely related.
   const categories = useMemo(() => {
     const base = withoutDim("category");
     if (filterSubSkill) {
       const decoded = decodeMaintenanceSubSkillKey(filterSubSkill);
-      return decoded && base.some((item) => item.subSkills?.includes(filterSubSkill)) ? [decoded.competency] : [];
+      if (!decoded || !validCompetencyNames.has(decoded.competency) || !validSubCompetencyNamesByParent.get(decoded.competency)?.has(decoded.subSkill)) return [];
+      return base.some((item) => item.subSkills?.includes(filterSubSkill)) ? [decoded.competency] : [];
     }
     const set = new Set<string>();
-    base.forEach((item) => item.skills.forEach((s) => set.add(s)));
+    base.forEach((item) => item.skills.forEach((s) => { if (validCompetencyNames.has(s)) set.add(s); }));
     return Array.from(set).sort();
-  }, [searchFiltered, filterSubSkill, filterType, filterAvailability, filterLocation]);
+  }, [searchFiltered, filterSubSkill, filterType, filterAvailability, filterLocation, validCompetencyNames, validSubCompetencyNamesByParent]);
 
   // Sub-skills — same fix: derived from providers' own real `subSkills` field,
-  // and (root cause of the Caméras/Chicha bug) now genuinely restricted to
-  // keys whose OWN encoded parent equals the selected category — a provider
-  // matching filterCategory can still carry other categories' sub-skill keys
-  // in its flattened `subSkills` array, and those must not leak in. Same
-  // parent-qualified-label-on-collision behavior as before.
+  // genuinely restricted to keys whose OWN encoded parent equals the selected
+  // category (root cause of the Caméras/Chicha bug — a provider matching
+  // filterCategory can still carry other categories' sub-skill keys in its
+  // flattened `subSkills` array), AND now also required to resolve to a real,
+  // currently-configured maintenance_sub_competencies record under that exact
+  // parent (task: "Synchronize Maintenance Filters With Database Competencies
+  // and Profile Assignments"). Same parent-qualified-label-on-collision
+  // behavior as before.
   const subSkillFilterOptions = useMemo(() => {
     const base = withoutDim("subSkill");
     const present = new Set<string>();
     base.forEach((item) => (item.subSkills ?? []).forEach((key) => {
-      if (filterCategory) {
-        const d = decodeMaintenanceSubSkillKey(key);
-        if (!d || d.competency !== filterCategory) return;
-      }
+      const d = decodeMaintenanceSubSkillKey(key);
+      if (!d) return;
+      if (filterCategory && d.competency !== filterCategory) return;
+      if (!validCompetencyNames.has(d.competency) || !validSubCompetencyNamesByParent.get(d.competency)?.has(d.subSkill)) return;
       present.add(key);
     }));
     const decoded = new Map<string, { competency: string; subSkill: string }>();
@@ -928,7 +964,7 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
       });
     });
     return options.sort((a, b) => a.label.localeCompare(b.label));
-  }, [searchFiltered, filterCategory, filterType, filterAvailability, filterLocation, subSkillIconByKey]);
+  }, [searchFiltered, filterCategory, filterType, filterAvailability, filterLocation, subSkillIconByKey, validCompetencyNames, validSubCompetencyNamesByParent]);
 
   // Type ("Freelance"/"Entreprise"/"Agence") — real values present among eligible
   // providers, not a hardcoded 3-item enum (root cause: the old Select always

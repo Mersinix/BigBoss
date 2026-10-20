@@ -39,7 +39,7 @@ import {
 import { useFavorites, selectTotalFavCount, type MaintenanceFavItem } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { useServiceStates, type ServiceKey } from "@/hooks/use-service-states";
-import { sortServiceIds, useServiceOrder, type MarketplaceServiceId } from "@/hooks/use-service-order";
+import { sortServiceIds, sortShortServiceIds, useServiceOrder, type MarketplaceServiceId } from "@/hooks/use-service-order";
 import { useMessagingSettings } from "@/hooks/use-messaging-settings";
 import { useRealtime } from "@/hooks/use-realtime";
 import { useQuickView } from "@/hooks/use-quick-view";
@@ -2502,7 +2502,12 @@ function MessagesPanel({
   const { toast } = useToast();
   const { states: serviceStates } = useServiceStates();
   const { order: serviceOrder } = useServiceOrder();
-  const visibleServicesList = sortServiceIds(SERVICES_LIST, serviceOrder).filter((s) => {
+  // sortShortServiceIds, not sortServiceIds — SERVICES_LIST uses this panel's
+  // own short ids ("BARISTA"/"ACADEMY"), which never matched the admin
+  // order's "BARISTA_MARKETPLACE"/"BARISTA_ACADEMY" (task: "Apply Admin
+  // Service Ordering to Coffee Owner Notifications and Messages Modals") —
+  // those two always sorted last regardless of the configured order.
+  const visibleServicesList = sortShortServiceIds(SERVICES_LIST, serviceOrder).filter((s) => {
     const key = SERVICE_ID_TO_KEY[s];
     return !key || serviceStates[key] !== "HIDDEN";
   });

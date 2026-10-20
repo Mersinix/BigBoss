@@ -7083,3 +7083,258 @@ d'appel de `AgentDetailModal`.
   l'audit le documente explicitement, un filet de sécurité pour l'avenir
   (aucun changement de comportement visible aujourd'hui), pas la résolution
   d'un bug actuellement observable dans l'interface des filtres.
+
+---
+
+# Tâche : Appliquer l'ordre des services Admin aux modales Notifications et Messages du Coffee Owner
+
+## 1. Audit préalable
+
+**Source de vérité déjà existante** : `client/src/hooks/use-service-order.ts` —
+`useServiceOrder()` (lit `GET /api/system-service-order`, normalise contre
+`DEFAULT_SERVICE_ORDER`) + `sortServiceIds(ids, order)` (trie n'importe quelle
+liste d'ids ou d'objets `{id}` selon cet ordre, repli en fin de liste pour un
+id inconnu). `MarketplaceServiceId` (`shared/schema.ts`) = exactement
+`['SHOP', 'MAINTENANCE', 'PRINT', 'BARISTA_MARKETPLACE', 'BARISTA_ACADEMY', 'MARKETING']`.
+
+**Les 3 emplacements « déjà corrects »** utilisent tous des ids DÉJÀ dans ce
+format long (confirmé par lecture directe) :
+- Bande de services sous la navbar (`marketplace-layout.tsx`, ~ligne 3400) :
+  ids `orderId` déjà `SHOP`/`MAINTENANCE`/`PRINT`/`BARISTA_MARKETPLACE`/
+  `BARISTA_ACADEMY`/`MARKETING`.
+- `FavoritesPanel` : `FAV_SERVICES` déjà dans ce même format long.
+- `AccountPanel` (Mon Compte → Réservations) : utilise `useServiceOrder()`
+  directement sans liste de services distincte à trier.
+
+**Cause racine identifiée pour Messages et Notifications** : ces deux
+surfaces utilisent un **second schéma d'identifiants, plus court**, distinct
+du format `MarketplaceServiceId` :
+- `MessagesPanel` (`marketplace-layout.tsx`) : type local `ServiceId =
+  "SHOP" | "PRINT" | "BARISTA" | "ACADEMY" | "MARKETING" | "MAINTENANCE"`
+  — `BARISTA`/`ACADEMY`, pas `BARISTA_MARKETPLACE`/`BARISTA_ACADEMY`.
+- `NotificationModal` (`notification-modal.tsx`) : `NotificationService`
+  (`shared/schema.ts`) = `'ADMIN' | 'SHOP' | 'PRINT' | 'MAINTENANCE' |
+  'BARISTA' | 'ACADEMY' | 'MARKETING'` — même schéma court, plus `ADMIN`.
+
+`MessagesPanel` appelait déjà `sortServiceIds(SERVICES_LIST, serviceOrder)` —
+mais comme `"BARISTA".toUpperCase()` et `"ACADEMY".toUpperCase()` ne
+correspondent à AUCUNE entrée de l'ordre configuré (qui ne contient que les
+noms longs), ces deux services **retombent systématiquement en fin de
+liste** (`Number.MAX_SAFE_INTEGER`), quel que soit l'ordre réellement
+configuré par l'Admin. `NotificationModal`, lui, n'appelait `useServiceOrder`
+nulle part : ses onglets (`SERVICE_TABS`) étaient un tableau statique à
+l'ordre fixe, jamais lié à la configuration Admin.
+
+**Preuve concrète en données réelles** : l'ordre actuellement configuré en
+base (`GET /api/system-service-order`) est
+`["SHOP","MAINTENANCE","BARISTA_MARKETPLACE","BARISTA_ACADEMY","PRINT","MARKETING"]`.
+Une simulation directe de l'ancien code de tri contre cet ordre réel produit
+`SHOP, MAINTENANCE, PRINT, MARKETING, BARISTA, ACADEMY` pour Messages — Barista
+et Academy relégués en fin de liste — alors que la bande de services sous la
+navbar affiche correctement `SHOP, MAINTENANCE, BARISTA, ACADEMY, PRINT,
+MARKETING` pour ce même ordre. **Le bug est donc réel et actuellement visible
+en production aujourd'hui**, pas seulement théorique.
+
+**Mapping notification/conversation → service** : déjà fiable et inchangé —
+chaque notification porte son propre champ `service: NotificationService`
+(authoritatif, jamais déduit du texte affiché) ; chaque conversation Messages
+est déjà scopée par son propre champ `service` côté API
+(`GET /api/messages/conversations?service=...`). Cette tâche ne touche à
+aucun des deux, uniquement à l'ORDRE d'affichage des onglets/sections de
+service.
+
+## 2. Implémentation
+
+- **`client/src/hooks/use-service-order.ts`** (changement additif uniquement,
+  `sortServiceIds`/`useServiceOrder`/`normalizeServiceOrder` strictement
+  inchangés) : nouvelle fonction exportée `sortShortServiceIds(ids, order)`
+  — même signature/comportement que `sortServiceIds`, mais traduit d'abord
+  chaque id court (`SHOP`/`MAINTENANCE`/`PRINT`/`BARISTA`/`ACADEMY`/
+  `MARKETING`) vers son véritable `MarketplaceServiceId` long
+  (`BARISTA`→`BARISTA_MARKETPLACE`, `ACADEMY`→`BARISTA_ACADEMY`, les 4 autres
+  identiques) avant de chercher sa position dans l'ordre configuré ; un id
+  sans correspondance (ex. `ADMIN`) retombe en fin de liste, même
+  comportement de repli que `sortServiceIds`.
+- **`MessagesPanel`** (`marketplace-layout.tsx`) : `sortServiceIds(SERVICES_LIST, ...)`
+  → `sortShortServiceIds(SERVICES_LIST, ...)` — un seul appel changé, la
+  liste de services affichée (`visibleServicesList`) et son unique point de
+  rendu restent identiques.
+- **`NotificationModal`** (`notification-modal.tsx`) : le tableau statique
+  `SERVICE_TABS` devient `SERVICE_TAB_SOURCE` (les 6 onglets de service, non
+  triés) ; un nouveau `SERVICE_TABS` est calculé À L'INTÉRIEUR du composant
+  (`useServiceOrder()` + `sortShortServiceIds(SERVICE_TAB_SOURCE, serviceOrder)`),
+  avec l'onglet « Tous » toujours forcé en première position devant la liste
+  triée.
+
+## 3. Garde-fous respectés
+
+- Aucune seconde configuration d'ordre introduite — les deux modales lisent
+  la même unique source (`useServiceOrder` → `/api/system-service-order`)
+  que les 3 emplacements déjà corrects.
+- Aucune donnée dupliquée côté état — `sortShortServiceIds` est une fonction
+  pure sans état, appelée directement au rendu (même convention que les
+  3 emplacements déjà corrects, qui ne mémoïsent pas non plus leur tri).
+- Chronologie des notifications/conversations à l'intérieur de chaque liste
+  de service non touchée — seul l'ordre des ONGLETS change, jamais le tri
+  interne d'une liste de notifications/conversations déjà filtrée par
+  service.
+- Mapping notification→service et conversation→service non modifié —
+  toujours les champs authoritatifs déjà existants.
+- Lecture/non-lu, actions, recherche, pagination, navigation — tous
+  inchangés dans les deux modales.
+- `sortServiceIds` et ses 3 points d'appel existants (navbar, Favoris,
+  Réservations) strictement non modifiés.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- `git status --short` final : exactement les 3 fichiers attendus modifiés
+  (`use-service-order.ts`, `marketplace-layout.tsx`, `notification-modal.tsx`).
+- **Vérification en données réelles** (lecture seule, `GET
+  /api/system-service-order` contre le serveur de dev actif) : simulation
+  directe de l'ancien ET du nouveau code de tri contre l'ordre réellement
+  configuré aujourd'hui
+  (`["SHOP","MAINTENANCE","BARISTA_MARKETPLACE","BARISTA_ACADEMY","PRINT","MARKETING"]`) —
+  confirmé que l'ancien code produisait `SHOP, MAINTENANCE, PRINT, MARKETING,
+  BARISTA, ACADEMY` (bug réel et actuellement visible) tandis que le nouveau
+  produit `SHOP, MAINTENANCE, BARISTA, ACADEMY, PRINT, MARKETING` —
+  identique à l'ordre déjà correctement affiché par la bande de services
+  sous la navbar pour ce même ordre configuré.
+- Aucune mutation de `/api/system-service-order` effectuée pendant la
+  vérification (paramètre partagé, affectant tous les Coffee Owners du
+  site) — volontairement non testé en conditions de changement dynamique
+  réel pour éviter de modifier un réglage Admin partagé sans autorisation
+  explicite ; la correction elle-même ne dépend d'aucune valeur
+  particulière de cet ordre (la fonction de tri est générique), donc ce choix
+  ne limite pas la confiance dans le correctif.
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour ouvrir effectivement les modales
+  Notifications et Messages et observer visuellement le nouvel ordre des
+  onglets, ni pour confirmer interactivement qu'un changement d'ordre côté
+  Admin se répercute bien après rafraîchissement — vérifié par lecture de
+  code et simulation directe contre l'ordre réellement configuré en base
+  (section 4). Une vérification manuelle (ouvrir les 2 modales, comparer
+  visuellement l'ordre des onglets à celui de la bande de services sous la
+  navbar) reste recommandée avant mise en production.
+- Le changement dynamique de l'ordre Admin (modifier puis re-sauvegarder
+  dans Admin → System Management → Services) n'a pas été testé en direct
+  sur l'environnement de développement partagé (voir section 4) — la
+  logique de rafraîchissement elle-même (`useQuery` sur
+  `/api/system-service-order`, déjà invalidée/rafraîchie par les 3
+  emplacements existants selon le même mécanisme) n'a pas été modifiée par
+  cette tâche, donc aucun risque de régression n'est attendu, mais ce point
+  précis reste non vérifié en conditions réelles interactives.
+
+---
+
+# Tâche : Corriger le filtre de date par défaut, la pagination permanente et la casse des onglets de la modale Notifications
+
+## 1. Audit préalable
+
+**Fichier concerné** : `client/src/components/cafe/notification-modal.tsx`
+(modale Notifications du Coffee Owner), plus le composant partagé
+`client/src/components/ui/data-pagination.tsx` pour le point n°2.
+
+**Cause racine n°1 — « Aujourd'hui » appliqué par défaut** : l'état
+`datePreset` était initialisé à `useState<DateRangePreset | "">("today")`,
+avec un commentaire explicite « "Aujourd'hui" is the default preset for a
+fresh filtering session (task requirement) » — une exigence d'une tâche
+antérieure, maintenant explicitement annulée par la tâche courante.
+`filterNotificationsByDate` (`notification-date-filter.tsx`) applique déjà
+correctement la règle « preset vide = aucune contrainte de date » — seul
+l'état initial posait problème, pas la logique de filtrage elle-même.
+**Preuve en base réelle** : sur 424 notifications existantes, 419 (99 %) ne
+datent pas d'aujourd'hui — avant ce correctif, l'ouverture de la modale
+masquait donc la quasi-totalité des notifications par défaut.
+
+**Cause racine n°2 — pagination qui disparaît** : dans
+`notification-modal.tsx`, le bloc de pagination était enveloppé dans
+`{filtered.length > 0 && (<div>...<DataPagination .../></div>)}` — une
+condition locale, propre à cette modale, qui masquait tout le bloc dès que
+la liste filtrée devenait vide. Même en supprimant cette seule condition
+locale, `DataPagination` lui-même (`client/src/components/ui/data-pagination.tsx`,
+composant **partagé par plus de 60 pages** dans tout le repo) contient son
+propre `if (totalItems === 0) return null;` — donc les deux couches
+masquaient la pagination au même seuil.
+
+**Cause racine n°3 — casse des onglets** : les libellés `SERVICE_TAB_SOURCE`/
+`SERVICE_TABS` mélangent des conventions de casse historiques (« Tous »,
+« SHOP », « Maintenance », « Barista », « Academy », « Marketing ») — jamais
+normalisées visuellement.
+
+## 2. Implémentation
+
+- **Filtre de date** (`notification-modal.tsx`) : `datePreset` initialisé à
+  `""` au lieu de `"today"`. Aucun autre changement — `filterNotificationsByDate`,
+  les presets disponibles, et la sélection explicite de « Aujourd'hui »
+  restent inchangés et continuent de fonctionner normalement quand
+  sélectionnés volontairement.
+- **Pagination permanente** :
+  - `notification-modal.tsx` : suppression de la condition
+    `{filtered.length > 0 && (...)}` — le bloc pagination est désormais
+    toujours rendu.
+  - `data-pagination.tsx` (changement additif, opt-in) : nouveau prop
+    `alwaysShow?: boolean` (défaut `false`) ; `if (totalItems === 0) return
+    null;` devient `if (totalItems === 0 && !alwaysShow) return null;` — les
+    **60+ autres points d'appel existants** ne passent pas ce prop et
+    conservent donc exactement leur comportement actuel (masquage à zéro
+    élément). Seule la modale Notifications passe `alwaysShow`.
+  - Correction du texte d'intervalle pour le cas zéro élément : `{start + 1}`
+    affichait « 1–0 sur 0 » (incohérent) ; devient
+    `{totalItems === 0 ? 0 : start + 1}–{end} sur {totalItems}`, produisant
+    « 0–0 sur 0 notifications » conformément à la convention demandée.
+    `totalPages`/`page` valent déjà 1/1 pour zéro élément via le calcul
+    existant de `usePagination` (`Math.max(1, Math.ceil(0/pageSize))`),
+    donc « Page 1 / 1 » et les boutons Précédent/Suivant désactivés
+    fonctionnent déjà sans changement supplémentaire.
+- **Casse des onglets** (`notification-modal.tsx`) : `{s.label}` enveloppé
+  dans `<span className="uppercase">` — changement de présentation CSS pur,
+  aucune chaîne `id`/`label` sous-jacente modifiée (donc aucun impact sur le
+  filtrage, les `data-testid`, ou l'ordre des services déjà corrigé dans la
+  tâche précédente).
+
+## 3. Garde-fous respectés
+
+- `alwaysShow` est strictement opt-in et par défaut `false` — vérifié par
+  recherche exhaustive (`grep -rn "alwaysShow"`) qu'aucun autre appelant de
+  `DataPagination` dans tout `client/src/` ne passe ce prop ; leur
+  comportement reste donc identique à l'existant.
+- Chronologie des notifications, statut lu/non-lu, `Tout marquer comme lu`,
+  navigation au clic, recherche, taille de page, et logique de
+  réinitialisation du filtre de date — tous inchangés.
+- Ordre des services (tâche précédente) préservé — seule la casse visuelle
+  du texte a changé, pas l'ordre ni les identifiants.
+- Aucun schéma, API, ni endpoint de notification modifié.
+- Aucune donnée de notification persistée modifiée.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- `git status --short` final : `notification-modal.tsx` (déjà modifié par la
+  tâche précédente, maintenant aussi par celle-ci) et `data-pagination.tsx`
+  (nouveau pour cette tâche) — aucun fichier inattendu.
+- **Vérification en données réelles** (lecture seule, base de dev réelle) :
+  confirmé que 419 des 424 notifications existantes ne datent pas
+  d'aujourd'hui — preuve concrète que le filtre par défaut « Aujourd'hui »
+  masquait réellement la quasi-totalité des notifications avant ce
+  correctif, pas seulement en théorie.
+- Recherche exhaustive confirmant qu'aucun autre des 60+ appelants de
+  `DataPagination` ne reçoit le nouveau prop `alwaysShow` — aucune
+  régression possible ailleurs.
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour ouvrir effectivement la modale,
+  confirmer visuellement que la pagination reste affichée dans tous les
+  états (aucun filtre, tous filtres effacés, zéro résultat), que les
+  libellés d'onglets apparaissent bien en majuscules, et qu'aucune boucle de
+  rendu React ni erreur console n'apparaît — vérifié par lecture de code,
+  `tsc`/`build` stricts, et une vérification de données réelles confirmant
+  l'ampleur concrète du bug de date par défaut. Une vérification manuelle
+  (ouvrir la modale, changer d'onglet, effacer les filtres, observer la
+  pagination et la casse des onglets) reste recommandée avant mise en
+  production.

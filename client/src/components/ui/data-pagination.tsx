@@ -54,6 +54,7 @@ export function DataPagination({
   onPageChange, onPageSizeChange,
   itemLabel = "résultats",
   isDark,
+  alwaysShow = false,
 }: {
   page: number;
   pageSize: PageSize;
@@ -74,12 +75,18 @@ export function DataPagination({
   // left unset — passing it explicitly only where it's actually needed avoids
   // double-styling a context that already works.
   isDark?: boolean;
+  // Opt-in, defaults to false (task: "Fix Default Date Filtering, Persistent
+  // Pagination, and Uppercase Notification Tabs") — keeps every existing
+  // caller's current "hide entirely at zero items" behavior unchanged;
+  // pass true only where the control must stay visible (e.g. "0–0 sur 0")
+  // regardless of result count.
+  alwaysShow?: boolean;
 }) {
   const isCustom = !(PAGE_SIZE_PRESETS as readonly number[]).includes(pageSize);
   const [customOpen, setCustomOpen] = useState(false);
   const [customInput, setCustomInput] = useState(String(pageSize));
 
-  if (totalItems === 0) return null;
+  if (totalItems === 0 && !alwaysShow) return null;
 
   const applyCustom = () => {
     const n = Math.max(1, Math.min(1000, Math.round(Number(customInput)) || pageSize));
@@ -90,7 +97,10 @@ export function DataPagination({
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-2">
       <p className={`text-xs order-2 sm:order-1 ${isDark ? "text-gray-400" : "text-muted-foreground"}`}>
-        {start + 1}–{end} sur {totalItems} {itemLabel}
+        {/* "0–0" (not "1–0") when there's genuinely nothing to show — only
+            reachable via alwaysShow, since every other caller already hides
+            the whole control at totalItems === 0. */}
+        {totalItems === 0 ? 0 : start + 1}–{end} sur {totalItems} {itemLabel}
       </p>
 
       <div className="flex items-center gap-3 flex-wrap order-1 sm:order-2">

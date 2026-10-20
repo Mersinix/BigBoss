@@ -58,11 +58,11 @@ const SYSTEM_MANAGEMENT_SECTIONS: { id: SystemManagementSection; label: string; 
 // "My Account → Reservations" switcher, both controlled by the single card
 // below (one source of truth for both surfaces — no "(réservations)"-only card).
 const SERVICES: { key: ServiceKey; label: string; description: string; icon: any }[] = [
-  { key: "PRINTING",            label: "Printing",             description: "Marketplace PRINT — services d'impression pour les cafés.", icon: Printer },
-  { key: "BARISTA_MARKETPLACE", label: "Marketplace Baristas", description: "Page /barista — recrutement de baristas indépendants.", icon: Users },
-  { key: "BARISTA_ACADEMY",     label: "Barista Academy",      description: "Page /academy — formations et cours barista.", icon: GraduationCap },
-  { key: "MARKETING",           label: "Marketing",            description: "Services MARKETING — agences et prestataires marketing.",   icon: Megaphone },
-  { key: "MAINTENANCE",         label: "Maintenance",          description: "Services MAINTENANCE — techniciens pour équipements café.", icon: Wrench },
+  { key: "PRINTING",            label: "PRINTING",             description: "Marketplace PRINT — services d'impression pour les cafés.", icon: Printer },
+  { key: "BARISTA_MARKETPLACE", label: "BARISTAS", description: "Page /barista — recrutement de baristas indépendants.", icon: Users },
+  { key: "BARISTA_ACADEMY",     label: "ACADEMY",      description: "Page /academy — formations et cours barista.", icon: GraduationCap },
+  { key: "MARKETING",           label: "MARKETING",            description: "Services MARKETING — agences et prestataires marketing.",   icon: Megaphone },
+  { key: "MAINTENANCE",         label: "MAINTENANCE",          description: "Services MAINTENANCE — techniciens pour équipements café.", icon: Wrench },
 ];
 
 const SERVICE_ORDER_CARDS: { id: MarketplaceServiceId; key?: ServiceKey; label: string; description: string; icon: any }[] = [
@@ -357,12 +357,12 @@ function LoginSecuritySection() {
 // whichever service is selected there, on the same heroActionSettings
 // table/route as before.
 const HERO_SERVICES: { key: HeroService; label: string; icon: any }[] = [
-  { key: "SHOP",        label: "Shop",                  icon: ShoppingBag },
-  { key: "BARISTA",     label: "Marketplace Baristas",  icon: Users },
-  { key: "ACADEMY",     label: "Barista Academy",       icon: GraduationCap },
-  { key: "MAINTENANCE", label: "Maintenance",           icon: Wrench },
-  { key: "PRINT",       label: "Printing",              icon: Printer },
-  { key: "MARKETING",   label: "Marketing",             icon: Megaphone },
+  { key: "SHOP",        label: "SHOP",                  icon: ShoppingBag },
+  { key: "BARISTA",     label: "BARISTAS",  icon: Users },
+  { key: "ACADEMY",     label: "ACADEMY",       icon: GraduationCap },
+  { key: "MAINTENANCE", label: "MAINTENANCE",           icon: Wrench },
+  { key: "PRINT",       label: "PRINTING",              icon: Printer },
+  { key: "MARKETING",   label: "MARKETING",             icon: Megaphone },
 ];
 
 // ── Service Hero Customization (background/gradient/subtitle/height/alignment/info-row/actions) ──
@@ -1001,15 +1001,15 @@ function ServiceHeroCustomizationSection() {
 // (its dark mode already exists independently of this control, per the
 // original task's own instruction not to touch it).
 const DARK_MODE_ACCOUNTS: { key: DarkModeAccount; label: string; icon: any }[] = [
-  { key: "BARISTA_ACADEMY",     label: "Barista Academy",     icon: GraduationCap },
-  { key: "BARISTA_MARKETPLACE", label: "Barista Marketplace", icon: Users },
-  { key: "DELIVERY_COMPANY",    label: "Livraison",           icon: Truck },
-  { key: "DRIVER",              label: "Chauffeur",           icon: Car },
-  { key: "PRINTER",             label: "Imprimerie",          icon: Printer },
-  { key: "MAINTENANCE",         label: "Maintenance",         icon: Wrench },
-  { key: "MARKETING",           label: "Marketing",           icon: Megaphone },
-  { key: "SUPPLIER",            label: "Supplier",            icon: Store },
-  { key: "ADMIN",               label: "Admin",                icon: ShieldCheck },
+  { key: "BARISTA_ACADEMY",     label: "ACADEMY",     icon: GraduationCap },
+  { key: "BARISTA_MARKETPLACE", label: "BARISTA", icon: Users },
+  { key: "DELIVERY_COMPANY",    label: "LIVRAISON",           icon: Truck },
+  { key: "DRIVER",              label: "CHAUFFEUR",           icon: Car },
+  { key: "PRINTER",             label: "PRINT",          icon: Printer },
+  { key: "MAINTENANCE",         label: "MAINTENANCE",         icon: Wrench },
+  { key: "MARKETING",           label: "MARKETING",           icon: Megaphone },
+  { key: "SUPPLIER",            label: "SUPPLIER",            icon: Store },
+  { key: "ADMIN",               label: "ADMIN",                icon: ShieldCheck },
 ];
 
 const THEME_MODE_OPTIONS: { value: AccountThemeMode; label: string; icon: any }[] = [

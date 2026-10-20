@@ -126,11 +126,11 @@ export function AppSidebar() {
         {
           label: "SERVICES",
           items: [
-            { title: "Maintenance", url: "/admin/maintenance", icon: Wrench },
-            { title: "Print", url: "/admin/print", icon: Printer },
-            { title: "Barista", url: "/admin/barista", icon: Coffee },
-            { title: "Academy", url: "/admin/academy", icon: GraduationCap },
-            { title: "Marketing", url: "/admin/marketing", icon: Megaphone },
+            { title: "MAINTENANCE", url: "/admin/maintenance", icon: Wrench },
+            { title: "PRINT", url: "/admin/print", icon: Printer },
+            { title: "BARISTA", url: "/admin/barista", icon: Coffee },
+            { title: "ACADEMY", url: "/admin/academy", icon: GraduationCap },
+            { title: "MARKETING", url: "/admin/marketing", icon: Megaphone },
           ],
         },
         {

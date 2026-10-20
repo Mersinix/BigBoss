@@ -5,6 +5,7 @@ import type { Notification, NotificationService } from "@shared/schema";
 import { useNotifications, useMarkNotificationRead, useMarkAllNotificationsRead } from "@/hooks/use-notifications";
 import { formatNotificationTime, NOTIFICATION_PRIORITY_DOT } from "@/lib/notification-format";
 import { useAccountOpenStore } from "@/store/account-open-store";
+import { sortShortServiceIds, useServiceOrder } from "@/hooks/use-service-order";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { NotificationDateFilter, filterNotificationsByDate } from "@/components/notifications/notification-date-filter";
 import type { DateRangePreset } from "@/lib/marketplace-analytics";
@@ -17,8 +18,12 @@ type TabId = "ALL" | NotificationService;
 // status change) still show under "Tous"; only the dedicated tab chip is gone.
 // No notification records are deleted, and the Admin role's own notification
 // system/tabs are untouched.
-const SERVICE_TABS: { id: TabId; label: string }[] = [
-  { id: "ALL", label: "Tous" },
+// The 6 service-specific tabs (everything but "ALL") now follow the Admin →
+// System Management → Services configured order (task: "Apply Admin Service
+// Ordering to Coffee Owner Notifications and Messages Modals") — this array
+// is only the unsorted source list; SERVICE_TABS below (inside the
+// component, where useServiceOrder is available) is what actually renders.
+const SERVICE_TAB_SOURCE: { id: Exclude<TabId, "ALL">; label: string }[] = [
   { id: "SHOP", label: "SHOP" },
   { id: "PRINT", label: "PRINT" },
   { id: "MAINTENANCE", label: "Maintenance" },
@@ -58,9 +63,20 @@ function openRelatedEntity(n: Notification, close: () => void) {
 
 export function NotificationModal({ open, onOpenChange, isDark }: { open: boolean; onOpenChange: (v: boolean) => void; isDark: boolean }) {
   const [tab, setTab] = useState<TabId>("ALL");
-  // "Aujourd'hui" is the default preset for a fresh filtering session (task
-  // requirement); "" = no preset active (custom date typed instead).
-  const [datePreset, setDatePreset] = useState<DateRangePreset | "">("today");
+  // "Tous" always stays first; the 6 service tabs follow the Admin-configured
+  // order (task: "Apply Admin Service Ordering to Coffee Owner Notifications
+  // and Messages Modals") — same source of truth as the navbar switcher/
+  // Favorites/Reservations, via the shared useServiceOrder hook.
+  const { order: serviceOrder } = useServiceOrder();
+  const SERVICE_TABS: { id: TabId; label: string }[] = [
+    { id: "ALL", label: "Tous" },
+    ...sortShortServiceIds(SERVICE_TAB_SOURCE, serviceOrder),
+  ];
+  // No default custom period (task: "Fix Default Date Filtering, Persistent
+  // Pagination, and Uppercase Notification Tabs") — opening the modal must
+  // never silently apply an implicit "Aujourd'hui" constraint; "" = no
+  // preset active (custom date typed instead, also unset by default).
+  const [datePreset, setDatePreset] = useState<DateRangePreset | "">("");
   const [customDate, setCustomDate] = useState("");
   // Server caps `limit` at 200 — fetch that full batch so every preset
   // (including "Cette année") has a real dataset to filter.
@@ -136,7 +152,10 @@ export function NotificationModal({ open, onOpenChange, isDark }: { open: boolea
                 }`}
                 data-testid={`tab-notifications-${s.id.toLowerCase()}`}
               >
-                {s.label}
+                {/* Presentation-only uppercase (task: "...and Uppercase Notification
+                    Tabs") — the underlying `label`/`id` strings (used for filtering,
+                    service identifiers, and data-testid) are untouched. */}
+                <span className="uppercase">{s.label}</span>
                 {count > 0 && (
                   <span className={`min-w-[16px] h-4 px-1 rounded-full text-[10px] font-bold flex items-center justify-center ${active ? "bg-amber-500 text-white" : isDark ? "bg-gray-700 text-gray-300" : "bg-gray-200 text-gray-600"}`}>
                     {count > 99 ? "99+" : count}
@@ -195,22 +214,28 @@ export function NotificationModal({ open, onOpenChange, isDark }: { open: boolea
           )}
         </div>
 
-        {filtered.length > 0 && (
-          <div className={`px-4 py-2 border-t ${isDark ? "border-gray-800" : "border-gray-100"}`}>
-            <DataPagination
-              page={pagination.page}
-              pageSize={pagination.pageSize}
-              totalItems={filtered.length}
-              totalPages={pagination.totalPages}
-              start={pagination.start}
-              end={pagination.end}
-              onPageChange={pagination.setPage}
-              onPageSizeChange={pagination.setPageSize}
-              itemLabel="notifications"
-              isDark={isDark}
-            />
-          </div>
-        )}
+        {/* Always rendered, never gated on `filtered.length > 0` (task: "Fix
+            Default Date Filtering, Persistent Pagination, and Uppercase
+            Notification Tabs") — stays visible when the modal opens, every
+            tab, cleared filters, and zero-result states alike. `alwaysShow`
+            is an opt-in DataPagination prop (defaults to false everywhere
+            else) so the 60+ other existing callers keep their current
+            "hide at zero items" behavior unchanged. */}
+        <div className={`px-4 py-2 border-t ${isDark ? "border-gray-800" : "border-gray-100"}`}>
+          <DataPagination
+            page={pagination.page}
+            pageSize={pagination.pageSize}
+            totalItems={filtered.length}
+            totalPages={pagination.totalPages}
+            start={pagination.start}
+            end={pagination.end}
+            onPageChange={pagination.setPage}
+            onPageSizeChange={pagination.setPageSize}
+            itemLabel="notifications"
+            isDark={isDark}
+            alwaysShow
+          />
+        </div>
       </DialogContent>
     </Dialog>
   );

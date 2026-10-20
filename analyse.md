@@ -6813,3 +6813,151 @@ sur un compte non concerné en les convertissant à la sélection unique.
   2 imprimeurs réels aux catégories distinctes), mais une vérification avec
   plusieurs agences réelles reste recommandée dès que les données le
   permettront.
+
+---
+
+# Tâche : Modale de détail Maintenance — compétences/sous-compétences sourcées de la base (taxonomie admin)
+
+## 1. Audit préalable
+
+**Composant** : `AgentDetailModal`, exporté depuis
+`client/src/pages/cafe/maintenance/maintenance-page.tsx`. Composant
+**partagé par 5 points d'appel distincts**, confirmé par recherche
+exhaustive dans tout `client/src/` :
+1. `/maintenance` (page principale, Coffee Owner).
+2. `marketplace-layout.tsx` (modale Mes Favoris).
+3. `maintenance-blacklist-modal.tsx` (liste des signalements, Admin/Coffee Owner).
+4. `admin/maintenance-page.tsx` (gestion Admin des comptes Maintenance).
+5. `maintenance/profile.tsx` (aperçu « Eye » de son propre profil, prop
+   `readOnly`).
+   Toute correction de ce composant s'applique donc automatiquement aux 5
+   contextes à la fois — aucune duplication requise, mais toute nouvelle
+   dépendance de données devait rester autonome (interne au composant) pour
+   ne pas avoir à modifier les 5 call sites.
+
+**Constat n°1 — le champ `Category` legacy était déjà retiré d'ici** : lecture
+du schéma (`shared/schema.ts`, table `maintenance_profiles`) et du composant
+lui-même : la colonne `categories: text("categories").array()` (pluriel,
+l'équivalent du « legacy Category field » visé par la tâche — il n'existe pas
+de colonne singulière `category`/`Category` sur cette table) porte déjà le
+commentaire « DEPRECATED — superseded by `skills`... No longer written by any
+code path as of this task — task: "Remove Legacy Categories from Maintenance
+and Use Only Compétences" ». Le composant utilise déjà exclusivement
+`agent.skills`/`agent.subSkills`, jamais `agent.categories` — confirmé qu'une
+tâche antérieure (hors de cette session) avait déjà traité cette partie
+précise.
+
+**Constat n°2 — la vraie lacune restante** : `agent.skills` (`text[]`, noms
+de compétences en texte libre, sans FK) et `agent.subSkills` (`text[]` de
+clés encodées `"<Compétence>::<Sous-compétence>"`, voir
+`shared/maintenance-sub-skill-key.ts`) sont bien les champs « autoritaires »
+déjà en place — mais le composant ne les validait contre **aucune donnée** de
+`maintenance_competencies`/`maintenance_sub_competencies` : il faisait
+confiance aveuglément aux tableaux texte libre sauvegardés sur le profil,
+sans jamais vérifier qu'un nom correspond encore à un enregistrement
+réellement configuré (actif, non gelé) dans la taxonomie Admin. Si un Admin
+renomme ou supprime une compétence/sous-compétence après qu'un prestataire
+l'a sélectionnée, l'ancien nom resterait affiché indéfiniment comme une
+« orpheline » — exactement le risque que la tâche demande de couvrir
+(« Only valid, configured competency and subcompetency records should be
+displayed »).
+
+**Relation entre les deux tables** : `maintenance_sub_competencies.competency_id`
+référence `maintenance_competencies.id` (FK logique, confirmée par le code
+existant du composant et de la page principale, qui fait déjà ce même join
+ailleurs). `/api/maintenance/taxonomy` (`storage.getAvailableMaintenanceTaxonomy`)
+renvoie déjà **uniquement** les enregistrements `isActive && !isFrozen` des
+deux tables — exactement la source « valide/configurée » exigée par la tâche,
+déjà utilisée par la page principale (`categoryIcons`/`subSkillIconByKey`/
+`subSkillFilterOptions`) mais jamais par la modale de détail elle-même avant
+ce correctif.
+
+**Vérification en base réelle** : aucune donnée réellement orpheline
+n'existe aujourd'hui (12/12 compétences actives, 75/75 sous-compétences
+actives, et chaque nom sauvegardé sur chaque profil correspond à un
+enregistrement actif) — ce correctif est donc un **filet de sécurité pour
+l'avenir** (aucun changement visible de comportement sur les données
+actuelles), pas une correction d'un bug actuellement visible à l'écran.
+Documenté ici conformément à la demande de la tâche de distinguer clairement
+l'implémentation des constats d'audit.
+
+## 2. Implémentation
+
+Un seul fichier modifié : `client/src/pages/cafe/maintenance/maintenance-page.tsx`
+(`AgentDetailModal`), le composant partagé.
+
+- Nouvelle requête interne `useQuery(["/api/maintenance/taxonomy"], { enabled: open && !!agent })` —
+  même clé de requête que celle déjà utilisée par la page principale
+  (`maintenance-page.tsx`'s own top-level `taxonomy`), donc **dédupliquée
+  automatiquement par React Query** (zéro requête réseau supplémentaire)
+  partout où cette page est déjà montée ; un unique petit appel public
+  (sans authentification requise) est émis uniquement dans les contextes qui
+  ne l'avaient pas déjà (Admin, aperçu de profil Maintenance).
+- `validCompetencyNames` : `Set` des noms de `maintenance_competencies`
+  actuellement actifs/non gelés.
+- `validSubCompetencyNamesByParent` : `Map<nomCompétenceParente, Set<nomSousCompétence>>`,
+  construite via le même join `competencyId → competencies.name` déjà utilisé
+  ailleurs dans ce fichier (`subSkillsByCategory` de la page principale).
+- `validSkills` : `agent.skills` filtré à ne garder que les noms présents dans
+  `validCompetencyNames`, avec déduplication défensive.
+- `subSkillsByParent` (déjà existant) étendu : chaque clé décodée n'est
+  conservée que si (a) sa compétence parente est valide ET (b) son propre
+  nom de sous-compétence est réellement configuré sous CETTE compétence
+  précise dans `validSubCompetencyNamesByParent` — déduplication également
+  ajoutée.
+- Le rendu de la section « Compétences » utilise désormais `validSkills` au
+  lieu de `agent.skills` brut ; aucun autre changement visuel.
+
+## 3. Garde-fous respectés
+
+- `agent.categories` (colonne dépréciée) toujours jamais lu — confirmé
+  inchangé.
+- Aucune migration, aucun changement de schéma, aucune suppression de
+  colonne — la colonne `categories` reste en base telle quelle.
+- Aucun contrat d'API modifié — `/api/maintenance/taxonomy` déjà existant,
+  déjà public, réutilisé tel quel.
+- Les 5 points d'appel du composant partagé héritent tous du correctif sans
+  qu'aucun d'eux n'ait eu besoin d'être modifié individuellement (aucune
+  nouvelle prop requise, la requête est interne au composant).
+- Création/édition de profil, paramètres, publication/approbation,
+  authentification/autorisation, recherche/filtres (y compris la
+  synchronisation Catégorie↔Sous-compétence déjà corrigée dans la tâche
+  précédente), cartes prestataires, Flash previews, favoris — tous
+  inchangés.
+- Aucune relation inventée : le lien compétence→sous-compétence utilise
+  exclusivement `competencyId`, jamais une correspondance par simple
+  similarité de texte.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- `git status --short` final : uniquement `maintenance-page.tsx` modifié
+  pour cette tâche.
+- **Vérification en données réelles** (lecture seule, serveur de dev actif) :
+  - Confirmé qu'aucune compétence/sous-compétence sauvegardée sur un profil
+    réel n'est aujourd'hui orpheline (requête SQL croisant
+    `maintenance_profiles.skills`/`sub_skills` contre les tables de
+    taxonomie actives) — le correctif ne modifie donc le rendu d'aucun
+    profil existant.
+  - Confirmé via `GET /api/maintenance/taxonomy` que la compétence réelle
+    « Caméras » (id 21) a exactement les 7 sous-compétences réelles déjà
+    affichées pour le prestataire `user_id = 27` (Entretien,
+    Vidéosurveillance, Caméras IP, Installation, Contrôle d'accès,
+    Réparation, Alarmes) — confirme l'absence de régression sur l'exemple
+    concret déjà utilisé dans la tâche précédente.
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour ouvrir effectivement la modale dans
+  chacun des 5 contextes (Coffee Owner, Favoris, Signalements, Admin, aperçu
+  de profil) et confirmer visuellement l'absence de changement perceptible —
+  vérifié par lecture de code, `tsc`/`build` stricts, et les requêtes réelles
+  ci-dessus. Une vérification manuelle dans un navigateur réel (au moins le
+  contexte Coffee Owner principal) reste recommandée avant mise en
+  production.
+- Comme documenté en section 1, aucune donnée actuellement en base ne permet
+  d'observer visuellement l'effet du filtrage (aucune compétence/sous-
+  compétence orpheline n'existe aujourd'hui) — le comportement de filtrage
+  n'a donc pu être vérifié que par simulation logique (section 4), pas par
+  un cas réel actuellement reproductible dans l'interface.

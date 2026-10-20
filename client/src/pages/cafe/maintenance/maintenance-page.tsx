@@ -363,25 +363,74 @@ export function AgentDetailModal({
     queryKey: ["/api/maintenance/reservations"],
     enabled: open && !!agent && !!user,
   });
+  // Database-backed taxonomy (task: "Use Database-Backed Competencies and
+  // Subcompetencies in the Maintenance Detail Modal") — same query/key as
+  // maintenance-page.tsx's own top-level `taxonomy` (already active/non-frozen
+  // only, see storage.getAvailableMaintenanceTaxonomy), so this dedupes
+  // against the cache with zero extra request whenever that page is already
+  // mounted; call sites that don't already have it (Admin's own maintenance
+  // page, the Maintenance account's own profile preview, etc.) get one small,
+  // already-public, unauthenticated query. `agent.skills`/`agent.subSkills`
+  // stay the source of WHICH names this account selected (the deprecated
+  // `maintenance_profiles.categories` column is still never read here) — this
+  // taxonomy is used only to validate that each saved name still corresponds
+  // to a real, currently-configured maintenance_competencies/
+  // maintenance_sub_competencies record, so a renamed/deleted admin entry
+  // can no longer linger in the modal as a stale, orphaned chip.
+  const { data: maintenanceTaxonomy } = useQuery<{
+    competencies: { id: number; name: string; icon: string | null }[];
+    subCompetencies: { id: number; competencyId: number; name: string; icon: string | null }[];
+  }>({ queryKey: ["/api/maintenance/taxonomy"], enabled: open && !!agent });
+  const validCompetencyNames = useMemo(
+    () => new Set((maintenanceTaxonomy?.competencies ?? []).map((c) => c.name)),
+    [maintenanceTaxonomy],
+  );
+  const validSubCompetencyNamesByParent = useMemo(() => {
+    const nameById = new Map((maintenanceTaxonomy?.competencies ?? []).map((c) => [c.id, c.name]));
+    const map = new Map<string, Set<string>>();
+    for (const sub of maintenanceTaxonomy?.subCompetencies ?? []) {
+      const parentName = nameById.get(sub.competencyId);
+      if (!parentName) continue;
+      if (!map.has(parentName)) map.set(parentName, new Set());
+      map.get(parentName)!.add(sub.name);
+    }
+    return map;
+  }, [maintenanceTaxonomy]);
+  // Only this account's own selected competencies that still resolve to a
+  // real, configured maintenance_competencies record — deduplicated, in the
+  // profile's own saved order.
+  const validSkills = useMemo(() => {
+    const seen = new Set<string>();
+    return (agent?.skills ?? []).filter((name) => {
+      if (!validCompetencyNames.has(name) || seen.has(name)) return false;
+      seen.add(name);
+      return true;
+    });
+  }, [agent?.skills, validCompetencyNames]);
   // Bug fix: agent.subSkills stores PARENT-QUALIFIED keys ("<competency>::<subSkill>",
   // see shared/maintenance-sub-skill-key.ts), never bare sub-skill names — the same
   // sub-skill label legitimately exists under several different parent competencies, so
   // the previous bare-name match here (`agent.subSkills.includes(sub.name)` against
   // every taxonomy sub-competency regardless of its own parent) could show a sub-skill
   // under the WRONG parent, or under every parent that happens to share that label.
-  // Decoding each saved key directly gives the correct parent unambiguously — no
-  // cross-reference against the taxonomy needed for grouping (only used here for icons).
+  // Decoding each saved key directly gives the correct parent unambiguously. Each decoded
+  // pair is now also validated against the real maintenance_sub_competencies relationship
+  // (validSubCompetencyNamesByParent) — a stale/renamed/deleted sub-competency can no
+  // longer be displayed just because the profile's own saved array still names it.
   const subSkillsByParent = useMemo(() => {
     const map = new Map<string, string[]>();
     for (const key of agent?.subSkills ?? []) {
       const decoded = decodeMaintenanceSubSkillKey(key);
       if (!decoded) continue;
+      if (!validCompetencyNames.has(decoded.competency)) continue;
+      const validSubs = validSubCompetencyNamesByParent.get(decoded.competency);
+      if (!validSubs?.has(decoded.subSkill)) continue;
       const list = map.get(decoded.competency) ?? [];
-      list.push(decoded.subSkill);
+      if (!list.includes(decoded.subSkill)) list.push(decoded.subSkill);
       map.set(decoded.competency, list);
     }
     return map;
-  }, [agent?.subSkills]);
+  }, [agent?.subSkills, validCompetencyNames, validSubCompetencyNamesByParent]);
   const eligibleReservations = reservations.filter((reservation) =>
     reservation.maintenanceUserId === agent?.userId && reservation.status === "COMPLETED",
   );
@@ -570,16 +619,19 @@ export function AgentDetailModal({
                 </div>
               </div>
             )}
-            {/* agent.skills is the one authoritative Maintenance competency field — no
-                longer unioned with agent.categories (deprecated duplicate, see
-                maintenanceProfiles.categories's own schema comment; task: "Remove Legacy
-                Categories from Maintenance and Use Only Compétences"). Chips carry a real
-                dark-mode variant instead of the previous hardcoded light-only
-                orange-50/amber-50 colors (Part 8's own fix, unrelated to this change). */}
+            {/* validSkills is agent.skills (the one authoritative Maintenance competency
+                field — no longer unioned with agent.categories, the deprecated duplicate,
+                see maintenanceProfiles.categories's own schema comment) narrowed to names
+                that still resolve to a real, currently-configured maintenance_competencies
+                record (task: "Use Database-Backed Competencies and Subcompetencies in the
+                Maintenance Detail Modal") — a stale/renamed/deleted admin entry can no
+                longer linger here just because it's still present in the saved array.
+                Chips carry a real dark-mode variant instead of the previous hardcoded
+                light-only orange-50/amber-50 colors (Part 8's own fix, unrelated). */}
             <div className={`p-3 rounded-xl ${t.mutedBg}`}>
               <h3 className={`text-xs font-semibold mb-1.5 ${t.textMuted}`}>Compétences</h3>
               <div className="space-y-2">
-                {agent.skills.map((item) => {
+                {validSkills.map((item) => {
                   const subs = subSkillsByParent.get(item) ?? [];
                   return (
                     <div key={item}>

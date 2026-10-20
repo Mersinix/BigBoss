@@ -25,7 +25,7 @@ import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import { FlashMode } from "@/components/flash-mode";
 import { PackCardTile } from "@/pages/cafe/browse-products";
-import type { StoreDetail, ProductWithTaxonomy, OpeningHoursMap, PackDetail, CategoryWithCount, ListingPromotion, SubCategoryWithDetails } from "@shared/schema";
+import type { StoreDetail, ProductWithTaxonomy, OpeningHoursMap, PackDetail, CategoryWithCount, ListingPromotion, SubCategoryWithDetails, BrandWithCount, FlavorWithCount, SizeWithCount } from "@shared/schema";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -646,17 +646,30 @@ export default function StoreDetailPage() {
     return map;
   }, [allCategories]);
 
+  // Admin-configured ordering (task: "Synchronize Category, Subcategory,
+  // Flavor, Size, and Brand Ordering Across the Coffee Owner Shop") — id →
+  // rank in Admin's own configured order (allCategories/allSubCategories are
+  // already sorted server-side by displayOrder, see
+  // server/storage.ts getCategories/getSubCategories/getFlavors/getSizes/
+  // getBrands). An id with no entry (no persisted order, or deleted/renamed
+  // since) falls to the end, deterministically, without disturbing the
+  // relative order of every explicitly-ordered option.
+  const categoryOrderIndex = useMemo(() => new Map(allCategories.map((c, i) => [c.id, i])), [allCategories]);
+  const rankOf = (orderIndex: Map<number, number>, id: string): number => orderIndex.get(Number(id)) ?? Number.MAX_SAFE_INTEGER;
+
   const categories = useMemo(() => {
     const map = new Map<string, string>();
     products.forEach((p) => {
       if (p.categoryLabel?.id && p.categoryLabel?.name) map.set(String(p.categoryLabel.id), p.categoryLabel.name);
     });
-    return Array.from(map.entries()).map(([id, name]) => ({
-      id,
-      name,
-      icon: categoryIconMap.get(Number(id)) ?? null,
-    }));
-  }, [products, categoryIconMap]);
+    return Array.from(map.entries())
+      .map(([id, name]) => ({
+        id,
+        name,
+        icon: categoryIconMap.get(Number(id)) ?? null,
+      }))
+      .sort((a, b) => rankOf(categoryOrderIndex, a.id) - rankOf(categoryOrderIndex, b.id));
+  }, [products, categoryIconMap, categoryOrderIndex]);
 
   const categoryFiltered = useMemo(() => {
     let list = products;
@@ -680,22 +693,39 @@ export default function StoreDetailPage() {
     allSubCategories.forEach((sc) => { if (sc.icon) map.set(sc.id, sc.icon); });
     return map;
   }, [allSubCategories]);
+  const subCategoryOrderIndex = useMemo(() => new Map(allSubCategories.map((s, i) => [s.id, i])), [allSubCategories]);
+
+  // Same ordering fix as subcategories above, for Marques/Saveurs/Tailles —
+  // these 3 weren't previously fetched at all (brand/flavor/size names came
+  // purely from product iteration), so one lightweight query per entity is
+  // added here, same public/already-admin-sorted endpoints /products itself
+  // now also reads from.
+  const { data: allBrands = [] } = useQuery<BrandWithCount[]>({ queryKey: ["/api/brands"] });
+  const { data: allFlavors = [] } = useQuery<FlavorWithCount[]>({ queryKey: ["/api/flavors"] });
+  const { data: allSizes = [] } = useQuery<SizeWithCount[]>({ queryKey: ["/api/sizes"] });
+  const brandOrderIndex = useMemo(() => new Map(allBrands.map((b, i) => [b.id, i])), [allBrands]);
+  const flavorOrderIndex = useMemo(() => new Map(allFlavors.map((f, i) => [f.id, i])), [allFlavors]);
+  const sizeOrderIndex = useMemo(() => new Map(allSizes.map((s, i) => [s.id, i])), [allSizes]);
 
   const subCategories = useMemo(() => {
     const map = new Map<string, string>();
     categoryFiltered.forEach((p) => {
       if (p.subCategoryLabel?.id && p.subCategoryLabel?.name) map.set(String(p.subCategoryLabel.id), p.subCategoryLabel.name);
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name, icon: subCategoryIconMap.get(Number(id)) ?? null }));
-  }, [categoryFiltered, subCategoryIconMap]);
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name, icon: subCategoryIconMap.get(Number(id)) ?? null }))
+      .sort((a, b) => rankOf(subCategoryOrderIndex, a.id) - rankOf(subCategoryOrderIndex, b.id));
+  }, [categoryFiltered, subCategoryIconMap, subCategoryOrderIndex]);
 
   const brands = useMemo(() => {
     const map = new Map<string, string>();
     categoryFiltered.forEach((p) => {
       if (p.brandLabel?.id && p.brandLabel?.name) map.set(String(p.brandLabel.id), p.brandLabel.name);
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [categoryFiltered]);
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => rankOf(brandOrderIndex, a.id) - rankOf(brandOrderIndex, b.id));
+  }, [categoryFiltered, brandOrderIndex]);
 
   // Flavor/size filters (task: "Complete Store Page Filters") — same derivation
   // pattern as subCategories/brands above, from the same real flavorLabels/
@@ -705,16 +735,20 @@ export default function StoreDetailPage() {
     categoryFiltered.forEach((p) => {
       (p.flavorLabels ?? []).forEach((fl) => { if (fl.id && fl.name) map.set(String(fl.id), fl.name); });
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [categoryFiltered]);
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => rankOf(flavorOrderIndex, a.id) - rankOf(flavorOrderIndex, b.id));
+  }, [categoryFiltered, flavorOrderIndex]);
 
   const sizes = useMemo(() => {
     const map = new Map<string, string>();
     categoryFiltered.forEach((p) => {
       (p.sizeLabels ?? []).forEach((sl) => { if (sl.id && sl.name) map.set(String(sl.id), sl.name); });
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [categoryFiltered]);
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => rankOf(sizeOrderIndex, a.id) - rankOf(sizeOrderIndex, b.id));
+  }, [categoryFiltered, sizeOrderIndex]);
 
   const filtered = useMemo(() => {
     let list = categoryFiltered;

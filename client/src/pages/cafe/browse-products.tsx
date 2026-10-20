@@ -22,7 +22,7 @@ import { calculateDistance, formatDistance } from "@/lib/distance";
 import { useSearchLocationStore } from "@/store/search-location-store";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
-import type { MarketplaceProduct, CategoryWithCount, StoreCard, PackDetail, TaxonomyLabel, SubCategoryWithDetails } from "@shared/schema";
+import type { MarketplaceProduct, CategoryWithCount, StoreCard, PackDetail, TaxonomyLabel, SubCategoryWithDetails, BrandWithCount, FlavorWithCount, SizeWithCount } from "@shared/schema";
 import { FlashMode } from "@/components/flash-mode";
 import { useServiceHeroConfig } from "@/hooks/use-service-hero-config";
 import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY, getHeroSubtitleColorStyle } from "@/components/shared/service-hero";
@@ -801,6 +801,7 @@ interface FilterState { subCategoryId: string; brandId: string; flavorId: string
 
 function FilterBar({
   categoryProducts, filters, onChange, onReset, hasSearchLocation, isDark, search, onSearchChange, subCategoryIconMap,
+  subCategoryOrderIndex, brandOrderIndex, flavorOrderIndex, sizeOrderIndex,
 }: {
   categoryProducts: MarketplaceProduct[];
   filters: FilterState;
@@ -819,6 +820,15 @@ function FilterBar({
   // from the full /api/subcategories records in the parent — see that
   // query's own comment for why this can't come from categoryProducts alone.
   subCategoryIconMap: Map<number, string>;
+  // Admin-configured ordering (task: "Synchronize Category, Subcategory,
+  // Flavor, Size, and Brand Ordering Across the Coffee Owner Shop") — id →
+  // rank in Admin's own configured order, used to sort each dropdown's
+  // eligible options; eligibility itself still comes from categoryProducts,
+  // unchanged.
+  subCategoryOrderIndex: Map<number, number>;
+  brandOrderIndex: Map<number, number>;
+  flavorOrderIndex: Map<number, number>;
+  sizeOrderIndex: Map<number, number>;
 }) {
   const t = useTheme(isDark);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -841,14 +851,22 @@ function FilterBar({
     return list;
   };
 
+  // Rank by the real Admin-configured order; an id with no explicit entry
+  // (never persisted a displayOrder, or deleted/renamed since) falls to the
+  // end, deterministically, without disturbing the relative order of every
+  // explicitly-ordered option (task's own required fallback rule).
+  const rankOf = (orderIndex: Map<number, number>, id: string): number => orderIndex.get(Number(id)) ?? Number.MAX_SAFE_INTEGER;
+
   const subCategories = useMemo(() => {
     const map = new Map<string, string>();
     withoutSelf("subCategoryId").forEach((p) => {
       if (p.subCategoryLabel?.id && p.subCategoryLabel?.name)
         map.set(String(p.subCategoryLabel.id), p.subCategoryLabel.name);
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name, icon: subCategoryIconMap.get(Number(id)) ?? null }));
-  }, [categoryProducts, filters.brandId, filters.flavorId, filters.sizeId, subCategoryIconMap]);
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name, icon: subCategoryIconMap.get(Number(id)) ?? null }))
+      .sort((a, b) => rankOf(subCategoryOrderIndex, a.id) - rankOf(subCategoryOrderIndex, b.id));
+  }, [categoryProducts, filters.brandId, filters.flavorId, filters.sizeId, subCategoryIconMap, subCategoryOrderIndex]);
 
   const brands = useMemo(() => {
     const map = new Map<string, string>();
@@ -856,8 +874,10 @@ function FilterBar({
       if (p.brandLabel?.id && p.brandLabel?.name)
         map.set(String(p.brandLabel.id), p.brandLabel.name);
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [categoryProducts, filters.subCategoryId, filters.flavorId, filters.sizeId]);
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => rankOf(brandOrderIndex, a.id) - rankOf(brandOrderIndex, b.id));
+  }, [categoryProducts, filters.subCategoryId, filters.flavorId, filters.sizeId, brandOrderIndex]);
 
   const flavors = useMemo(() => {
     const map = new Map<string, string>();
@@ -866,8 +886,10 @@ function FilterBar({
         if (fl.id && fl.name) map.set(String(fl.id), fl.name);
       });
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [categoryProducts, filters.subCategoryId, filters.brandId, filters.sizeId]);
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => rankOf(flavorOrderIndex, a.id) - rankOf(flavorOrderIndex, b.id));
+  }, [categoryProducts, filters.subCategoryId, filters.brandId, filters.sizeId, flavorOrderIndex]);
 
   const sizes = useMemo(() => {
     const map = new Map<string, string>();
@@ -876,8 +898,10 @@ function FilterBar({
         if (sl.id && sl.name) map.set(String(sl.id), sl.name);
       });
     });
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [categoryProducts, filters.subCategoryId, filters.brandId, filters.flavorId]);
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => rankOf(sizeOrderIndex, a.id) - rankOf(sizeOrderIndex, b.id));
+  }, [categoryProducts, filters.subCategoryId, filters.brandId, filters.flavorId, sizeOrderIndex]);
 
   // Previously hid the whole bar (search included) whenever there were no
   // facets to filter by — now only hides it when there's nothing to search
@@ -1056,6 +1080,25 @@ export default function BrowseProducts() {
     allSubCategories.forEach((sc) => { if (sc.icon) map.set(sc.id, sc.icon); });
     return map;
   }, [allSubCategories]);
+
+  // Admin-configured ordering (task: "Synchronize Category, Subcategory,
+  // Flavor, Size, and Brand Ordering Across the Coffee Owner Shop") — Sous-
+  // catégories/Marques/Saveurs/Tailles were previously ordered by whatever
+  // order products happened to appear in (a Map built by iterating
+  // categoryProducts), never by Admin → Categories → Category Management's
+  // own configured displayOrder. These 3 queries mirror allSubCategories
+  // above exactly: the full admin-managed list (already sorted server-side
+  // by displayOrder, see server/storage.ts getFlavors/getSizes/getBrands),
+  // reduced here to an id→rank map so FilterBar can sort its ELIGIBLE
+  // options (still derived from categoryProducts, unchanged) by that real
+  // order instead of insertion/Map order.
+  const { data: allBrands = [] } = useQuery<BrandWithCount[]>({ queryKey: ["/api/brands"] });
+  const { data: allFlavors = [] } = useQuery<FlavorWithCount[]>({ queryKey: ["/api/flavors"] });
+  const { data: allSizes = [] } = useQuery<SizeWithCount[]>({ queryKey: ["/api/sizes"] });
+  const subCategoryOrderIndex = useMemo(() => new Map(allSubCategories.map((s, i) => [s.id, i])), [allSubCategories]);
+  const brandOrderIndex = useMemo(() => new Map(allBrands.map((b, i) => [b.id, i])), [allBrands]);
+  const flavorOrderIndex = useMemo(() => new Map(allFlavors.map((f, i) => [f.id, i])), [allFlavors]);
+  const sizeOrderIndex = useMemo(() => new Map(allSizes.map((s, i) => [s.id, i])), [allSizes]);
 
   const { data: stores = [], isLoading: storesLoading } = useQuery<StoreCard[]>({
     queryKey: ["/api/stores"],
@@ -1308,6 +1351,10 @@ export default function BrowseProducts() {
           search={search}
           onSearchChange={setSearch}
           subCategoryIconMap={subCategoryIconMap}
+          subCategoryOrderIndex={subCategoryOrderIndex}
+          brandOrderIndex={brandOrderIndex}
+          flavorOrderIndex={flavorOrderIndex}
+          sizeOrderIndex={sizeOrderIndex}
         />
       </div>
 

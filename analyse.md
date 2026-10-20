@@ -7338,3 +7338,135 @@ normalisées visuellement.
   (ouvrir la modale, changer d'onglet, effacer les filtres, observer la
   pagination et la casse des onglets) reste recommandée avant mise en
   production.
+
+---
+
+# Tâche : Synchroniser l'ordre des Catégories/Sous-catégories/Saveurs/Tailles/Marques avec Admin sur le Shop Coffee Owner
+
+## 1. Audit préalable
+
+**Pourquoi la catégorie principale de `/products` était déjà correcte** :
+`categories` (la bande `CategoryStrip`) est alimentée **directement** par
+`useQuery(["/api/categories"])` — et `storage.getCategories` trie déjà
+`ORDER BY display_order, id` côté serveur. La liste n'est jamais reconstruite
+à partir des produits : elle vient telle quelle de cette requête déjà
+ordonnée. **C'est précisément pour cette raison, et aucune autre, que la
+catégorie principale fonctionnait déjà.**
+
+**Cause racine pour les 4 autres filtres de `/products`** (Sous-catégories/
+Marques/Saveurs/Tailles, dans `FilterBar`) : chacun était reconstruit via un
+`Map<id, name>` rempli en **itérant les produits déjà chargés**
+(`categoryProducts.forEach(...)`), jamais à partir d'une requête directe vers
+`/api/subcategories`/`/api/brands`/`/api/flavors`/`/api/sizes` triée par
+`displayOrder`. Un `Map` JavaScript préserve l'ordre d'INSERTION, donc l'ordre
+affiché reflétait simplement l'ordre d'apparition des produits dans
+`/api/marketplace` — sans aucun rapport avec l'ordre configuré en Admin.
+
+**Même cause racine sur la page boutique individuelle** (`store-detail-page.tsx`,
+`/stores/:storeId`) : **les 5 filtres** (y compris la catégorie principale,
+contrairement à `/products`) étaient tous reconstruits en itérant les
+produits de CETTE boutique — `allCategories`/`allSubCategories` étaient déjà
+récupérés (pour les icônes uniquement), mais jamais utilisés pour l'ORDRE.
+
+**Preuve concrète en données réelles** : `sub_categories` a un véritable
+ordre Admin déjà configuré (`Robusta Beans`=0, `Arabica Beans`=1,
+`Capsules & Pods`=2, `Ground Coffee`=3, `Cold Brew Bags`=4, `Whole Milk`=5…).
+En comparant l'ancien ordre (obtenu en simulant l'itération de
+`/api/marketplace`) et le nouveau (`/api/subcategories`), les deux séquences
+sont **complètement différentes** :
+`Capsules & Pods, Cold Brew Bags, Arabica Beans, Robusta Beans, Cups & Packaging, Oat Milk`
+(ancien) vs `Robusta Beans, Arabica Beans, Capsules & Pods, Ground Coffee, Cold Brew Bags, Whole Milk`
+(nouveau, Admin). Le bug est donc réel et actuellement visible, pas
+seulement théorique. En revanche, `brands`/`flavors`/`sizes` ont
+aujourd'hui tous `display_order = 0` (aucun Admin ne les a encore
+réordonnés) — le correctif y est structurellement correct et prêt, mais
+sans différence visible tant qu'aucun ordre réel n'y est configuré.
+
+## 2. Implémentation
+
+Deux fichiers modifiés, aucun changement de schéma ni d'API (les 5
+endpoints `/api/categories`/`/api/subcategories`/`/api/brands`/`/api/flavors`/
+`/api/sizes` étaient déjà triés par `displayOrder` côté serveur depuis la
+tâche « Admin Category Management Redesign » — seule la consommation côté
+client manquait).
+
+**`client/src/pages/cafe/browse-products.tsx`** :
+- 3 nouvelles requêtes `useQuery` (`/api/brands`, `/api/flavors`, `/api/sizes`)
+  dans le composant parent, au même niveau que la requête `/api/subcategories`
+  déjà existante (réutilisée pour les icônes).
+- 4 `Map<id, rangIndex>` construits à partir de ces listes déjà ordonnées
+  (`subCategoryOrderIndex`/`brandOrderIndex`/`flavorOrderIndex`/`sizeOrderIndex`),
+  passés en nouvelles props à `FilterBar`.
+- Dans `FilterBar`, les 4 `useMemo` (`subCategories`/`brands`/`flavors`/`sizes`)
+  gardent EXACTEMENT la même logique d'éligibilité (dérivée des produits,
+  cross-filter-aware, inchangée) — seule une étape `.sort((a,b) =>
+  rankOf(...) - rankOf(...))` a été ajoutée après la construction du tableau,
+  utilisant le rang réel de l'id dans la liste Admin ; un id sans entrée
+  retombe en fin de liste (repli déterministe, sans perturber l'ordre des
+  options explicitement classées).
+
+**`client/src/pages/cafe/store-detail-page.tsx`** :
+- Même principe pour les 5 filtres (y compris la catégorie principale, qui
+  ici N'ÉTAIT PAS déjà directement alimentée par `/api/categories` comme sur
+  `/products`) : `allCategories`/`allSubCategories` déjà récupérés réutilisés
+  pour construire `categoryOrderIndex`/`subCategoryOrderIndex` ; 3 nouvelles
+  requêtes `/api/brands`/`/api/flavors`/`/api/sizes` ajoutées pour
+  `brandOrderIndex`/`flavorOrderIndex`/`sizeOrderIndex`.
+- Même ajout `.sort(...)` sur les 5 `useMemo` existants
+  (`categories`/`subCategories`/`brands`/`flavors`/`sizes`), logique
+  d'éligibilité par produit totalement inchangée.
+
+## 3. Garde-fous respectés
+
+- Aucune liste codée en dur introduite — chaque ordre provient exclusivement
+  de la requête Admin déjà existante pour cette entité.
+- Aucun tri alphabétique substitué à l'ordre Admin.
+- `🛍️ Tout` reste géré séparément (jamais inclus dans `categories`), sa
+  position reste donc inchangée.
+- `Recommandé` (tri) non touché — aucune des modifications ne concerne la
+  logique de tri des produits, uniquement l'ordre des OPTIONS de filtre.
+- Éligibilité des options (quels ids apparaissent dans chaque liste) non
+  modifiée — exactement les mêmes prédicats de filtrage par produit
+  qu'avant ; seul l'ORDRE final du tableau a changé.
+- Catégorie principale de `/products` (déjà correcte) non touchée — toujours
+  alimentée directement par `/api/categories`, aucun changement.
+- Aucune requête réseau dupliquée : les 3 nouvelles requêtes par fichier
+  (`/api/brands`/`/api/flavors`/`/api/sizes`) sont des endpoints publics déjà
+  existants, jamais appelés ailleurs dans ces deux fichiers auparavant.
+- Pagination, recherche, favoris, panier, permissions, et toute logique de
+  filtrage produit — inchangés.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- `git status --short` final : exactement les 2 fichiers attendus modifiés.
+- **Vérification en données réelles** (lecture seule, serveur de dev actif) :
+  - Confirmé que `sub_categories`/`categories` ont un ordre Admin
+    réellement configuré et non trivial (`display_order` ne correspond pas
+    à l'ordre des `id`).
+  - Comparaison directe ancien-ordre (simulation de l'itération de
+    `/api/marketplace`) vs nouvel-ordre (`/api/subcategories`) : séquences
+    complètement différentes, confirmant un bug réel et actuellement
+    visible, désormais corrigé.
+  - Confirmé que `brands`/`flavors`/`sizes` ont aujourd'hui tous
+    `display_order = 0` — le correctif est prêt et structurellement correct,
+    sans effet visible tant qu'aucun Admin ne les réordonne réellement
+    (documenté ici comme limite de vérification, pas comme un correctif
+    incomplet).
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour ouvrir effectivement `/products` et
+  une page boutique individuelle, et confirmer visuellement le nouvel ordre
+  des 5 picklists ainsi que l'absence de régression sur les sélections/la
+  recherche — vérifié par lecture de code et la comparaison de données
+  réelles ci-dessus. Une vérification manuelle (desktop et mobile, sur
+  `/products` et plusieurs pages boutique) reste recommandée avant mise en
+  production.
+- L'effet visible du correctif sur `brands`/`flavors`/`sizes` dépend d'un
+  réordonnancement Admin qui n'a pas encore eu lieu dans cet environnement
+  (tous à `display_order = 0` aujourd'hui) — comportement correct mais non
+  observable autrement qu'en base pour l'instant ; recommandé de vérifier à
+  nouveau après qu'un Admin ait réellement réordonné au moins l'une de ces
+  trois listes.

@@ -6436,3 +6436,380 @@ Conséquences automatiques, sans aucun autre changement de code :
   de synchronisation préexistante n'a subi aucune régression. Une
   vérification manuelle des 6 scénarios dans un navigateur réel reste
   recommandée avant mise en production.
+
+---
+
+# Tâche : Synchronisation des filtres et options « sans résultat zéro » — Maintenance, Barista, Academy, Print, Marketing
+
+## 1. Objectif et méthode
+
+Appliquer à `/maintenance`, `/barista`, `/academy`, `/print`, `/marketing` le
+même principe déjà validé sur `/products` (tâches précédentes) : **aucune
+option de filtre affichée ne doit pouvoir produire zéro résultat**. Les 5
+pages ont des modèles de données et des architectures de chargement
+différents — chacune a été auditée séparément (section 2), puis corrigée avec
+la plus petite modification sûre adaptée à son architecture réelle, sans
+imposer une taxonomie ou un composant partagé commun entre elles.
+
+**Fichiers modifiés** (un par page, aucun fichier partagé entre plusieurs
+services n'a dû être touché) :
+- `client/src/pages/cafe/maintenance/maintenance-page.tsx`
+- `client/src/pages/cafe/barista/barista-page.tsx`
+- `client/src/pages/cafe/barista/barista-academy-page.tsx`
+- `client/src/pages/cafe/print/print-page.tsx`
+- `client/src/pages/cafe/marketing/marketing-page.tsx`
+
+## 2. Audit — cause racine par page
+
+**`/maintenance`** : les options « Compétence » (pastilles) et « Sous-
+compétences » provenaient de `/api/maintenance/categories` et de
+`taxonomy.subCompetencies` — la liste ADMIN complète, jamais filtrée par les
+profils réellement publiés. Le filtre « Type » (Freelance/Entreprise/Agence)
+était une énumération codée en dur, affichée intégralement quel que soit le
+nombre de profils de chaque type. « Disponibilité » affichait toujours ses 2
+valeurs même si l'une d'elles n'avait plus aucun profil correspondant. Seul
+« Ville » (`allLocations`) était déjà dérivé des vrais profils, mais sans tenir
+compte des autres filtres actifs. **Preuve en base réelle** : les compétences
+admin « Systèmes POS » et « Téléviseurs » existent mais aucun profil Maintenance
+ne les possède — elles s'affichaient donc comme sélectionnables tout en
+garantissant zéro résultat.
+
+**`/barista`** : même schéma de cause racine. Le filtre Niveau
+(Débutant/Avancé/Expert) était codé en dur ; « Compétence » (pastilles)
+préférait la taxonomie admin (`useBaristaSkills`) à la réalité des profils dès
+qu'elle n'était pas vide ; « Niveau d'étude » et « Langue » provenaient
+respectivement de `useBaristaEducationLevels`/`useBaristaLanguages` (taxonomies
+admin), jamais croisées avec les profils réels. **Preuve en base réelle** :
+les compétences admin « Cold Brew » et « Formation barista » n'ont aucun
+barista les proposant ; les niveaux d'étude admin « No Education », « Lycée »,
+« BTS », « BTP » et les langues admin « Espagnol », « Italien » n'ont non plus
+aucun profil correspondant.
+
+**`/academy`** : architecture différente des deux précédentes — `useAcademyCourses({search, level, certification})`
+envoyait ces 3 valeurs **au serveur**, donc le client ne détenait jamais que
+LA combinaison déjà filtrée en cours, jamais l'ensemble complet nécessaire
+pour calculer quelles options Niveau/Formations produiraient réellement des
+résultats sous les autres filtres actifs. Les 2 Select (3 niveaux + 2 états de
+certification) étaient codés en dur. **Preuve en base réelle** : les 3
+formations publiées ont toutes `hasCertification = true` — l'option « Sans
+certification » garantissait donc zéro résultat à coup sûr avant ce correctif.
+L'endpoint `/api/academy/courses` accepte déjà un appel sans paramètres
+(confirmé dans `server/storage.ts getPublishedAcademyCourses`, tous les
+filtres y sont optionnels) — le filtrage a donc été déplacé côté client,
+exactement comme `/products`/`/maintenance`/`/barista`, sans requête
+supplémentaire.
+
+**`/print`** : architecture proche de `/products` (un état `categoryId` séparé
++ un objet `filters`), mais en pire : `PrintFilterBar` recevait les cartes
+**brutes, non filtrées** (ni par catégorie, ni par recherche), et seul
+« Sous-catégorie » appliquait une narrowing manuelle et partielle par
+catégorie — « Sociétés », « Matières » et « Livraisons » ignoraient
+totalement la catégorie active ET les autres filtres actifs. **Preuve en base
+réelle** : les matières réellement disponibles diffèrent totalement d'une
+catégorie à l'autre (ex. « Emballages Café » n'a que « papier carton », alors
+que « Accessoires Personnalisés » propose « Verre »/« Bois ») — sélectionner
+une catégorie puis ouvrir Matières affichait donc, avant ce correctif, des
+matières d'autres catégories garantissant zéro résultat. Le bouton
+Réinitialiser ne remettait pas non plus `categoryId` à vide (même bug déjà
+corrigé sur `/products` dans la tâche précédente).
+
+**`/marketing`** : même cause racine qu'Academy — `useMarketingServices({search, category, profileType, location})`
+envoyait ces 4 valeurs au serveur, empêchant tout calcul d'options
+cohérentes pour les autres filtres (ex. « Villes » dérivé de `services` déjà
+filtré PAR ville active aurait affiché une seule ville possible, empêchant de
+changer de ville). Les pastilles de catégorie et le menu « Sous-catégories »
+provenaient de la taxonomie admin globale (`taxonomy`/`subcategoryTaxonomy`),
+jamais croisés avec les services réellement publiés. « Types »
+(Agence/Freelancer/Studio) était codé en dur. **Preuve en base réelle** :
+les 4 services publiés appartiennent tous à des agences de type `Agency` —
+« Freelancer » et « Studio » garantissaient donc zéro résultat avant ce
+correctif. Même solution qu'Academy : `/api/marketing/services` accepte déjà
+un appel sans paramètres (confirmé dans `getPublishedMarketingServices`),
+filtrage déplacé côté client.
+
+## 3. Implémentation — stratégie commune, adaptée à chaque page
+
+Le même principe a été appliqué partout, sans forcer un composant ou une
+taxonomie commune entre pages (chacune garde son propre modèle de données) :
+
+1. **Base de données éligible unique** : une liste complète (déjà chargée,
+   aucune requête supplémentaire) filtrée uniquement par la recherche texte
+   — jamais par les filtres de facette eux-mêmes.
+2. **Dérivation d'options « sans soi-même »** (`withoutDim`/`withoutSelf`) :
+   pour chaque filtre, ses options proviennent de la base ci-dessus filtrée
+   par TOUS LES AUTRES filtres actifs, jamais par lui-même — la valeur
+   actuellement sélectionnée ne peut donc jamais disparaître de sa propre
+   liste tout en se resserrant correctement en réponse aux autres.
+3. **Taxonomie admin conservée uniquement pour les métadonnées** (icônes,
+   libellés, id) — jamais comme source des valeurs sélectionnables.
+4. **Réconciliation des sélections devenues invalides** :
+   - `/maintenance` et `/barista` et `/marketing` : un `useEffect` par
+     dimension, qui n'efface **que** la sélection devenue incompatible
+     (jamais les autres) — ne peut pas boucler puisqu'un effet n'efface
+     qu'une valeur, il n'en recrée jamais une nouvelle.
+   - `/products` et `/print` (architecture `categoryId` + `filters` unique
+     point d'entrée `updateFilter`) : réconciliation synchrone, dans la même
+     passe que la sélection elle-même (comme déjà fait sur `/products` dans
+     la tâche précédente) — même résolution de catégorie « auto-sélectionnée
+     seulement si non-ambiguë, préservée si déjà compatible, effacée sinon ».
+   - `/academy` : réconciliation par `useEffect`, les 2 seules dimensions
+     (Niveau/Formations) n'ayant pas de hiérarchie catégorie à résoudre.
+5. **`/print`** a aussi reçu le même correctif Réinitialiser que `/products`
+   (`resetAll` efface désormais aussi `categoryId`).
+
+## 4. Garde-fous respectés
+
+- Aucune donnée inventée : chaque option provient exclusivement des cartes
+  réellement éligibles (ou, pour Academy/Marketing, de l'ensemble complet
+  désormais chargé une seule fois) — jamais d'une liste statique ni de la
+  taxonomie admin seule.
+- Aucune règle d'autorisation, de visibilité, de statut de publication ou
+  d'approbation modifiée — `getPublishedAcademyCourses`/
+  `getPublishedMarketingServices` restent les sources uniques, seul le point
+  d'entrée (avec ou sans paramètres de requête) a changé côté client.
+- Aucun contrat d'API ni schéma de base modifié sur aucune des 5 pages —
+  tous les endpoints existants acceptent déjà un appel non filtré (vérifié
+  directement dans `server/storage.ts`).
+- Favoris, modales de détail, Flash preview, pagination (`DataPagination`/
+  `usePagination` sur `/products`/aucune des 5 pages n'en utilise par
+  ailleurs), recherche et tri préservés — seules les listes d'OPTIONS et la
+  logique de réconciliation ont changé, jamais le rendu des cartes ni les
+  actions existantes.
+- Aucune nouvelle dépendance ; aucun composant partagé introduit entre pages
+  (chaque correctif reste local à son fichier, cohérent avec le modèle de
+  données propre à chaque service).
+
+## 5. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur, après chacune des 5 pages.
+- `npm run build` → succès (client + serveur) après l'ensemble des 5 pages.
+- `git status --short` final : exactement les 5 fichiers attendus modifiés.
+- **Vérification en données réelles** (lecture seule, serveur de dev déjà
+  actif) :
+  - Maintenance : confirmé que « Systèmes POS »/« Téléviseurs » (taxonomie
+    admin) n'ont aucun profil réel les utilisant.
+  - Barista : confirmé que « Cold Brew »/« Formation barista » (compétences),
+    « No Education »/« Lycée »/« BTS »/« BTP » (niveaux d'étude) et
+    « Espagnol »/« Italien » (langues) n'ont aucun profil réel correspondant.
+  - Academy : comparé `GET /api/academy/courses` (complet) vs
+    `GET /api/academy/courses?level=EXPERT` (serveur) contre un filtrage
+    client identique sur le jeu complet — résultats strictement identiques
+    (1 formation EXPERT des deux côtés) ; confirmé que les 3 formations
+    publiées ont toutes `hasCertification = true` (« Sans certification »
+    était un piège à zéro résultat garanti).
+  - Print : confirmé que les matières réelles diffèrent totalement d'une
+    catégorie à l'autre (ex. « Emballages Café » = papier carton uniquement,
+    « Accessoires Personnalisés » = Verre/Bois) — preuve directe que
+    Matières devait être recalculée par catégorie.
+  - Marketing : confirmé que les 4 services publiés appartiennent tous à des
+    agences de type `Agency` — « Freelancer »/« Studio » étaient des pièges à
+    zéro résultat garanti avant ce correctif.
+- Aucun test unitaire dédié au calcul des options de filtre n'existait avant
+  cette tâche et aucun n'a été ajouté (pas d'infrastructure de test unitaire
+  front-end existante identifiée pour ces pages lors de l'audit — ajouter un
+  framework de test serait allé au-delà du changement minimal demandé).
+
+## 6. Limites connues
+
+- **Aucun navigateur réel disponible** pour la matrice de vérification
+  complète de la tâche (16 points, cliquer effectivement chaque option sur
+  chacune des 5 pages, observer l'absence de boucle de rendu React, tester
+  desktop/mobile) — chaque correctif a été vérifié par (a) lecture de code
+  confirmant que l'architecture suit strictement le motif déjà validé sur
+  `/products`, (b) `tsc`/`build` stricts, et (c) des requêtes réelles contre
+  la base et l'API de développement confirmant des cas concrets où le bug
+  existait réellement. Une vérification manuelle complète dans un navigateur
+  réel (les 5 routes, combinaisons multi-filtres, mobile) reste recommandée
+  avant mise en production.
+- `/academy` et `/marketing` chargent désormais l'intégralité du jeu de
+  données publié en un seul appel (au lieu d'un appel par combinaison de
+  filtres) — avec les volumes actuels (3 formations, 4 services) l'impact est
+  nul ; si ces catalogues venaient à grossir significativement, un filtrage
+  serveur paginé redeviendrait pertinent, mais cela dépasserait le périmètre
+  « plus petit changement sûr » de cette tâche.
+- Les comparaisons de chaînes insensibles à la casse (`.toLowerCase()`,
+  reprises telles quelles du code préexistant) peuvent théoriquement diverger
+  sur des caractères accentués selon leur forme de normalisation Unicode —
+  risque déjà présent avant cette tâche dans la logique de FILTRAGE
+  elle-même (pas introduit par ce correctif), signalé ici par prudence plutôt
+  que corrigé, pour rester dans le périmètre strict de la tâche.
+
+---
+
+# Tâche : Filtrage Imprimeries/Agences, mapping Catégorie–Sous-compétence Maintenance, picklists à sélection unique
+
+## 1. Audit préalable et causes racines
+
+### `/print` — filtres non appliqués aux Imprimeries
+
+`PrintStoresSection` (cartes « Imprimeries ») ne recevait que `categoryId` et
+`search` — jamais `filters` (`subCategoryId`/`brandId`/`material`/
+`deliveryTime`). Elle filtrait via `company.categories` (un agrégat
+self-déclaré côté `PrintCompanyListCard`, catégories uniquement) au lieu de
+vérifier si l'entreprise a réellement un **service mappé** correspondant aux
+filtres actifs. Preuve en base réelle : l'imprimeur #28 a des services dans
+« Emballages Café »/« Menus & Supports Papier »/« Accessoires Personnalisés »,
+l'imprimeur #53 dans « Gobelets & Vente à emporter »/« Menus & Supports
+Papier »/« Étiquettes & Autocollants » — sélectionner une Matière ou une
+Livraison ne filtrait jamais les cartes Imprimeries, même quand un seul des
+deux n'avait réellement aucun service correspondant.
+
+### `/marketing` — filtres non appliqués aux Agences
+
+Même cause racine : `MarketingStoresSection` ne recevait que `categoryId`
+(`selectedService`) et `search`, filtrait via `company.categories`
+(self-déclaré), jamais via le mapping réel service→agence
+(`service.marketingUserId`). Types/Notes/Villes/Sous-catégories n'avaient
+donc jamais d'effet sur les cartes Agences.
+
+### `/maintenance` — mapping Catégorie↔Sous-compétence incorrect (bug introduit par la tâche précédente)
+
+Cause racine confirmée par relecture directe de mon propre correctif de la
+tâche précédente (« Synchronize All Filters ») : `subSkillFilterOptions` et
+`categories` prenaient bien les profils éligibles, mais ensuite **unissaient
+la totalité** de `item.subSkills`/`item.skills` du profil, sans jamais
+vérifier que la clé encodée ("<Compétence>::<Sous-compétence>", voir
+`shared/maintenance-sub-skill-key.ts`) correspond réellement à la compétence
+sélectionnée. **Preuve en base réelle, exemple exact de la tâche** : le
+prestataire `user_id = 27` a `skills = ["Caméras", "Chicha"]` avec des
+sous-compétences homonymes sous les deux parents (« Entretien »,
+« Réparation ») — sélectionner « Caméras » faisait apparaître « Tuyaux et
+joints » et « Systèmes de chauffe » (propres à Chicha) dans le picklist
+Sous-compétences, exactement le bug décrit par la tâche.
+
+### Les deux picklists multi-select
+
+`filterSubCategories: string[]` (Marketing) et `filterSubSkills: string[]`
+(Maintenance) utilisaient `DropdownMenuCheckboxItem` + tableau, OR sémantique.
+Confirmé qu'aucun autre appelant ne partage ces composants entre comptes
+(chaque fichier définit sa propre section de filtres, comme établi par
+l'audit des tâches précédentes de cette session) — aucun risque de régression
+sur un compte non concerné en les convertissant à la sélection unique.
+
+## 2. Implémentation
+
+### `/print` (`print-page.tsx`)
+
+- Nouveau `facetFiltered` (catégorie/sous-catégorie/société/matière/livraison,
+  **sans** la recherche texte) dérivé de `cards` (catalogue brut) ; `filtered`
+  (affiché) devient `facetFiltered` + recherche + tri — résultat strictement
+  identique à avant (pur réagencement), mais permet maintenant de dériver :
+- `eligiblePrinterIds = new Set(facetFiltered.map(c => c.printerId))` et
+  `hasFacetFilters` — passés à `PrintStoresSection`, qui filtre désormais les
+  imprimeries par ce mapping réel service→imprimeur plutôt que par
+  `company.categories`. La recherche par nom/description propre à
+  l'imprimerie reste indépendante des filtres de facette (comportement déjà
+  documenté et préservé : « a company is discoverable even when none of its
+  own service names match »).
+
+### `/marketing` (`marketing-page.tsx`)
+
+- Même stratégie : nouveau `facetFilteredServices` (catégorie/sous-catégorie/
+  type/note/ville, sans recherche) dérivé de `services` (déjà chargé en
+  entier depuis la tâche précédente) ; `filteredServices` devient
+  `facetFilteredServices` + recherche + tri.
+- `eligibleAgencyIds = new Set(facetFilteredServices.map(s => s.marketingUserId))`
+  et `hasFacetFilters` passés à `MarketingStoresSection`, qui filtre les
+  agences par ce mapping réel plutôt que par `company.categories`.
+- **Sélection unique** : `filterSubCategories: string[]` → `filterSubCategory: string`.
+  `DropdownMenuCheckboxItem` → `DropdownMenuRadioGroup`/`DropdownMenuRadioItem`
+  (primitives déjà exportées par `@/components/ui/dropdown-menu`, jamais
+  utilisées jusqu'ici sur cette page) — un item « Toutes les sous-catégories »
+  explicite permet d'effacer la sélection. Toutes les dérivations d'options
+  (`categoryOptions`/`typeOptions`/`ratingOptions`/`allLocations`), la
+  réconciliation, `selectCategoryFilter`, `hasFilters` et `resetFilters` ont
+  été adaptées à la valeur unique.
+
+### `/maintenance` (`maintenance-page.tsx`)
+
+- **Cas A (catégorie → sous-compétences)** : `subSkillFilterOptions` filtre
+  désormais chaque clé de `item.subSkills` par son **propre parent décodé**
+  (`decodeMaintenanceSubSkillKey(key).competency === filterCategory`) quand
+  une catégorie est active — plus d'union aveugle de tout le tableau
+  `subSkills` d'un profil éligible.
+- **Cas B (sous-compétence → catégorie)** : `categories`, quand une
+  sous-compétence est sélectionnée, ne renvoie plus l'union de
+  `item.skills` des profils correspondants mais **uniquement le parent réel
+  de la clé sélectionnée** (`decodeMaintenanceSubSkillKey(filterSubSkill).competency`),
+  confirmé présent chez au moins un profil éligible — jamais une autre
+  catégorie non liée. Avec la sélection unique (ci-dessous), cette
+  résolution est déterministe et sans ambiguïté : chaque clé encodée porte
+  déjà sa propre catégorie, donc sélectionner « Chicha::Entretien » ne peut
+  jamais faire apparaître « Caméras » (et réciproquement) — exactement « If
+  the selected subcategory exists under only one category, only that
+  related category should remain eligible », trivialement vrai ici puisque
+  chaque option EST déjà scoping-unique par construction.
+- **Sélection unique** : `filterSubSkills: string[]` → `filterSubSkill: string`.
+  `DropdownMenuCheckboxItem` → `DropdownMenuRadioGroup`/`DropdownMenuRadioItem`,
+  item « Toutes les sous-compétences » explicite. `selectSubSkill` résout
+  désormais directement `filterCategory` depuis la clé choisie (motif
+  identique à la résolution de catégorie déjà utilisée sur `/products`) ;
+  `selectCategory` (clic sur une pastille) préserve la sous-compétence
+  sélectionnée seulement si son parent décodé correspond encore à la
+  nouvelle catégorie, sinon l'efface (au lieu de l'ancien filtrage sur tout
+  un tableau).
+
+## 3. Garde-fous respectés
+
+- Aucune règle d'autorisation, de visibilité, de statut de publication ou
+  d'approbation modifiée sur aucune des 3 pages.
+- Aucun contrat d'API ni schéma de base modifié — le mapping service→
+  imprimeur (`printerId`) et service→agence (`marketingUserId`) existait déjà
+  sur chaque carte service, aucune donnée supplémentaire n'a dû être
+  récupérée côté serveur.
+- Aucune donnée inventée : le Cas B de Maintenance utilise exclusivement la
+  relation réelle portée par la clé encodée elle-même, jamais une
+  correspondance par nom déduite.
+- `DropdownMenuRadioGroup`/`DropdownMenuRadioItem` sont des primitives déjà
+  partagées par le design system (`@/components/ui/dropdown-menu`), non
+  modifiées elles-mêmes — seuls leurs DEUX nouveaux points d'appel
+  (Maintenance, Marketing) ont été ajoutés ; aucun autre compte n'utilise ce
+  composant pour ce picklist, donc aucune régression ailleurs.
+- Favoris, modales de détail, Flash preview, pagination, recherche et tri
+  préservés sur les 3 pages — seules les cartes Imprimeries/Agences et les
+  deux picklists ont changé de comportement.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur, après chacune des 3 pages.
+- `npm run build` → succès (client + serveur).
+- `git status --short` final : exactement les 5 fichiers attendus modifiés
+  (les 5 pages déjà touchées par la tâche précédente, toujours non
+  committées — aucun fichier supplémentaire).
+- **Vérification en données réelles** (lecture seule, serveur de dev actif) :
+  - Maintenance : confirmé en base que le prestataire `user_id = 27` est
+    l'exemple exact de la tâche (`skills = ["Caméras","Chicha"]`,
+    sous-compétences homonymes sous les deux parents) ; simulation directe
+    de la nouvelle logique sur cette ligne réelle : sélectionner « Caméras »
+    ne renvoie plus que les 7 clés `Caméras::*` (plus de fuite de
+    `Chicha::*`) ; sélectionner `Chicha::Entretien` résout `categories`
+    à `["Chicha"]` et `Caméras::Entretien` à `["Caméras"]` séparément et
+    sans ambiguïté — comportement strictement conforme à l'exemple de la
+    tâche.
+  - Print : confirmé via `/api/print/marketplace` que les imprimeurs #28 et
+    #53 ont des catégories de services réellement différentes (seule
+    « Menus & Supports Papier » leur est commune) — preuve directe que le
+    mapping service→imprimeur devait être utilisé pour les cartes
+    Imprimeries plutôt que l'agrégat self-déclaré.
+  - Marketing : confirmé via `/api/marketing/services` que le champ réel
+    `marketingUserId` est bien présent et peuplé sur chaque service (une
+    seule agence existe actuellement en base, donc la validation
+    multi-agences n'a pu être testée qu'au niveau du code, par symétrie
+    stricte avec le correctif Print déjà validé sur des données
+    multi-entités réelles).
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour cliquer effectivement les picklists
+  convertis en sélection unique et observer visuellement le radio-check, ni
+  pour parcourir la matrice de vérification complète de la tâche sur les 3
+  pages — vérifié par lecture de code, `tsc`/`build` stricts, et simulation
+  directe contre des lignes réelles de la base (notamment l'exemple exact
+  Caméras/Chicha de la tâche). Une vérification manuelle dans un navigateur
+  réel reste recommandée avant mise en production.
+- La validation multi-agences du correctif Marketing (Agences) n'a pu être
+  testée qu'avec une seule agence réellement présente en base aujourd'hui —
+  la logique est strictement symétrique à celle de Print (déjà validée avec
+  2 imprimeurs réels aux catégories distinctes), mais une vérification avec
+  plusieurs agences réelles reste recommandée dès que les données le
+  permettront.

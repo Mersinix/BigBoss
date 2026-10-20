@@ -30,7 +30,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem,
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
 import {
   Wrench, Search, MapPin, Star, MessageCircle, SlidersHorizontal,
@@ -71,6 +71,10 @@ const TYPE_COLORS: Record<string, string> = {
   Agency: "bg-orange-100 text-orange-700",
 };
 const TYPE_ICONS: Record<string, any> = { Freelance: User, Company: Building2, Agency: Users };
+// French label for the Type filter's real enum values (task: "Synchronize All
+// Filters…") — the filter's options are now data-driven (typeOptions below),
+// this only maps a present raw value to its existing display label.
+const TYPE_LABELS: Record<string, string> = { Freelance: "Freelance", Company: "Entreprise", Agency: "Agence" };
 
 function useTheme(isDark: boolean) {
   return {
@@ -730,7 +734,10 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
   // bare sub-skill names, so a selection always stays unambiguous even when the same
   // sub-skill label exists under several parent competencies (the exact collision the
   // qualified-key format was introduced to prevent, see that file's own comment).
-  const [filterSubSkills, setFilterSubSkills] = useState<string[]>([]);
+  // Single-selection (task: "...and Single-Selection Picklists") — was a
+  // multi-select array; a Coffee Owner now picks one sous-compétence at a
+  // time, same as every other filter on this page.
+  const [filterSubSkill, setFilterSubSkill] = useState("");
   const [filterType, setFilterType] = useState("");
   const [filterAvailability, setFilterAvailability] = useState("");
   const [filterLocation, setFilterLocation] = useState("");
@@ -741,7 +748,14 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
   const [jobManagementOpen, setJobManagementOpen] = useState(false);
   const [jobManagementJobId, setJobManagementJobId] = useState<number | null>(null);
   const { data: profiles = [], isLoading: profilesLoading } = useQuery<MaintenanceMarketplaceCard[]>({ queryKey: ["/api/maintenance/profiles"] });
-  const { data: categories = [] } = useQuery<string[]>({ queryKey: ["/api/maintenance/categories"] });
+  // Admin taxonomy — kept ONLY for icon lookups (categoryIcons/subSkillIconByKey below).
+  // Task: "Synchronize All Filters and Display Only Options With Matching Results" —
+  // the SELECTABLE option lists themselves (categories/subSkillFilterOptions/
+  // typeOptions/availabilityOptions/allLocations further down) must come from
+  // eligible `profiles`, never from this global admin-configured list, since a
+  // competency/sub-skill can exist here with zero providers actually offering it.
+  // The old `/api/maintenance/categories` query (the prior, taxonomy-sourced
+  // pill list) has been removed — nothing else in this file read it.
   const { data: taxonomy } = useQuery<{
     competencies: { id: number; name: string; icon: string | null }[];
     zones: any[];
@@ -752,47 +766,16 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
     for (const c of taxonomy?.competencies ?? []) if (c.icon) map.set(c.name, c.icon);
     return map;
   }, [taxonomy]);
-  // Admin-defined sub-skills, grouped by their PARENT competency's NAME (not id) — this page's
-  // category filter/chips already key everything off plain competency names (same free-text
-  // convention as maintenanceProfiles.categories/maintenanceJobPosts.categories), so joining
-  // subCompetencies.competencyId -> competencies.name here keeps that one convention consistent
-  // instead of introducing ids into the display layer.
-  const subSkillsByCategory = useMemo(() => {
-    const map = new Map<string, { id: number; name: string; icon: string | null }[]>();
+  const subSkillIconByKey = useMemo(() => {
     const nameById = new Map((taxonomy?.competencies ?? []).map((c) => [c.id, c.name]));
+    const map = new Map<string, string | null>();
     for (const sub of taxonomy?.subCompetencies ?? []) {
       const parentName = nameById.get(sub.competencyId);
       if (!parentName) continue;
-      const list = map.get(parentName) ?? [];
-      list.push(sub);
-      map.set(parentName, list);
+      map.set(encodeMaintenanceSubSkillKey(parentName, sub.name), sub.icon);
     }
     return map;
   }, [taxonomy]);
-  // Keep Sous-compétences Filters Always Visible — the picklist's available options:
-  // scoped to the selected parent when one is active (identical to before), or the
-  // union across every parent when none is (so the filter never goes empty just
-  // because "Tous" is selected). Options always carry the parent-qualified key so a
-  // name that exists under two parents is never collapsed into one ambiguous choice —
-  // its label gets the parent name appended only when that collision actually occurs.
-  const subSkillFilterOptions = useMemo(() => {
-    const nameCounts = new Map<string, number>();
-    for (const subs of Array.from(subSkillsByCategory.values())) for (const sub of subs) nameCounts.set(sub.name, (nameCounts.get(sub.name) ?? 0) + 1);
-    const entries: [string, { id: number; name: string; icon: string | null }[]][] = filterCategory
-      ? [[filterCategory, subSkillsByCategory.get(filterCategory) ?? []]]
-      : Array.from(subSkillsByCategory.entries());
-    const options: { key: string; label: string; icon: string | null }[] = [];
-    for (const [parentName, subs] of entries) {
-      for (const sub of subs) {
-        options.push({
-          key: encodeMaintenanceSubSkillKey(parentName, sub.name),
-          label: !filterCategory && (nameCounts.get(sub.name) ?? 0) > 1 ? `${sub.name} · ${parentName}` : sub.name,
-          icon: sub.icon,
-        });
-      }
-    }
-    return options;
-  }, [subSkillsByCategory, filterCategory]);
   const { data: favoriteIds = EMPTY_IDS } = useQuery<number[]>({ queryKey: ["/api/maintenance-favorites"], enabled: !!user && accessLevel === "approved" });
   const syncMaintenance = useFavorites((s) => s.syncMaintenance);
 
@@ -814,7 +797,122 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
     const freshAgent = profiles.find((profile) => profile.userId === selectedAgent.userId);
     if (freshAgent && freshAgent !== selectedAgent) setSelectedAgent(freshAgent);
   }, [profiles, selectedAgent?.userId]);
-  const allLocations = useMemo(() => Array.from(new Set(profiles.map((item) => item.location).filter(Boolean))).sort(), [profiles]);
+
+  // ── Data-driven, cross-filter-aware option derivation ───────────────────────
+  // (task: "Synchronize All Filters...") — mirrors the /products fix: a single
+  // search-only base, then a `withoutDim` helper that narrows by every OTHER
+  // active filter but never by the dimension being derived, so a filter's own
+  // currently selected value can never vanish from its own option list while
+  // still correctly narrowing in response to its siblings.
+  const searchFiltered = useMemo(() => {
+    if (!search.trim()) return profiles;
+    const q = search.toLowerCase();
+    return profiles.filter((item) => [item.name, item.jobTitle, item.description, item.location, ...item.skills].join(" ").toLowerCase().includes(q));
+  }, [profiles, search]);
+
+  type MaintenanceDim = "category" | "subSkill" | "type" | "availability" | "location";
+  const withoutDim = (exclude: MaintenanceDim) => {
+    let list = searchFiltered;
+    if (exclude !== "category" && filterCategory) list = list.filter((item) => item.skills.includes(filterCategory));
+    if (exclude !== "subSkill" && filterSubSkill) list = list.filter((item) => item.subSkills?.includes(filterSubSkill));
+    if (exclude !== "type" && filterType) list = list.filter((item) => item.profileType === filterType);
+    if (exclude !== "availability" && filterAvailability) list = list.filter((item) => (filterAvailability === "available" ? item.available : !item.available));
+    if (exclude !== "location" && filterLocation) list = list.filter((item) => item.location === filterLocation);
+    return list;
+  };
+
+  // Category pills — real competencies actually offered by an eligible, currently
+  // matching provider (root cause: previously the full admin taxonomy list,
+  // regardless of whether any provider had that competency). When a
+  // sub-skill IS selected, a provider's full `skills` list must not be
+  // unioned in wholesale — a provider can legitimately have several
+  // unrelated categories (e.g. Caméras AND Chicha), and only the sub-skill's
+  // OWN real parent (carried directly by its encoded key, see
+  // shared/maintenance-sub-skill-key.ts) is genuinely related (task: "Fix...
+  // Maintenance Category–Subcategory Mapping").
+  const categories = useMemo(() => {
+    const base = withoutDim("category");
+    if (filterSubSkill) {
+      const decoded = decodeMaintenanceSubSkillKey(filterSubSkill);
+      return decoded && base.some((item) => item.subSkills?.includes(filterSubSkill)) ? [decoded.competency] : [];
+    }
+    const set = new Set<string>();
+    base.forEach((item) => item.skills.forEach((s) => set.add(s)));
+    return Array.from(set).sort();
+  }, [searchFiltered, filterSubSkill, filterType, filterAvailability, filterLocation]);
+
+  // Sub-skills — same fix: derived from providers' own real `subSkills` field,
+  // and (root cause of the Caméras/Chicha bug) now genuinely restricted to
+  // keys whose OWN encoded parent equals the selected category — a provider
+  // matching filterCategory can still carry other categories' sub-skill keys
+  // in its flattened `subSkills` array, and those must not leak in. Same
+  // parent-qualified-label-on-collision behavior as before.
+  const subSkillFilterOptions = useMemo(() => {
+    const base = withoutDim("subSkill");
+    const present = new Set<string>();
+    base.forEach((item) => (item.subSkills ?? []).forEach((key) => {
+      if (filterCategory) {
+        const d = decodeMaintenanceSubSkillKey(key);
+        if (!d || d.competency !== filterCategory) return;
+      }
+      present.add(key);
+    }));
+    const decoded = new Map<string, { competency: string; subSkill: string }>();
+    const nameCounts = new Map<string, number>();
+    present.forEach((key) => {
+      const d = decodeMaintenanceSubSkillKey(key);
+      if (!d) return;
+      decoded.set(key, d);
+      nameCounts.set(d.subSkill, (nameCounts.get(d.subSkill) ?? 0) + 1);
+    });
+    const options: { key: string; label: string; icon: string | null }[] = [];
+    present.forEach((key) => {
+      const d = decoded.get(key);
+      if (!d) return;
+      options.push({
+        key,
+        label: !filterCategory && (nameCounts.get(d.subSkill) ?? 0) > 1 ? `${d.subSkill} · ${d.competency}` : d.subSkill,
+        icon: subSkillIconByKey.get(key) ?? null,
+      });
+    });
+    return options.sort((a, b) => a.label.localeCompare(b.label));
+  }, [searchFiltered, filterCategory, filterType, filterAvailability, filterLocation, subSkillIconByKey]);
+
+  // Type ("Freelance"/"Entreprise"/"Agence") — real values present among eligible
+  // providers, not a hardcoded 3-item enum (root cause: the old Select always
+  // rendered all 3 regardless of data).
+  const typeOptions = useMemo(() => {
+    const set = new Set<string>();
+    withoutDim("type").forEach((item) => { if (item.profileType) set.add(item.profileType); });
+    return Array.from(set).sort();
+  }, [searchFiltered, filterCategory, filterSubSkill, filterAvailability, filterLocation]);
+
+  // Availability — only offer "Disponible"/"Indisponible" when at least one
+  // eligible provider (under the other active filters) is actually in that state.
+  const availabilityOptions = useMemo(() => {
+    const base = withoutDim("availability");
+    return { available: base.some((item) => item.available), unavailable: base.some((item) => !item.available) };
+  }, [searchFiltered, filterCategory, filterSubSkill, filterType, filterLocation]);
+
+  const allLocations = useMemo(() => {
+    const set = new Set<string>();
+    withoutDim("location").forEach((item) => { if (item.location) set.add(item.location); });
+    return Array.from(set).sort();
+  }, [searchFiltered, filterCategory, filterSubSkill, filterType, filterAvailability]);
+
+  // Reconcile existing selections that a sibling filter change just made invalid —
+  // clears only the one no longer compatible, never resets unrelated filters, and
+  // can't loop (each effect only ever clears, it never re-sets a value), so React
+  // settles after at most one extra pass per genuine conflict (task Phase 5/6).
+  useEffect(() => { if (filterCategory && !categories.includes(filterCategory)) setFilterCategory(""); }, [categories]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (filterSubSkill && !subSkillFilterOptions.some((o) => o.key === filterSubSkill)) setFilterSubSkill(""); }, [subSkillFilterOptions]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (filterType && !typeOptions.includes(filterType)) setFilterType(""); }, [typeOptions]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (filterAvailability === "available" && !availabilityOptions.available) setFilterAvailability("");
+    if (filterAvailability === "unavailable" && !availabilityOptions.unavailable) setFilterAvailability("");
+  }, [availabilityOptions]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (filterLocation && !allLocations.includes(filterLocation)) setFilterLocation(""); }, [allLocations]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const filtered = useMemo(() => {
     let list = profiles;
     // item.skills is the one authoritative Maintenance competency field — item.categories
@@ -826,17 +924,13 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
     // "<competency>::<subSkill>" keys (see shared/maintenance-sub-skill-key.ts), so this
     // can never match a same-named sub-skill the provider only has under an unrelated
     // parent (the exact bug this task fixes, applied here to the Coffee Owner filter too).
-    // Multiple selected sub-skills use OR semantics (match any one of them) — same
-    // convention as the Barista marketplace's own multi-select Langue filter.
-    if (filterSubSkills.length > 0) {
-      list = list.filter((item) => filterSubSkills.some((key) => item.subSkills?.includes(key)));
-    }
+    if (filterSubSkill) list = list.filter((item) => item.subSkills?.includes(filterSubSkill));
     if (filterType) list = list.filter((item) => item.profileType === filterType);
     if (filterAvailability === "available") list = list.filter((item) => item.available);
     if (filterAvailability === "unavailable") list = list.filter((item) => !item.available);
     if (filterLocation) list = list.filter((item) => item.location === filterLocation);
     return list;
-  }, [profiles, search, filterCategory, filterSubSkills, filterType, filterAvailability, filterLocation]);
+  }, [profiles, search, filterCategory, filterSubSkill, filterType, filterAvailability, filterLocation]);
   const contact = async (agent: MaintenanceMarketplaceCard) => {
       try {
         const response = await apiRequest("POST", "/api/messages/conversations", {
@@ -848,18 +942,28 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
       }
     catch (error) { toast({ title: "Contact impossible", description: error instanceof Error ? error.message : "Veuillez réessayer.", variant: "destructive" }); }
   };
-  const hasFilters = !!(search || filterCategory || filterSubSkills.length > 0 || filterType || filterAvailability || filterLocation);
+  const hasFilters = !!(search || filterCategory || filterSubSkill || filterType || filterAvailability || filterLocation);
   const openDetail = (agent: MaintenanceMarketplaceCard) => { setSelectedAgent(agent); setDetailOpen(true); };
-  // Selecting (or switching) a parent competency keeps only the selected sub-skills that
-  // still belong to it — it never blanket-clears the whole selection, so sub-skills
-  // chosen under the "Tous" (no parent) view stay selected when the Coffee Owner later
-  // narrows to a specific parent that still has them.
+  // Selecting (or switching) a parent competency keeps the selected sub-skill
+  // only if it still belongs to it — it never blanket-clears an otherwise-
+  // still-compatible selection.
   const selectCategory = (category: string) => {
     setFilterCategory(category);
-    if (category) setFilterSubSkills((prev) => prev.filter((key) => decodeMaintenanceSubSkillKey(key)?.competency === category));
+    if (category) setFilterSubSkill((prev) => (decodeMaintenanceSubSkillKey(prev)?.competency === category ? prev : ""));
   };
-  const toggleSubSkill = (key: string) => {
-    setFilterSubSkills((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
+  // Single-selection (task: "...and Single-Selection Picklists") — selecting
+  // the same value again clears it (same "toggle off" affordance the old
+  // multi-select checkbox had), selecting a different value replaces it.
+  // Direct selection also resolves the parent category deterministically —
+  // the key itself carries its own real competency (never ambiguous, so
+  // never arbitrarily forced the way a cross-category attribute would be).
+  const selectSubSkill = (key: string) => {
+    const next = filterSubSkill === key ? "" : key;
+    setFilterSubSkill(next);
+    if (next) {
+      const decoded = decodeMaintenanceSubSkillKey(next);
+      if (decoded) setFilterCategory(decoded.competency);
+    }
   };
 
   return (
@@ -962,11 +1066,12 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
                   </div>
                 </div>
                 {/* Sous-compétences — Keep Sous-compétences Filters Always Visible: a
-                    permanent multi-select (never conditionally hidden, unlike the single-select
-                    it replaces), scoped to the selected parent when one is active or the union
-                    across every parent otherwise (subSkillFilterOptions above). Same compact
-                    dropdown-with-checkboxes pattern as the Barista marketplace's own multi-select
-                    Langue filter (pages/cafe/barista/barista-page.tsx). */}
+                    permanent picklist (never conditionally hidden), scoped to the selected
+                    parent when one is active or the union across every parent otherwise
+                    (subSkillFilterOptions above). Single-selection (task: "...and
+                    Single-Selection Picklists") — a RadioGroup/RadioItem pair replaces the
+                    old CheckboxItem array, same dropdown shell/styling, exactly one value
+                    selectable at a time. */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
@@ -974,7 +1079,7 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
                       className={`h-7 text-xs rounded-full px-3 w-auto min-w-[150px] shrink-0 inline-flex items-center justify-between gap-1.5 border ${t.inputBg}`}
                       data-testid="select-maintenance-subskill"
                     >
-                      {filterSubSkills.length > 0 ? `Sous-compétences (${filterSubSkills.length})` : "Sous-compétences"}
+                      {subSkillFilterOptions.find((o) => o.key === filterSubSkill)?.label ?? "Sous-compétences"}
                     </button>
                   </DropdownMenuTrigger>
                   {/* Reduce Subcategory Picklist Scroller Height — caps the list at a
@@ -992,22 +1097,28 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
                   >
                     {subSkillFilterOptions.length === 0 ? (
                       <div className="px-2 py-1.5 text-xs text-muted-foreground">Aucune sous-compétence configurée</div>
-                    ) : subSkillFilterOptions.map((opt) => (
-                      <DropdownMenuCheckboxItem
-                        key={opt.key}
-                        checked={filterSubSkills.includes(opt.key)}
-                        onCheckedChange={() => toggleSubSkill(opt.key)}
-                        data-testid={`checkbox-maintenance-subskill-${opt.key}`}
-                      >
-                        {opt.icon ? `${opt.icon} ${opt.label}` : opt.label}
-                      </DropdownMenuCheckboxItem>
-                    ))}
+                    ) : (
+                      <DropdownMenuRadioGroup value={filterSubSkill} onValueChange={selectSubSkill}>
+                        <DropdownMenuRadioItem value="" data-testid="radio-maintenance-subskill-all">
+                          Toutes les sous-compétences
+                        </DropdownMenuRadioItem>
+                        {subSkillFilterOptions.map((opt) => (
+                          <DropdownMenuRadioItem
+                            key={opt.key}
+                            value={opt.key}
+                            data-testid={`radio-maintenance-subskill-${opt.key}`}
+                          >
+                            {opt.icon ? `${opt.icon} ${opt.label}` : opt.label}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Select value={filterType || "__all__"} onValueChange={(value) => setFilterType(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Type" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Types</SelectItem><SelectItem value="Freelance">Freelance</SelectItem><SelectItem value="Company">Entreprise</SelectItem><SelectItem value="Agency">Agence</SelectItem></SelectContent></Select>
-                <Select value={filterAvailability || "__all__"} onValueChange={(value) => setFilterAvailability(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Disponibilité" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Disponibilités</SelectItem><SelectItem value="available">Disponible</SelectItem><SelectItem value="unavailable">Indisponible</SelectItem></SelectContent></Select>
+                <Select value={filterType || "__all__"} onValueChange={(value) => setFilterType(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[120px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Type" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Types</SelectItem>{typeOptions.map((v) => <SelectItem key={v} value={v}>{TYPE_LABELS[v] ?? v}</SelectItem>)}</SelectContent></Select>
+                <Select value={filterAvailability || "__all__"} onValueChange={(value) => setFilterAvailability(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[130px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Disponibilité" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Disponibilités</SelectItem>{availabilityOptions.available && <SelectItem value="available">Disponible</SelectItem>}{availabilityOptions.unavailable && <SelectItem value="unavailable">Indisponible</SelectItem>}</SelectContent></Select>
                 <Select value={filterLocation || "__all__"} onValueChange={(value) => setFilterLocation(value === "__all__" ? "" : value)}><SelectTrigger className={`h-7 text-xs rounded-full px-3 w-auto min-w-[110px] shrink-0 ${t.selectTrigger}`}><SelectValue placeholder="Ville" /></SelectTrigger><SelectContent className={t.selectContent}><SelectItem value="__all__">Villes</SelectItem>{allLocations.map((location) => <SelectItem key={location} value={location}>{location}</SelectItem>)}</SelectContent></Select>
-                {hasFilters && <button onClick={() => { setSearch(""); setFilterCategory(""); setFilterSubSkills([]); setFilterType(""); setFilterAvailability(""); setFilterLocation(""); }} className={`flex items-center gap-1 text-xs transition-colors ml-1 shrink-0 whitespace-nowrap ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}><RotateCcw className="w-3 h-3" />Reset</button>}
+                {hasFilters && <button onClick={() => { setSearch(""); setFilterCategory(""); setFilterSubSkill(""); setFilterType(""); setFilterAvailability(""); setFilterLocation(""); }} className={`flex items-center gap-1 text-xs transition-colors ml-1 shrink-0 whitespace-nowrap ${t.dk ? "text-red-400 hover:text-red-300" : "text-destructive hover:text-destructive/80"}`}><RotateCcw className="w-3 h-3" />Reset</button>}
               </div>
             </div>
           </div>

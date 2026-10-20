@@ -209,11 +209,18 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
   const [fastSearchOpen, setFastSearchOpen] = useState(false);
   const [blacklistOpen, setBlacklistOpen] = useState(false);
 
-  const { data: courses = [], isLoading } = useAcademyCourses({
-    search: trainingSearch || undefined,
-    level: trainingLevel || undefined,
-    certification: trainingCert || undefined,
-  });
+  // Fetch the FULL eligible course set once (task: "Synchronize All Filters
+  // and Display Only Options With Matching Results") — search/level/
+  // certification used to be passed straight through to the server
+  // (useAcademyCourses({search, level, certification})), so the client only
+  // ever held ONE already-filtered combination and had no way to know which
+  // Niveau/Formations options would actually produce results under the other
+  // active filters (the two Selects below were a hardcoded 3- and 2-value
+  // list regardless of data). The endpoint already supports an unfiltered
+  // call (confirmed in server/storage.ts getPublishedAcademyCourses — filters
+  // are optional), so filtering moves client-side here, matching every other
+  // marketplace page's architecture and avoiding any extra API requests.
+  const { data: courses = [], isLoading } = useAcademyCourses();
   const { data: academyCompanies = [] } = useAcademyCompanies();
   // Unify Service and Store Search + Remove Navbar Search Inputs — same query
   // as the courses search above, matched against this academy's own name/
@@ -229,12 +236,52 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
     return academyCompanies.filter((c) => c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q));
   }, [academyCompanies, trainingSearch]);
 
+  // Same search haystack as the server's own getPublishedAcademyCourses
+  // (title/description/academyName/category) so client-side filtering stays
+  // behaviorally identical to what the server used to do.
+  const searchFilteredCourses = useMemo(() => {
+    if (!trainingSearch.trim()) return courses;
+    const q = trainingSearch.trim().toLowerCase();
+    return courses.filter((c) => [c.title, c.description, c.academyName, c.category].join(" ").toLowerCase().includes(q));
+  }, [courses, trainingSearch]);
+
+  type AcademyDim = "level" | "certification";
+  const withoutDim = (exclude: AcademyDim) => {
+    let list = searchFilteredCourses;
+    if (exclude !== "level" && trainingLevel) list = list.filter((c) => c.level === trainingLevel);
+    if (exclude !== "certification" && trainingCert) list = list.filter((c) => String(c.hasCertification) === trainingCert);
+    return list;
+  };
+
+  // Niveau/Formations options — only levels/certification-states actually
+  // represented by at least one eligible, currently-matching course, derived
+  // with its own dimension excluded so the current selection never vanishes
+  // from its own list while still narrowing in response to the other filter.
+  const levelOptions = useMemo(() => {
+    const set = new Set<string>();
+    withoutDim("level").forEach((c) => { if (c.level) set.add(c.level); });
+    return Array.from(set);
+  }, [searchFilteredCourses, trainingCert]);
+
+  const certOptions = useMemo(() => {
+    const base = withoutDim("certification");
+    return { withCert: base.some((c) => c.hasCertification), withoutCert: base.some((c) => !c.hasCertification) };
+  }, [searchFilteredCourses, trainingLevel]);
+
+  useEffect(() => { if (trainingLevel && !levelOptions.includes(trainingLevel)) setTrainingLevel(""); }, [levelOptions]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (trainingCert === "true" && !certOptions.withCert) setTrainingCert("");
+    if (trainingCert === "false" && !certOptions.withoutCert) setTrainingCert("");
+  }, [certOptions]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const filteredTraining = useMemo(() => {
-    let list = courses;
+    let list = searchFilteredCourses;
+    if (trainingLevel) list = list.filter((c) => c.level === trainingLevel);
+    if (trainingCert) list = list.filter((c) => String(c.hasCertification) === trainingCert);
     if (trainingSortBy === "price_asc") list = [...list].sort((a, b) => a.priceInCents - b.priceInCents);
     if (trainingSortBy === "price_desc") list = [...list].sort((a, b) => b.priceInCents - a.priceInCents);
     return list;
-  }, [courses, trainingSortBy]);
+  }, [searchFilteredCourses, trainingLevel, trainingCert, trainingSortBy]);
   const hasTrainingFilters = !!(trainingSearch || trainingLevel || trainingCert || trainingSortBy);
   const certifiedCount = useMemo(() => courses.filter((c) => c.hasCertification).length, [courses]);
 
@@ -414,9 +461,7 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
               </SelectTrigger>
               <SelectContent className={t.selectContent}>
                 <SelectItem value="__all__">Niveaux</SelectItem>
-                <SelectItem value="BEGINNER">Débutant</SelectItem>
-                <SelectItem value="ADVANCED">Avancé</SelectItem>
-                <SelectItem value="EXPERT">Expert</SelectItem>
+                {levelOptions.map((v) => <SelectItem key={v} value={v}>{LEVEL_LABELS[v as AcademyCourseLevel] ?? v}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select
@@ -428,8 +473,8 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
               </SelectTrigger>
               <SelectContent className={t.selectContent}>
                 <SelectItem value="__all__">Formations</SelectItem>
-                <SelectItem value="true">Avec certification</SelectItem>
-                <SelectItem value="false">Sans certification</SelectItem>
+                {certOptions.withCert && <SelectItem value="true">Avec certification</SelectItem>}
+                {certOptions.withoutCert && <SelectItem value="false">Sans certification</SelectItem>}
               </SelectContent>
             </Select>
             <Select value={trainingSortBy || "recommended"} onValueChange={(v) => setTrainingSortBy(v === "recommended" ? "" : v)}>

@@ -487,23 +487,84 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
     baristaLanguages,
   ]);
 
-  // Add Icons to Barista Compétences — {name, icon} pairs for the filter chip
-  // switcher below, rendered dynamically from the Admin-managed taxonomy
-  // (skillOptions) rather than a hardcoded icon map. Same bootstrap fallback as
-  // the previous allSkills (derive bare names from real profiles when the
-  // Admin taxonomy is completely empty) — those synthesized entries simply
-  // have no icon yet, so they fall back to DEFAULT_SKILL_ICON below.
+  // ── Data-driven, cross-filter-aware option derivation ───────────────────────
+  // (task: "Synchronize All Filters and Display Only Options With Matching
+  // Results") — mirrors the /products and /maintenance fix: a single
+  // search-only base, then a `withoutDim` helper that narrows by every OTHER
+  // active filter but never by the dimension being derived, so a filter's own
+  // currently selected value can never vanish from its own option list while
+  // still correctly narrowing in response to its siblings. Admin taxonomy
+  // (skillOptions/educationOptions/languageOptions) is now used ONLY for
+  // icon/id metadata lookup — the SELECTABLE values always come from eligible
+  // `profiles`, since an admin-configured skill/education level/language can
+  // exist with zero matching baristas (the root cause of the reported bug).
+  const searchFiltered = useMemo(() => {
+    if (!baristaSearch.trim()) return profiles;
+    const q = baristaSearch.toLowerCase();
+    return profiles.filter((b) => b.name.toLowerCase().includes(q) || b.skills.some((s) => s.toLowerCase().includes(q)));
+  }, [profiles, baristaSearch]);
+
+  type BaristaDim = "level" | "availability" | "skill" | "location" | "education" | "languages";
+  const withoutDim = (exclude: BaristaDim) => {
+    let list = searchFiltered;
+    if (exclude !== "level" && baristaLevel) list = list.filter((b) => b.level === baristaLevel);
+    if (exclude !== "availability" && baristaAvailability) list = list.filter((b) => (baristaAvailability === "available" ? b.available : !b.available));
+    if (exclude !== "skill" && baristaSkill) list = list.filter((b) => b.skills.some((s) => s.toLowerCase() === baristaSkill.toLowerCase()));
+    if (exclude !== "location" && baristaLocation) list = list.filter((b) => b.location.toLowerCase() === baristaLocation.toLowerCase());
+    if (exclude !== "education" && baristaEducation) list = list.filter((b) => (b.educationLevel ?? "").toLowerCase() === baristaEducation.toLowerCase());
+    if (exclude !== "languages" && baristaLanguages.length > 0) list = list.filter((b) => b.languages?.some((lang) => baristaLanguages.some((sel) => sel.toLowerCase() === lang.toLowerCase())));
+    return list;
+  };
+
   const skillChipOptions = useMemo(() => {
-    const names = skillOptions.length > 0
-      ? skillOptions.map((s) => s.name)
-      : Array.from(new Set(profiles.flatMap((b) => b.skills)));
     const iconByName = new Map(skillOptions.map((s) => [s.name, s.icon] as const));
-    return names.sort().map((name) => ({ name, icon: iconByName.get(name) ?? null }));
-  }, [skillOptions, profiles]);
-  const allLocations = useMemo(
-    () => Array.from(new Set(profiles.map((b) => b.location).filter(Boolean))).sort(),
-    [profiles]
-  );
+    const names = new Set<string>();
+    withoutDim("skill").forEach((b) => b.skills.forEach((s) => names.add(s)));
+    return Array.from(names).sort().map((name) => ({ name, icon: iconByName.get(name) ?? null }));
+  }, [searchFiltered, baristaLevel, baristaAvailability, baristaLocation, baristaEducation, baristaLanguages, skillOptions]);
+
+  const levelOptions = useMemo(() => {
+    const set = new Set<string>();
+    withoutDim("level").forEach((b) => { if (b.level) set.add(b.level); });
+    return Array.from(set);
+  }, [searchFiltered, baristaAvailability, baristaSkill, baristaLocation, baristaEducation, baristaLanguages]);
+
+  const availabilityOptions = useMemo(() => {
+    const base = withoutDim("availability");
+    return { available: base.some((b) => b.available), unavailable: base.some((b) => !b.available) };
+  }, [searchFiltered, baristaLevel, baristaSkill, baristaLocation, baristaEducation, baristaLanguages]);
+
+  const allLocations = useMemo(() => {
+    const set = new Set<string>();
+    withoutDim("location").forEach((b) => { if (b.location) set.add(b.location); });
+    return Array.from(set).sort();
+  }, [searchFiltered, baristaLevel, baristaAvailability, baristaSkill, baristaEducation, baristaLanguages]);
+
+  const educationFilterOptions = useMemo(() => {
+    const present = new Set<string>();
+    withoutDim("education").forEach((b) => { if (b.educationLevel) present.add(b.educationLevel.toLowerCase()); });
+    return educationOptions.filter((e) => present.has(e.name.toLowerCase()));
+  }, [searchFiltered, baristaLevel, baristaAvailability, baristaSkill, baristaLocation, baristaLanguages, educationOptions]);
+
+  const languageFilterOptions = useMemo(() => {
+    const present = new Set<string>();
+    withoutDim("languages").forEach((b) => (b.languages ?? []).forEach((lang) => present.add(lang.toLowerCase())));
+    return languageOptions.filter((l) => present.has(l.name.toLowerCase()));
+  }, [searchFiltered, baristaLevel, baristaAvailability, baristaSkill, baristaLocation, baristaEducation, languageOptions]);
+
+  // Reconcile existing selections a sibling filter change just made invalid —
+  // clears only the one no longer compatible, never resets unrelated filters;
+  // each effect only ever clears a value (never sets a new one), so this can't
+  // loop — React settles after at most one extra pass per genuine conflict.
+  useEffect(() => { if (baristaLevel && !levelOptions.includes(baristaLevel)) setBaristaLevel(""); }, [levelOptions]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (baristaAvailability === "available" && !availabilityOptions.available) setBaristaAvailability("");
+    if (baristaAvailability === "unavailable" && !availabilityOptions.unavailable) setBaristaAvailability("");
+  }, [availabilityOptions]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (baristaSkill && !skillChipOptions.some((s) => s.name === baristaSkill)) setBaristaSkill(""); }, [skillChipOptions]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (baristaLocation && !allLocations.includes(baristaLocation)) setBaristaLocation(""); }, [allLocations]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (baristaEducation && !educationFilterOptions.some((e) => e.name === baristaEducation)) setBaristaEducation(""); }, [educationFilterOptions]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setBaristaLanguages((prev) => prev.filter((l) => languageFilterOptions.some((o) => o.name === l))); }, [languageFilterOptions]);
 
   const hasBaristaFilters = !!(
     baristaSearch ||
@@ -714,9 +775,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 </SelectTrigger>
                 <SelectContent className={t.selectContent}>
                   <SelectItem value="__all__">Niveaux</SelectItem>
-                  <SelectItem value="BEGINNER">Débutant</SelectItem>
-                  <SelectItem value="ADVANCED">Avancé</SelectItem>
-                  <SelectItem value="EXPERT">Expert</SelectItem>
+                  {levelOptions.map((v) => <SelectItem key={v} value={v}>{BARISTA_LEVEL_LABELS[v] ?? v}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select
@@ -728,8 +787,8 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 </SelectTrigger>
                 <SelectContent className={t.selectContent}>
                   <SelectItem value="__all__">Disponibilités</SelectItem>
-                  <SelectItem value="available">Disponible</SelectItem>
-                  <SelectItem value="unavailable">Indisponible</SelectItem>
+                  {availabilityOptions.available && <SelectItem value="available">Disponible</SelectItem>}
+                  {availabilityOptions.unavailable && <SelectItem value="unavailable">Indisponible</SelectItem>}
                 </SelectContent>
               </Select>
               <Select
@@ -755,7 +814,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 </SelectTrigger>
                 <SelectContent className={t.selectContent}>
                   <SelectItem value="__all__">Niveaux</SelectItem>
-                  {educationOptions.map((e) => (
+                  {educationFilterOptions.map((e) => (
                     <SelectItem key={e.id} value={e.name}>{e.name}</SelectItem>
                   ))}
                 </SelectContent>
@@ -771,9 +830,9 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className={t.selectContent} align="start">
-                  {languageOptions.length === 0 ? (
+                  {languageFilterOptions.length === 0 ? (
                     <div className="px-2 py-1.5 text-xs text-muted-foreground">Aucune langue configurée</div>
-                  ) : languageOptions.map((lang) => (
+                  ) : languageFilterOptions.map((lang) => (
                     <DropdownMenuCheckboxItem
                       key={lang.id}
                       checked={baristaLanguages.includes(lang.name)}

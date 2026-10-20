@@ -55,7 +55,7 @@ import { MarketingServiceDetailModal } from "@/components/marketing/marketing-se
 import { MarketingMappedServiceCard } from "@/components/marketing/marketing-mapped-service-card";
 import { MarketingFastSearch } from "@/components/marketing/marketing-fast-search";
 import { MarketingBlacklistModal } from "@/components/marketing/marketing-blacklist-modal";
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from "@/components/ui/dropdown-menu";
 import { formatDistance } from "@/lib/distance";
 import { resolveMarketingCategoryIcon, resolveMarketingSubCategoryIcon } from "@/lib/marketing-category-icon";
 
@@ -113,6 +113,10 @@ const PROVIDER_TYPE_COLORS: Record<string, string> = {
 };
 function providerTypeLabel(type: string) { return PROVIDER_TYPE_LABELS[type] ?? type; }
 function providerTypeColor(type: string) { return PROVIDER_TYPE_COLORS[type] ?? "bg-gray-100 text-gray-700"; }
+// Rating filter thresholds (task: "Synchronize All Filters...") — the Notes
+// Select's candidate values; still a fixed, meaningful set of thresholds (not
+// a taxonomy), but only offered when at least one eligible service meets it.
+const RATING_THRESHOLDS = ["4.5", "4.7", "4.9"];
 
 // ── Marketing Store card/section ────────────────────────────────────────────
 // Mirrors print-page.tsx's PrintStoreCardTile/PrintStoresSection (itself
@@ -203,9 +207,15 @@ function MarketingStoreCardTile({ company, onClick, isDark }: {
   );
 }
 
-function MarketingStoresSection({ companies, categoryId, search, onSelect, isDark }: {
+function MarketingStoresSection({ companies, eligibleAgencyIds, hasFacetFilters, search, onSelect, isDark }: {
   companies: MarketingCompanyListCard[];
-  categoryId: string;
+  // Real marketingUserId mapping from the eligible, facet-filtered SERVICE
+  // cards (task: "Fix Company/Agency Filtering...") — an agency stays
+  // visible only when it has at least one mapped service matching the
+  // active category/sous-catégorie/type/note/ville filters, never via its
+  // own self-declared `categories` field.
+  eligibleAgencyIds: Set<number>;
+  hasFacetFilters: boolean;
   // Unify Service and Store Search + Remove Navbar Search Inputs — same query
   // as the services search below, matched against this agency's own name/
   // description, so an agency is discoverable even when none of its own
@@ -220,13 +230,13 @@ function MarketingStoresSection({ companies, categoryId, search, onSelect, isDar
 
   const filtered = useMemo(() => {
     let list = companies;
-    if (categoryId) list = list.filter((c) => c.categories.some((cat: string) => cat.toLowerCase() === categoryId.toLowerCase()));
+    if (hasFacetFilters) list = list.filter((c) => eligibleAgencyIds.has(c.userId));
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter((c) => c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q));
     }
     return list;
-  }, [companies, categoryId, search]);
+  }, [companies, eligibleAgencyIds, hasFacetFilters, search]);
 
   if (!filtered.length) return null;
   const showToggle = filtered.length > INITIAL_LIMIT;
@@ -421,7 +431,10 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   // subCategories list is already scoped to that service's single parent category, so
   // matching by plain name is unambiguous — see shared/schema.ts marketingServices
   // comment on subCategories).
-  const [filterSubCategories, setFilterSubCategories] = useState<string[]>([]);
+  // Single-selection (task: "...and Single-Selection Picklists") — was a
+  // multi-select array; a Coffee Owner now picks one sous-catégorie at a
+  // time, same as every other filter on this page.
+  const [filterSubCategory, setFilterSubCategory] = useState("");
   const [detailServiceId, setDetailServiceId] = useState<number | null>(null);
   const [detailAgencyId, setDetailAgencyId] = useState<number | null>(null);
   const [quoteProvider, setQuoteProvider] = useState<MarketingMarketplaceCard | null>(null);
@@ -431,14 +444,19 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   const { data: taxonomy = [] } = useMarketingTaxonomy();
   const { data: subcategoryTaxonomy = [] } = useMarketingSubCategoryTaxonomy();
   const { data: marketingCompanies = [] } = useMarketingCompanies();
-  // /marketing now maps one card per published SERVICE (Agency → Multiple Services),
-  // mirroring Academy's /academy (one card per formation, not per academy).
-  const { data: services = [], isLoading } = useMarketingServices({
-    search: search.trim() || undefined,
-    category: selectedService || undefined,
-    profileType: filterType || undefined,
-    location: filterLocation || undefined,
-  });
+  // Fetch the FULL eligible service set once (task: "Synchronize All Filters
+  // and Display Only Options With Matching Results") — search/category/
+  // profileType/location used to be passed straight to the server, so the
+  // client only ever held ONE already-filtered combination: Villes/Types
+  // couldn't reflect alternatives once a location/type was active (they'd
+  // only ever list the one currently selected), and category pills /
+  // Sous-catégories came from the global admin taxonomy regardless of
+  // whether any eligible service actually matched. The endpoint already
+  // supports an unfiltered call (confirmed in server/storage.ts
+  // getPublishedMarketingServices — every filter is optional), so filtering
+  // moves client-side, matching /products'/'/academy's own architecture and
+  // adding no extra requests.
+  const { data: services = [], isLoading } = useMarketingServices();
   // Agency list — kept only for Fast Search/Blacklist (still agency-centric browsing,
   // unchanged) and to hydrate the favorite hearts below (favorites stay agency-scoped).
   const { data: providers = [] } = useMarketingProfiles();
@@ -466,58 +484,147 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
     syncMarketingService(serviceFavoriteIds, services);
   }, [serviceFavoriteIds, services, syncMarketingService]);
 
-  const allLocations = useMemo(() => Array.from(new Set(services.map((s) => s.agencyLocation).filter(Boolean))).sort(), [services]);
-
-  const filteredServices = useMemo(() => {
-    let list = services;
-    if (filterRating) { const min = parseFloat(filterRating) * 10; list = list.filter((s) => s.rating >= min); }
-    // Multiple selected subcategories use OR semantics (match any one of them) — same
-    // convention as the Maintenance marketplace's own multi-select Sous-compétences filter.
-    if (filterSubCategories.length > 0) list = list.filter((s) => filterSubCategories.some((name) => s.subCategories?.includes(name)));
-    if (sortBy === "price_asc") list = [...list].sort((a, b) => a.startingPriceInCents - b.startingPriceInCents);
-    if (sortBy === "price_desc") list = [...list].sort((a, b) => b.startingPriceInCents - a.startingPriceInCents);
-    return list;
-  }, [services, filterRating, filterSubCategories, sortBy]);
-
   // Resolved via the one shared lib/marketing-category-icon.ts helper — reused
   // here, by the filter strip below, and by the Store Details page, so no page
-  // ever invents a second icon mapping.
+  // ever invents a second icon mapping. Taxonomy is now used ONLY for icon
+  // lookups — the SELECTABLE category/sous-catégorie values come from
+  // eligible `services` below, never from this global admin-configured list.
   const categoryIconByName = useMemo(() => {
     const map = new Map<string, string>();
     for (const cat of taxonomy) map.set(cat.name, resolveMarketingCategoryIcon(cat.name, taxonomy));
     return map;
   }, [taxonomy]);
 
-  // Keep Sous-catégories Filters Always Visible — options scoped to the selected parent
-  // category when one is active, or the union across every category otherwise, so the
-  // picklist is never empty just because no parent is selected yet.
-  const subCategoryFilterOptions = useMemo(() => {
-    const selectedCategoryTaxonomy = taxonomy.find((c) => c.name === selectedService);
-    const rows = selectedService
-      ? subcategoryTaxonomy.filter((s) => s.categoryId === selectedCategoryTaxonomy?.id)
-      : subcategoryTaxonomy;
-    return rows.filter((s) => s.isActive && !s.isFrozen);
-  }, [subcategoryTaxonomy, taxonomy, selectedService]);
+  // ── Data-driven, cross-filter-aware option derivation ───────────────────────
+  // (task: "Synchronize All Filters...") — mirrors the /products/
+  // /maintenance fix: a single search-only base, then a `withoutDim` helper
+  // that narrows by every OTHER active filter but never by the dimension
+  // being derived.
+  const searchFiltered = useMemo(() => {
+    if (!search.trim()) return services;
+    const q = search.trim().toLowerCase();
+    return services.filter((s) => [s.category, s.description, s.agencyName, s.agencyLocation].join(" ").toLowerCase().includes(q));
+  }, [services, search]);
 
-  const hasFilters = !!(selectedService || search || filterRating || filterLocation || filterType || filterSubCategories.length > 0 || sortBy);
-
-  const resetFilters = () => {
-    setSelectedService(""); setSearch(""); setFilterRating(""); setFilterLocation(""); setFilterType(""); setFilterSubCategories([]); setSortBy("");
+  type MarketingDim = "category" | "subCategories" | "profileType" | "rating" | "location";
+  const withoutDim = (exclude: MarketingDim) => {
+    let list = searchFiltered;
+    if (exclude !== "category" && selectedService) list = list.filter((s) => s.category.toLowerCase() === selectedService.toLowerCase());
+    if (exclude !== "subCategories" && filterSubCategory) list = list.filter((s) => s.subCategories?.includes(filterSubCategory));
+    if (exclude !== "profileType" && filterType) list = list.filter((s) => s.agencyProfileType === filterType);
+    if (exclude !== "rating" && filterRating) { const min = parseFloat(filterRating) * 10; list = list.filter((s) => s.rating >= min); }
+    if (exclude !== "location" && filterLocation) list = list.filter((s) => s.agencyLocation === filterLocation);
+    return list;
   };
 
-  // Selecting (or switching) a parent category keeps only the selected subcategories
-  // that still belong to it (via the Admin taxonomy's categoryId relationship) — it
-  // never blanket-clears the whole selection, mirroring the Maintenance marketplace's
-  // own selectCategory behavior.
+  // Category pills — real categories actually represented by an eligible,
+  // currently matching service (root cause: previously the full admin
+  // taxonomy list regardless of whether any service used that category).
+  const categoryOptions = useMemo(() => {
+    const set = new Set<string>();
+    withoutDim("category").forEach((s) => { if (s.category) set.add(s.category); });
+    return Array.from(set);
+  }, [searchFiltered, filterSubCategory, filterType, filterRating, filterLocation]);
+
+  // Sous-catégories — same fix: derived from services' own real
+  // `subCategories` field instead of the global admin taxonomy, still scoped
+  // to the selected parent category (that scoping now comes naturally from
+  // withoutDim already applying selectedService).
+  const subCategoryFilterOptions = useMemo(() => {
+    const present = new Set<string>();
+    withoutDim("subCategories").forEach((s) => (s.subCategories ?? []).forEach((name) => present.add(name)));
+    return subcategoryTaxonomy.filter((s) => s.isActive && !s.isFrozen && present.has(s.name));
+  }, [searchFiltered, selectedService, filterType, filterRating, filterLocation, subcategoryTaxonomy]);
+
+  // Types — real profileType values present among eligible services, not a
+  // hardcoded 3-item enum.
+  const typeOptions = useMemo(() => {
+    const set = new Set<string>();
+    withoutDim("profileType").forEach((s) => { if (s.agencyProfileType) set.add(s.agencyProfileType); });
+    return Array.from(set);
+  }, [searchFiltered, selectedService, filterSubCategory, filterRating, filterLocation]);
+
+  // Notes — only offer a rating threshold that at least one eligible service
+  // (under the other active filters) actually meets.
+  const ratingOptions = useMemo(() => {
+    const base = withoutDim("rating");
+    return RATING_THRESHOLDS.filter((v) => base.some((s) => s.rating >= parseFloat(v) * 10));
+  }, [searchFiltered, selectedService, filterSubCategory, filterType, filterLocation]);
+
+  const allLocations = useMemo(() => {
+    const set = new Set<string>();
+    withoutDim("location").forEach((s) => { if (s.agencyLocation) set.add(s.agencyLocation); });
+    return Array.from(set).sort();
+  }, [searchFiltered, selectedService, filterSubCategory, filterType, filterRating]);
+
+  // Facet-only (category/sous-catégorie/type/note/ville, NOT search) subset of
+  // the eligible services — used to derive which marketing agencies actually
+  // have a matching mapped service (task: "Fix Company/Agency Filtering...
+  // and Maintenance Category–Subcategory Mapping"), kept separate from
+  // `filteredServices` below so an agency's own name/description still
+  // matches `search` even when none of its SERVICE names do
+  // (MarketingStoresSection's existing, preserved search behavior).
+  const facetFilteredServices = useMemo(() => {
+    let list = services;
+    if (selectedService) list = list.filter((s) => s.category.toLowerCase() === selectedService.toLowerCase());
+    if (filterType) list = list.filter((s) => s.agencyProfileType === filterType);
+    if (filterLocation) list = list.filter((s) => s.agencyLocation === filterLocation);
+    if (filterRating) { const min = parseFloat(filterRating) * 10; list = list.filter((s) => s.rating >= min); }
+    if (filterSubCategory) list = list.filter((s) => s.subCategories?.includes(filterSubCategory));
+    return list;
+  }, [services, selectedService, filterType, filterLocation, filterRating, filterSubCategory]);
+
+  // A marketing agency must not remain visible merely because its own record
+  // exists — it must have at least one mapped service matching the active
+  // facet filters (real marketingUserId mapping already present on every
+  // service card, never an agency's own self-declared field).
+  const eligibleAgencyIds = useMemo(() => new Set(facetFilteredServices.map((s) => s.marketingUserId)), [facetFilteredServices]);
+  const hasFacetFilters = !!(selectedService || filterType || filterLocation || filterRating || filterSubCategory);
+
+  const filteredServices = useMemo(() => {
+    let list = facetFilteredServices;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((s) => [s.category, s.description, s.agencyName, s.agencyLocation].join(" ").toLowerCase().includes(q));
+    }
+    if (sortBy === "price_asc") list = [...list].sort((a, b) => a.startingPriceInCents - b.startingPriceInCents);
+    if (sortBy === "price_desc") list = [...list].sort((a, b) => b.startingPriceInCents - a.startingPriceInCents);
+    return list;
+  }, [facetFilteredServices, search, sortBy]);
+
+  // Reconcile existing selections that a sibling filter change just made
+  // invalid — clears only the one no longer compatible, never resets
+  // unrelated filters; each effect only ever clears (never sets a new
+  // value), so this can't loop.
+  useEffect(() => { if (selectedService && !categoryOptions.includes(selectedService)) setSelectedService(""); }, [categoryOptions]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (filterSubCategory && !subCategoryFilterOptions.some((o) => o.name === filterSubCategory)) setFilterSubCategory(""); }, [subCategoryFilterOptions]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (filterType && !typeOptions.includes(filterType)) setFilterType(""); }, [typeOptions]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (filterRating && !ratingOptions.includes(filterRating)) setFilterRating(""); }, [ratingOptions]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (filterLocation && !allLocations.includes(filterLocation)) setFilterLocation(""); }, [allLocations]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const hasFilters = !!(selectedService || search || filterRating || filterLocation || filterType || filterSubCategory || sortBy);
+
+  const resetFilters = () => {
+    setSelectedService(""); setSearch(""); setFilterRating(""); setFilterLocation(""); setFilterType(""); setFilterSubCategory(""); setSortBy("");
+  };
+
+  // Selecting (or switching) a parent category keeps the selected subcategory
+  // only if it still belongs to it (via the Admin taxonomy's categoryId
+  // relationship) — it never blanket-clears an otherwise-still-compatible
+  // selection, mirroring the Maintenance marketplace's own selectCategory
+  // behavior.
   const selectCategoryFilter = (categoryName: string) => {
     setSelectedService(categoryName);
     if (!categoryName) return;
     const categoryRow = taxonomy.find((c) => c.name === categoryName);
     const validNames = new Set(subcategoryTaxonomy.filter((s) => s.categoryId === categoryRow?.id).map((s) => s.name));
-    setFilterSubCategories((prev) => prev.filter((name) => validNames.has(name)));
+    setFilterSubCategory((prev) => (validNames.has(prev) ? prev : ""));
   };
-  const toggleSubCategoryFilter = (name: string) => {
-    setFilterSubCategories((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
+  // Single-selection (task: "...and Single-Selection Picklists") — selecting
+  // the same value again clears it (same "toggle off" affordance the old
+  // multi-select checkbox had), selecting a different value replaces it.
+  const selectSubCategoryFilter = (name: string) => {
+    setFilterSubCategory((prev) => (prev === name ? "" : name));
   };
 
   const averageRating = services.length > 0 ? services.reduce((s, v) => s + v.rating, 0) / services.length / 10 : 0;
@@ -620,15 +727,15 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
                   <span>All</span>
                 </button>
               </div>
-              {taxonomy.filter((c) => c.isActive && !c.isFrozen).map((cat) => (
-                <div key={cat.id} className={`flex rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
+              {categoryOptions.map((catName) => (
+                <div key={catName} className={`flex rounded-2xl p-1 shrink-0 ${t.switcherBg}`}>
                   <button
-                    onClick={() => selectCategoryFilter(selectedService === cat.name ? "" : cat.name)}
-                    data-testid={`button-service-cat-${cat.name}`}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-[11px] font-semibold ${selectedService === cat.name ? t.switcherActive : t.switcherInactive}`}
+                    onClick={() => selectCategoryFilter(selectedService === catName ? "" : catName)}
+                    data-testid={`button-service-cat-${catName}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all text-[11px] font-semibold ${selectedService === catName ? t.switcherActive : t.switcherInactive}`}
                   >
-                    <span className="text-base leading-none">{categoryIconByName.get(cat.name)}</span>
-                    <span className="max-w-[72px] truncate">{cat.name}</span>
+                    <span className="text-base leading-none">{categoryIconByName.get(catName)}</span>
+                    <span className="max-w-[72px] truncate">{catName}</span>
                   </button>
                 </div>
               ))}
@@ -678,7 +785,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
                   className={`h-7 text-xs rounded-full px-3 w-auto min-w-[150px] shrink-0 inline-flex items-center justify-between gap-1.5 border ${t.inputBg}`}
                   data-testid="select-marketing-subcategory"
                 >
-                  {filterSubCategories.length > 0 ? `Sous-catégories (${filterSubCategories.length})` : "Sous-catégories"}
+                  {filterSubCategory || "Sous-catégories"}
                 </button>
               </DropdownMenuTrigger>
               {/* Reduce Subcategory Picklist Scroller Height — caps the list at a
@@ -688,7 +795,10 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
                   visible scrollbar, scroll still works) — same cross-browser
                   hide-but-keep-scrolling combo already used by this very filter
                   bar's own horizontal chip row just above ([&::-webkit-scrollbar]:hidden
-                  + scrollbarWidth: "none"), applied here to vertical scroll instead. */}
+                  + scrollbarWidth: "none"), applied here to vertical scroll instead.
+                  Single-selection (task: "...and Single-Selection Picklists") — a
+                  RadioGroup/RadioItem pair replaces the old CheckboxItem array, same
+                  dropdown shell/styling, exactly one value selectable at a time. */}
               <DropdownMenuContent
                 className={`${t.selectContent} max-h-56 overflow-y-auto [&::-webkit-scrollbar]:hidden`}
                 style={{ scrollbarWidth: "none" }}
@@ -696,16 +806,22 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               >
                 {subCategoryFilterOptions.length === 0 ? (
                   <div className="px-2 py-1.5 text-xs text-muted-foreground">Aucune sous-catégorie configurée</div>
-                ) : subCategoryFilterOptions.map((sub) => (
-                  <DropdownMenuCheckboxItem
-                    key={sub.id}
-                    checked={filterSubCategories.includes(sub.name)}
-                    onCheckedChange={() => toggleSubCategoryFilter(sub.name)}
-                    data-testid={`checkbox-marketing-subcategory-${sub.id}`}
-                  >
-                    {resolveMarketingSubCategoryIcon(sub.name, subcategoryTaxonomy)} {sub.name}
-                  </DropdownMenuCheckboxItem>
-                ))}
+                ) : (
+                  <DropdownMenuRadioGroup value={filterSubCategory} onValueChange={selectSubCategoryFilter}>
+                    <DropdownMenuRadioItem value="" data-testid="radio-marketing-subcategory-all">
+                      Toutes les sous-catégories
+                    </DropdownMenuRadioItem>
+                    {subCategoryFilterOptions.map((sub) => (
+                      <DropdownMenuRadioItem
+                        key={sub.id}
+                        value={sub.name}
+                        data-testid={`radio-marketing-subcategory-${sub.id}`}
+                      >
+                        {resolveMarketingSubCategoryIcon(sub.name, subcategoryTaxonomy)} {sub.name}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
             <Select value={filterType || "__all__"} onValueChange={(v) => setFilterType(v === "__all__" ? "" : v)}>
@@ -714,9 +830,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               </SelectTrigger>
               <SelectContent className={t.selectContent}>
                 <SelectItem value="__all__">Types</SelectItem>
-                <SelectItem value="Agency">Agence</SelectItem>
-                <SelectItem value="Freelancer">Freelancer</SelectItem>
-                <SelectItem value="Studio">Studio</SelectItem>
+                {typeOptions.map((v) => <SelectItem key={v} value={v}>{providerTypeLabel(v)}</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterRating || "__all__"} onValueChange={(v) => setFilterRating(v === "__all__" ? "" : v)}>
@@ -725,9 +839,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               </SelectTrigger>
               <SelectContent className={t.selectContent}>
                 <SelectItem value="__all__">Notes</SelectItem>
-                <SelectItem value="4.5">4.5+</SelectItem>
-                <SelectItem value="4.7">4.7+</SelectItem>
-                <SelectItem value="4.9">4.9+</SelectItem>
+                {ratingOptions.map((v) => <SelectItem key={v} value={v}>{v}+</SelectItem>)}
               </SelectContent>
             </Select>
             <Select value={filterLocation || "__all__"} onValueChange={(v) => setFilterLocation(v === "__all__" ? "" : v)}>
@@ -763,7 +875,8 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
       <div className="max-w-7xl mx-auto px-4 py-8">
         <MarketingStoresSection
           companies={marketingCompanies}
-          categoryId={selectedService}
+          eligibleAgencyIds={eligibleAgencyIds}
+          hasFacetFilters={hasFacetFilters}
           search={search}
           onSelect={(agencyId) => navigate(`/marketing/stores/${agencyId}`)}
           isDark={isDark}

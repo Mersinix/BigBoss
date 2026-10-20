@@ -235,9 +235,15 @@ function PrintStoreCardTile({ company, onClick, isDark }: {
   );
 }
 
-function PrintStoresSection({ companies, categoryId, search, onSelect, isDark }: {
+function PrintStoresSection({ companies, eligiblePrinterIds, hasFacetFilters, search, onSelect, isDark }: {
   companies: PrintCompanyListCard[];
-  categoryId: string;
+  // Real printerId mapping from the eligible, facet-filtered SERVICE cards
+  // (task: "Fix Company/Agency Filtering...") — a company stays visible only
+  // when it has at least one mapped service matching the active category/
+  // sous-catégorie/société/matière/livraison filters, never via its own
+  // self-declared `categories` field.
+  eligiblePrinterIds: Set<number>;
+  hasFacetFilters: boolean;
   // Unify Service and Store Search + Remove Navbar Search Inputs — same query
   // as the catalog search below, matched against this printer's own name/
   // description, so a company is discoverable even when none of its own
@@ -252,13 +258,13 @@ function PrintStoresSection({ companies, categoryId, search, onSelect, isDark }:
 
   const filtered = useMemo(() => {
     let list = companies;
-    if (categoryId) list = list.filter((c) => c.categories.some((cat) => cat.toLowerCase() === categoryId.toLowerCase()));
+    if (hasFacetFilters) list = list.filter((c) => eligiblePrinterIds.has(c.userId));
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter((c) => c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q));
     }
     return list;
-  }, [companies, categoryId, search]);
+  }, [companies, eligiblePrinterIds, hasFacetFilters, search]);
 
   if (!filtered.length) return null;
   const showToggle = filtered.length > INITIAL_LIMIT;
@@ -401,30 +407,59 @@ function PrintFilterBar({ cards, filters, onChange, onReset, categoryId, isDark,
   const searchInputRef = useRef<HTMLInputElement>(null);
   const hasActive = Object.values(filters).some(Boolean) || !!search;
 
+  // Cross-filter-aware, category/search-scoped option derivation (task:
+  // "Synchronize All Filters and Display Only Options With Matching
+  // Results") — `cards` here is the RAW, unfiltered catalog (root cause: this
+  // bar never applied categoryId OR search to 3 of its 4 facets, and never
+  // excluded a facet's own dimension when deriving the others, so e.g.
+  // Sociétés/Matières/Livraisons never actually narrowed in response to
+  // category or to each other). categoryAndSearchFiltered mirrors the
+  // parent's own `filtered` search predicate exactly.
+  const categoryAndSearchFiltered = useMemo(() => {
+    let list = cards;
+    if (categoryId) list = list.filter((c) => c.category === categoryId);
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((c) =>
+        c.name.toLowerCase().includes(q) || c.description.toLowerCase().includes(q) ||
+        c.category.toLowerCase().includes(q) || c.subCategory.toLowerCase().includes(q) || c.printerName.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [cards, categoryId, search]);
+
+  const withoutSelf = (exclude: keyof PrintFilters) => {
+    let list = categoryAndSearchFiltered;
+    if (exclude !== "subCategoryId" && filters.subCategoryId) list = list.filter((c) => c.subCategory === filters.subCategoryId);
+    if (exclude !== "brandId" && filters.brandId) list = list.filter((c) => String(c.printerId) === filters.brandId);
+    if (exclude !== "material" && filters.material) list = list.filter((c) => c.materials.includes(filters.material));
+    if (exclude !== "deliveryTime" && filters.deliveryTime) list = list.filter((c) => bucketLabelFor(c.productionTimeDays) === filters.deliveryTime);
+    return list;
+  };
+
   const subCategories = useMemo(() => {
     const set = new Set<string>();
-    cards.forEach((c) => {
-      if (c.subCategory && (!categoryId || c.category === categoryId)) set.add(c.subCategory);
-    });
+    withoutSelf("subCategoryId").forEach((c) => { if (c.subCategory) set.add(c.subCategory); });
     return Array.from(set);
-  }, [cards, categoryId]);
+  }, [categoryAndSearchFiltered, filters.brandId, filters.material, filters.deliveryTime]);
 
   const printers = useMemo(() => {
     const map = new Map<string, string>();
-    cards.forEach((c) => map.set(String(c.printerId), c.printerName));
+    withoutSelf("brandId").forEach((c) => map.set(String(c.printerId), c.printerName));
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [cards]);
+  }, [categoryAndSearchFiltered, filters.subCategoryId, filters.material, filters.deliveryTime]);
 
   const materials = useMemo(() => {
     const set = new Set<string>();
-    cards.forEach((c) => c.materials.forEach((m) => set.add(m)));
+    withoutSelf("material").forEach((c) => c.materials.forEach((m) => set.add(m)));
     return Array.from(set);
-  }, [cards]);
+  }, [categoryAndSearchFiltered, filters.subCategoryId, filters.brandId, filters.deliveryTime]);
 
   const deliveryBuckets = useMemo(() => {
-    const set = new Set(cards.map((c) => bucketLabelFor(c.productionTimeDays)));
+    const base = withoutSelf("deliveryTime");
+    const set = new Set(base.map((c) => bucketLabelFor(c.productionTimeDays)));
     return PRODUCTION_TIME_BUCKETS.map((b) => b.label).filter((l) => set.has(l));
-  }, [cards]);
+  }, [categoryAndSearchFiltered, filters.subCategoryId, filters.brandId, filters.material]);
 
   // Previously hid the whole bar (search included) whenever there were no
   // facets to filter by — now only hides it when there's nothing to search
@@ -590,8 +625,31 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
   // /print's catalog is already fetched in full and filtered in-memory.
   const searchQuery = printSearch.trim().toLowerCase();
 
-  const filtered = useMemo(() => {
+  // Facet-only (category/sous-catégorie/société/matière/livraison, NOT search)
+  // subset of the eligible catalog — used to derive which printing companies
+  // actually have a matching mapped service (task: "Fix Company/Agency
+  // Filtering..."), kept separate from `filtered` below so a printer's own
+  // name/description still matches `search` even when none of its SERVICE
+  // names do (PrintStoresSection's existing, preserved search behavior).
+  const facetFiltered = useMemo(() => {
     let list = cards;
+    if (categoryId) list = list.filter((c) => c.category === categoryId);
+    if (filters.subCategoryId) list = list.filter((c) => c.subCategory === filters.subCategoryId);
+    if (filters.brandId) list = list.filter((c) => String(c.printerId) === filters.brandId);
+    if (filters.material) list = list.filter((c) => c.materials.includes(filters.material));
+    if (filters.deliveryTime) list = list.filter((c) => bucketLabelFor(c.productionTimeDays) === filters.deliveryTime);
+    return list;
+  }, [cards, categoryId, filters.subCategoryId, filters.brandId, filters.material, filters.deliveryTime]);
+
+  // A printing company must not remain visible merely because its own record
+  // exists — it must have at least one mapped service matching the active
+  // facet filters (real printerId mapping already present on every card,
+  // never a company's own self-declared field).
+  const eligiblePrinterIds = useMemo(() => new Set(facetFiltered.map((c) => c.printerId)), [facetFiltered]);
+  const hasFacetFilters = !!(categoryId || filters.subCategoryId || filters.brandId || filters.material || filters.deliveryTime);
+
+  const filtered = useMemo(() => {
+    let list = facetFiltered;
 
     if (searchQuery) {
       list = list.filter((c) =>
@@ -602,18 +660,62 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
         c.printerName.toLowerCase().includes(searchQuery)
       );
     }
-    if (categoryId) list = list.filter((c) => c.category === categoryId);
-    if (filters.subCategoryId) list = list.filter((c) => c.subCategory === filters.subCategoryId);
-    if (filters.brandId) list = list.filter((c) => String(c.printerId) === filters.brandId);
-    if (filters.material) list = list.filter((c) => c.materials.includes(filters.material));
-    if (filters.deliveryTime) list = list.filter((c) => bucketLabelFor(c.productionTimeDays) === filters.deliveryTime);
     if (filters.sortBy === "price_asc") list = [...list].sort((a, b) => a.priceInCents - b.priceInCents);
     if (filters.sortBy === "price_desc") list = [...list].sort((a, b) => b.priceInCents - a.priceInCents);
 
     return list;
-  }, [cards, searchQuery, categoryId, filters]);
+  }, [facetFiltered, searchQuery, filters.sortBy]);
 
-  const updateFilter = (key: keyof PrintFilters, val: string) => setFilters((p) => ({ ...p, [key]: val }));
+  // Filter synchronization (task: "Synchronize All Filters and Display Only
+  // Options With Matching Results") — mirrors the /products fix exactly:
+  // selecting a Sous-catégorie/Société/Matière/Livraison directly used to
+  // only ever touch `filters`, never `categoryId`. Print's subCategory is
+  // plain text (no FK — see the taxonomy comment above), so unlike /products'
+  // sub-category it has no single authoritative parent; all 4 facets here
+  // resolve the category the same way (via the real matching cards), never
+  // arbitrarily forcing one when it's genuinely ambiguous.
+  const PRINT_DIMS: (keyof PrintFilters)[] = ["subCategoryId", "brandId", "material", "deliveryTime"];
+  const matchesPrintDim = (c: PrintCatalogCard, key: keyof PrintFilters, val: string): boolean => {
+    if (key === "subCategoryId") return c.subCategory === val;
+    if (key === "brandId") return String(c.printerId) === val;
+    if (key === "material") return c.materials.includes(val);
+    if (key === "deliveryTime") return bucketLabelFor(c.productionTimeDays) === val;
+    return true;
+  };
+
+  const updateFilter = (key: keyof PrintFilters, val: string) => {
+    if (key === "sortBy" || !val || !PRINT_DIMS.includes(key)) {
+      setFilters((p) => ({ ...p, [key]: val }));
+      return;
+    }
+
+    const searchFiltered = searchQuery
+      ? cards.filter((c) =>
+          c.name.toLowerCase().includes(searchQuery) || c.description.toLowerCase().includes(searchQuery) ||
+          c.category.toLowerCase().includes(searchQuery) || c.subCategory.toLowerCase().includes(searchQuery) || c.printerName.toLowerCase().includes(searchQuery)
+        )
+      : cards;
+
+    const matches = searchFiltered.filter((c) => matchesPrintDim(c, key, val));
+    const distinctCats = new Set(matches.map((c) => c.category).filter(Boolean));
+    let resolvedCategoryId = categoryId;
+    if (distinctCats.size === 1) resolvedCategoryId = Array.from(distinctCats)[0];
+    else if (categoryId && !distinctCats.has(categoryId)) resolvedCategoryId = "";
+    if (resolvedCategoryId !== categoryId) setCategoryId(resolvedCategoryId);
+
+    setFilters((prev) => {
+      const next = { ...prev, [key]: val };
+      const categoryScoped = resolvedCategoryId ? searchFiltered.filter((c) => c.category === resolvedCategoryId) : searchFiltered;
+      for (const otherKey of PRINT_DIMS) {
+        if (otherKey === key) continue;
+        const otherVal = next[otherKey];
+        if (!otherVal) continue;
+        const stillCompatible = categoryScoped.some((c) => matchesPrintDim(c, key, val) && matchesPrintDim(c, otherKey, otherVal));
+        if (!stillCompatible) next[otherKey] = "";
+      }
+      return next;
+    });
+  };
   // Resets only the facet filters — kept separate from search on purpose: the
   // category chip strip's own onSelect calls this while deliberately carrying
   // the current search text over into the new category (see its own comment
@@ -621,9 +723,11 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
   // the same reason search is — it's a "how do you want to view this list"
   // choice, not scoped to a particular category.
   const resetFilters = () => setFilters((p) => ({ subCategoryId: "", brandId: "", material: "", deliveryTime: "", sortBy: p.sortBy }));
-  // The Reset button (PrintFilterBar) clears everything, including search and
-  // sort — same "Reset clears search too" behavior as /academy's own Reset.
-  const resetAll = () => { setFilters({ subCategoryId: "", brandId: "", material: "", deliveryTime: "", sortBy: "" }); setPrintSearch(""); };
+  // The Reset button (PrintFilterBar) clears everything, including search,
+  // sort, AND the selected category (previously missing — same bug already
+  // fixed on /products' own Réinitialiser) — same "Reset clears everything"
+  // behavior as /academy's own Reset.
+  const resetAll = () => { setFilters({ subCategoryId: "", brandId: "", material: "", deliveryTime: "", sortBy: "" }); setPrintSearch(""); setCategoryId(""); };
 
   const isLoading = cardsLoading || categoriesLoading;
   const distinctPrinterCount = useMemo(() => new Set(cards.map((c) => c.printerId)).size, [cards]);
@@ -783,7 +887,8 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
         {!printCompaniesLoading && (
           <PrintStoresSection
             companies={printCompanies}
-            categoryId={categoryId}
+            eligiblePrinterIds={eligiblePrinterIds}
+            hasFacetFilters={hasFacetFilters}
             search={printSearch}
             onSelect={(printerId) => navigate(`/print/stores/${printerId}`)}
             isDark={isDark}

@@ -6157,3 +6157,282 @@ Admin Product Management de ne traiter que les cartes.
   interaction des cartes — même limite déjà signalée pour Admin Product
   Management, cohérente entre les trois pages concernées par cette série de
   tâches.
+
+---
+
+# Tâche : Coffee Owner Shop — Synchronisation complète des filtres produits
+
+## 1. Audit préalable et cause racine
+
+**Page** : `client/src/pages/cafe/browse-products.tsx` (`/products`). Deux
+états de filtre séparés : `categoryId` (piloté par la bande de catégories
+`CategoryStrip`) et `filters: FilterState` (`subCategoryId`/`brandId`/
+`flavorId`/`sizeId`/`sortBy`, piloté par le `FilterBar`), tous deux au niveau
+du composant parent.
+
+**Cause racine n°1 — aucune résolution de catégorie depuis les filtres
+secondaires** : `updateFilter` (avant correctif) faisait uniquement
+`setFilters((p) => ({ ...p, [key]: val }))` — sélectionner directement une
+Sous-catégorie, une Marque, une Saveur ou une Taille ne touchait jamais
+`categoryId`. Seule la bande de catégories (`CategoryStrip.onSelect`)
+appelait `setCategoryId` + `resetFilters()`, ce qui explique précisément le
+symptôme rapporté : « la sélection de catégorie fonctionne, la sélection
+directe d'un autre filtre non ».
+
+**Cause racine n°2 — options de filtre dérivées d'une seule base, aveugles
+aux filtres frères** : dans `FilterBar`, les 4 listes d'options
+(`subCategories`/`brands`/`flavors`/`sizes`) étaient toutes dérivées
+uniquement de `categoryProducts` (= produits filtrés par `categoryId` +
+recherche), sans jamais tenir compte des 3 AUTRES filtres secondaires déjà
+actifs. Résultat : sélectionner une Marque ne réduisait jamais les options de
+Saveur/Taille/Sous-catégorie, et réciproquement — chaque dropdown vivait dans
+sa propre bulle, déconnecté des sélections des autres.
+
+**Relations réelles confirmées en base** (aucune supposition codée en dur) :
+- Sous-catégorie → catégorie parente : relation directe et non ambiguë,
+  `sub_categories.category_id` (déjà chargée via `/api/subcategories`, déjà
+  utilisée sur cette page pour les icônes — réutilisée ici pour la résolution,
+  pas une seconde source).
+- Marque/Saveur/Taille → catégorie : **pas** de relation directe unique (ces
+  entités portent `subCategoryIds` pouvant couvrir plusieurs catégories) —
+  confirmé concrètement en base réelle : la marque « Illy » (id 3) a des
+  produits dans 4 catégories différentes (1, 2, 4, 6), tandis que « Nespresso »
+  (id 2) n'existe que dans la catégorie 1. La résolution doit donc se faire au
+  niveau des produits correspondants, jamais d'une table de correspondance
+  inventée.
+
+**Fichiers concernés** : un seul fichier, `browse-products.tsx` (composant
+`FilterBar` + composant parent par défaut) — aucun composant partagé avec
+d'autres comptes/pages boutique n'a été touché (ces pages ont chacune leur
+propre état de filtre indépendant, confirmé par les audits de tâches
+précédentes de cette session).
+
+## 2. Implémentation
+
+### A. Résolution de catégorie + réconciliation des filtres frères (`updateFilter`, composant parent)
+
+Nouvelle logique (remplace l'ancien one-liner) :
+- Le tri (`sortBy`) et l'effacement d'un filtre (`val === ""`) ne déclenchent
+  jamais de résolution de catégorie — comportement inchangé (Phase 7G/E).
+- **Sous-catégorie sélectionnée** : la catégorie parente réelle
+  (`allSubCategories.find(s => s.id === val)?.categoryId`) est **toujours**
+  appliquée — relation directe, jamais ambiguë (Phase 3).
+- **Marque/Saveur/Taille sélectionnée** : calcul de l'ensemble des produits
+  réels (filtrés par la recherche en cours) correspondant à cette sélection,
+  puis des catégories distinctes qu'ils couvrent :
+  - Une seule catégorie distincte → sélection automatique de cette catégorie
+    (Phases 4-6).
+  - Plusieurs catégories distinctes ET la catégorie actuellement sélectionnée
+    en fait partie → catégorie actuelle préservée sans y toucher (ne force
+    jamais un choix arbitraire parmi plusieurs valides).
+  - Plusieurs catégories distinctes ET la catégorie actuelle n'en fait **pas**
+    partie → catégorie effacée (résolution de conflit, Phase 7D) plutôt que
+    laissée dans un état contradictoire.
+  - Plusieurs catégories distinctes ET aucune catégorie actuelle → rien n'est
+    forcé, l'état ambigu est préservé tel quel (Phase 4/5/6).
+- Après résolution de la catégorie, les **autres filtres secondaires déjà
+  actifs** sont vérifiés un par un contre la nouvelle sélection + la catégorie
+  résolue : si un filtre frère n'a plus aucun produit correspondant en
+  commun avec la nouvelle sélection, il est effacé — lui seul, aucun autre
+  filtre non concerné n'est touché (Phase 7D, « clear only selections that
+  are no longer compatible »). Une seule passe, pas de récursivité ni de
+  boucle (Phase 8, « avoid infinite update loops »).
+
+### B. Dérivation des options de filtre « sans soi-même » (`FilterBar`)
+
+Nouvel helper interne `withoutSelf(excludeKey)` : part de `categoryProducts`
+(catégorie + recherche, inchangé) puis applique les 3 AUTRES filtres
+secondaires actifs (jamais celui qu'on dérive lui-même). Les 4 `useMemo`
+(`subCategories`/`brands`/`flavors`/`sizes`) utilisent chacun cette fonction
+en excluant leur propre dimension, avec les dépendances `useMemo` mises à jour
+en conséquence (les 3 filtres frères, pas le sien). Ceci respecte explicitement
+l'avertissement de la Phase 8 : ne jamais dériver un dropdown de produits déjà
+filtrés par ce même dropdown (sinon la valeur sélectionnée disparaîtrait de sa
+propre liste), tout en garantissant que chaque dropdown se resserre
+correctement en réponse aux 3 autres.
+
+Aucune autre logique (recherche, tri, pagination, Réinitialiser, bande de
+catégories, Packs, Stores) n'a été modifiée — ces sections consomment déjà le
+même état partagé (`categoryId`/`filters`) et bénéficient automatiquement de
+la correction sans changement de leur propre code.
+
+## 3. Garde-fous respectés
+
+- Aucune relation catégorie/sous-catégorie/marque/saveur/taille codée en dur —
+  toute résolution utilise soit la relation réelle `sub_categories.category_id`
+  (sous-catégorie), soit les catégories réellement présentes sur les produits
+  correspondants (marque/saveur/taille), jamais une table de correspondance
+  inventée.
+- Comportement existant de la sélection de catégorie (Phase 7A, explicitement
+  qualifié de « correct » par l'énoncé de la tâche) non modifié : elle
+  continue de réinitialiser tous les filtres secondaires exactement comme
+  avant.
+- Comportement de Tout/Réinitialiser/recherche/tri non modifié — aucune de ces
+  fonctions ne passe par le nouveau chemin de résolution (gardé explicitement
+  hors de la condition qui déclenche la résolution).
+- Aucune nouvelle route API, aucun nouveau composant, aucune dépendance
+  ajoutée — uniquement de la logique côté client sur des données déjà
+  chargées (`allProducts`, `allSubCategories`), toutes deux déjà présentes sur
+  cette page avant cette tâche.
+- Icônes, styles, mise en page, cartes produit, modales de détail, favoris,
+  panier, règles de disponibilité fournisseur — tous inchangés (aucun fichier
+  autre que `browse-products.tsx` n'a été touché).
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- **Simulation en données réelles** (script Node exécutant exactement la même
+  logique que `updateFilter`/`withoutSelf`, contre un export live de
+  `/api/marketplace` et `/api/subcategories`, puis nettoyé après coup) :
+  1. Sélection directe d'une sous-catégorie réelle (« Robusta Beans », id 2)
+     sans catégorie préalable → résout correctement vers sa vraie catégorie
+     parente (1), confirmée en base.
+  2. Sélection d'une marque réelle non-ambiguë (« Nespresso », présente
+     uniquement en catégorie 1) → catégorie auto-sélectionnée (1).
+  3. Sélection d'une marque réelle ambiguë (« Illy », présente dans 4
+     catégories réelles : 1, 2, 4, 6), sans catégorie préalable → catégorie
+     reste non définie (`""`), aucun choix arbitraire — conforme à la Phase 4.
+  4. Même marque ambiguë avec une catégorie préalable **incompatible** (3,
+     absente de son périmètre réel) → catégorie effacée (conflit résolu).
+  5. Même marque ambiguë avec une catégorie préalable **compatible** (1,
+     présente dans son périmètre réel) → catégorie préservée sans y toucher.
+  6. Sélection d'une marque non-ambiguë puis d'une saveur compatible → la
+     marque reste sélectionnée (aucun effacement inutile d'une sélection
+     encore valide).
+  7. Puis sélection d'une saveur réelle incompatible avec cette marque
+     (« Vanilla », jamais associée à « Nespresso » dans les données réelles)
+     → la marque est effacée (conflit détecté et résolu), la catégorie reste
+     correcte car toujours compatible avec la nouvelle saveur.
+  Les 7 scénarios produisent exactement le résultat attendu par les Phases
+  3-7 de la tâche.
+- `git status --short` final : uniquement `browse-products.tsx` modifié pour
+  cette tâche.
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour vérifier visuellement l'enchaînement
+  complet des 16 scénarios de la section Vérification de la tâche (clics
+  successifs sur les dropdowns, absence de rechargement de page, absence de
+  requête réseau dupliquée) — la logique elle-même a été vérifiée directement
+  contre des données réelles (section 4), et aucune requête réseau nouvelle
+  n'a été introduite (`allProducts`/`allSubCategories` étaient déjà chargés
+  une fois par cette page avant cette tâche ; la résolution n'ajoute que du
+  calcul client sur des données déjà en mémoire). Une vérification manuelle
+  des 16 scénarios dans un navigateur réel reste recommandée avant mise en
+  production.
+- La résolution de conflit entre filtres frères (section 2A, dernier point)
+  effectue une seule passe de vérification par sélection, comparée uniquement
+  à la nouvelle sélection (pas à une revalidation croisée complète de toutes
+  les combinaisons restantes) — choix délibéré pour rester prévisible et
+  éviter toute boucle (Phase 8), cohérent avec la façon dont la tâche décrit
+  chaque scénario comme « une nouvelle sélection peut invalider une sélection
+  existante », jamais comme une revalidation N-à-N généralisée.
+
+---
+
+# Tâche : Coffee Owner Shop — Corriger Réinitialiser pour qu'il efface aussi la catégorie
+
+## 1. Audit préalable et cause racine
+
+Dans `client/src/pages/cafe/browse-products.tsx`, le bouton **Réinitialiser**
+du `FilterBar` appelle `onReset`, câblé sur `resetAll` (composant parent) :
+
+```tsx
+const resetAll = () => { resetFilters(); setSearch(""); };
+```
+
+`resetFilters()` ne touche que `filters` (`subCategoryId`/`brandId`/
+`flavorId`/`sizeId`/`sortBy`) — jamais `categoryId`, qui est un état React
+**séparé**, propre à la bande de catégories (`CategoryStrip`). C'est
+exactement la cause du symptôme rapporté : les 5 filtres du `FilterBar`
+reviennent bien à vide, mais la catégorie sélectionnée (ex. CAFE) reste
+affichée car rien ne la réinitialise.
+
+`resetFilters` ne pouvait pas être étendue directement pour y ajouter
+`categoryId = ""`, car elle est **réutilisée ailleurs** : la bande de
+catégories appelle `setCategoryId(id); resetFilters();` lors d'une sélection
+directe de catégorie — y ajouter l'effacement de `categoryId` aurait annulé
+la sélection qu'on vient tout juste de faire, à la ligne suivante. Le correctif
+devait donc être posé uniquement dans `resetAll` (le gestionnaire du bouton
+Réinitialiser), pas dans `resetFilters` elle-même.
+
+Confirmé que cette tâche est bien postérieure et indépendante de la tâche
+précédente « Synchronize All Product Filters » (toujours non committée) :
+`git diff` avant implémentation montre que toute la logique de synchronisation
+(`updateFilter`, `withoutSelf`, résolution de catégorie) reste intacte et
+n'a pas été touchée par ce correctif.
+
+## 2. Implémentation
+
+Un seul changement, dans `client/src/pages/cafe/browse-products.tsx` :
+
+```tsx
+// avant
+const resetAll = () => { resetFilters(); setSearch(""); };
+
+// après
+const resetAll = () => { resetFilters(); setSearch(""); setCategoryId(""); };
+```
+
+Conséquences automatiques, sans aucun autre changement de code :
+- `categoryId === ""` fait immédiatement réapparaître le pill « 🛍️ Tout »
+  comme actif dans `CategoryStrip` (son style actif est déjà conditionné par
+  `selected === ""`, confirmé par lecture directe de ce composant).
+- `categoryFiltered` (dérivé de `allProducts` + `search` + `categoryId`)
+  recalcule immédiatement vers l'ensemble complet des produits autorisés
+  (recherche déjà vidée par le même appel), sans restriction de catégorie.
+- `FilterBar` reçoit ce nouveau `categoryProducts` complet ; ses 4 listes
+  d'options (`subCategories`/`brands`/`flavors`/`sizes`, déjà corrigées par
+  la tâche précédente pour être mutuellement cohérentes) se recalculent
+  automatiquement vers leur état par défaut complet, puisque tous les filtres
+  secondaires sont également vides à ce stade.
+- Le tri revient à « Recommandé » par le même mécanisme déjà existant
+  (`filters.sortBy === ""` → affiché comme « Recommandé », comportement
+  inchangé).
+- Aucune requête réseau supplémentaire : aucune des données consommées
+  (`allProducts`, `allSubCategories`, `categories`) n'est re-fetchée, seul
+  l'état client est réinitialisé.
+
+## 3. Garde-fous respectés
+
+- Changement d'une seule ligne, dans un seul fichier — aucune redéfinition
+  des filtres ni de leur logique de synchronisation.
+- `resetFilters()` elle-même reste inchangée, donc le comportement de
+  sélection directe d'une catégorie (qui en dépend) reste identique à avant.
+- Toute la logique de synchronisation de la tâche précédente
+  (`updateFilter`, résolution de catégorie depuis sous-catégorie/marque/
+  saveur/taille, réconciliation des filtres frères, dérivation d'options
+  « sans soi-même ») reste strictement intacte — confirmé par `git diff`
+  avant/après ce correctif, qui ne montre que la ligne `resetAll` modifiée.
+- Aucun second bouton de réinitialisation introduit, aucun style modifié —
+  seul le comportement du bouton existant a changé.
+- Aucune route API, schéma, ou composant partagé avec d'autres pages touché.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- `git diff` sur `browse-products.tsx` avant implémentation : confirmé que
+  seule la ligne `resetAll` a changé, toute la logique de synchronisation de
+  la tâche précédente reste intacte (aucune régression introduite).
+- `git status --short` final : uniquement `browse-products.tsx` modifié pour
+  cette tâche (en plus de `analyse.md`).
+- Lecture de code confirmant la propagation automatique attendue : le style
+  actif de la pastille « Tout » dans `CategoryStrip` dépend bien de
+  `selected === ""` (donc de `categoryId`), et `categoryFiltered`/
+  `FilterBar` dépendent bien de `categoryId` dans leurs tableaux de
+  dépendances `useMemo` déjà en place — aucun changement supplémentaire requis
+  pour que la mise à jour se propage jusqu'à l'affichage.
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour cliquer effectivement sur
+  Réinitialiser et observer visuellement le retour à « 🛍️ Tout » et aux
+  listes de filtres complètes dans les 6 scénarios de vérification de la
+  tâche — le correctif a été vérifié par lecture directe des dépendances
+  React (`useMemo`/props) qui garantissent la propagation automatique de
+  `categoryId = ""` jusqu'à l'affichage, et par confirmation que la logique
+  de synchronisation préexistante n'a subi aucune régression. Une
+  vérification manuelle des 6 scénarios dans un navigateur réel reste
+  recommandée avant mise en production.

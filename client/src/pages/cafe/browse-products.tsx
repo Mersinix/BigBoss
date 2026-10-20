@@ -825,43 +825,59 @@ function FilterBar({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const hasActive = Object.values(filters).some(Boolean) || !!search;
 
+  // Cross-filter-aware option derivation (task: "Coffee Owner Shop:
+  // Synchronize All Product Filters") — each dropdown's options come from
+  // categoryProducts narrowed by every OTHER active secondary filter, but
+  // never by its own, so the currently selected value can never disappear
+  // from its own list while still correctly narrowing in response to its
+  // siblings (Phase 8's explicit warning against deriving a dropdown solely
+  // from a list already filtered by that same dropdown).
+  const withoutSelf = (excludeKey: keyof FilterState) => {
+    let list = categoryProducts;
+    if (excludeKey !== "subCategoryId" && filters.subCategoryId) list = list.filter((p) => String(p.subCategoryId) === filters.subCategoryId);
+    if (excludeKey !== "brandId" && filters.brandId) list = list.filter((p) => p.brandLabel && String(p.brandLabel.id) === filters.brandId);
+    if (excludeKey !== "flavorId" && filters.flavorId) list = list.filter((p) => (p.flavorLabels ?? []).some((fl) => String(fl.id) === filters.flavorId));
+    if (excludeKey !== "sizeId" && filters.sizeId) list = list.filter((p) => (p.sizeLabels ?? []).some((sl) => String(sl.id) === filters.sizeId));
+    return list;
+  };
+
   const subCategories = useMemo(() => {
     const map = new Map<string, string>();
-    categoryProducts.forEach((p) => {
+    withoutSelf("subCategoryId").forEach((p) => {
       if (p.subCategoryLabel?.id && p.subCategoryLabel?.name)
         map.set(String(p.subCategoryLabel.id), p.subCategoryLabel.name);
     });
     return Array.from(map.entries()).map(([id, name]) => ({ id, name, icon: subCategoryIconMap.get(Number(id)) ?? null }));
-  }, [categoryProducts, subCategoryIconMap]);
+  }, [categoryProducts, filters.brandId, filters.flavorId, filters.sizeId, subCategoryIconMap]);
 
   const brands = useMemo(() => {
     const map = new Map<string, string>();
-    categoryProducts.forEach((p) => {
+    withoutSelf("brandId").forEach((p) => {
       if (p.brandLabel?.id && p.brandLabel?.name)
         map.set(String(p.brandLabel.id), p.brandLabel.name);
     });
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [categoryProducts]);
+  }, [categoryProducts, filters.subCategoryId, filters.flavorId, filters.sizeId]);
 
   const flavors = useMemo(() => {
     const map = new Map<string, string>();
-    categoryProducts.forEach((p) => {
+    withoutSelf("flavorId").forEach((p) => {
       (p.flavorLabels ?? []).forEach((fl) => {
         if (fl.id && fl.name) map.set(String(fl.id), fl.name);
       });
     });
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [categoryProducts]);
+  }, [categoryProducts, filters.subCategoryId, filters.brandId, filters.sizeId]);
 
   const sizes = useMemo(() => {
     const map = new Map<string, string>();
-    categoryProducts.forEach((p) => {
+    withoutSelf("sizeId").forEach((p) => {
       (p.sizeLabels ?? []).forEach((sl) => {
         if (sl.id && sl.name) map.set(String(sl.id), sl.name);
       });
     });
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [categoryProducts]);
+  }, [categoryProducts, filters.subCategoryId, filters.brandId, filters.flavorId]);
 
   // Previously hid the whole bar (search included) whenever there were no
   // facets to filter by — now only hides it when there's nothing to search
@@ -1111,15 +1127,85 @@ export default function BrowseProducts() {
     }));
   }, [allProducts, listingPromotions]);
 
-  const updateFilter = (key: keyof FilterState, val: string) => setFilters((p) => ({ ...p, [key]: val }));
+  // Filter synchronization (task: "Coffee Owner Shop: Synchronize All Product
+  // Filters") — selecting a Sub-category/Brand/Flavor/Size directly used to
+  // only ever touch `filters`, never `categoryId`, and FilterBar's own option
+  // lists (see below) were derived purely from category+search, blind to the
+  // other active secondary filters. Root cause confirmed by reading both: no
+  // code path resolved a parent category from a sub-category/brand/flavor/size
+  // selection, and no dropdown excluded its own dimension while deriving its
+  // options from the others.
+  const SECONDARY_FILTER_DIMS: (keyof FilterState)[] = ["subCategoryId", "brandId", "flavorId", "sizeId"];
+  const matchesFilterDim = (p: MarketplaceProduct, key: keyof FilterState, val: string): boolean => {
+    if (key === "subCategoryId") return String(p.subCategoryId) === val;
+    if (key === "brandId") return !!p.brandLabel && String(p.brandLabel.id) === val;
+    if (key === "flavorId") return (p.flavorLabels ?? []).some((fl) => String(fl.id) === val);
+    if (key === "sizeId") return (p.sizeLabels ?? []).some((sl) => String(sl.id) === val);
+    return true;
+  };
+
+  const updateFilter = (key: keyof FilterState, val: string) => {
+    // Sorting never touches category or the other filters (Phase 7G).
+    if (key === "sortBy" || !val || !SECONDARY_FILTER_DIMS.includes(key)) {
+      setFilters((p) => ({ ...p, [key]: val }));
+      return;
+    }
+
+    const searchFiltered = search.trim()
+      ? allProducts.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()) || (p.description ?? "").toLowerCase().includes(search.trim().toLowerCase()))
+      : allProducts;
+
+    // Resolve the parent category. Sub-category has one real, unambiguous
+    // parent (the actual taxonomy relationship, never assumed/hardcoded —
+    // Phase 3) so it always wins outright. Brand/Flavor/Size can legitimately
+    // span several categories, so the category is only auto-selected when the
+    // matching products identify exactly one (Phases 4-6); otherwise the
+    // current category is kept if still compatible, or cleared if the new
+    // selection makes it contradictory (Phase 7D) — never arbitrarily forced.
+    let resolvedCategoryId = categoryId;
+    if (key === "subCategoryId") {
+      const sub = allSubCategories.find((s) => String(s.id) === val);
+      if (sub) resolvedCategoryId = String(sub.categoryId);
+    } else {
+      const matches = searchFiltered.filter((p) => matchesFilterDim(p, key, val));
+      const distinctCats = new Set(matches.map((p) => p.categoryId).filter((id): id is number => id != null));
+      if (distinctCats.size === 1) resolvedCategoryId = String(Array.from(distinctCats)[0]);
+      else if (categoryId && !distinctCats.has(Number(categoryId))) resolvedCategoryId = "";
+    }
+    if (resolvedCategoryId !== categoryId) setCategoryId(resolvedCategoryId);
+
+    setFilters((prev) => {
+      const next = { ...prev, [key]: val };
+      // Reconcile the other active secondary filters against the new
+      // selection + resolved category — clear only the ones that no longer
+      // have any matching product, leaving unrelated valid selections alone.
+      const categoryScoped = resolvedCategoryId
+        ? searchFiltered.filter((p) => String(p.categoryId) === resolvedCategoryId)
+        : searchFiltered;
+      for (const otherKey of SECONDARY_FILTER_DIMS) {
+        if (otherKey === key) continue;
+        const otherVal = next[otherKey];
+        if (!otherVal) continue;
+        const stillCompatible = categoryScoped.some((p) => matchesFilterDim(p, key, val) && matchesFilterDim(p, otherKey, otherVal));
+        if (!stillCompatible) next[otherKey] = "";
+      }
+      return next;
+    });
+  };
   // Resets only the facet filters — kept separate from search on purpose: the
   // category strip's own onSelect calls this while deliberately carrying the
   // current search text over into the new category (see its own call site
   // below), so resetFilters must never clear it.
   const resetFilters = () => setFilters({ subCategoryId: "", brandId: "", flavorId: "", sizeId: "", sortBy: "" });
-  // The Reset button (FilterBar) clears everything, including search — same
-  // "Reset clears search too" behavior as /academy's own Reset.
-  const resetAll = () => { resetFilters(); setSearch(""); };
+  // The Reset button (FilterBar) clears everything, including search and the
+  // selected category — same "Reset clears search too" behavior as
+  // /academy's own Reset. Category was missing here (task: "Coffee Owner
+  // Shop: Fix Réinitialiser to Reset All Filters") — resetFilters() alone
+  // only clears the FilterBar's own facets, never categoryId, since
+  // resetFilters is also reused by the category strip's own onSelect (which
+  // must NOT touch categoryId, it just set it) — so the category clear
+  // belongs here, not inside resetFilters itself.
+  const resetAll = () => { resetFilters(); setSearch(""); setCategoryId(""); };
   const activeFilterCount = Object.values(filters).filter(Boolean).length + (search ? 1 : 0) + (categoryId ? 1 : 0);
 
   const handleSearchSubmit = (e: React.FormEvent) => {

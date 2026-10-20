@@ -631,12 +631,16 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
 
 // ── Edit Listing Modal ────────────────────────────────────────────────────────
 
-function EditListingModal({ listing, flavs, szs, onClose, onSuccess }: {
+function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }: {
   listing: SupplierListingWithProduct;
   flavs: FlavorWithCount[];
   szs: SizeWithCount[];
   onClose: () => void;
   onSuccess: () => void;
+  // Delete moved into this modal (task: "Supplier Product Pages: Card
+  // Interaction & Modal Redesign") — reuses the page's existing pack-aware
+  // requestRemove flow, not a new deletion path.
+  onDelete?: () => void;
 }) {
   const { toast } = useToast();
 
@@ -738,7 +742,17 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess }: {
               </label>
             </div>
 
-            <div className="flex gap-2 justify-end pt-2">
+            <div className="flex gap-2 justify-end items-center pt-2">
+              {onDelete && (
+                <Button
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive mr-auto"
+                  onClick={onDelete}
+                  data-testid="button-delete-listing-modal"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Remove
+                </Button>
+              )}
               <Button variant="outline" onClick={onClose}>Cancel</Button>
               <Button onClick={() => save.mutate()} disabled={save.isPending} data-testid="button-save-listing">
                 {save.isPending ? "Saving…" : "Save Changes"}
@@ -783,11 +797,16 @@ type SupProdForm = {
 };
 const EMPTY_SUP_FORM: SupProdForm = { name: "", description: "", imageUrl: "", categoryId: "", subCategoryId: "", flavorIds: [], sizeIds: [], brandId: "" };
 
-function SupplierProductFormModal({ open, onClose, editing, cats, subs, flavs, szs, brnds, mappings = [] }: {
+function SupplierProductFormModal({ open, onClose, editing, cats, subs, flavs, szs, brnds, mappings = [], onDelete }: {
   open: boolean; onClose: () => void; editing: ProductWithTaxonomy | null;
   cats: CategoryWithCount[]; subs: SubCategoryWithDetails[];
   flavs: FlavorWithCount[]; szs: SizeWithCount[]; brnds: BrandWithCount[];
   mappings?: any[];
+  // Delete moved into this modal (task: "Supplier Product Pages: Card
+  // Interaction & Modal Redesign") — only ever passed/shown for a PENDING
+  // submission, since this modal itself is only ever opened for one today
+  // (the card's Edit affordance is already gated on status === 'PENDING').
+  onDelete?: () => void;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -936,7 +955,17 @@ function SupplierProductFormModal({ open, onClose, editing, cats, subs, flavs, s
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex gap-2 justify-end pt-2">
+            <div className="flex gap-2 justify-end items-center pt-2">
+              {editing && onDelete && (
+                <Button
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive mr-auto"
+                  onClick={onDelete}
+                  data-testid="button-delete-sprod-modal"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+                </Button>
+              )}
               <Button variant="outline" onClick={onClose}>Cancel</Button>
               <Button onClick={handleSave} disabled={save.isPending || !form.name.trim()} data-testid="button-save-sprod">
                 {save.isPending ? "Saving…" : editing ? "Save Changes" : "Submit for Review"}
@@ -1234,29 +1263,30 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
         </div>
       ) : viewMode === "grid" ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {pageDisplayed.map(p => (
-            <div key={p.id} className="border rounded-lg overflow-hidden bg-card" data-testid={`card-created-product-${p.id}`}>
+          {pageDisplayed.map(p => {
+            // Editing (and therefore the card's click-to-open affordance) stays
+            // gated on PENDING, exactly as the old per-card Edit button already
+            // was — approved submissions still have no edit entry point, so this
+            // preserves the existing admin-review distinction (task: "Supplier
+            // Product Pages: Card Interaction & Modal Redesign").
+            const isPending = (p as any).status === 'PENDING';
+            return (
+            <div
+              key={p.id}
+              className={`border rounded-lg overflow-hidden bg-card transition-shadow ${isPending ? "cursor-pointer hover:shadow-sm" : ""}`}
+              onClick={isPending ? () => { setEditingProd(p); setModalOpen(true); } : undefined}
+              data-testid={`card-created-product-${p.id}`}
+            >
               <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
                 {p.imageUrl ? <img src={p.imageUrl} alt="" className="w-full h-full object-cover" /> : <Package className="w-8 h-8 text-muted-foreground opacity-40" />}
               </div>
               <div className="p-2.5 space-y-1">
                 <p className="font-medium text-sm line-clamp-2">{p.name}</p>
                 <StatusBadge status={(p as any).status ?? 'PENDING'} />
-                <div className="flex gap-1 pt-1">
-                  {(p as any).status === 'PENDING' && (
-                    <>
-                      <Button size="sm" variant="ghost" className="h-7 flex-1 text-xs" onClick={() => { setEditingProd(p); setModalOpen(true); }} data-testid={`button-edit-sprod-${p.id}`}>
-                        <Pencil className="w-3 h-3 mr-1" />Edit
-                      </Button>
-                      <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => requestDelete(p)} data-testid={`button-delete-sprod-grid-${p.id}`}>
-                        <Trash2 className="w-3 h-3" />
-                      </Button>
-                    </>
-                  )}
-                </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="rounded-lg border overflow-hidden">
@@ -1325,6 +1355,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
           editing={editingProd}
           cats={cats} subs={subs} flavs={flavs} szs={szs} brnds={brnds}
           mappings={mappings}
+          onDelete={editingProd ? () => { const p = editingProd; setModalOpen(false); setEditingProd(null); requestDelete(p); } : undefined}
         />
       )}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
@@ -2022,7 +2053,12 @@ function MyProductsTab({
           ) : viewMode === "grid" ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {pageDisplayed.map(l => (
-                <div key={l.id} className="border rounded-lg overflow-hidden bg-card" data-testid={`card-my-listing-${l.id}`}>
+                <div
+                  key={l.id}
+                  className="border rounded-lg overflow-hidden bg-card hover:shadow-sm transition-shadow cursor-pointer"
+                  onClick={() => setEditingListing(l)}
+                  data-testid={`card-my-listing-${l.id}`}
+                >
                   <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
                     {l.product.imageUrl ? <img src={l.product.imageUrl} alt="" className="w-full h-full object-cover" /> : <Package className="w-8 h-8 text-muted-foreground opacity-40" />}
                   </div>
@@ -2030,10 +2066,6 @@ function MyProductsTab({
                     <p className="font-medium text-sm line-clamp-2">{l.product.name}</p>
                     <p className="text-sm font-semibold">{fmt(l.price)}</p>
                     <p className={`text-xs ${l.stock > 0 ? "text-emerald-600" : "text-red-600"}`}>{l.stock > 0 ? `${l.stock} in stock` : "Out of stock"}</p>
-                    <div className="flex gap-1 pt-1">
-                      <Button size="sm" variant="ghost" className="h-7 flex-1 text-xs" onClick={() => setEditingListing(l)} data-testid={`button-edit-listing-${l.id}`}><Pencil className="w-3 h-3 mr-1" />Edit</Button>
-                      <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => { if (confirm(`Remove "${l.product.name}"?`)) removeMutation.mutate(l.id); }}><Trash2 className="w-3 h-3" /></Button>
-                    </div>
                   </div>
                 </div>
               ))}
@@ -2107,6 +2139,7 @@ function MyProductsTab({
           szs={szs}
           onClose={() => setEditingListing(null)}
           onSuccess={() => { qc.invalidateQueries({ queryKey: ["/api/supplier/listings"] }); invalidateMarketplace(qc); }}
+          onDelete={() => { const l = editingListing; setEditingListing(null); requestRemove(l); }}
         />
       )}
       <AlertDialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>

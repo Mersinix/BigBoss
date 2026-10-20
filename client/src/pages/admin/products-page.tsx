@@ -78,10 +78,15 @@ function DeleteConfirm({ open, name, onClose, onConfirm, isPending }: { open: bo
 
 // ── Taxonomy Badges ──────────────────────────────────────────────────────────
 
-function CardTaxBadges({ product }: { product: ProductWithTaxonomy }) {
+function CardTaxBadges({ product, hideCategory }: { product: ProductWithTaxonomy; hideCategory?: boolean }) {
   return (
     <div className="flex flex-wrap gap-1">
-      {product.categoryLabel && <Badge variant="secondary" className="text-xs">{product.categoryLabel.name}</Badge>}
+      {/* hideCategory (task: "Admin Product Management Card & Details Modal
+          Redesign") — Product Management's own grid card now shows the
+          category as an overlay on the image instead; the Supplier Products
+          grid (a separate card, out of scope for this task) keeps passing
+          nothing here and still renders it inline as before. */}
+      {!hideCategory && product.categoryLabel && <Badge variant="secondary" className="text-xs">{product.categoryLabel.name}</Badge>}
       {product.subCategoryLabel && <Badge variant="outline" className="text-xs">{product.subCategoryLabel.name}</Badge>}
       {product.brandLabel && <Badge className="text-xs">{product.brandLabel.name}</Badge>}
     </div>
@@ -237,7 +242,7 @@ function MultiSelectList({ label, items, selected, onChange, hint }: {
 // ── Product Form Modal ───────────────────────────────────────────────────────
 
 function ProductFormModal({
-  open, onClose, editing, cats, subs, flavs, szs, brnds, endpoint = "/api/admin/products",
+  open, onClose, editing, cats, subs, flavs, szs, brnds, endpoint = "/api/admin/products", onDelete,
 }: {
   open: boolean;
   onClose: () => void;
@@ -248,6 +253,10 @@ function ProductFormModal({
   szs: SizeWithCount[];
   brnds: BrandWithCount[];
   endpoint?: string;
+  // Delete moved into this modal (task: "Admin Product Management Card &
+  // Details Modal Redesign") — optional so the modal still renders fine
+  // wherever it's used only for Add (no `editing`, no delete to offer).
+  onDelete?: () => void;
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -553,7 +562,17 @@ function ProductFormModal({
             </div>
           </div>
         </div>
-        <div className="flex gap-2 justify-end pt-4 border-t mt-4">
+        <div className="flex gap-2 justify-end items-center pt-4 border-t mt-4">
+          {editing && onDelete && (
+            <Button
+              variant="ghost"
+              className="text-destructive hover:text-destructive mr-auto"
+              onClick={onDelete}
+              data-testid="button-delete-product"
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+            </Button>
+          )}
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={handleSave} disabled={save.isPending || !form.name.trim()} data-testid="button-save-product">
             {save.isPending ? "Saving…" : editing ? "Save Changes" : "Create Product"}
@@ -2063,6 +2082,7 @@ export default function AdminProductsPage() {
       invalidateMarketplace(qc);
       toast({ title: "Product deleted" });
       setDeleting(null);
+      setModalOpen(false); setEditing(null);
     },
     onError: () => toast({ title: "Error deleting product", variant: "destructive" }),
   });
@@ -2275,26 +2295,32 @@ export default function AdminProductsPage() {
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {pageDisplayed.map(p => (
-            <div key={p.id} className="border rounded-lg overflow-hidden bg-card hover:shadow-sm transition-shadow" data-testid={`card-product-${p.id}`}>
-              <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
+            <div
+              key={p.id}
+              className="border rounded-lg overflow-hidden bg-card hover:shadow-sm transition-shadow cursor-pointer"
+              onClick={() => openEdit(p)}
+              data-testid={`card-product-${p.id}`}
+            >
+              <div className="relative aspect-square bg-secondary flex items-center justify-center overflow-hidden">
                 {p.imageUrl ? (
                   <img src={p.imageUrl} alt="" className="w-full h-full object-cover" />
                 ) : (
                   <Package className="w-8 h-8 text-muted-foreground opacity-40" />
                 )}
+                {/* Category — top-left badge over the image (task: "Admin
+                    Product Management Card & Details Modal Redesign"), same
+                    dark-backdrop overlay convention already used across the
+                    app's own mapped service cards (e.g.
+                    print-mapped-service-card.tsx, marketing-mapped-service-card.tsx). */}
+                {p.categoryLabel && (
+                  <span className="absolute top-2 left-2 max-w-[80%] truncate bg-black/55 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-1 rounded-full">
+                    {p.categoryLabel.name}
+                  </span>
+                )}
               </div>
               <div className="p-2.5 space-y-1.5">
                 <p className="font-medium text-sm line-clamp-2 leading-tight">{p.name}</p>
-                <CardTaxBadges product={p} />
-                <ProductStatusBadge product={p} />
-                <div className="flex gap-1 pt-0.5">
-                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs flex-1" onClick={() => openEdit(p)} data-testid={`button-edit-product-${p.id}`}>
-                    <Pencil className="w-3 h-3 mr-1" />Edit
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive hover:text-destructive" onClick={() => setDeleting(p)} data-testid={`button-delete-product-${p.id}`}>
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
-                </div>
+                <CardTaxBadges product={p} hideCategory />
               </div>
             </div>
           ))}
@@ -2365,6 +2391,7 @@ export default function AdminProductsPage() {
           flavs={flavs}
           szs={szs}
           brnds={brnds}
+          onDelete={editing ? () => setDeleting(editing) : undefined}
         />
       )}
 

@@ -5801,3 +5801,359 @@ après : categories 13, sub_categories 30, flavors 19, sizes 19, brands 30).
   (à cause du filtre) peut déplacer l'élément au-delà d'éléments non visibles à
   l'écran. Ce comportement existe déjà à l'identique sur Admin Stores ; aucune
   régression introduite, juste un héritage assumé du motif réutilisé.
+
+---
+
+# Tâche : Admin Product Management — Cartes produit cliquables, Delete dans la modale, retrait du badge Active, étiquette catégorie sur l'image
+
+## 1. Audit préalable
+
+**Page** : `client/src/pages/admin/products-page.tsx` (2383 lignes), onglet
+« Product Management » (3 onglets au total sur `/admin/products` :
+Product Management / Supplier Products / Packs — seul le premier est visé par
+la tâche, confirmé par la section « Preserve » qui liste les deux autres comme
+navigation à ne pas toucher).
+
+**Deux modes d'affichage déjà présents** dans Product Management (bascule
+Grille/Liste, `viewMode`) :
+- **Grille** (`viewMode === 'grid'`, lignes ~2275-2301 avant modification) :
+  les « mapped product cards » décrites par la tâche — image, nom, badges
+  taxonomie (`CardTaxBadges`), badge `ProductStatusBadge` (Active/Inactive),
+  boutons Edit + Delete séparés. C'est exactement le composant visé.
+- **Liste** (table, `viewMode === 'list'`) : tableau classique avec icône-image
+  en cellule, mêmes actions Edit/Delete en colonne « Actions ». La tâche ne
+  mentionne que des « cartes » — ce mode table est resté **intact**, par souci
+  de ne changer que ce qui est explicitement demandé.
+
+**Modale déjà existante et réutilisable** : `ProductFormModal` (un seul composant,
+un seul point d'appel dans ce fichier, sert à la fois Add et Edit — `editing`
+null = Add). Gère déjà la sauvegarde (`PATCH`/`POST` vers `/api/admin/products`),
+la validation (nom requis), le statut du produit (visible seulement si
+`editing`), et une pré-visualisation live. Un second composant du même nom
+existe dans `client/src/pages/supplier/manage-products.tsx`, mais c'est une
+définition locale indépendante (aucun import croisé) — la modale Admin reste
+strictement isolée, modifiable sans risque pour le côté fournisseur.
+
+**Suppression déjà gérée au niveau de la page** (hors de la modale) : état
+`deleting`/`setDeleting` + `deleteMutation` (`DELETE /api/admin/products/:id`)
++ composant `DeleteConfirm` déjà existant, affichant déjà le message exact
+« This will permanently remove the product and all supplier listings
+referencing it » — confirmant que la suppression admin **cascade** déjà sur les
+listings fournisseurs liés plutôt que d'être bloquée par eux (comportement
+existant à préserver tel quel, pas de contrainte de blocage à reproduire).
+
+**Badges partagés à vérifier avant modification** : `CardTaxBadges` (catégorie/
+sous-catégorie/marque) est utilisé à deux endroits : la grille Product
+Management (ligne ~2288, visée par la tâche) **et** la grille Supplier Products
+(ligne ~1102, carte `card-supplier-product-*`, un onglet séparé et explicitement
+hors périmètre — `onClick={() => setSelectedProduct(p)}` déjà présent, son propre
+workflow d'approbation/claim à préserver intact). Modifier `CardTaxBadges`
+directement aurait affecté les deux grilles à la fois — un prop optionnel
+`hideCategory` a donc été ajouté (défaut `false`, comportement Supplier
+Products inchangé) plutôt que de dupliquer le composant.
+
+**Convention « badge top-left sur l'image » déjà établie ailleurs dans
+l'app** : `print-mapped-service-card.tsx`, `academy-mapped-course-card.tsx`,
+`marketing-mapped-service-card.tsx`, `marketing-page.tsx`, `maintenance-page.tsx`,
+`barista-page.tsx` utilisent tous exactement
+`absolute top-2 left-2 max-w-[62%] truncate bg-black/55 backdrop-blur-sm
+text-white text-[10px] font-semibold px-2 py-1 rounded-full` pour un badge lisible
+sur n'importe quelle image (fond semi-transparent + flou + texte blanc).
+Réutilisé à l'identique pour l'étiquette de catégorie plutôt que d'inventer un
+nouveau style.
+
+**Données réelles confirmées** : interrogation directe de la base — les 4
+produits cités en exemple par la tâche (« Nespresso Original Capsules x10 »,
+« Cold Brew Coarse Grind Bag 250g », « Illy Classico Arabica Beans 500g »,
+« Robusta Dark Roast Beans 1kg ») existent réellement comme produits admin,
+tous rattachés à la catégorie réelle « CAFE » — confirme que l'étiquette de
+catégorie affichera de vraies données pour ces cas précis.
+
+## 2. Implémentation
+
+Fichier modifié : `client/src/pages/admin/products-page.tsx` uniquement.
+
+- **`CardTaxBadges`** : ajout du prop optionnel `hideCategory?: boolean` ;
+  quand vrai, le badge catégorie n'est plus rendu dans le corps de la carte
+  (remplacé par l'étiquette sur l'image, voir plus bas). Appel inchangé partout
+  ailleurs (Supplier Products continue d'appeler `<CardTaxBadges product={p} />`
+  sans le prop → comportement identique à avant).
+- **Carte grille Product Management** :
+  - Conteneur de carte : ajout de `cursor-pointer` + `onClick={() => openEdit(p)}`
+    (réutilise exactement la fonction `openEdit` déjà utilisée par l'ancien
+    bouton Edit — même modale, mêmes données pré-remplies, aucune duplication).
+  - Zone image : ajout de `relative` ; nouvelle étiquette catégorie en overlay
+    (`p.categoryLabel?.name`, repli silencieux si absente — aucune catégorie
+    inventée), motif de style copié exactement de la convention « top-left
+    badge over the image » déjà utilisée ailleurs dans l'app.
+  - Suppression du bouton Edit, du bouton Delete, et de
+    `<ProductStatusBadge product={p} />` (badge Active/Inactive) du corps de la
+    carte.
+  - `<CardTaxBadges product={p} />` → `<CardTaxBadges product={p} hideCategory />`
+    (sous-catégorie et marque restent affichées dans le corps de la carte comme
+    avant ; seule la catégorie a été déplacée).
+  - Aucun autre élément interactif ne reste dans la carte après suppression
+    d'Edit/Delete — `stopPropagation` non nécessaire (contrairement à la tâche
+    précédente sur Category Management où un toggle Actif/Inactif restait
+    présent dans la carte).
+- **`ProductFormModal`** : nouveau prop optionnel `onDelete?: () => void`.
+  Nouveau bouton Delete dans la zone d'actions existante (`mr-auto`, style
+  destructif ghost identique aux boutons Delete déjà utilisés dans les modales
+  de Category Management), affiché uniquement quand `editing` est non-null ET
+  `onDelete` est fourni (jamais affiché en mode Add).
+- **Point d'appel de la modale** (niveau page) : `onDelete={editing ? () =>
+  setDeleting(editing) : undefined}` — réouvre exactement le `DeleteConfirm`
+  déjà existant (même message d'avertissement, même mutation `deleteMutation`),
+  sans dupliquer la logique de suppression.
+- **`deleteMutation`** : `onSuccess` étendu pour aussi fermer la modale d'édition
+  (`setModalOpen(false); setEditing(null)`) en plus de fermer `DeleteConfirm` —
+  sans cela, après une suppression réussie depuis la modale, l'ancienne modale
+  resterait ouverte sur un produit qui n'existe plus.
+- Le mode **Liste** (table) de Product Management, la grille **Supplier
+  Products**, l'onglet **Packs**, les compteurs de résumé, les filtres
+  recherche/catégorie/sous-catégorie/flavor/size/brand, et le bouton Add
+  Product sont **inchangés**.
+
+## 3. Garde-fous respectés
+
+- Aucune donnée produit, catégorie, ou relation taxonomique modifiée — le
+  statut du produit reste géré exactement comme avant (toujours visible et
+  modifiable dans la modale via le `Select` « Product Status » existant quand
+  `editing` est vrai) ; seul l'affichage du badge Active/Inactive sur la carte
+  a été retiré, pas la donnée ni sa modification.
+- Aucune contrainte de suppression contournée : réutilisation exacte de
+  `deleteMutation`/`DeleteConfirm`/son message d'avertissement déjà existants —
+  aucune nouvelle route, aucun nouveau comportement de suppression introduit.
+- Aucune donnée inventée pour l'étiquette catégorie — uniquement
+  `product.categoryLabel?.name`, déjà la source de vérité utilisée par
+  `TaxBadges`/`CardTaxBadges` avant cette tâche ; absence de catégorie gérée
+  silencieusement (`&&` — aucun badge si `categoryLabel` est `null`).
+  Confirmé via la base que les produits cités en exemple ont tous une vraie
+  catégorie assignée.
+- Workflows Supplier Products (approbation, claim, suppression de soumissions
+  en attente) totalement intacts — `CardTaxBadges` reste rétro-compatible par
+  défaut, aucun autre fichier ni composant touché.
+- Mode clair/sombre non modifié : les classes réutilisées
+  (`bg-black/55 backdrop-blur-sm text-white`) sont déjà indépendantes du thème
+  (toujours un badge sombre sur l'image, peu importe le thème de la page — même
+  convention que partout ailleurs dans l'app).
+- Aucune nouvelle dépendance, aucun nouveau composant, aucune route API
+  ajoutée — uniquement des changements de présentation + un prop optionnel sur
+  un composant déjà existant.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur, aucun changement backend dans
+  cette tâche).
+- `git status --short` final : uniquement `products-page.tsx` modifié pour
+  cette tâche.
+- Vérification en base réelle (lecture seule) : les 4 produits cités en
+  exemple par la tâche existent réellement avec une vraie catégorie assignée
+  (« CAFE ») ; confirmé aussi via `/api/admin/products` que l'endpoint reste
+  protégé par authentification admin (401 sans session), sans changement de
+  contrat d'API.
+- Grep final confirmant que `ProductStatusBadge` et le bouton `Edit` (icône
+  `Pencil`) ne subsistent que dans le mode Liste (table) — intentionnellement
+  laissé intact, pas une régression oubliée.
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour confirmer visuellement la lisibilité
+  de l'étiquette de catégorie sur des images très claires ou très sombres, ni
+  le comportement du curseur/hover sur desktop vs. le tactile sur mobile —
+  vérifié par réutilisation du motif de style déjà éprouvé ailleurs dans
+  l'application (mêmes classes exactes que les cartes de service Print/Academy/
+  Marketing/Maintenance/Barista) et par les données réelles confirmées en base.
+  Une vérification manuelle (survol, clic, mode sombre, image très claire,
+  nom de catégorie long) reste recommandée avant mise en production.
+- Le mode Liste (table) de Product Management garde son propre bouton Edit/
+  Delete par ligne — volontairement non modifié, la tâche ne portant que sur
+  les « cartes ». Signalé ici comme incohérence potentielle entre les deux
+  modes d'affichage (cartes sans actions visibles vs. tableau avec actions
+  visibles), à clarifier si une tâche future demande d'harmoniser les deux.
+
+---
+
+# Tâche : Pages Produits Fournisseur — Cartes cliquables et Delete dans la modale (My Products & New Product)
+
+## 1. Audit préalable
+
+**Route unique** : `/supplier/products` → composant `ManageProducts`
+(`client/src/pages/supplier/manage-products.tsx`, 2224 lignes), avec 4 onglets :
+Admin Products, **My Products** (`MyProductsTab`), **New Product**
+(`NewProductTab`), Pack. Seuls les deux onglets nommés par la tâche ont été
+modifiés ; Admin Products et Pack sont restés intacts.
+
+### A. My Products (`MyProductsTab`, modèle de données = `SupplierListingWithProduct`)
+
+- Les cartes de la grille représentent des **listings fournisseur**
+  (`supplier_product_listings`, confirmé par lecture directe du schéma/de la
+  base — prix/stock propres au fournisseur, distincts du produit catalogue
+  partagé `products`), pas des produits catalogue admin.
+- Modale existante déjà réutilisable : `EditListingModal` — un vrai « variant
+  builder » (prix/stock par combinaison saveur+taille), pas un simple champ
+  prix/stock unique ; gère déjà la sauvegarde (`PATCH
+  /api/supplier/listings/:id`) et l'option « Add to Pack ».
+- **Deux chemins de suppression différents existaient déjà, avec un
+  comportement incohérent entre les deux** : la vue Liste utilisait
+  `requestRemove` (vérifie d'abord l'usage dans des Packs via
+  `GET /api/supplier/listings/:id/pack-usage`, affiche un `AlertDialog` dédié
+  si des Packs sont concernés, sinon un `confirm()` simple), tandis que la vue
+  Grille appelait directement `removeMutation.mutate(l.id)` derrière un simple
+  `confirm()`, **sans jamais vérifier l'usage en Pack**. Pour la modale, c'est
+  le chemin le plus sûr et le plus complet (`requestRemove`) qui a été
+  réutilisé, afin de ne pas introduire une suppression moins protégée que
+  l'existant.
+- Aucune étiquette de catégorie n'est actuellement affichée sur la carte
+  Grille (seulement image/nom/prix/stock) — seule la vue Liste affiche
+  `TaxBadges` (catégorie incluse). La phase « étiquette catégorie » de la
+  tâche est explicitement conditionnelle (« If product category labels are
+  displayed… ») : comme ce n'est pas le cas ici, aucune étiquette n'a été
+  ajoutée — changement non applicable, documenté plutôt qu'inventé.
+- Pagination déjà présente (`usePagination`/`DataPagination`), déjà
+  fonctionnelle, non touchée.
+
+### B. New Product (`NewProductTab`, modèle de données = `ProductWithTaxonomy` créé par le fournisseur)
+
+- Les cartes représentent des **produits soumis par le fournisseur pour
+  validation admin** (`products.createdBySupplier = true`), avec un statut
+  réel (`PENDING`/`ACTIVE`, confirmé en base : ex. produits #41/#36 en
+  `PENDING`, #35 « FANTA 25cl » déjà `ACTIVE`) — un modèle et un workflow
+  distincts de ceux de My Products, jamais confondus dans cette tâche.
+- **Constatation critique, gouvernant toute l'implémentation** : les boutons
+  Edit/Delete de la carte Grille (et de la ligne Liste) n'étaient déjà
+  affichés **que lorsque `status === 'PENDING'`** — un produit déjà approuvé
+  (`ACTIVE`) n'a aujourd'hui strictement aucun moyen d'ouvrir la modale
+  d'édition ni de suppression. C'est exactement la distinction que la tâche
+  demande explicitement de préserver (« Do not allow card clicks or modal
+  interactions to bypass admin review », « If editing an approved submission
+  has different behavior from editing a pending submission, preserve the
+  existing distinction »). Rendre toute la carte cliquable sans cette garde
+  aurait été une régression : cela aurait permis de rouvrir l'édition d'un
+  produit déjà approuvé, ce qui n'est possible dans aucune version actuelle de
+  l'application.
+- Suppression déjà gérée par `requestDelete` (même motif que `requestRemove` :
+  vérifie l'usage en Pack via `GET /api/supplier/created-products/:id/pack-usage`,
+  `AlertDialog` dédié si nécessaire, sinon `confirm()` simple) — réutilisé tel
+  quel, aucune duplication.
+- Modale déjà existante : `SupplierProductFormModal` — n'est aujourd'hui
+  ouverte que pour des soumissions `PENDING` (jamais pour une soumission déjà
+  approuvée), donc aucune garde de statut supplémentaire n'était nécessaire à
+  l'intérieur de la modale elle-même pour préserver cet invariant.
+- Aucune étiquette de catégorie affichée sur la carte Grille non plus
+  (uniquement dans la vue Liste) — même conclusion que My Products : non
+  applicable, rien à déplacer.
+- Pagination déjà présente (`usePagination`/`DataPagination`), déjà
+  fonctionnelle, non touchée.
+
+### C. Référence Admin Product Management
+
+Motif réutilisé à l'identique : carte entière cliquable (`cursor-pointer` +
+`onClick`), bouton Delete déplacé dans le pied de la modale (`mr-auto`, style
+ghost destructif), fermeture de la modale après suppression réussie. Différence
+assumée et documentée : l'étiquette « Active » n'a **pas** été retirée ici — la
+tâche précise explicitement que ce retrait était spécifique à Admin, et que les
+statuts d'approbation fournisseur (`StatusBadge` : PENDING/ACTIVE) doivent
+rester visibles sur les cartes New Product, ce qui a été respecté sans y
+toucher.
+
+## 2. Implémentation
+
+Fichier modifié : `client/src/pages/supplier/manage-products.tsx` uniquement.
+
+**My Products** :
+- Carte Grille : ajout de `cursor-pointer` + `onClick={() => setEditingListing(l)}`
+  sur le conteneur (réutilise la fonction déjà utilisée par l'ancien bouton
+  Edit) ; suppression des boutons Edit et Delete du corps de la carte ; prix et
+  stock restent affichés exactement comme avant.
+- `EditListingModal` : nouveau prop optionnel `onDelete?: () => void` ; nouveau
+  bouton (libellé « Remove », cohérent avec le vocabulaire déjà utilisé par cet
+  onglet — « Remove from your products », « Remove product and archive Packs »,
+  jamais « Delete ») dans le pied de la modale, visible uniquement si fourni.
+- Point d'appel : `onDelete={() => { const l = editingListing; setEditingListing(null); requestRemove(l); }}`
+  — ferme la modale puis déclenche le même chemin de suppression protégé par
+  Pack déjà utilisé par la vue Liste (pas celui, moins sûr, de l'ancien bouton
+  Grille).
+
+**New Product** :
+- Carte Grille : calcul `isPending = status === 'PENDING'` ; `cursor-pointer`
+  et `onClick` appliqués **uniquement si `isPending`** (sinon aucun des deux,
+  carte non interactive comme avant) ; suppression des boutons Edit/Delete
+  conditionnels du corps de la carte ; `StatusBadge` conservé tel quel (aucun
+  retrait, contrairement à Admin).
+- `SupplierProductFormModal` : nouveau prop optionnel `onDelete?: () => void` ;
+  nouveau bouton Delete dans le pied de la modale, visible uniquement quand
+  `editing` est non-null ET `onDelete` est fourni.
+- Point d'appel : `onDelete={editingProd ? () => { const p = editingProd; setModalOpen(false); setEditingProd(null); requestDelete(p); } : undefined}`
+  — ferme la modale puis déclenche le même `requestDelete` protégé par Pack
+  déjà utilisé par les deux vues existantes.
+
+Dans les deux onglets, le mode **Liste** (table) reste **intact** : mêmes
+boutons Edit/Delete par ligne qu'avant, cohérent avec le choix déjà fait sur
+Admin Product Management de ne traiter que les cartes.
+
+## 3. Garde-fous respectés
+
+- Aucune nouvelle route API, aucune nouvelle mutation introduite — les deux
+  boutons Delete dans les modales appellent les fonctions `requestRemove`/
+  `requestDelete` déjà existantes, qui appellent elles-mêmes les mutations déjà
+  existantes (`removeMutation`/`deleteMut`).
+- Aucune contrainte Pack contournée : au contraire, My Products passe
+  maintenant par le chemin le plus protégé (`requestRemove`) au lieu de
+  l'ancien raccourci Grille non protégé — c'est un durcissement involontaire
+  mais cohérent avec l'esprit de la tâche (« Reuse the existing confirmation
+  dialog and deletion logic »), pas un contournement.
+- Workflow d'approbation New Product totalement préservé : aucune soumission
+  `ACTIVE` ne peut être ouverte, éditée ou supprimée via la carte — exactement
+  le même comportement qu'avant cette tâche.
+- Prix, stock, formatage de devise (`useFormatCurrency`/`fmt`), recherche,
+  filtres catégorie/sous-catégorie/saveur/taille/marque, compteurs de
+  statistiques, et pagination des deux onglets — tous inchangés dans leur
+  logique, seuls les éléments d'interaction de la carte ont été modifiés.
+- Aucune donnée inventée, aucun enregistrement de test laissé en base (aucune
+  mutation de données n'a été exécutée pendant la vérification de cette
+  tâche — uniquement des lectures).
+- Mode clair/sombre non modifié : aucune classe de couleur nouvelle, mêmes
+  tokens déjà utilisés par les boutons/badges existants.
+
+## 4. Tests exécutés
+
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur, aucun changement backend).
+- `git status --short` final : uniquement `manage-products.tsx` modifié pour
+  cette tâche (en plus de `analyse.md`) ; `products-page.tsx` provient de la
+  tâche Admin précédente, toujours non committée, non retouchée ici.
+- Vérification en base réelle (lecture seule) : confirmé que des produits
+  réels créés par un fournisseur existent avec des statuts réellement
+  différents (`PENDING` pour #41/#36, `ACTIVE` pour #35 « FANTA 25cl ») —
+  valide concrètement que la garde `isPending` laissera la carte #35
+  non cliquable tandis que #41/#36 le resteront, exactement le comportement
+  attendu. Confirmé aussi que des listings fournisseur réels existent
+  (ex. « Illy Classico Arabica Beans 500g », « Monin Hazelnut Sugar-Free
+  700ml ») pour alimenter la grille My Products avec de vraies données.
+- Grep final confirmant que `Pencil`/les boutons Edit-par-ligne ne subsistent
+  que dans les vues Liste des deux onglets (intentionnellement non modifiées),
+  pas une régression oubliée dans les grilles.
+
+## 5. Limites connues
+
+- Aucun navigateur réel disponible pour confirmer visuellement le clic sur
+  carte, l'absence de curseur-pointeur sur les cartes New Product non
+  éditables, et le rendu des nouveaux boutons Delete/Remove dans les deux
+  modales en mode sombre — vérifié par lecture de code comparant chaque ajout
+  au motif déjà utilisé par Admin Product Management, et par les données
+  réelles ci-dessus. Une vérification manuelle (clic sur une carte PENDING,
+  tentative de clic sur une carte ACTIVE pour confirmer l'absence de réaction,
+  suppression d'un listing utilisé dans un Pack) reste recommandée avant mise
+  en production.
+- Aucune étiquette de catégorie n'a été ajoutée sur les cartes (My Products et
+  New Product) : ni l'une ni l'autre n'en affichait avant cette tâche, et la
+  phase correspondante de la tâche est explicitement conditionnelle à leur
+  présence préalable — non traité, documenté ici plutôt qu'ajouté sans base
+  réelle dans la conception existante.
+- Les deux vues Liste (tableau) des deux onglets gardent leurs propres
+  boutons Edit/Delete/Remove par ligne, non harmonisés avec la nouvelle
+  interaction des cartes — même limite déjà signalée pour Admin Product
+  Management, cohérente entre les trois pages concernées par cette série de
+  tâches.

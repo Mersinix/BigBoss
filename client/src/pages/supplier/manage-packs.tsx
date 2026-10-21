@@ -22,9 +22,10 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useFormatCurrency } from "@/hooks/use-currency";
-import type { SupplierListingWithProduct, PackDetail } from "@shared/schema";
+import type { SupplierListingWithProduct, PackDetail, CategoryWithCount, SubCategoryWithDetails } from "@shared/schema";
 import { FlashMode } from "@/components/flash-mode";
 import { PackImageGallery } from "@/components/pack-image-gallery";
+import { PackQuickViewModal } from "@/components/pack-quick-view-modal";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 
 // ── Variant grouping helper ───────────────────────────────────────────────────
@@ -128,6 +129,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
   );
   const [flashImageUrl, setFlashImageUrl] = useState(editing?.flashImageUrl ?? "");
   const [flashPreviewOpen, setFlashPreviewOpen] = useState(false);
+  const [packDetailPreviewOpen, setPackDetailPreviewOpen] = useState(false);
   const [expirationDate, setExpirationDate] = useState(editing?.expirationDate ? new Date(editing.expirationDate).toISOString().slice(0, 10) : "");
   const [items, setItems] = useState<PackItemDraft[]>(
     editing
@@ -157,6 +159,65 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
     }
     return base;
   }, [listings, preSelectedListingIds]);
+
+  // ── "Variants in pack" Category/Subcategory filters ───────────────────────
+  // Display-only: narrows which listings are RENDERED in the variant picker
+  // below. Deliberately never filters `usableListings` itself, since that
+  // array also drives `selectedItems`/`currentItems` (real eligibility) —
+  // changing it here would risk hiding already-selected variants from the
+  // pack instead of merely hiding them from view (task's explicit "Preserve
+  // the existing variant selection state" requirement).
+  const { data: allCategories = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
+  const { data: allSubCategories = [] } = useQuery<SubCategoryWithDetails[]>({ queryKey: ["/api/subcategories"] });
+  const categoryOrderIndex = useMemo(() => new Map(allCategories.map((c, i) => [c.id, i])), [allCategories]);
+  const subCategoryOrderIndex = useMemo(() => new Map(allSubCategories.map((s, i) => [s.id, i])), [allSubCategories]);
+
+  const [variantCategoryId, setVariantCategoryId] = useState("");
+  const [variantSubCategoryId, setVariantSubCategoryId] = useState("");
+
+  // Options are limited to what's actually eligible (present in
+  // usableListings), never the full Admin taxonomy regardless of
+  // availability — ordered by the same Admin-configured displayOrder used
+  // everywhere else in the app.
+  const variantCategoryOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    usableListings.forEach(l => {
+      const cat = l.product.categoryLabel;
+      if (cat) map.set(String(cat.id), cat.name);
+    });
+    return Array.from(map.entries())
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => (categoryOrderIndex.get(Number(a.id)) ?? Infinity) - (categoryOrderIndex.get(Number(b.id)) ?? Infinity));
+  }, [usableListings, categoryOrderIndex]);
+
+  const variantSubCategoryOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    usableListings.forEach(l => {
+      if (variantCategoryId && String(l.product.categoryLabel?.id ?? "") !== variantCategoryId) return;
+      const sub = l.product.subCategoryLabel;
+      if (sub) map.set(String(sub.id), sub.name);
+    });
+    return Array.from(map.entries())
+      .map(([id, label]) => ({ id, label }))
+      .sort((a, b) => (subCategoryOrderIndex.get(Number(a.id)) ?? Infinity) - (subCategoryOrderIndex.get(Number(b.id)) ?? Infinity));
+  }, [usableListings, variantCategoryId, subCategoryOrderIndex]);
+
+  // Changing the category can invalidate the current subcategory selection
+  // (it may no longer belong to the newly selected category) — reset it
+  // rather than leave a stale filter that would silently empty the list.
+  useEffect(() => {
+    if (variantSubCategoryId && !variantSubCategoryOptions.some(s => s.id === variantSubCategoryId)) {
+      setVariantSubCategoryId("");
+    }
+  }, [variantSubCategoryOptions, variantSubCategoryId]);
+
+  const displayedListings = useMemo(() => {
+    return usableListings.filter(l => {
+      if (variantCategoryId && String(l.product.categoryLabel?.id ?? "") !== variantCategoryId) return false;
+      if (variantSubCategoryId && String(l.product.subCategoryLabel?.id ?? "") !== variantSubCategoryId) return false;
+      return true;
+    });
+  }, [usableListings, variantCategoryId, variantSubCategoryId]);
 
   // Inventory can change while the edit modal is open. Keep stale relations
   // out of the preview, calculations, and the next save.
@@ -257,7 +318,21 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
       if (listing.product.subCategoryLabel) subCategoryNames.add(listing.product.subCategoryLabel.name);
       if (listing.product.brandLabel) brandNames.add(listing.product.brandLabel.name);
        const flavorNames = selectedVariants.map(v => v.flavorName).filter((n): n is string => !!n);
-       return { ...it, productName: listing.product.name, flavorName: flavorNames.length === 1 ? flavorNames[0] : undefined, flavorNames, sizeName: variant?.sizeName, unitPrice, packVariantPriceCents };
+       // All same-size variants (every flavor option, not just the ones
+       // currently selected) — additive fields used by the Pack Detail Live
+       // Preview (task: "Supplier Pack Create/Edit Modals") so its flavor
+       // distribution controls have real data to work with, exactly like a
+       // saved pack's items[].listingVariants. Flash doesn't read these.
+       const listingVariants = sameGroup.map(v => ({
+         variantId: v.id, flavorId: v.flavorId ?? null, flavorName: v.flavorName ?? null,
+         sizeId: v.sizeId ?? null, sizeName: v.sizeName ?? null, price: v.price, availableQuantity: v.quantity,
+       }));
+       return {
+         ...it, productId: listing.product.id, productName: listing.product.name,
+         productImageUrl: listing.product.imageUrl ?? null,
+         flavorName: flavorNames.length === 1 ? flavorNames[0] : undefined, flavorNames,
+         sizeName: variant?.sizeName, unitPrice, packVariantPriceCents, availableQty, listingVariants,
+       };
     }).filter(Boolean) as any[];
     return {
       rows,
@@ -299,7 +374,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
       packVariantPrice: row.packVariantPriceCents,
       productId: row.productId ?? 0,
       productName: row.productName,
-      productImageUrl: listings.find(l => l.id === row.listingId)?.product.imageUrl ?? null,
+      productImageUrl: row.productImageUrl ?? null,
       categoryId: null,
       brandId: null,
       flavorId: null,
@@ -307,8 +382,8 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
       sizeId: null,
       sizeName: row.sizeName ?? null,
       unitPrice: row.unitPrice,
-      availableQuantity: 0,
-      listingVariants: [],
+      availableQuantity: row.availableQty ?? 0,
+      listingVariants: row.listingVariants ?? [],
     })),
     categoryIds: [],
     subCategoryIds: [],
@@ -465,11 +540,40 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                 Variants in pack
                 {selectedItems.length < 2 && <span className="text-xs text-amber-600 ml-2">(select at least 2 variants)</span>}
               </Label>
+              {usableListings.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                  <Select value={variantCategoryId || "__all__"} onValueChange={(v) => setVariantCategoryId(v === "__all__" ? "" : v)}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="select-variant-filter-category">
+                      <SelectValue placeholder="Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All categories</SelectItem>
+                      {variantCategoryOptions.map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={variantSubCategoryId || "__all__"} onValueChange={(v) => setVariantSubCategoryId(v === "__all__" ? "" : v)}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="select-variant-filter-subcategory">
+                      <SelectValue placeholder="Subcategory" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__all__">All subcategories</SelectItem>
+                      {variantSubCategoryOptions.map(s => (
+                        <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="border rounded-lg divide-y max-h-80 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
                 {usableListings.length === 0 && (
                   <p className="text-sm text-muted-foreground p-3">No pack-eligible products found.</p>
                 )}
-                {usableListings.map(listing => {
+                {usableListings.length > 0 && displayedListings.length === 0 && (
+                  <p className="text-sm text-muted-foreground p-3">No products match the selected filters.</p>
+                )}
+                {displayedListings.map(listing => {
                   const groups = getVariantGroups(listing);
                   if (groups.length === 0) return null;
                   return (
@@ -593,8 +697,8 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                     </div>
                   ))}
                 </div>
-                 <Button type="button" variant="outline" className="w-full" onClick={() => setFlashPreviewOpen(true)}>
-                   <Zap className="w-4 h-4 mr-2" />Open Flash Live Preview
+                 <Button type="button" variant="outline" className="w-full" onClick={() => setPackDetailPreviewOpen(true)} data-testid="button-open-pack-detail-preview">
+                   <Eye className="w-4 h-4 mr-2" />Open Pack Detail Live Preview
                  </Button>
               </CardContent>
             </Card>
@@ -618,6 +722,17 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
            products={[]}
            packs={[flashPreviewPack]}
            storeName="Flash Live Preview"
+         />
+         {/* Pack Detail Live Preview — a second, independent instance of the
+             exact same component the Coffee Owner Shop uses
+             (pack-quick-view-modal.tsx), fed the live unsaved form state via
+             previewPack instead of the real Zustand store + server fetch.
+             Add-to-cart/Favori/Avis are neutralized inside that component
+             when previewPack is set (see its own preview-mode branching). */}
+         <PackQuickViewModal
+           previewPack={flashPreviewPack}
+           previewOpen={packDetailPreviewOpen}
+           onPreviewClose={() => setPackDetailPreviewOpen(false)}
          />
       </DialogContent>
     </Dialog>

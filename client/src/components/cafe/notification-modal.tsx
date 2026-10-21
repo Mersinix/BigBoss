@@ -10,7 +10,17 @@ import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { NotificationDateFilter, filterNotificationsByDate } from "@/components/notifications/notification-date-filter";
 import type { DateRangePreset } from "@/lib/marketplace-analytics";
 
-type TabId = "ALL" | NotificationService;
+// "CUSTOM" (task: "Coffee Owner Notifications: Filter & Pagination Fix") —
+// the new "Personnalisé" tab's own id. It is NOT a real NotificationService
+// (no notification is ever saved with this value), so it's tracked as its
+// own TabId member rather than overloading "ALL" — that would make two
+// visually distinct buttons share one highlight state, which would look
+// broken (clicking "Personnalisé" would light up "Tous" instead). Every
+// place that already treats `tab === "ALL"` as "no category filter" also
+// treats `tab === "CUSTOM"` the same way, below — reusing the exact existing
+// "no filter" convention/behavior, just making it reachable from a second,
+// independently-selectable button.
+type TabId = "ALL" | "CUSTOM" | NotificationService;
 
 // "Admin" tab removed from this Coffee Owner-facing view
 // (docs/notification_date_filter_pagination_navigation_audit.md) — ADMIN-service
@@ -68,8 +78,12 @@ export function NotificationModal({ open, onOpenChange, isDark }: { open: boolea
   // and Messages Modals") — same source of truth as the navbar switcher/
   // Favorites/Reservations, via the shared useServiceOrder hook.
   const { order: serviceOrder } = useServiceOrder();
+  // "Personnalisé" is fixed right after "Tous" — it isn't a real service, so
+  // it never participates in the Admin service-order sort applied to the
+  // other 6 tabs.
   const SERVICE_TABS: { id: TabId; label: string }[] = [
     { id: "ALL", label: "Tous" },
+    { id: "CUSTOM", label: "Personnalisé" },
     ...sortShortServiceIds(SERVICE_TAB_SOURCE, serviceOrder),
   ];
   // No default custom period (task: "Fix Default Date Filtering, Persistent
@@ -85,7 +99,7 @@ export function NotificationModal({ open, onOpenChange, isDark }: { open: boolea
   const markAllRead = useMarkAllNotificationsRead();
 
   const tabFiltered = useMemo(
-    () => (tab === "ALL" ? notifications : notifications.filter((n) => n.service === tab)),
+    () => (tab === "ALL" || tab === "CUSTOM" ? notifications : notifications.filter((n) => n.service === tab)),
     [notifications, tab],
   );
   const filtered = useMemo(
@@ -99,6 +113,10 @@ export function NotificationModal({ open, onOpenChange, isDark }: { open: boolea
       map.ALL = (map.ALL ?? 0) + 1;
       map[n.service] = (map[n.service] ?? 0) + 1;
     }
+    // "Personnalisé" shows the same total unread count as "Tous" — it
+    // represents the identical "no category filter" set, just reachable
+    // from its own button.
+    map.CUSTOM = map.ALL;
     return map;
   }, [notifications]);
 
@@ -177,7 +195,7 @@ export function NotificationModal({ open, onOpenChange, isDark }: { open: boolea
           />
           {(unreadByService[tab] ?? 0) > 0 && (
             <button
-              onClick={() => markAllRead.mutate(tab === "ALL" ? undefined : tab)}
+              onClick={() => markAllRead.mutate((tab === "ALL" || tab === "CUSTOM") ? undefined : tab)}
               className={`flex items-center gap-1 text-xs font-medium ${isDark ? "text-amber-400 hover:text-amber-300" : "text-amber-600 hover:text-amber-700"}`}
               data-testid="button-mark-all-read"
             >

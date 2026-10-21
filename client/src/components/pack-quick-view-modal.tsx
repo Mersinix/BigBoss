@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Layers, Minus, Plus, Package, Heart, Star, Calendar, AlertCircle, X, Lock, Sun, Moon,
+  Layers, Minus, Plus, Package, Heart, Star, MapPin, AlertCircle, X, Lock, Sun, Moon,
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
@@ -17,8 +17,49 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { useThemeStore } from "@/store/theme-store";
+import { useSearchLocationStore } from "@/store/search-location-store";
+import { calculateDistance, formatDistance } from "@/lib/distance";
 import { PackImageGallery } from "@/components/pack-image-gallery";
+import { ReviewsModal } from "@/components/account/reviews-modal";
 import type { PackDetail, SupplierProductReview, PackVariantOption, ProductWithTaxonomy } from "@shared/schema";
+
+// ── Pack image overlay icons (Fav / Theme / Close) — shared between the
+// loading skeleton and the real hero image so both stay reachable the same
+// way, anchored to the image container itself rather than to the Dialog
+// (task: "Use the existing image container as the positioning reference").
+function PackImageTopIcons({ faved, onToggleFav, isDark, onToggleTheme, onClose }: {
+  faved: boolean;
+  onToggleFav: () => void;
+  isDark: boolean;
+  onToggleTheme: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="absolute top-3 right-3 z-20 flex gap-2">
+      <button
+        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all hover:scale-105 bg-black/40 backdrop-blur-sm"
+        onClick={onToggleFav}
+        data-testid="button-fav-pack-modal"
+      >
+        <Heart className={`w-4 h-4 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white"}`} />
+      </button>
+      <button
+        onClick={onToggleTheme}
+        aria-label="Toggle theme"
+        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors bg-black/40 backdrop-blur-sm"
+      >
+        {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-white" />}
+      </button>
+      <button
+        onClick={onClose}
+        aria-label="Close"
+        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors bg-black/40 backdrop-blur-sm"
+      >
+        <X className="w-4 h-4 text-white" />
+      </button>
+    </div>
+  );
+}
 
 // ── Theme tokens (mirrors browse-products + store-detail-page) ────────────────
 
@@ -84,22 +125,23 @@ function StarRatingInput({ value, onChange }: { value: number; onChange: (v: num
   );
 }
 
-function ReviewStars({ rating, isDark = false }: { rating: number; isDark?: boolean }) {
-  return (
-    <div className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map(n => (
-        <Star
-          key={n}
-          className={`w-3.5 h-3.5 ${n <= rating ? "fill-amber-400 text-amber-400" : isDark ? "text-gray-600" : "text-gray-300"}`}
-        />
-      ))}
-    </div>
-  );
-}
+// ── Pack Reviews (opened via the Star icon on the pack image) ────────────────
+// Reuses the exact same /api/reviews/pack/:packId query + submission mutation
+// as before — only the presentation shell changed, from an inline modal tab to
+// the shared ReviewsModal (the same pattern already used by Marketing/Barista/
+// Academy/Print's own "Avis" icon). No new API, no duplicated data source.
 
-// ── Pack Reviews Tab ──────────────────────────────────────────────────────────
-
-function PackReviewsTab({ packId, isDark }: { packId: number; isDark: boolean }) {
+function PackReviewsModal({
+  open, onClose, packId, packName, avgRating, reviewCount, isDark,
+}: {
+  open: boolean;
+  onClose: () => void;
+  packId: number;
+  packName: string;
+  avgRating: number;
+  reviewCount: number;
+  isDark: boolean;
+}) {
   const t = useTheme(isDark);
   const { user } = useAuth();
   const { toast } = useToast();
@@ -109,14 +151,14 @@ function PackReviewsTab({ packId, isDark }: { packId: number; isDark: boolean })
 
   const canReview = user?.role === "CAFE_OWNER" && (user as any).status === "approved";
 
-  const { data: reviews = [], isLoading } = useQuery<SupplierProductReview[]>({
+  const { data: reviews = [] } = useQuery<SupplierProductReview[]>({
     queryKey: ["/api/reviews/pack", packId],
     queryFn: async () => {
       const res = await fetch(`/api/reviews/pack/${packId}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    enabled: !!packId,
+    enabled: open && !!packId,
   });
 
   const myReview = user ? reviews.find(r => r.cafeId === user.id) : undefined;
@@ -134,33 +176,38 @@ function PackReviewsTab({ packId, isDark }: { packId: number; isDark: boolean })
       qc.invalidateQueries({ queryKey: ["/api/reviews/pack", packId] });
       qc.invalidateQueries({ queryKey: ["/api/marketplace/packs"] });
       toast({ title: "Review submitted!" });
-      setRating(0);
-      setComment("");
     },
     onError: (err: any) => toast({ title: err?.message ?? "Error submitting review", variant: "destructive" }),
   });
 
-  if (isLoading) {
-    return (
-      <div className="py-4 space-y-2">
-        <div className={`h-16 w-full rounded-2xl animate-pulse ${t.dk ? "bg-gray-800" : "bg-gray-100"}`} />
-        <div className={`h-16 w-full rounded-2xl animate-pulse ${t.dk ? "bg-gray-800" : "bg-gray-100"}`} />
-      </div>
-    );
-  }
+  const reviewRows = useMemo(() => reviews.map(r => ({
+    id: r.id,
+    cafeOwnerName: r.cafeOwnerName,
+    cafeName: r.cafeName,
+    rating: r.rating,
+    comment: r.comment,
+    createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : undefined,
+  })), [reviews]);
 
   return (
-    <div className="space-y-3">
-      {canReview && !myReview && (
-        <div className={`border rounded-2xl p-4 space-y-3 ${t.reviewForm}`}>
-          <p className={`text-sm font-semibold ${t.textPrimary}`}>Leave a review</p>
+    <ReviewsModal
+      open={open}
+      onClose={onClose}
+      professionalName={packName}
+      rating={avgRating}
+      reviewCount={reviewCount}
+      reviews={reviewRows}
+      isDark={isDark}
+      reviewForm={canReview ? (
+        <div className={`p-3 rounded-xl border space-y-2 ${t.dk ? "border-gray-700" : "border-gray-200"}`}>
+          <p className={`text-xs font-medium ${t.textPrimary}`}>{myReview ? "Modifier votre avis" : "Leave a review"}</p>
           <StarRatingInput value={rating} onChange={setRating} />
           <Textarea
             placeholder="Share your experience with this pack…"
             value={comment}
             onChange={e => setComment(e.target.value)}
             className={`resize-none text-sm rounded-xl ${t.inputCls}`}
-            rows={3}
+            rows={2}
           />
           <Button
             size="sm"
@@ -168,42 +215,11 @@ function PackReviewsTab({ packId, isDark }: { packId: number; isDark: boolean })
             disabled={rating === 0 || submit.isPending}
             className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white border-0"
           >
-            {submit.isPending ? "Submitting…" : "Submit Review"}
+            {submit.isPending ? "Submitting…" : myReview ? "Mettre à jour l'avis" : "Submit Review"}
           </Button>
         </div>
-      )}
-
-      {canReview && myReview && (
-        <div className={`border rounded-2xl p-4 space-y-1.5 ${t.myReview}`}>
-          <p className={`text-xs font-semibold ${t.myReviewText}`}>Your review</p>
-          <div className="flex items-center justify-between">
-            <ReviewStars rating={myReview.rating} isDark={isDark} />
-          </div>
-          {myReview.comment && <p className={`text-xs ${t.textMuted}`}>{myReview.comment}</p>}
-          <p className={`text-[10px] ${t.textSubtle}`}>{myReview.createdAt ? new Date(myReview.createdAt).toLocaleDateString() : ""}</p>
-        </div>
-      )}
-
-      {reviews.length === 0 ? (
-        <div className="py-8 text-center">
-          <Star className={`w-8 h-8 mx-auto mb-2 ${t.emptyIcon}`} />
-          <p className={`text-sm ${t.textMuted}`}>No pack reviews yet. Be the first!</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {reviews.map(r => (
-            <div key={r.id} className={`border rounded-2xl p-3 space-y-1.5 ${t.reviewCard}`}>
-              <div className="flex items-center justify-between">
-                <p className={`text-sm font-semibold ${t.textPrimary}`}>{r.cafeName || r.cafeOwnerName}</p>
-                <ReviewStars rating={r.rating} isDark={isDark} />
-              </div>
-              {r.comment && <p className={`text-xs ${t.textMuted}`}>{r.comment}</p>}
-              <p className={`text-[10px] ${t.textSubtle}`}>{r.createdAt ? new Date(r.createdAt).toLocaleDateString() : ""}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+      ) : undefined}
+    />
   );
 }
 
@@ -229,122 +245,6 @@ function SupplierNameWithRating({ supplierId, supplierName, isDark }: { supplier
           <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
           <span className={`text-xs font-medium ${t.textPrimary}`}>{avgRating.toFixed(1)}</span>
           <span className={`text-[10px] ${t.textMuted}`}>({reviews.length})</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Supplier Reviews Tab ──────────────────────────────────────────────────────
-
-function SupplierReviewsTab({ supplierId, supplierName, isDark }: { supplierId: number; supplierName: string; isDark: boolean }) {
-  const t = useTheme(isDark);
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const qc = useQueryClient();
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState("");
-
-  const canReview = user?.role === "CAFE_OWNER" && (user as any).status === "approved";
-
-  const { data: reviews = [], isLoading } = useQuery<SupplierProductReview[]>({
-    queryKey: ["/api/reviews/supplier-public", supplierId],
-    queryFn: async () => {
-      const res = await fetch(`/api/reviews/supplier-public/${supplierId}`);
-      if (!res.ok) throw new Error("Failed");
-      return res.json();
-    },
-    enabled: !!supplierId,
-  });
-
-  const myReview = user ? reviews.find(r => r.cafeId === user.id) : undefined;
-  const alreadyReviewed = !!myReview;
-
-  const submit = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/reviews", { reviewType: "SUPPLIER", supplierId, rating, comment: comment.trim() || undefined }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/reviews/supplier-public", supplierId] });
-      toast({ title: "Review submitted!" });
-      setRating(0);
-      setComment("");
-    },
-    onError: (err: any) => toast({ title: err?.message ?? "Error submitting review", variant: "destructive" }),
-  });
-
-  if (isLoading) {
-    return (
-      <div className="py-4 space-y-2">
-        <div className={`h-16 w-full rounded-2xl animate-pulse ${t.dk ? "bg-gray-800" : "bg-gray-100"}`} />
-        <div className={`h-16 w-full rounded-2xl animate-pulse ${t.dk ? "bg-gray-800" : "bg-gray-100"}`} />
-      </div>
-    );
-  }
-
-  const avgRating = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
-
-  return (
-    <div className="space-y-3">
-      {reviews.length > 0 && (
-        <div className={`border rounded-2xl p-4 flex items-center gap-4 ${t.summaryCard}`}>
-          <div className="text-center shrink-0">
-            <p className={`text-2xl font-extrabold ${t.dk ? "text-amber-400" : "text-amber-600"}`}>{avgRating.toFixed(1)}</p>
-            <ReviewStars rating={Math.round(avgRating)} isDark={isDark} />
-          </div>
-          <div>
-            <p className={`font-semibold text-sm ${t.textPrimary}`}>{supplierName}</p>
-            <p className={`text-xs ${t.textMuted}`}>{reviews.length} review{reviews.length !== 1 ? "s" : ""}</p>
-          </div>
-        </div>
-      )}
-
-      {canReview && !alreadyReviewed && (
-        <div className={`border rounded-2xl p-4 space-y-3 ${t.reviewForm}`}>
-          <p className={`text-sm font-semibold ${t.textPrimary}`}>Review {supplierName}</p>
-          <StarRatingInput value={rating} onChange={setRating} />
-          <Textarea
-            placeholder="Share your experience with this supplier…"
-            value={comment}
-            onChange={e => setComment(e.target.value)}
-            className={`resize-none text-sm rounded-xl ${t.inputCls}`}
-            rows={3}
-          />
-          <Button
-            size="sm"
-            onClick={() => submit.mutate()}
-            disabled={rating === 0 || submit.isPending}
-            className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white border-0"
-          >
-            {submit.isPending ? "Submitting…" : "Submit Review"}
-          </Button>
-        </div>
-      )}
-
-      {canReview && alreadyReviewed && myReview && (
-        <div className={`border rounded-2xl p-4 space-y-1.5 ${t.myReview}`}>
-          <p className={`text-xs font-semibold ${t.myReviewText}`}>Your review of {supplierName}</p>
-          <ReviewStars rating={myReview.rating} isDark={isDark} />
-          {myReview.comment && <p className={`text-xs ${t.textMuted}`}>{myReview.comment}</p>}
-          <p className={`text-[10px] ${t.textSubtle}`}>{myReview.createdAt ? new Date(myReview.createdAt).toLocaleDateString() : ""}</p>
-        </div>
-      )}
-
-      {reviews.length === 0 ? (
-        <div className="py-8 text-center">
-          <Star className={`w-8 h-8 mx-auto mb-2 ${t.emptyIcon}`} />
-          <p className={`text-sm ${t.textMuted}`}>No supplier reviews yet.</p>
-        </div>
-      ) : (
-        <div className="space-y-2">
-          {reviews.slice(0, 10).map(r => (
-            <div key={r.id} className={`border rounded-2xl p-3 space-y-1.5 ${t.reviewCard}`}>
-              <div className="flex items-center justify-between">
-                <p className={`text-sm font-semibold ${t.textPrimary}`}>{r.cafeName || r.cafeOwnerName}</p>
-                <ReviewStars rating={r.rating} isDark={isDark} />
-              </div>
-              {r.comment && <p className={`text-xs ${t.textMuted}`}>{r.comment}</p>}
-              <p className={`text-[10px] ${t.textSubtle}`}>{r.createdAt ? new Date(r.createdAt).toLocaleDateString() : ""}</p>
-            </div>
-          ))}
         </div>
       )}
     </div>
@@ -394,7 +294,7 @@ function FlavorDistributionRow({ item, allocations, onChange, isDark }: {
               <p className={`text-xs font-medium truncate ${t.textPrimary}`}>
                 {[a.flavorName, a.sizeName].filter(Boolean).join(" · ") || "Default"}
               </p>
-              <p className={`text-[10px] ${t.textSubtle}`}>{a.availableQty} in stock</p>
+              <p className={`text-[10px] ${t.textSubtle}`}>{a.availableQty} en stock</p>
             </div>
             {/* Qty stepper */}
             <div className={`flex items-center border rounded-xl overflow-hidden ${t.stepperBorder}`}>
@@ -552,19 +452,31 @@ function ProductPreviewModal({ productId, onClose }: { productId: number | null;
 
 // ── Main Modal ────────────────────────────────────────────────────────────────
 
-export function PackQuickViewModal() {
+export function PackQuickViewModal({ previewPack, previewOpen, onPreviewClose }: {
+  // Additive — supports a second, independent instance of this exact same
+  // component (e.g. the Supplier's own "Open Pack Detail Live Preview"
+  // button) rendered with a locally-built, not-yet-saved PackDetail object
+  // instead of the real Zustand store + server fetch. Left undefined, this
+  // component behaves exactly as before (the Coffee Owner Shop's own
+  // singleton instance in marketplace-layout.tsx never passes these).
+  previewPack?: PackDetail;
+  previewOpen?: boolean;
+  onPreviewClose?: () => void;
+} = {}) {
+  const isPreview = previewPack != null;
+
   const packId = usePackQuickView((s) => s.packId);
   const editCartItem = usePackQuickView((s) => s.editCartItem);
   const onSave = usePackQuickView((s) => s.onSave);
   const replaceTargetPackId = usePackQuickView((s) => s.replaceTargetPackId);
   const clearReplaceTarget = usePackQuickView((s) => s.clearReplaceTarget);
-  const close  = usePackQuickView((s) => s.close);
-  const isEditing = editCartItem != null;
+  const storeClose = usePackQuickView((s) => s.close);
+  const close = isPreview ? (onPreviewClose ?? (() => {})) : storeClose;
+  const isEditing = !isPreview && editCartItem != null;
 
   const [qty, setQty]           = useState(1);
-  const [activeTab, setActiveTab] = useState<"details" | "reviews">("details");
-  const [reviewsTab, setReviewsTab] = useState<"pack" | "supplier">("pack");
   const [previewProductId, setPreviewProductId] = useState<number | null>(null);
+  const [packReviewsOpen, setPackReviewsOpen] = useState(false);
   // When editing an existing cart line, the pack-loaded effect below must seed
   // flavorSelections from the cart's actual saved distribution once, instead
   // of the auto-computed default — subsequent qty changes made by the user
@@ -576,26 +488,24 @@ export function PackQuickViewModal() {
   const t = useTheme(isDark);
   const fmt = useFormatCurrency();
 
-  // ── Scroll detection for fixed header ─────────────────────────────────────
-  const [scrolled, setScrolled] = useState(false);
-  const scrollRef = useRef<HTMLDivElement>(null);
-
   const { toast } = useToast();
   const addPackItem = useCart((s) => s.addPackItem);
   const setPackItem = useCart((s) => s.setPackItem);
   const replacePackItem = useCart((s) => s.replacePackItem);
-  const faved      = useFavorites((s) => (packId != null ? !!s.pack[packId] : false));
+  const faved      = useFavorites((s) => (!isPreview && packId != null ? !!s.pack[packId] : false));
   const togglePack = useFavorites((s) => s.togglePack);
 
-  const { data: pack, isLoading } = useQuery<PackDetail>({
+  const { data: queriedPack, isLoading: queryLoading } = useQuery<PackDetail>({
     queryKey: ["/api/marketplace/packs", packId],
     queryFn: async () => {
       const res = await fetch(`/api/marketplace/packs/${packId}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
-    enabled: packId != null,
+    enabled: !isPreview && packId != null,
   });
+  const pack = isPreview ? previewPack : queriedPack;
+  const isLoading = isPreview ? false : queryLoading;
 
   // ── Flavor distribution state ─────────────────────────────────────────────
   const [flavorSelections, setFlavorSelections] = useState<Record<number, FlavorAllocation[]>>({});
@@ -688,14 +598,31 @@ export function PackQuickViewModal() {
       setQty(1);
       seedFromCartRef.current = false;
     }
-    setActiveTab("details");
-    setReviewsTab("pack");
-    setScrolled(false);
+    setPackReviewsOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [packId]);
 
   const individualTotal = pack ? pack.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0) : 0;
   const maxQty = pack ? Math.min(pack.quantityAvailable, pack.maxBuildable) : 0;
+
+  // Distance — identical computation/guard to PackCardTile (browse-products.tsx):
+  // null (omitted, never fabricated) unless both the user's search location and
+  // the pack's supplier coordinates are present and valid.
+  const searchLocation = useSearchLocationStore((s) => s.searchLocation);
+  const distance = useMemo(() => {
+    if (!pack || !searchLocation || !(pack as any).supplierLat || !(pack as any).supplierLng) return null;
+    const lat = parseFloat((pack as any).supplierLat);
+    const lng = parseFloat((pack as any).supplierLng);
+    if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+    return calculateDistance(parseFloat(searchLocation.lat), parseFloat(searchLocation.lng), lat, lng);
+  }, [pack, searchLocation]);
+
+  // Expiry/stock styling — mirrors PackCardTile's exact treatment (amber,
+  // no separate icon for expiry, "Exp: <day> <month short> <year>").
+  const priceColor = t.dk ? "text-amber-400" : "text-amber-600";
+  const expiryLabel = pack?.expirationDate
+    ? new Date(pack.expirationDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+    : null;
 
   const flavorSelectionsValid = useMemo(() => {
     if (!pack) return true;
@@ -783,7 +710,7 @@ export function PackQuickViewModal() {
   const hasFlavorChoice = pack ? pack.items.some(i => i.listingVariants.filter(v => v.availableQuantity > 0).length > 1) : false;
 
   return (
-    <Dialog open={packId != null} onOpenChange={(open) => { if (!open) close(); }}>
+    <Dialog open={isPreview ? !!previewOpen : packId != null} onOpenChange={(open) => { if (!open) close(); }}>
       {/*
         DialogContent: flex column, no inner scroll (scroll is on the inner div),
         p-0 to let our header/body/footer control all spacing,
@@ -797,87 +724,100 @@ export function PackQuickViewModal() {
           <DialogTitle>Pack Details</DialogTitle>
         </VisuallyHidden>
 
-        {/* ── Fixed header ───────────────────────────────────────────────── */}
-        <div className={`shrink-0 px-3 sm:px-5 pt-4 pb-3 border-b backdrop-blur-sm transition-colors ${t.headerBg}`}>
-          <div className="flex items-center gap-3">
-            {/* Fav button */}
-            <button
-              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all hover:scale-110 ${t.iconBtn}`}
-              onClick={() => pack && togglePack(pack.id)}
-              data-testid="button-fav-pack-modal"
-            >
-              <Heart className={`w-4 h-4 transition-colors ${faved ? "fill-rose-500 text-rose-500" : ""}`} />
-            </button>
-
-            {/* Pack name + tags — fade in on scroll */}
-            <div className={`flex-1 min-w-0 transition-opacity duration-200 ${scrolled ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
-              <p className={`text-[13px] font-bold truncate text-center ${t.textPrimary}`}>
-                {pack?.name ?? ""}
-              </p>
-              {pack && (pack.brandLabels.length > 0 || pack.categoryLabels.length > 0) && (
-                <div className="flex items-center justify-center gap-1 flex-wrap mt-0.5">
-                  <span className={`text-[10px] font-semibold ${t.dk ? "text-amber-400" : "text-amber-600"}`}>Pack</span>
-                  {pack.brandLabels.slice(0, 2).map(b => (
-                    <span key={b.id} className={`text-[10px] ${t.textMuted}`}>· {b.name}</span>
-                  ))}
-                  {pack.categoryLabels.slice(0, 2).map(c => (
-                    <span key={c.id} className={`text-[10px] ${t.textMuted}`}>· {c.name}</span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Sun/Moon toggle */}
-            <button
-              onClick={toggle}
-              aria-label="Toggle theme"
-              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${t.iconBtn}`}
-            >
-              {isDark
-                ? <Sun className="w-4 h-4 text-amber-400" />
-                : <Moon className="w-4 h-4 text-gray-500" />
-              }
-            </button>
-
-            {/* Close button */}
-            <button
-              onClick={close}
-              aria-label="Close"
-              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${t.iconBtn}`}
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
         {/* ── Scrollable body ─────────────────────────────────────────────── */}
         <div
-          ref={scrollRef}
-          className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 pb-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full"
-          onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 90)}
+          className="flex-1 min-h-0 overflow-y-auto pb-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full"
           style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >
           {isLoading || !pack ? (
             <div className="px-3 sm:px-5 py-6 space-y-4">
-              <div className={`h-48 w-full rounded-2xl animate-pulse ${t.dk ? "bg-gray-800" : "bg-gray-100"}`} />
+              <div className={`relative h-48 w-full rounded-2xl animate-pulse ${t.dk ? "bg-gray-800" : "bg-gray-100"}`}>
+                <PackImageTopIcons
+                  faved={false}
+                  onToggleFav={() => {}}
+                  isDark={isDark}
+                  onToggleTheme={toggle}
+                  onClose={close}
+                />
+              </div>
               <div className={`h-6 w-2/3 rounded-xl animate-pulse ${t.dk ? "bg-gray-800" : "bg-gray-100"}`} />
               <div className={`h-4 w-1/2 rounded-xl animate-pulse ${t.dk ? "bg-gray-800" : "bg-gray-100"}`} />
             </div>
           ) : (
             <>
-              {/* ── Hero image ─────────────────────────────────────────── */}
-              <PackImageGallery
-                imageUrl={pack.imageUrl}
-                imageUrls={pack.imageUrls}
-                alt={pack.name}
-                mainClassName={`relative aspect-[16/9] ${t.imgBg}`}
-                emptyClassName={t.emptyIcon}
-                thumbnailClassName="px-1"
-              />
+              {/* ── Hero image — flush with the modal's own top corners,
+                  fixed height, overlay icons anchored to the image container
+                  itself (Fav/Theme/Close top-right, Avis bottom-right) so
+                  they scroll away together with the image instead of
+                  staying pinned to the viewport. The existing thumbnail
+                  gallery beneath it is untouched (same component, same
+                  behavior), only given its own explicit horizontal padding
+                  now that the scroll container's ambient padding has been
+                  removed (every other section below already carries its own
+                  independent px-3/sm:px-5, so this is the only consumer
+                  that actually relied on it). ── */}
+              <div>
+                <PackImageGallery
+                  imageUrl={pack.imageUrl}
+                  imageUrls={pack.imageUrls}
+                  alt={pack.name}
+                  mainClassName={`relative w-full h-56 sm:h-72 shrink-0 ${t.imgBg}`}
+                  mainRoundedClassName="rounded-t-3xl"
+                  emptyClassName={t.emptyIcon}
+                  thumbnailClassName="px-3 sm:px-5 pt-1"
+                  overlay={
+                    <>
+                      <PackImageTopIcons
+                        faved={faved}
+                        onToggleFav={isPreview ? () => {} : () => togglePack(pack.id)}
+                        isDark={isDark}
+                        onToggleTheme={toggle}
+                        onClose={close}
+                      />
+                      {/* Avis — hidden in preview mode (the Supplier's
+                          not-yet-saved draft has no real review history to
+                          open, and no real packId to fetch reviews for). */}
+                      {!isPreview && (
+                        <div className="absolute bottom-3 right-3 z-20">
+                          <button
+                            onClick={() => setPackReviewsOpen(true)}
+                            className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all hover:scale-105 bg-black/40 backdrop-blur-sm"
+                            data-testid="button-open-pack-reviews"
+                            title="Avis"
+                          >
+                            <Star className="w-4 h-4 text-white" />
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  }
+                />
+              </div>
 
               {/* ── Pack info section ──────────────────────────────────── */}
               <div className="px-3 sm:px-5 pt-5 pb-4 space-y-3">
-                {/* Badges row */}
+                {/* Pack name + rating — header, directly below the images
+                    and above the mapped badges (task: "Improve Pack Details
+                    Modal Layout" — this used to be duplicated further down
+                    in a separate scroll-triggered sticky block; that block
+                    is now removed rather than kept as a second rendering of
+                    the same name/brands/category). Rating styled the same
+                    way as SupplierNameWithRating's own inline rating below,
+                    not the denser card-style rating, per spec. */}
+                <div className="flex items-start justify-between gap-x-3 gap-y-1 flex-wrap">
+                  <h2 className={`text-xl font-extrabold leading-tight ${t.textPrimary}`} data-testid="text-pack-name">
+                    {pack.name}
+                  </h2>
+                  {pack.packReviewCount > 0 && (
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                      <span className={`text-sm font-semibold ${t.textPrimary}`}>{pack.packAvgRating.toFixed(1)}</span>
+                      <span className={`text-xs ${t.textMuted}`}>({pack.packReviewCount})</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Badges row (mapped Pack/brand/category) */}
                 <div className="flex flex-wrap gap-1.5">
                   <Badge className={`text-[10px] font-semibold border px-2 py-0.5 ${t.badgePack}`}>
                     <Layers className="w-3 h-3 mr-1 inline" />Pack
@@ -890,11 +830,6 @@ export function PackQuickViewModal() {
                   ))}
                 </div>
 
-                {/* Pack name */}
-                <h2 className={`text-xl font-extrabold leading-tight ${t.textPrimary}`} data-testid="text-pack-name">
-                  {pack.name}
-                </h2>
-
                 {/* Description */}
                 {pack.description && (
                   <p className={`text-sm leading-relaxed ${t.textMuted}`}>{pack.description}</p>
@@ -903,7 +838,14 @@ export function PackQuickViewModal() {
                 {/* Supplier */}
                 <SupplierNameWithRating supplierId={pack.supplierId} supplierName={pack.supplierName} isDark={isDark} />
 
-                {/* Price / stock / expiry / rating row */}
+                {/* Price / distance / stock / expiry row — expiry and stock
+                    now match PackCardTile's exact treatment (amber, same
+                    "Exp: <day> <month> <year>" format, Package icon for
+                    stock); distance reuses the same calculation/guard as
+                    the mapped cards and is simply omitted (never invented)
+                    when no valid search location or supplier coordinates
+                    exist. Pack rating moved up next to the name (above),
+                    no longer duplicated here. */}
                 <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 pt-2 border-t ${t.divider}`}>
                   {/* Price */}
                   <div className="flex items-baseline gap-2.5">
@@ -914,69 +856,38 @@ export function PackQuickViewModal() {
                       {fmt(pack.price)}
                     </span>
                     {individualTotal > pack.price && (
-                      <span className={`text-sm line-through ${t.textMuted}`}>{fmt(individualTotal)}</span>
+                      <span className={`text-2xl line-through ${t.textMuted}`}>{fmt(individualTotal)}</span>
                     )}
                   </div>
 
+                  {/* Distance */}
+                  {distance != null && (
+                    <span className={`flex items-center gap-0.5 text-sm ${t.textMuted}`}>
+                      <MapPin className="w-3.5 h-3.5 shrink-0" />{formatDistance(distance)}
+                    </span>
+                  )}
+
                   {/* Stock */}
-                  <span className={`text-sm font-medium ${t.textMuted}`}>
-                    {maxQty} disponible{maxQty !== 1 ? "s" : ""}
+                  <span className={`flex items-center gap-1 text-sm font-medium ${priceColor}`}>
+                    <Package className="w-3.5 h-3.5 shrink-0" />
+                    {maxQty} Pack disponible{maxQty !== 1 ? "s" : ""}
                   </span>
 
                   {/* Expiry */}
-                  {pack.expirationDate && (
-                    <div className={`flex items-center gap-1 text-sm ${t.textMuted}`}>
-                      <Calendar className="w-3.5 h-3.5 shrink-0" />
-                      Expires {new Date(pack.expirationDate).toLocaleDateString()}
-                    </div>
-                  )}
-
-                  {/* Rating */}
-                  {pack.packReviewCount > 0 && (
-                    <div className="flex items-center gap-1">
-                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                      <span className={`text-sm font-semibold ${t.textPrimary}`}>{pack.packAvgRating.toFixed(1)}</span>
-                      <span className={`text-xs ${t.textMuted}`}>({pack.packReviewCount})</span>
-                    </div>
+                  {expiryLabel && (
+                    <span className={`text-sm font-medium ${priceColor}`}>Exp: {expiryLabel}</span>
                   )}
                 </div>
               </div>
 
-              {/* ── Sticky tabs (Pack Details / Reviews) ──────────────── */}
-              <div className={`sticky top-0 z-10 border-b px-3 sm:px-5 py-2 transition-colors ${t.stickyBg}`}>
-                {/* Favorites-style pill switcher */}
-                <div className={`inline-flex rounded-2xl p-1 gap-1 ${t.switcherBg}`}>
-                  <button
-                    onClick={() => setActiveTab("details")}
-                    className={`px-4 py-1.5 rounded-xl text-[12px] font-semibold transition-all ${activeTab === "details" ? t.switcherActive : t.switcherInact}`}
-                  >
-                    Pack Details
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("reviews")}
-                    className={`flex items-center gap-1.5 px-4 py-1.5 rounded-xl text-[12px] font-semibold transition-all ${activeTab === "reviews" ? t.switcherActive : t.switcherInact}`}
-                  >
-                    Reviews
-                    {pack.packReviewCount > 0 && (
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${t.dk ? "bg-gray-600 text-gray-200" : "bg-gray-200 text-gray-600"}`}>
-                        {pack.packReviewCount}
-                      </span>
-                    )}
-                  </button>
-                </div>
-              </div>
-
-              {/* ── Tab content ────────────────────────────────────────── */}
+              {/* ── Pack Details content ──────────────────────────────── */}
               <div className="px-3 sm:px-5 pt-4 pb-4">
-
-                {/* DETAILS TAB */}
-                {activeTab === "details" && (
-                  <div className="space-y-4">
+                <div className="space-y-4">
 
                     {/* Included products */}
                     <div>
                       <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${t.textMuted}`}>
-                        Included Products
+                        Produits inclus
                       </p>
                       <div className={`border rounded-2xl overflow-hidden divide-y ${t.dk ? "border-gray-700/60 divide-gray-700/60" : "border-gray-100 divide-gray-100"}`}>
                         {pack.items.map((item) => (
@@ -1019,8 +930,8 @@ export function PackQuickViewModal() {
                     {hasFlavorChoice && (
                       <div className="space-y-3">
                         <div>
-                          <p className={`text-sm font-bold ${t.textPrimary}`}>Choose your flavor distribution</p>
-                          <p className={`text-xs mt-0.5 ${t.textMuted}`}>Distribute the quantities across available flavors for each product.</p>
+                          <p className={`text-sm font-bold ${t.textPrimary}`}>Choisissez la répartition des parfums</p>
+                          <p className={`text-xs mt-0.5 ${t.textMuted}`}>Répartissez les quantités entre les parfums disponibles pour chaque produit.</p>
                         </div>
                         {pack.items
                           .filter(item => item.listingVariants.filter(v => v.availableQuantity > 0).length > 1)
@@ -1041,35 +952,6 @@ export function PackQuickViewModal() {
                       </div>
                     )}
                   </div>
-                )}
-
-                {/* REVIEWS TAB */}
-                {activeTab === "reviews" && (
-                  <div className="space-y-4">
-                    {/* Inner Pack / Supplier sub-switcher */}
-                    <div className={`inline-flex rounded-2xl p-1 gap-1 ${t.switcherBg}`}>
-                      <button
-                        onClick={() => setReviewsTab("pack")}
-                        className={`px-4 py-1.5 rounded-xl text-[12px] font-semibold transition-all ${reviewsTab === "pack" ? t.switcherActive : t.switcherInact}`}
-                      >
-                        Pack Reviews
-                      </button>
-                      <button
-                        onClick={() => setReviewsTab("supplier")}
-                        className={`px-4 py-1.5 rounded-xl text-[12px] font-semibold transition-all ${reviewsTab === "supplier" ? t.switcherActive : t.switcherInact}`}
-                      >
-                        Supplier Reviews
-                      </button>
-                    </div>
-
-                    {reviewsTab === "pack" && (
-                      <PackReviewsTab packId={pack.id} isDark={isDark} />
-                    )}
-                    {reviewsTab === "supplier" && (
-                      <SupplierReviewsTab supplierId={pack.supplierId} supplierName={pack.supplierName} isDark={isDark} />
-                    )}
-                  </div>
-                )}
               </div>
 
               {/* Bottom spacer so content isn't hidden behind fixed footer */}
@@ -1109,7 +991,9 @@ export function PackQuickViewModal() {
                     : "bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-white shadow-lg shadow-amber-500/20"
                 }`}
                 disabled={maxQty === 0 || !flavorSelectionsValid}
-                onClick={handleAddToCart}
+                onClick={isPreview
+                  ? () => toast({ title: "Mode aperçu", description: "Aucune commande réelle n'est créée depuis cette prévisualisation." })
+                  : handleAddToCart}
                 data-testid="button-add-pack-to-cart"
               >
                 {maxQty === 0
@@ -1127,6 +1011,18 @@ export function PackQuickViewModal() {
       </DialogContent>
 
       <ProductPreviewModal productId={previewProductId} onClose={() => setPreviewProductId(null)} />
+
+      {!isPreview && pack && (
+        <PackReviewsModal
+          open={packReviewsOpen}
+          onClose={() => setPackReviewsOpen(false)}
+          packId={pack.id}
+          packName={pack.name}
+          avgRating={pack.packAvgRating}
+          reviewCount={pack.packReviewCount}
+          isDark={isDark}
+        />
+      )}
     </Dialog>
   );
 }

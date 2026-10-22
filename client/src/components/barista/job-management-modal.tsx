@@ -734,7 +734,7 @@ function ApplicationCard({ app, isDark, t }: { app: BaristaJobApplication; isDar
           />
           <div className="flex gap-2 justify-end">
             {reproposing && (
-              <Button size="sm" variant="ghost" className={t.textPrimary} onClick={() => setReproposing(false)} disabled={busy} data-testid={`button-job-meeting-cancel-${app.id}`}>
+              <Button size="sm" variant="outline" className={t.textPrimary} onClick={() => setReproposing(false)} disabled={busy} data-testid={`button-job-meeting-cancel-${app.id}`}>
                 Annuler
               </Button>
             )}

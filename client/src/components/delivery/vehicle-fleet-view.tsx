@@ -209,8 +209,8 @@ export default function VehicleFleetView({ title = "Véhicules", subtitle = "Gé
                     <span className="text-xs text-muted-foreground">Disponible</span>
                   </div>
                   <div className="flex gap-1">
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(v)} data-testid={`button-edit-vehicle-${v.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                    <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => handleDelete(v)} data-testid={`button-delete-vehicle-${v.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+                    <Button size="sm" variant="outline" onClick={() => setEditing(v)} data-testid={`button-edit-vehicle-${v.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                    <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => handleDelete(v)} data-testid={`button-delete-vehicle-${v.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
                   </div>
                 </div>
               </CardContent>

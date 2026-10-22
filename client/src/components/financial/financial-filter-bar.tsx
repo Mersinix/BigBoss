@@ -144,7 +144,7 @@ export function FinancialFilterBar({
       </div>
 
       {isFinancialFiltersActive(filters) && (
-        <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => onChange(DEFAULT_FINANCIAL_FILTERS)}>
+        <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => onChange(DEFAULT_FINANCIAL_FILTERS)}>
           <X className="w-3.5 h-3.5" /> Effacer
         </Button>
       )}

@@ -519,7 +519,7 @@ export function JobPostFormModal({
           <div className={`flex flex-col-reverse sm:flex-row gap-2 sm:justify-end pt-4 border-t ${t.border}`}>
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               onClick={onClose}
               disabled={isPending}
               className={t.textPrimary}

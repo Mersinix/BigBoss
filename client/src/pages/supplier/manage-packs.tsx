@@ -487,7 +487,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                       data-testid={`input-pack-image-${index + 1}`}
                     />
                     {imageUrls.length > 1 && (
-                      <Button type="button" size="icon" variant="ghost" className="shrink-0 text-destructive" onClick={() => removeImageUrl(index)} aria-label={`Remove image ${index + 1}`}>
+                      <Button type="button" size="icon" variant="outline" className="shrink-0 text-destructive" onClick={() => removeImageUrl(index)} aria-label={`Remove image ${index + 1}`}>
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     )}
@@ -1084,7 +1084,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
           </div>
         )}
         {hasActiveFilters && (
-          <Button variant="ghost" size="sm" className="h-8 text-xs px-2 text-muted-foreground shrink-0" onClick={() => { setSearch(""); setFilterCategory("__all__"); setFilterSubCategory("__all__"); setFilterBrand("__all__"); setFilterFlavor("__all__"); setFilterSize("__all__"); }}>
+          <Button variant="outline" size="sm" className="h-8 text-xs px-2 text-muted-foreground shrink-0" onClick={() => { setSearch(""); setFilterCategory("__all__"); setFilterSubCategory("__all__"); setFilterBrand("__all__"); setFilterFlavor("__all__"); setFilterSize("__all__"); }}>
             Clear filters
           </Button>
         )}
@@ -1126,7 +1126,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
                     </div>
                   </div>
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
                     className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive shrink-0"
                     onClick={() => requestRemoveFromPack(listing)}
@@ -1589,7 +1589,7 @@ export function PackTab() {
                   </div>
                 )}
                 {packsHasActiveFilters && (
-                  <Button variant="ghost" size="sm" className="h-8 text-xs px-2 text-muted-foreground shrink-0" onClick={() => { setPacksSearch(""); setPacksFilterCategory("__all__"); setPacksFilterSubCategory("__all__"); setPacksFilterBrand("__all__"); setPacksFilterFlavor("__all__"); setPacksFilterSize("__all__"); }}>
+                  <Button variant="outline" size="sm" className="h-8 text-xs px-2 text-muted-foreground shrink-0" onClick={() => { setPacksSearch(""); setPacksFilterCategory("__all__"); setPacksFilterSubCategory("__all__"); setPacksFilterBrand("__all__"); setPacksFilterFlavor("__all__"); setPacksFilterSize("__all__"); }}>
                     Clear filters
                   </Button>
                 )}

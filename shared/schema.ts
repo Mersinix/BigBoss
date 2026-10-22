@@ -179,6 +179,16 @@ export const supplierProductListings = pgTable("supplier_product_listings", {
   maxStock: integer("max_stock"),
   unit: text("unit").notNull().default('unit'),
   visibility: listingVisibilityEnum("visibility").notNull().default('VISIBLE'),
+  // Whether this listing appears as an individually purchasable standalone
+  // product in the Coffee Owner Shop. Deliberately separate from
+  // `visibility` above, which buildPackDetails' validItems check already
+  // treats as a pack-item-validity signal (and prunes pack references
+  // when it isn't 'VISIBLE') — reusing it here would silently delete this
+  // listing's references from every pack that includes it. This field is
+  // read only by the standalone listing/purchase paths, never by pack
+  // retrieval, validation, or checkout. Defaults to true so every existing
+  // listing keeps its current visibility until a supplier explicitly hides it.
+  isIndividuallyVisible: boolean("is_individually_visible").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

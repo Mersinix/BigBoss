@@ -137,13 +137,13 @@ export function InventoryTable({
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       {!item.hasVariants && (
-                        <Button size="icon" variant="ghost" className="h-8 w-8" title="Quick adjust stock" onClick={() => onAdjust(item)} data-testid={`button-adjust-${item.listingId}`}>
+                        <Button size="icon" variant="outline" className="h-8 w-8" title="Quick adjust stock" onClick={() => onAdjust(item)} data-testid={`button-adjust-${item.listingId}`}>
                           <Plus className="w-3.5 h-3.5" />
                         </Button>
                       )}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button size="icon" variant="ghost" className="h-8 w-8" data-testid={`button-menu-${item.listingId}`}><MoreVertical className="w-3.5 h-3.5" /></Button>
+                          <Button size="icon" variant="outline" className="h-8 w-8" data-testid={`button-menu-${item.listingId}`}><MoreVertical className="w-3.5 h-3.5" /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => onHistory(item)} data-testid={`menu-history-${item.listingId}`}><History className="w-3.5 h-3.5 mr-2" />Stock History</DropdownMenuItem>
@@ -199,7 +199,7 @@ export function InventoryTable({
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
-                        size="icon" variant="ghost" className="h-8 w-8"
+                        size="icon" variant="outline" className="h-8 w-8"
                         title={`Adjust stock — ${variant.variantName}`}
                         onClick={() => onAdjustVariant(item, variant)}
                         data-testid={`button-adjust-variant-${variant.variantId}`}

@@ -580,7 +580,7 @@ function FilterBar({ filters, onChange, prospectTypes, onAddType }: { filters: F
         </SelectContent>
       </Select>
       {active > 0 && (
-        <Button size="sm" variant="ghost" className="shrink-0" onClick={() => onChange({ search: "", status: "", prospectType: "", city: "", hasPhone: "", hasWebsite: "", minRating: "", sortBy: "createdAt", sortOrder: "desc" })}>
+        <Button size="sm" variant="outline" className="shrink-0" onClick={() => onChange({ search: "", status: "", prospectType: "", city: "", hasPhone: "", hasWebsite: "", minRating: "", sortBy: "createdAt", sortOrder: "desc" })}>
           <X className="w-3.5 h-3.5 mr-1" />Clear filters
         </Button>
       )}
@@ -609,7 +609,7 @@ function BulkActions({ ids, onClear, onAction }: { ids: number[]; onClear: () =>
         </DropdownMenuContent>
       </DropdownMenu>
       <Button size="sm" variant="destructive" onClick={() => onAction("delete")}><Trash2 className="w-3.5 h-3.5 mr-1" />Delete</Button>
-      <Button size="sm" variant="ghost" onClick={onClear}><X className="w-3.5 h-3.5" /></Button>
+      <Button size="sm" variant="outline" onClick={onClear}><X className="w-3.5 h-3.5" /></Button>
     </div>
   );
 }
@@ -624,7 +624,7 @@ function RowActions({ prospect, onView, onAction }: {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={e => e.stopPropagation()}>
+        <Button variant="outline" size="sm" className="h-7 w-7 p-0" onClick={e => e.stopPropagation()}>
           <MoreHorizontal className="w-4 h-4" />
         </Button>
       </DropdownMenuTrigger>
@@ -905,7 +905,7 @@ function ProspectSheet({ prospect, open, onClose, onSaved, prospectTypes }: {
                         'bg-gray-100 text-gray-600 dark:bg-gray-500/15 dark:text-gray-400'
                       }`}>{followUp.priority}</Badge>
                     </div>
-                    <Button size="sm" variant="ghost" onClick={() => setFollowUp(null)}><X className="w-4 h-4" /></Button>
+                    <Button size="sm" variant="outline" onClick={() => setFollowUp(null)}><X className="w-4 h-4" /></Button>
                   </div>
                   {followUp.notes && <p className="text-xs text-muted-foreground">{followUp.notes}</p>}
                 </div>
@@ -1146,7 +1146,7 @@ function CreateAccountModal({ prospect, type, open, onClose }: { prospect: Prosp
                     <p className="text-sm truncate">{pickedLocation.address || pickedLocation.details?.street}</p>
                     {pickedLocation.details?.street && <p className="text-xs text-muted-foreground truncate">{pickedLocation.details.street}</p>}
                   </div>
-                  <Button size="sm" variant="ghost" onClick={() => setLocationModalOpen(true)} data-testid="button-edit-create-account-location">Edit</Button>
+                  <Button size="sm" variant="outline" onClick={() => setLocationModalOpen(true)} data-testid="button-edit-create-account-location">Edit</Button>
                 </div>
               ) : (
                 <Button size="sm" variant="outline" className="mt-1 w-full" onClick={() => setLocationModalOpen(true)} data-testid="button-pick-create-account-location">

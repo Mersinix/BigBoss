@@ -231,7 +231,7 @@ function AcademyDetail({ academy, onClose, onOpenCourse, onRefresh }: { academy:
                 <div className="space-y-2">
                   <Textarea placeholder="Motif du refus (visible par le professionnel)…" value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} rows={2} />
                   <div className="flex gap-2 justify-end">
-                    <Button size="sm" variant="ghost" onClick={() => { setRejecting(false); setRejectionReason(""); }}>Annuler</Button>
+                    <Button size="sm" variant="outline" onClick={() => { setRejecting(false); setRejectionReason(""); }}>Annuler</Button>
                     <Button size="sm" variant="destructive" disabled={publicationMutation.isPending} onClick={() => publicationMutation.mutate({ decision: "REJECTED", rejectionReason })} data-testid="button-reject-academy-publication">
                       {publicationMutation.isPending ? "…" : "Confirmer le refus"}
                     </Button>
@@ -607,7 +607,7 @@ export default function AdminAcademyPage() {
               <SelectContent><SelectItem value="all">Tous les statuts</SelectItem><SelectItem value="approved">Approuvée</SelectItem><SelectItem value="pending">En attente</SelectItem><SelectItem value="rejected">Rejetée</SelectItem></SelectContent>
             </Select>
             {(academySearch || academyStatus !== "all") && (
-              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setAcademySearch(""); setAcademyStatus("all"); }} data-testid="button-clear-academies-filters">
+              <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setAcademySearch(""); setAcademyStatus("all"); }} data-testid="button-clear-academies-filters">
                 <X className="w-3.5 h-3.5" /> Effacer
               </Button>
             )}
@@ -727,7 +727,7 @@ export default function AdminAcademyPage() {
               <SelectContent><SelectItem value="all">Toutes</SelectItem><SelectItem value="published">Publiées</SelectItem><SelectItem value="draft">Brouillons</SelectItem></SelectContent>
             </Select>
             {hasCourseFilters && (
-              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setCourseSearch(""); setCourseStatus("all"); setCourseCategory("all"); setCourseAcademy("all"); }} data-testid="button-clear-courses-filters">
+              <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setCourseSearch(""); setCourseStatus("all"); setCourseCategory("all"); setCourseAcademy("all"); }} data-testid="button-clear-courses-filters">
                 <X className="w-3.5 h-3.5" /> Effacer
               </Button>
             )}
@@ -811,7 +811,7 @@ export default function AdminAcademyPage() {
               <SelectContent><SelectItem value="all">Tous les statuts</SelectItem>{Object.entries(REGISTRATION_STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
             </Select>
             {(registrationSearch || registrationStatus !== "all") && (
-              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setRegistrationSearch(""); setRegistrationStatus("all"); }} data-testid="button-clear-registrations-filters">
+              <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setRegistrationSearch(""); setRegistrationStatus("all"); }} data-testid="button-clear-registrations-filters">
                 <X className="w-3.5 h-3.5" /> Effacer
               </Button>
             )}

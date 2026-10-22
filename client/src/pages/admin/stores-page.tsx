@@ -201,7 +201,7 @@ function StoreDetailDialog({
               )}
               <Button
                 size="sm"
-                variant="ghost"
+                variant="outline"
                 className="text-destructive hover:text-destructive ml-auto"
                 onClick={() => actionMutation.mutate({ action: "delete" })}
                 disabled={actionMutation.isPending}
@@ -494,7 +494,7 @@ export default function AdminStoresPage() {
 
         {hasActiveFilters && (
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             className="gap-1.5 text-muted-foreground shrink-0"
             onClick={() => { setSearch(""); setStatusFilter("ALL"); setVisibilityFilter("ALL"); }}

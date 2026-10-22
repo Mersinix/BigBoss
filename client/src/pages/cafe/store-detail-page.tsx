@@ -431,7 +431,7 @@ function StorePacksSection({ packs, filters, search, hasCommercialAccess, isDark
         </div>
         {showToggle && (
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             className={`text-xs font-semibold h-8 px-3 ${t.sectionBtnPack}`}
             onClick={() => setExpanded((e) => !e)}

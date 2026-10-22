@@ -184,7 +184,7 @@ export default function InventoryPage() {
               >
                 <Trash2 className="w-3.5 h-3.5 mr-1.5" />Remove
               </Button>
-              <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setSelectedIds(new Set())} data-testid="button-clear-selection">
+              <Button size="sm" variant="outline" className="ml-auto" onClick={() => setSelectedIds(new Set())} data-testid="button-clear-selection">
                 <X className="w-3.5 h-3.5 mr-1" />Clear selection
               </Button>
             </div>

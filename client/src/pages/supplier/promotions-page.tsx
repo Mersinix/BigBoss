@@ -746,9 +746,9 @@ function PromotionCard({
                 <Settings2 className="w-3 h-3" /> Manage
               </Button>
             )}
-            <Button size="sm" variant="ghost" onClick={onEdit} className="h-8 w-8 p-0"><Edit2 className="w-3.5 h-3.5" /></Button>
+            <Button size="sm" variant="outline" onClick={onEdit} className="h-8 w-8 p-0"><Edit2 className="w-3.5 h-3.5" /></Button>
             <div className="relative">
-              <Button size="sm" variant="ghost" onClick={() => setShowMenu(!showMenu)} className="h-8 w-8 p-0"><MoreHorizontal className="w-4 h-4" /></Button>
+              <Button size="sm" variant="outline" onClick={() => setShowMenu(!showMenu)} className="h-8 w-8 p-0"><MoreHorizontal className="w-4 h-4" /></Button>
               {showMenu && (
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
@@ -986,7 +986,7 @@ export default function PromotionsPage() {
           </SelectContent>
         </Select>
         {hasFilters && (
-          <Button variant="ghost" size="sm" className="text-muted-foreground shrink-0" onClick={clearFilters}>
+          <Button variant="outline" size="sm" className="text-muted-foreground shrink-0" onClick={clearFilters}>
             <X className="w-3.5 h-3.5 mr-1" />Clear
           </Button>
         )}

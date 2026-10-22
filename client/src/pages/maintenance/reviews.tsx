@@ -98,7 +98,7 @@ export default function Reviews() {
                   </div>
                 </div>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
                   className="h-7 px-2 text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400"
                   disabled={reported}

@@ -120,7 +120,7 @@ export function PrintBlacklistModal({
             </Select>
             <Textarea placeholder="Décrivez le problème…" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} className={t.inputBg} data-testid="input-print-report-reason" />
             <div className="flex gap-2 justify-end pt-1">
-              <Button size="sm" variant="ghost" className={t.textPrimary} onClick={() => { setFormOpen(false); setPrinterId(""); setReason(""); }}>Annuler</Button>
+              <Button size="sm" variant="outline" className={t.textPrimary} onClick={() => { setFormOpen(false); setPrinterId(""); setReason(""); }}>Annuler</Button>
               <Button size="sm" variant="destructive" onClick={submitReport} disabled={!printerId || !reason.trim() || reportPrinter.isPending} data-testid="button-submit-print-report">
                 {reportPrinter.isPending ? "Envoi…" : "Envoyer le signalement"}
               </Button>

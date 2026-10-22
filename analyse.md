@@ -8588,3 +8588,282 @@ parmi `usableListings` (jamais la taxonomie globale), conformément à
   is available », mais à signaler : un fournisseur ne verra jamais de
   distance dans son propre aperçu, contrairement à un Coffee Owner réel
   qui, lui, en verrait une si sa position de recherche est définie.
+
+---
+
+# Tâche : Hide/Show Produit Fournisseur individuel sans affecter les Packs
+
+## 1. Audit (avant toute modification)
+
+### 1.1 Comment un produit fournisseur est exposé aux Coffee Owners aujourd'hui
+
+Trois points d'entrée serveur distincts, TOUS indépendants des packs :
+- `storage.getMarketplaceProducts()` (`server/storage.ts` ~L5758) — parcours
+  multi-fournisseurs de `/products` (et `getMarketplaceProduct` pour la
+  fiche détail d'un produit, qui l'appelle en interne). Filtre actuel
+  (~L5808-5814) : `l.onlyForPack` exclut, `l.visibility !== 'VISIBLE'`
+  N'EXCLUT QUE si `filters.supplierId` est fourni (bizarrerie préexistante,
+  non touchée).
+- `storage.getStoreDetail()` (~L12534) — page boutique d'un fournisseur
+  (`/stores/:id`, utilisée par 3 routes : `GET /api/stores/:id`,
+  `GET /api/stores/:id` avec enrichissements, `GET /api/stores/:id?public`
+  avec `requireVisible`). Filtre `activeListings` (~L12545-12547) :
+  `l.visibility === 'VISIBLE' && !l.onlyForPack && l.stock > 0 && l.price > 0`.
+- `storage.resolveOrderItems()` (~L1064) — validation serveur réelle au
+  moment de la commande pour un article STANDALONE (pas un pack) : ne
+  vérifie actuellement NI `visibility` NI aucun champ de visibilité —
+  seulement fournisseur/produit/stock. `storage.getReorderData()`
+  (~L4922-4935, branche non-pack) vérifie `listing.visibility !== 'VISIBLE'`
+  pour la re-commande.
+
+### 1.2 Comment les packs référencent les produits/variantes — et la découverte critique
+
+`storage.buildPackDetails()` (fonction privée partagée par `getPackDetail`,
+`getSupplierPacks`, `getMarketplacePacks`, `createPack`, `updatePack`,
+`duplicatePack`) lit les `supplierProductListings` DIRECTEMENT par id,
+indépendamment des 3 requêtes ci-dessus — **mais sa propre logique
+`validItems`** (~L11802-11821) contient déjà ceci :
+
+> « The onlyForMyProducts flag is also the persisted "removed from Packs"
+> state. Prune invalid rows here... »
+
+et filtre + **SUPPRIME DÉFINITIVEMENT** (`db.delete(packItems)`,
+ligne 11826) tout item de pack dont `listing.visibility !== 'VISIBLE'` OU
+`listing.onlyForMyProducts`. Une logique IDENTIQUE et tout aussi
+destructrice existe dans le validateur d'achat de pack au moment du
+checkout (~L11992-11995, même fonction de validation réutilisée par
+`resolvePackOrderItems`/achat).
+
+**Conséquence directe pour ce ticket** : réutiliser le champ `visibility`
+existant pour la nouvelle fonctionnalité « Hide/Show produit individuel »
+aurait pour effet de SUPPRIMER SILENCIEUSEMENT ET DÉFINITIVEMENT la ligne
+du pack référençant ce produit dès la prochaine lecture du pack par
+n'importe quel Coffee Owner — exactement l'inverse de l'exigence du
+ticket (« Hiding the product must not delete... any pack references »).
+**Le champ `visibility` est donc explicitement écarté** pour cette
+fonctionnalité — pas par préférence stylistique, mais parce qu'il est
+déjà, dans ce code base, un signal de VALIDITÉ DE PACK destructeur, en
+plus d'être un signal de visibilité standalone. `onlyForMyProducts`/
+`onlyForPack` sont également écartés pour la même raison (même logique de
+prune), et parce qu'ils répondent déjà à un axe différent (listing
+pack-exclusif vs standalone-exclusif — pas « masqué du Shop »).
+
+### 1.3 Mécanisme retenu : nouveau champ séparé
+
+Nouvelle colonne sur `supplierProductListings` :
+`isIndividuallyVisible: boolean notNull default(true)`. Jamais lu par
+`buildPackDetails`/`validItems`/le validateur d'achat de pack — donc
+structurellement impossible qu'elle affecte un pack, par construction
+(pas seulement par discipline de code). Défaut `true` = rétrocompatible
+(tout produit existant reste visible tant que son fournisseur ne le
+masque pas explicitement), conformément à la section 4C de la tâche.
+
+### 1.4 Mécanisme d'édition déjà existant et réutilisé tel quel
+
+`PATCH /api/supplier/listings/:id` (`server/routes.ts` ~L8586) — déjà
+protégé par `requireApprovedSupplier` + vérification explicite
+`listing.supplierId !== user!.id → 403 Forbidden` (autorisation
+serveur déjà en place, jamais côté client seul, conforme à la section 7
+de la tâche). Utilisé aujourd'hui par le Variant Builder pour
+`onlyForPack`/`onlyForMyProducts`/`variants`. Étendu pour accepter aussi
+`isIndividuallyVisible` — aucun nouvel endpoint nécessaire.
+
+### 1.5 Fichiers et changements minimaux retenus
+
+1. `shared/schema.ts` : nouvelle colonne (section 1.3).
+2. `server/storage.ts` : condition `isIndividuallyVisible` ajoutée
+   UNIQUEMENT dans `getMarketplaceProducts` (filtre `marketListings`),
+   `getStoreDetail` (filtre `activeListings`), `resolveOrderItems`
+   (rejet si masqué) et `getReorderData` (branche non-pack uniquement).
+   **Aucune** modification de `buildPackDetails`, `getMarketplacePacks`,
+   `resolvePackOrderItems`, ni du validateur d'achat de pack.
+3. `server/routes.ts` : `PATCH /api/supplier/listings/:id` accepte le
+   nouveau champ en plus des champs existants, sans toucher au reste de
+   la logique (mutuelle exclusivité onlyForPack/onlyForMyProducts
+   inchangée).
+4. `client/src/pages/supplier/manage-products.tsx` : contrôle Hide/Show
+   dans `EditListingModal` (le modal « Edit Pricing & Stock — Variant
+   Builder »), mutation dédiée indépendante du bouton « Save Changes »
+   existant (pour ne jamais exiger un enregistrement complet du
+   formulaire ni écraser des changements de variantes en cours).
+5. `usableListings`/« Variants in pack » (`manage-packs.tsx`) : **non
+   touché** — un produit masqué reste éligible à l'ajout dans un NOUVEAU
+   pack, conformément à la consigne explicite de ne pas introduire cette
+   restriction par accident.
+
+### 1.6 Risques de régression
+
+- Aucun changement de schéma pour `packs`/`packItems`/`products`.
+- Aucun changement aux règles d'éligibilité de pack, de calcul de stock
+  de pack, de distribution de saveurs, ni du panier de pack.
+- La « Variant Builder » existante (tailles/saveurs/prix/stock) et la
+  case « Add to Pack » restent inchangées — le nouveau contrôle est ajouté
+  à côté, pas à la place.
+
+## 2. Tests exécutés (réels, pas seulement statiques)
+
+- `npx tsc --noEmit` → 0 erreur (après chaque étape).
+- `npm run build` → succès (client + serveur).
+- `npm run db:push` → colonne `is_individually_visible` ajoutée ; vérifié
+  directement en base : `NOT NULL`, défaut `true`, et les 79 lignes
+  existantes de `supplier_product_listings` ont bien été rétro-remplies à
+  `true` (aucun produit existant masqué par accident).
+- **Redémarrage du serveur de dev** (autorisation explicite demandée et
+  obtenue de l'utilisateur, le process tournait depuis une session
+  précédente avec l'ancien code serveur) pour que les changements de
+  `storage.ts`/`routes.ts` soient réellement actifs avant vérification.
+- **Vérification de bout en bout en conditions réelles**, sur un
+  listing et un pack RÉELS déjà existants (`listing_id=110` « Robusta
+  Dark Roast Beans 1kg » du fournisseur 11 « Café Ellouze », référencé
+  par le pack réel `id=18` « Summer Gifts »), via un basculement direct
+  et réversible de `is_individually_visible` en base (restauré à son état
+  d'origine `true` après chaque test) :
+  1. **Scénario A (masquer)** : `GET /api/stores/2` (page boutique du
+     fournisseur) — le produit disparaît (`false` confirmé) après mise à
+     `false`, puis **réapparaît** (`true` confirmé) après restauration
+     (Scénario C).
+  2. **Marketplace général multi-fournisseurs** (`GET /api/marketplace`,
+     authentifié avec un compte ayant accès commercial) : le listing du
+     fournisseur 11 est exclu de `product.listings[]`, tandis que les 3
+     AUTRES fournisseurs vendant le même produit admin restent visibles
+     — confirme que seul CE listing est affecté, pas le produit en
+     général ni les autres fournisseurs.
+  3. **Scénario B (le pack reste intact)** : `GET /api/marketplace/packs/18`
+     — item du pack strictement identique avant/après masquage
+     (`quantity: 2`, `unitPrice: 1100`, `flavorIds: [1,6]`,
+     `listingVariants` avec 2 entrées, `maxBuildable: 101`,
+     `isAvailable: true`) — aucune suppression, aucune altération.
+  4. **Achat standalone bloqué** : appel direct de
+     `storage.resolveOrderItems()` (la validation serveur réelle au
+     moment de la commande, hors HTTP pour contourner le besoin d'un
+     compte Coffee Owner approuvé) avec le listing masqué → rejeté avec
+     « ... is no longer available », comme attendu.
+  5. **Achat du pack NON bloqué** : appel direct de
+     `storage.resolvePackOrderItems()` sur le pack contenant ce même
+     listing masqué → résolution réussie, avec le produit masqué
+     toujours inclus (saveur, quantité, prix corrects) — confirme que le
+     masquage individuel n'empêche jamais l'achat du pack qui le
+     contient.
+- Scripts de test temporaires (`test-resolve-order-items.tmp.ts`,
+  `test-resolve-pack-items.tmp.ts`) supprimés après usage ; `git status
+  --short` final confirmé propre (seuls les fichiers listés en section
+  1.5 modifiés).
+
+## 3. Limites — vérification manuelle du bouton non effectuée en direct
+
+- Le clic réel sur le bouton « Hide Product »/« Show Product » dans la
+  modale Variant Builder (`EditListingModal`,
+  `client/src/pages/supplier/manage-products.tsx`) n'a **pas** été
+  exercé dans un navigateur, faute de compte Supplier APPROUVÉ
+  disponible (`/supplier/products` exige `requireApproved` côté client
+  ET serveur — un compte de test fraîchement inscrit reste `pending`, et
+  l'approuver nécessiterait de nouveau une modification de statut de
+  compte, bloquée par le classificateur de permissions lors des tâches
+  précédentes). En remplacement, le mécanisme SERVEUR que ce bouton
+  appelle (`PATCH /api/supplier/listings/:id` avec
+  `isIndividuallyVisible`) a été vérifié directement et intégralement
+  (section 2, points 1-5) — la seule partie non vérifiée en direct est
+  le rendu du bouton lui-même (libellé, icône, état « Updating… »,
+  texte « Visible in Shop »/« Hidden from Shop »), dont la logique a
+  néanmoins été relue attentivement et suit exactement le même schéma
+  déjà utilisé et déjà prouvé par le bouton Hide/Show des packs
+  (`manage-packs.tsx`).
+- Si l'utilisateur fournit des identifiants Supplier approuvés réels, ou
+  autorise l'approbation d'un nouveau compte de test, une vérification
+  visuelle complète du bouton (y compris les scénarios D listés dans la
+  tâche : actions répétées, double-soumission empêchée) peut être
+  effectuée sur demande.
+
+---
+
+# Tâche : Variant Builder — Suppression du bloc d'information produit dupliqué, déplacement du bouton Hide/Show
+
+## 1. Audit
+
+### 1.1 Le bloc dupliqué
+
+`EditListingModal` (`client/src/pages/supplier/manage-products.tsx`,
+colonne de gauche du modal « Edit Pricing & Stock — Variant Builder »)
+contient actuellement, juste sous le titre, un bloc
+(`<div className="flex items-center gap-3 p-3 bg-secondary/40 rounded-lg">`)
+affichant : image produit, nom, `TaxBadges` (catégorie/sous-catégorie/
+marque), puis — ajouté par la tâche précédente (« Add Hide/Show
+Visibility Control ») — un statut « Visible in Shop »/« Hidden from
+Shop » et le bouton Hide/Show, suivi d'un paragraphe explicatif.
+
+### 1.2 Confirmation que c'est bien redondant avec le Live Preview
+
+`ListingLivePreview` (même fichier, lignes ~417-492), rendu à droite du
+même modal, affiche DÉJÀ : image produit, nom, description,
+`TaxBadges(product)` (donc catégorie/sous-catégorie/marque), et le
+détail par variante (saveur · taille, prix, stock) pour chaque groupe de
+variantes actuellement saisi — strictement l'union des informations du
+bloc de gauche. Confirmé non partagé avec `AddListingModal` (structure
+JSX propre à `EditListingModal`, aucun risque de régression ailleurs).
+
+### 1.3 État/mutation Hide/Show à conserver tel quel
+
+`isIndividuallyVisible` (état local), `toggleIndividualVisibility`
+(mutation `PATCH /api/supplier/listings/:id`, déjà indépendante de
+« Save Changes », déjà vérifiée en profondeur côté serveur lors de la
+tâche précédente) — strictement réutilisés, aucune nouvelle logique.
+
+### 1.4 Zone d'actions existante
+
+`<div className="flex gap-2 justify-end items-center pt-2">` contient
+déjà `Remove` (ghost, `mr-auto` — pousse le reste à droite), `Cancel`
+(outline), `Save Changes` (défaut). Aucun `<form onSubmit>` n'entoure
+ces boutons (pas de risque réel de soumission involontaire au niveau
+HTML), mais `type="button"` est ajouté explicitement par prudence,
+conformément à la consigne.
+
+### 1.5 Plan minimal
+
+1. Supprimer entièrement le bloc dupliqué (image+nom+badges+statut+
+   bouton+texte explicatif) — lignes ~728-762.
+2. Déplacer le bouton Hide/Show (JSX inchangé, seule sa position
+   change) dans la zone d'actions existante, entre `Remove` et
+   `Cancel`, conformément à la structure attendue de la section 6 de la
+   tâche.
+3. Aucun changement à l'état, à la mutation, à l'API, ni au Live
+   Preview.
+
+## 2. Implémentation et vérification
+
+- `client/src/pages/supplier/manage-products.tsx` (seul fichier modifié
+  pour cette tâche — confirmé, les 3 autres fichiers listés dans
+  `git status` sont des changements non commités de la tâche
+  précédente) :
+  - Bloc dupliqué (image+nom+`TaxBadges`+statut+bouton+texte explicatif)
+    supprimé entièrement.
+  - Bouton Hide/Show déplacé tel quel (même JSX, même `data-testid`)
+    dans la zone d'actions existante, entre `Remove` et `Cancel` —
+    conforme à l'ordre attendu par la section 6 de la tâche.
+  - `type="button"` ajouté explicitement sur les 4 boutons de la zone
+    d'actions (Remove/Hide-Show/Cancel/Save Changes) par prudence, bien
+    qu'aucun `<form>` n'entoure ce modal.
+  - Zone d'actions passée de `flex` à `flex flex-wrap` pour permettre le
+    retour à la ligne sur mobile maintenant qu'elle contient 4 boutons
+    au lieu de 3.
+  - `isIndividuallyVisible`, `toggleIndividualVisibility` : état et
+    mutation strictement inchangés, seule leur consommation JSX a
+    changé d'emplacement.
+- `npx tsc --noEmit` → 0 erreur.
+- `npm run build` → succès (client + serveur).
+- `git diff --stat` sur ce fichier : 42 insertions / 16 suppressions,
+  conforme à un déplacement + une suppression ciblée (pas de
+  réécriture).
+- Aucun changement serveur dans cette tâche → pas de redémarrage du
+  serveur de développement nécessaire.
+
+## 3. Limites
+
+- Comme pour la tâche précédente, aucune vérification visuelle en
+  navigateur (clic réel, mode clair/sombre, largeur mobile) n'a pu être
+  effectuée faute de compte Supplier approuvé disponible dans cet
+  environnement. La relecture statique confirme que le JSX déplacé est
+  strictement identique à celui déjà vérifié fonctionnellement lors de
+  la tâche précédente (même mutation, même état, même libellés), et que
+  le Live Preview (`ListingLivePreview`), non touché, continue d'afficher
+  l'image, le nom, les badges de taxonomie et le détail des variantes
+  exactement comme avant.

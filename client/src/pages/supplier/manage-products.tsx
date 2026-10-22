@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Package, Search, X, Pencil, Trash2, CheckCircle2, ShoppingBag, Layers, LayoutGrid, LayoutList } from "lucide-react";
+import { Plus, Package, Search, X, Pencil, Trash2, CheckCircle2, ShoppingBag, Layers, LayoutGrid, LayoutList, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
@@ -280,7 +280,7 @@ function VariantGroupBuilder({
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium">Variant group {idx + 1}</p>
               {groups.length > 1 && (
-                <Button type="button" size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => remove(g.id)}>Remove</Button>
+                <Button type="button" size="sm" variant="outline" className="h-7 text-destructive" onClick={() => remove(g.id)}>Remove</Button>
               )}
             </div>
             {sizes.length > 0 && (
@@ -643,6 +643,28 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
   onDelete?: () => void;
 }) {
   const { toast } = useToast();
+  const qc = useQueryClient();
+
+  // Hide/Show (task: "Add Hide/Show Visibility Control for Supplier
+  // Products Without Affecting Packs") — a dedicated, immediate mutation
+  // independent of "Save Changes" below, so toggling it never requires
+  // saving in-progress variant edits and never gets bundled with them.
+  // Local state mirrors the server value so the button flips right away
+  // even though `listing` itself is a snapshot the parent only refreshes
+  // on next open.
+  const [isIndividuallyVisible, setIsIndividuallyVisible] = useState(
+    (listing as any).isIndividuallyVisible ?? true
+  );
+  const toggleIndividualVisibility = useMutation({
+    mutationFn: () => apiRequest("PATCH", `/api/supplier/listings/${listing.id}`, { isIndividuallyVisible: !isIndividuallyVisible }),
+    onSuccess: () => {
+      setIsIndividuallyVisible((v: boolean) => !v);
+      qc.invalidateQueries({ queryKey: ["/api/supplier/listings"] });
+      invalidateMarketplace(qc, listing.productId);
+      toast({ title: isIndividuallyVisible ? "Product hidden from Shop" : "Product visible in Shop" });
+    },
+    onError: () => toast({ title: "Failed to update visibility", variant: "destructive" }),
+  });
 
   const availableFlavors = useMemo(() => {
     const ids = listing.product.flavorIds?.length ? listing.product.flavorIds : (listing.product.flavorId ? [listing.product.flavorId] : []);
@@ -703,18 +725,6 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
           {/* Left – Builder */}
           <div className="space-y-4">
-            <div className="flex items-center gap-3 p-3 bg-secondary/40 rounded-lg">
-              {listing.product.imageUrl ? (
-                <img src={listing.product.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover" />
-              ) : (
-                <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground" /></div>
-              )}
-              <div>
-                <p className="font-medium text-sm">{listing.product.name}</p>
-                <TaxBadges product={listing.product} />
-              </div>
-            </div>
-
             <div>
               <Label className="mb-2 block">Manage variant groups (size + flavors + price + stock per flavor)</Label>
               <VariantGroupBuilder flavors={availableFlavors} sizes={availableSizes} groups={groups} onChange={setGroups} />
@@ -742,10 +752,11 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
               </label>
             </div>
 
-            <div className="flex gap-2 justify-end items-center pt-2">
+            <div className="flex flex-wrap gap-2 justify-end items-center pt-2">
               {onDelete && (
                 <Button
-                  variant="ghost"
+                  type="button"
+                  variant="outline"
                   className="text-destructive hover:text-destructive mr-auto"
                   onClick={onDelete}
                   data-testid="button-delete-listing-modal"
@@ -753,9 +764,23 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
                   <Trash2 className="w-3.5 h-3.5 mr-1.5" />Remove
                 </Button>
               )}
-              <Button variant="outline" onClick={onClose}>Cancel</Button>
-              <Button onClick={() => save.mutate()} disabled={save.isPending} data-testid="button-save-listing">
-                {save.isPending ? "Saving…" : "Save Changes"}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => toggleIndividualVisibility.mutate()}
+                disabled={toggleIndividualVisibility.isPending}
+                data-testid="button-toggle-listing-visibility"
+              >
+                {toggleIndividualVisibility.isPending ? (
+                  "Updating…"
+                ) : isIndividuallyVisible ? (
+                  <><EyeOff className="w-3.5 h-3.5 mr-1.5" />Hide</>
+                ) : (
+                  <><Eye className="w-3.5 h-3.5 mr-1.5" />Show</>
+                )}
+              </Button>
+              <Button type="button" onClick={() => save.mutate()} disabled={save.isPending} data-testid="button-save-listing">
+                {save.isPending ? "Saving…" : "Save"}
               </Button>
             </div>
           </div>
@@ -958,7 +983,7 @@ function SupplierProductFormModal({ open, onClose, editing, cats, subs, flavs, s
             <div className="flex gap-2 justify-end items-center pt-2">
               {editing && onDelete && (
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   className="text-destructive hover:text-destructive mr-auto"
                   onClick={onDelete}
                   data-testid="button-delete-sprod-modal"
@@ -1212,7 +1237,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
             </div>
             {/* Clear */}
             {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={() => setFilters(EMPTY_NEW_FILTERS)} className="text-muted-foreground shrink-0">
+              <Button variant="outline" size="sm" onClick={() => setFilters(EMPTY_NEW_FILTERS)} className="text-muted-foreground shrink-0">
                 <X className="w-4 h-4 mr-1" />Clear
               </Button>
             )}
@@ -1319,12 +1344,12 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
                   <TableCell><StatusBadge status={(p as any).status ?? 'PENDING'} /></TableCell>
                   <TableCell className="text-right">
                     {(p as any).status === 'PENDING' && (
-                      <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => { setEditingProd(p); setModalOpen(true); }} data-testid={`button-edit-sprod-${p.id}`}>
+                      <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => { setEditingProd(p); setModalOpen(true); }} data-testid={`button-edit-sprod-${p.id}`}>
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
                     )}
                     {(p as any).status === 'PENDING' && (
-                      <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => requestDelete(p)} data-testid={`button-delete-sprod-${p.id}`}>
+                      <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => requestDelete(p)} data-testid={`button-delete-sprod-${p.id}`}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     )}
@@ -1614,7 +1639,7 @@ function AdminProductsTab({
                 {/* View toggle + Clear */}
                 <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
                   {hasActiveFilters && (
-                    <Button variant="ghost" size="sm" onClick={() => {
+                    <Button variant="outline" size="sm" onClick={() => {
                       setFilters(EMPTY_SIMPLE);
                       setSelectedCategory(null);
                       setSelectedSubCategory(null);
@@ -2008,7 +2033,7 @@ function MyProductsTab({
                 {/* View toggle + Clear */}
                 <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
                   {hasActiveFilters && (
-                    <Button variant="ghost" size="sm" onClick={() => {
+                    <Button variant="outline" size="sm" onClick={() => {
                       setFilters(EMPTY_SIMPLE);
                       setSelectedCategory(null);
                       setSelectedSubCategory(null);
@@ -2105,10 +2130,10 @@ function MyProductsTab({
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditingListing(l)} data-testid={`button-edit-listing-${l.id}`}>
+                        <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setEditingListing(l)} data-testid={`button-edit-listing-${l.id}`}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => requestRemove(l)} data-testid={`button-remove-listing-${l.id}`}>
+                        <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => requestRemove(l)} data-testid={`button-remove-listing-${l.id}`}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </TableCell>

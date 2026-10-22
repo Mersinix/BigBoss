@@ -90,7 +90,7 @@ function DeliveryCard({ delivery, onViewDetails, onCancel, cancelling }: {
           <div className="flex items-center justify-end">
             <Button
               size="sm"
-              variant="ghost"
+              variant="outline"
               className="h-7 text-xs text-destructive hover:text-destructive"
               onClick={(e) => { e.stopPropagation(); onCancel(); }}
               disabled={cancelling}
@@ -216,7 +216,7 @@ function DeliveriesTab({ deliveries, isLoading, onViewDetails, onCancel, cancell
         </div>
         {hasActiveFilters && (
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             className="gap-1.5 text-muted-foreground shrink-0"
             onClick={() => { setSearch(""); setStatus("ALL"); setVehicleType("ALL"); setMode("ALL"); setDatePreset("all"); setDateCustom({ from: "", to: "" }); }}
@@ -386,7 +386,7 @@ function DeliveryCompanyPublicationReview({ companyUserId }: { companyUserId: nu
                 data-testid="input-delivery-company-publication-rejection-reason"
               />
               <div className="flex gap-2 justify-end">
-                <Button size="sm" variant="ghost" className={isDark ? "text-white" : ""} onClick={() => { setRejecting(false); setRejectionReason(""); }}>Annuler</Button>
+                <Button size="sm" variant="outline" className={isDark ? "text-white" : ""} onClick={() => { setRejecting(false); setRejectionReason(""); }}>Annuler</Button>
                 <Button size="sm" variant="destructive" disabled={publicationMutation.isPending} onClick={() => publicationMutation.mutate({ decision: "REJECTED", rejectionReason })} data-testid="button-reject-delivery-company-publication">
                   {publicationMutation.isPending ? "…" : "Confirmer le refus"}
                 </Button>
@@ -463,7 +463,7 @@ function DriverPublicationControl({ driverId }: { driverId: number }) {
                 data-testid="input-driver-publication-rejection-reason"
               />
               <div className="flex gap-2 justify-end">
-                <Button size="sm" variant="ghost" className={isDark ? "text-gray-300 hover:bg-gray-700" : ""} onClick={() => { setRejecting(false); setRejectionReason(""); }}>Annuler</Button>
+                <Button size="sm" variant="outline" className={isDark ? "text-gray-300 hover:bg-gray-700" : ""} onClick={() => { setRejecting(false); setRejectionReason(""); }}>Annuler</Button>
                 <Button size="sm" variant="destructive" disabled={publicationMutation.isPending} onClick={() => publicationMutation.mutate({ decision: "REJECTED", rejectionReason })} data-testid="button-reject-driver-publication">
                   {publicationMutation.isPending ? "…" : "Confirmer le refus"}
                 </Button>
@@ -571,7 +571,7 @@ function CompanyDriversTab({ users, deliveries }: { users: User[]; deliveries: D
         </Select>
         {hasActiveFilters && (
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             className="gap-1.5 text-muted-foreground shrink-0"
             onClick={() => { setSearch(""); setStatusFilter("ALL"); setActivityFilter("ALL"); setDriverFilter("ALL"); }}
@@ -726,7 +726,7 @@ function SupplierDriversTab({ users, deliveries }: { users: User[]; deliveries: 
         )}
         {hasActiveFilters && (
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             className="gap-1.5 text-muted-foreground shrink-0"
             onClick={() => { setSearch(""); setActivityFilter("ALL"); setSupplierFilter("ALL"); }}

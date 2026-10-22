@@ -168,7 +168,7 @@ export default function SupplierDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <SectionCard
           title="Commandes récentes" icon={ShoppingBag} className="lg:col-span-2" contentClassName="overflow-x-auto"
-          right={<Button asChild variant="ghost" size="sm" className="text-xs text-primary"><Link href="/orders">Voir tout</Link></Button>}
+          right={<Button asChild variant="outline" size="sm" className="text-xs text-primary"><Link href="/orders">Voir tout</Link></Button>}
         >
           <table className="w-full text-xs">
             <thead>
@@ -211,7 +211,7 @@ export default function SupplierDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <SectionCard
           title="Produits les plus vendus" icon={Package} contentClassName="overflow-x-auto"
-          right={<Button asChild variant="ghost" size="sm" className="text-xs text-primary"><Link href="/supplier/products">Voir tout</Link></Button>}
+          right={<Button asChild variant="outline" size="sm" className="text-xs text-primary"><Link href="/supplier/products">Voir tout</Link></Button>}
         >
           <table className="w-full text-xs">
             <thead>
@@ -236,7 +236,7 @@ export default function SupplierDashboard() {
 
         <SectionCard
           title="Alertes stock faible" icon={AlertTriangle}
-          right={<Button asChild variant="ghost" size="sm" className="text-xs text-primary"><Link href="/supplier/inventory">Gérer</Link></Button>}
+          right={<Button asChild variant="outline" size="sm" className="text-xs text-primary"><Link href="/supplier/inventory">Gérer</Link></Button>}
         >
           {lowStock.length === 0 ? (
             <EmptyState message="Tous les produits sont bien approvisionnés." />

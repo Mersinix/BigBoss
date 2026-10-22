@@ -158,7 +158,7 @@ export default function AcademyCalendarPage() {
                       {s.status === "ACTIVE" && (
                         <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" onClick={() => setStatus(s.id, "COMPLETED")} disabled={update.isPending} data-testid={`button-complete-session-${s.id}`}>Terminer</Button>
                       )}
-                      <Button size="sm" variant="ghost" className="text-red-600 hover:bg-red-50" onClick={() => (s.registeredCount > 0 ? setStatus(s.id, "CANCELLED") : handleDelete(s.id))} data-testid={`button-cancel-session-${s.id}`}>
+                      <Button size="sm" variant="outline" className="text-red-600 hover:bg-red-50" onClick={() => (s.registeredCount > 0 ? setStatus(s.id, "CANCELLED") : handleDelete(s.id))} data-testid={`button-cancel-session-${s.id}`}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>

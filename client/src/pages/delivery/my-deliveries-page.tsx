@@ -84,7 +84,7 @@ function ReassignDriverControl({ delivery, onDone }: { delivery: DeliveryWithDet
       >
         Confirmer
       </Button>
-      <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={onDone}>Annuler</Button>
+      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={onDone}>Annuler</Button>
     </div>
   );
 }

@@ -1069,6 +1069,11 @@ export class DatabaseStorage implements IStorage {
       if (!listing) throw new Error(`Listing ${item.listingId} not found`);
       if (listing.supplierId !== item.supplierId) throw new Error('Supplier mismatch for listing');
       if (listing.productId !== item.productId) throw new Error('Product mismatch for listing');
+      // Standalone purchase entry point — this is never reached for pack
+      // items (resolvePackOrderItems is a separate function), so a hidden
+      // individual listing can't be bought directly even if a stale client
+      // still has it in cart, while packs referencing it stay purchasable.
+      if (!listing.isIndividuallyVisible) throw new Error(`${item.productName ?? 'Product'} is no longer available`);
 
       const [product] = await db.select().from(products).where(eq(products.id, item.productId));
       if (!product?.isAdminProduct) throw new Error('Product is not available in marketplace');
@@ -4932,7 +4937,7 @@ export class DatabaseStorage implements IStorage {
       if (!listingId) { unavailable.push({ name: item.product?.name ?? `Product #${item.productId}`, reason: 'No longer offered by supplier' }); continue; }
 
       const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, listingId));
-      if (!listing || listing.visibility !== 'VISIBLE') { unavailable.push({ name: item.product?.name ?? '', reason: 'No longer available' }); continue; }
+      if (!listing || listing.visibility !== 'VISIBLE' || !listing.isIndividuallyVisible) { unavailable.push({ name: item.product?.name ?? '', reason: 'No longer available' }); continue; }
 
       const [product] = await db.select().from(products).where(eq(products.id, item.productId));
       if (!product?.isAdminProduct || product.status !== 'ACTIVE') { unavailable.push({ name: product?.name ?? '', reason: 'Product no longer available' }); continue; }
@@ -5809,6 +5814,10 @@ export class DatabaseStorage implements IStorage {
          .filter((l) => {
           if (l.onlyForPack) return false;
            if (filters?.supplierId != null && l.visibility !== 'VISIBLE') return false;
+          // Standalone-listing-only visibility — never checked by pack
+          // retrieval/validation (see buildPackDetails), so hiding a
+          // product here never touches any pack that references it.
+          if (!l.isIndividuallyVisible) return false;
           if (prod.categoryId && frozenSet.has(`${l.supplierId}:${prod.categoryId}`)) return false;
           return true;
         })
@@ -12437,7 +12446,7 @@ export class DatabaseStorage implements IStorage {
     return stores.map((store) => {
       const supplier = userMap.get(store.supplierId);
        const listings = (listingsBySupplier.get(store.supplierId) ?? []).filter(
-         (l) => l.visibility === 'VISIBLE' && !l.onlyForPack && l.stock > 0 && l.price > 0,
+         (l) => l.visibility === 'VISIBLE' && l.isIndividuallyVisible && !l.onlyForPack && l.stock > 0 && l.price > 0,
        );
       const categoryIds = new Set<number>();
       const subCategoryIds = new Set<number>();
@@ -12543,7 +12552,9 @@ export class DatabaseStorage implements IStorage {
       ),
     ]);
     const activeListings = listings.filter(
-      (l) => l.visibility === 'VISIBLE' && !l.onlyForPack && l.stock > 0 && l.price > 0,
+      // isIndividuallyVisible is standalone-listing-only (see schema comment) —
+      // never checked by pack retrieval, so this store's packs are unaffected.
+      (l) => l.visibility === 'VISIBLE' && l.isIndividuallyVisible && !l.onlyForPack && l.stock > 0 && l.price > 0,
     );
     const reviewCount = reviewRows.length;
     const avgRating = reviewCount ? reviewRows.reduce((s, r) => s + r.rating, 0) / reviewCount : 0;

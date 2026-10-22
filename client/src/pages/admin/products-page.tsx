@@ -565,7 +565,7 @@ function ProductFormModal({
         <div className="flex gap-2 justify-end items-center pt-4 border-t mt-4">
           {editing && onDelete && (
             <Button
-              variant="ghost"
+              variant="outline"
               className="text-destructive hover:text-destructive mr-auto"
               onClick={onDelete}
               data-testid="button-delete-product"
@@ -1066,7 +1066,7 @@ function SupplierProductsSection({
                 </Select>
               </div>
               {hasActiveSpFilters && (
-                <Button variant="ghost" size="sm" onClick={() => setSpFilters(EMPTY_SP_FILTERS)} className="text-muted-foreground shrink-0">
+                <Button variant="outline" size="sm" onClick={() => setSpFilters(EMPTY_SP_FILTERS)} className="text-muted-foreground shrink-0">
                   <X className="w-4 h-4 mr-1" />Clear
                 </Button>
               )}
@@ -1126,7 +1126,7 @@ function SupplierProductsSection({
                       <CheckCircle2 className="w-3 h-3 mr-1" />Approve
                     </Button>
                   )}
-                  <Button size="sm" variant="ghost" className="h-7 px-2 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(p)} disabled={deleteMut.isPending} data-testid={`button-delete-sprod-${p.id}`}>
+                  <Button size="sm" variant="outline" className="h-7 px-2 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(p)} disabled={deleteMut.isPending} data-testid={`button-delete-sprod-${p.id}`}>
                     <Trash2 className="w-3 h-3" />
                   </Button>
                 </div>
@@ -1440,7 +1440,7 @@ function AdminPackPreviewModal({
             </div>
             {!confirmDelete ? (
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 className="text-destructive hover:text-destructive hover:bg-destructive/10"
                 onClick={() => setConfirmDelete(true)}
@@ -1758,7 +1758,7 @@ function AdminPacksSection({
 
               {/* Clear */}
               {hasActivePackFilters && (
-                <Button variant="ghost" size="sm" onClick={() => setPackFilters(EMPTY_PACK_FILTERS)} className="text-muted-foreground shrink-0">
+                <Button variant="outline" size="sm" onClick={() => setPackFilters(EMPTY_PACK_FILTERS)} className="text-muted-foreground shrink-0">
                   <X className="w-4 h-4 mr-1" />Clear
                 </Button>
               )}
@@ -1838,7 +1838,7 @@ function AdminPacksSection({
                 {/* Quick actions */}
                 <div className="flex gap-1 pt-0.5" onClick={e => e.stopPropagation()}>
                   <Button
-                    size="sm" variant="ghost"
+                    size="sm" variant="outline"
                     className="h-7 px-2 text-xs flex-1"
                     title={pack.visibility === "VISIBLE" ? "Hide" : "Show"}
                     onClick={() => toggleVisibility(pack)}
@@ -1849,7 +1849,7 @@ function AdminPacksSection({
                     {pack.visibility === "VISIBLE" ? "Hide" : "Show"}
                   </Button>
                   <Button
-                    size="sm" variant="ghost"
+                    size="sm" variant="outline"
                     className="h-7 px-2 text-destructive hover:text-destructive"
                     onClick={() => setDeleting({ id: pack.id, name: pack.name })}
                     data-testid={`button-delete-pack-${pack.id}`}
@@ -1921,7 +1921,7 @@ function AdminPacksSection({
                   <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center justify-end gap-1">
                       <Button
-                        size="icon" variant="ghost" className="h-8 w-8"
+                        size="icon" variant="outline" className="h-8 w-8"
                         title={pack.visibility === "VISIBLE" ? "Hide pack" : "Show pack"}
                         onClick={() => toggleVisibility(pack)}
                         disabled={patchMutation.isPending}
@@ -1930,7 +1930,7 @@ function AdminPacksSection({
                         {pack.visibility === "VISIBLE" ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />}
                       </Button>
                       <Button
-                        size="icon" variant="ghost"
+                        size="icon" variant="outline"
                         className="h-8 w-8 text-destructive hover:text-destructive"
                         onClick={() => setDeleting({ id: pack.id, name: pack.name })}
                         data-testid={`button-delete-pack-${pack.id}`}
@@ -2241,7 +2241,7 @@ export default function AdminProductsPage() {
 
             {/* Clear */}
             {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={() => setFilters(EMPTY_FILTERS)} className="text-muted-foreground shrink-0">
+              <Button variant="outline" size="sm" onClick={() => setFilters(EMPTY_FILTERS)} className="text-muted-foreground shrink-0">
                 <X className="w-4 h-4 mr-1" />Clear
               </Button>
             )}
@@ -2354,10 +2354,10 @@ export default function AdminProductsPage() {
                   <TableCell><TaxBadges product={p} /></TableCell>
                   <TableCell><ProductStatusBadge product={p} /></TableCell>
                   <TableCell className="text-right">
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(p)} data-testid={`button-edit-product-${p.id}`}>
+                    <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => openEdit(p)} data-testid={`button-edit-product-${p.id}`}>
                       <Pencil className="w-3.5 h-3.5" />
                     </Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleting(p)} data-testid={`button-delete-product-${p.id}`}>
+                    <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleting(p)} data-testid={`button-delete-product-${p.id}`}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   </TableCell>

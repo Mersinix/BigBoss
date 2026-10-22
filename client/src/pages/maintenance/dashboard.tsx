@@ -63,7 +63,7 @@ export default function MaintenanceDashboard() {
             </div>
             </div>
             <Button
-              variant="ghost"
+              variant="outline"
               onClick={() => logout()}
               disabled={isLoggingOut}
               className="text-white hover:bg-white/15 hover:text-white rounded-xl text-xs"

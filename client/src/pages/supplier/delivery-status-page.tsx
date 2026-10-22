@@ -62,7 +62,7 @@ function CompanyBrowseView({ delivery, onBack, onClose }: { delivery: DeliveryWi
   return (
     <>
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" className="gap-1 -ml-2" onClick={onBack}><ChevronLeft className="w-4 h-4" />Retour</Button>
+        <Button variant="outline" size="sm" className="gap-1 -ml-2" onClick={onBack}><ChevronLeft className="w-4 h-4" />Retour</Button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[55vh] overflow-y-auto pt-1">
         {isLoading ? (
@@ -388,7 +388,7 @@ export default function SupplierDeliveryStatusPage() {
           </div>
         </div>
         {hasFilters && (
-          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={clearFilters}>
+          <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={clearFilters}>
             <X className="w-3.5 h-3.5" /> Effacer
           </Button>
         )}

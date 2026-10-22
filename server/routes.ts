@@ -8594,6 +8594,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const body = z.object({
         onlyForPack: z.boolean().optional(),
         onlyForMyProducts: z.boolean().optional(),
+        isIndividuallyVisible: z.boolean().optional(),
         variants: z.array(z.object({
           flavorId: z.number().nullable().optional(),
           sizeId: z.number().nullable().optional(),
@@ -8617,6 +8618,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       if (body.onlyForPack !== undefined) listingUpdate.onlyForPack = body.onlyForPack;
       if (body.onlyForMyProducts !== undefined) listingUpdate.onlyForMyProducts = body.onlyForMyProducts;
+      // Standalone-listing-only — see schema comment on isIndividuallyVisible.
+      // Applied unconditionally (never folded into the removingFromPackProducts
+      // short-circuit below, which is specific to the onlyForPack/onlyForMyProducts pair).
+      if (body.isIndividuallyVisible !== undefined) listingUpdate.isIndividuallyVisible = body.isIndividuallyVisible;
       if (Object.keys(listingUpdate).length && !removingFromPackProducts) {
         await db.update(supplierProductListings).set(listingUpdate).where(eq(supplierProductListings.id, listingId));
       }

@@ -415,8 +415,8 @@ export default function BaristaProfilePage() {
                 {w.description && <p className="text-xs text-muted-foreground mt-1">{w.description}</p>}
               </div>
               <div className="flex gap-1 shrink-0">
-                <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setWorkHistoryForm(w)} data-testid={`button-edit-work-history-${w.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteWorkHistory.mutate(w.id)} data-testid={`button-delete-work-history-${w.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+                <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => setWorkHistoryForm(w)} data-testid={`button-edit-work-history-${w.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                <Button type="button" variant="outline" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteWorkHistory.mutate(w.id)} data-testid={`button-delete-work-history-${w.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
               </div>
             </div>
           ))}
@@ -431,7 +431,7 @@ export default function BaristaProfilePage() {
               </div>
               <Textarea placeholder="Description (facultatif)" rows={2} value={workHistoryForm.description ?? ""} onChange={(e) => setWorkHistoryForm((p) => ({ ...p, description: e.target.value }))} data-testid="input-work-history-description" />
               <div className="flex gap-2 justify-end">
-                <Button type="button" variant="ghost" onClick={() => setWorkHistoryForm(null)}>Annuler</Button>
+                <Button type="button" variant="outline" onClick={() => setWorkHistoryForm(null)}>Annuler</Button>
                 <Button type="button" onClick={saveWorkHistory} disabled={createWorkHistory.isPending || updateWorkHistory.isPending} className="bg-green-600 hover:bg-green-700 text-white" data-testid="button-save-work-history">
                   Enregistrer
                 </Button>

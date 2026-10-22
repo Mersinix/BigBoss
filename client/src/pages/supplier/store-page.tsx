@@ -456,7 +456,7 @@ export default function StorePage() {
                         data-testid={`input-cover-url-${i}`}
                       />
                       {form.coverUrls.length > 1 && (
-                        <Button size="icon" variant="ghost" className="h-9 w-9 shrink-0 text-destructive hover:text-destructive" onClick={() => removeCoverUrl(i)} data-testid={`btn-remove-image-${i}`}>
+                        <Button size="icon" variant="outline" className="h-9 w-9 shrink-0 text-destructive hover:text-destructive" onClick={() => removeCoverUrl(i)} data-testid={`btn-remove-image-${i}`}>
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       )}

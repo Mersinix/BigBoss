@@ -64,7 +64,7 @@ export function NotificationBellDropdown({ notificationsHref }: { notificationsH
         <div className="flex items-center justify-between px-4 py-3 border-b border-border/50">
           <p className="text-sm font-semibold text-foreground">Notifications</p>
           {unread > 0 && (
-            <Button variant="ghost" size="sm" className="h-auto py-1 px-2 text-xs" onClick={() => markAllRead.mutate(undefined)}>
+            <Button variant="outline" size="sm" className="h-auto py-1 px-2 text-xs" onClick={() => markAllRead.mutate(undefined)}>
               Tout marquer comme lu
             </Button>
           )}

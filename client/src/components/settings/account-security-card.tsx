@@ -73,7 +73,7 @@ export const AccountSecurityCard = forwardRef<SettingsCardHandle, { testIdPrefix
         Renseignez les deux champs puis utilisez le bouton Enregistrer en haut de page pour changer votre mot de passe.
       </p>
       <Separator className="my-4" />
-      <Button variant="ghost" className="text-destructive hover:text-destructive gap-2" onClick={() => logout()} disabled={isLoggingOut} data-testid={`button-${testIdPrefix}-logout`}>
+      <Button variant="outline" className="text-destructive hover:text-destructive gap-2" onClick={() => logout()} disabled={isLoggingOut} data-testid={`button-${testIdPrefix}-logout`}>
         <LogOut className="w-4 h-4" /> Se déconnecter
       </Button>
     </SectionCard>

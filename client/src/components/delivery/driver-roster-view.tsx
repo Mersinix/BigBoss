@@ -208,7 +208,7 @@ export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gé
                       </Select>
                     </div>
                   )}
-                  <Button size="sm" variant="ghost" className="w-full h-7 text-xs" onClick={() => setDetail(d)} data-testid={`button-driver-details-${d.id}`}>Voir les détails</Button>
+                  <Button size="sm" variant="outline" className="w-full h-7 text-xs" onClick={() => setDetail(d)} data-testid={`button-driver-details-${d.id}`}>Voir les détails</Button>
                 </CardContent>
               </Card>
             );

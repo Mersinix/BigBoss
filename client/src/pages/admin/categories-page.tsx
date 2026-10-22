@@ -307,7 +307,7 @@ function CategoriesTab() {
             <div className="flex gap-2 justify-end items-center">
               {editing && (
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   className="text-destructive hover:text-destructive mr-auto"
                   onClick={() => setDeleting(editing)}
                   data-testid="button-delete-category"
@@ -433,7 +433,7 @@ function SubCategoriesTab() {
             </SelectContent>
           </Select>
           {filterCat !== "all" && (
-            <Button variant="ghost" size="sm" className="text-muted-foreground shrink-0" onClick={() => setFilterCat("all")} data-testid="button-clear-subcat-filters">
+            <Button variant="outline" size="sm" className="text-muted-foreground shrink-0" onClick={() => setFilterCat("all")} data-testid="button-clear-subcat-filters">
               <X className="w-3.5 h-3.5 mr-1" />Clear
             </Button>
           )}
@@ -543,7 +543,7 @@ function SubCategoriesTab() {
             <div className="flex gap-2 justify-end items-center">
               {editing && (
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   className="text-destructive hover:text-destructive mr-auto"
                   onClick={() => setDeleting(editing)}
                   data-testid="button-delete-subcat"
@@ -745,7 +745,7 @@ function TaxonomyCrudTab({
             </SelectContent>
           </Select>
           {(filterCatId !== "all" || filterSubCatId !== "all") && (
-            <Button variant="ghost" size="sm" className="text-muted-foreground shrink-0" onClick={() => { setFilterCatId("all"); setFilterSubCatId("all"); }} data-testid={`button-clear-${testPrefix}-filters`}>
+            <Button variant="outline" size="sm" className="text-muted-foreground shrink-0" onClick={() => { setFilterCatId("all"); setFilterSubCatId("all"); }} data-testid={`button-clear-${testPrefix}-filters`}>
               <X className="w-3.5 h-3.5 mr-1" />Clear
             </Button>
           )}
@@ -909,7 +909,7 @@ function TaxonomyCrudTab({
             <div className="flex gap-2 justify-end items-center">
               {editing && (
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   className="text-destructive hover:text-destructive mr-auto"
                   onClick={() => setDeleting(editing)}
                   data-testid={`button-delete-${testPrefix}`}
@@ -1342,7 +1342,7 @@ function CategoryRequestsSection() {
           </SelectContent>
         </Select>
         {(search || roleFilter !== "all") && (
-          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setSearch(""); setRoleFilter("all"); }} data-testid="button-clear-cr-filters">
+          <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setSearch(""); setRoleFilter("all"); }} data-testid="button-clear-cr-filters">
             <X className="w-3.5 h-3.5" /> Effacer
           </Button>
         )}
@@ -1591,7 +1591,7 @@ function SupplierCategoriesSection() {
           </SelectContent>
         </Select>
         {(typeFilter !== "all" || statusFilter !== "all") && (
-          <Button variant="ghost" size="sm" className="text-muted-foreground shrink-0" onClick={() => { setTypeFilter("all"); setStatusFilter("all"); }} data-testid="button-clear-suggestions-filters">
+          <Button variant="outline" size="sm" className="text-muted-foreground shrink-0" onClick={() => { setTypeFilter("all"); setStatusFilter("all"); }} data-testid="button-clear-suggestions-filters">
             <X className="w-3.5 h-3.5 mr-1" />Clear
           </Button>
         )}
@@ -1639,8 +1639,8 @@ function SupplierCategoriesSection() {
                           <CheckCircle className="w-3.5 h-3.5 mr-1" />Approve
                         </Button>
                       )}
-                      <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(s)} data-testid={`button-edit-suggestion-${s.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(s)} data-testid={`button-delete-suggestion-${s.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => openEdit(s)} data-testid={`button-edit-suggestion-${s.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                      <Button size="icon" variant="outline" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(s)} data-testid={`button-delete-suggestion-${s.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>

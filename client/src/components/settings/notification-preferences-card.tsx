@@ -46,10 +46,10 @@ export function NotificationPreferencesCard({ role, className }: { role: User["r
       className={className}
       right={
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" className="h-auto py-1 px-2 text-xs" onClick={() => setAll(true)} data-testid="button-notif-prefs-enable-all">
+          <Button variant="outline" size="sm" className="h-auto py-1 px-2 text-xs" onClick={() => setAll(true)} data-testid="button-notif-prefs-enable-all">
             Tout activer
           </Button>
-          <Button variant="ghost" size="sm" className="h-auto py-1 px-2 text-xs" onClick={() => setAll(false)} data-testid="button-notif-prefs-disable-all">
+          <Button variant="outline" size="sm" className="h-auto py-1 px-2 text-xs" onClick={() => setAll(false)} data-testid="button-notif-prefs-disable-all">
             Tout désactiver
           </Button>
         </div>

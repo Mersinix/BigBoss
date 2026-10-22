@@ -255,7 +255,7 @@ function MarketingStoresSection({ companies, eligibleAgencyIds, hasFacetFilters,
         </div>
         {showToggle && (
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             className={`text-xs font-semibold h-8 px-3 ${isDark ? "text-gray-300 hover:text-white hover:bg-gray-800" : "text-gray-600 hover:text-gray-900"}`}
             onClick={() => setExpanded((e) => !e)}

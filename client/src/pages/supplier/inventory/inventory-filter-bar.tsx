@@ -108,7 +108,7 @@ export function InventoryFilterBar({
 
       <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
         {hasActiveFilters && (
-          <Button variant="ghost" size="sm" onClick={onClear} className="text-muted-foreground" data-testid="button-clear-inventory-filters">
+          <Button variant="outline" size="sm" onClick={onClear} className="text-muted-foreground" data-testid="button-clear-inventory-filters">
             <X className="w-4 h-4 mr-1" />Clear
           </Button>
         )}

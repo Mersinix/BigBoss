@@ -90,8 +90,8 @@ function BroadcastDialog({ contacts, onClose }: { contacts: EligibleContact[]; o
             <div className="flex items-center justify-between">
               <Label>Recipients ({selectedIds.size} selected)</Label>
               <div className="flex gap-2">
-                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={selectAll}>All</Button>
-                <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={clearAll}>None</Button>
+                <Button size="sm" variant="outline" className="h-6 text-xs" onClick={selectAll}>All</Button>
+                <Button size="sm" variant="outline" className="h-6 text-xs" onClick={clearAll}>None</Button>
               </div>
             </div>
             <Input className="h-8 text-sm" placeholder="Filter contacts…" value={contactSearch} onChange={e => setContactSearch(e.target.value)} />

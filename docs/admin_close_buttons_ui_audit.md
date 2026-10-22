@@ -26,7 +26,7 @@ non-Admin component needed scoping.
 | `print-page.tsx` | `PrinterAccountDetail` (cover-header Dialog) | same as above | `onClick={onClose}` |
 | `academy-page.tsx` | `AccountDetail` (cover-header Dialog, only Dialog in file) | same as above | `onClick={onClose}` |
 | `maintenance-page.tsx` | `AccountDetail` (cover-header Dialog) | same as above | `onClick={onClose}` |
-| `prospecting-page.tsx` | `ProspectSheet` (drawer) | shadcn `Button` wrapper: `variant="ghost" className="shrink-0 h-7 w-7 p-0"` | `onClick={onClose}` (prop, wired to `() => setSheetProspect(null)` at the render site) |
+| `prospecting-page.tsx` | `ProspectSheet` (drawer) | shadcn `Button` wrapper: `variant="outline" className="shrink-0 h-7 w-7 p-0"` | `onClick={onClose}` (prop, wired to `() => setSheetProspect(null)` at the render site) |
 
 **Part B — 24 dialogs relying on the shadcn default close button (needed `[&>button]:hidden` added + a new custom button matching the reference, wired to the exact existing `onOpenChange`/Cancel handler):**
 

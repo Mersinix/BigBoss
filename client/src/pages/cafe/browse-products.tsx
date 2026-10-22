@@ -478,7 +478,7 @@ function StoresSection({
         </div>
         {showToggle && (
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             className={`text-xs font-semibold h-8 px-3 ${t.sectionBtn}`}
             onClick={() => setExpanded((e) => !e)}
@@ -763,7 +763,7 @@ function PacksSection({
         </div>
         {showToggle && (
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             className={`text-xs font-semibold h-8 px-3 ${t.sectionBtnPack}`}
             onClick={() => setExpanded((e) => !e)}

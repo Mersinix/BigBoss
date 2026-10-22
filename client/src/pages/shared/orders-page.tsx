@@ -342,7 +342,7 @@ export default function OrdersPage() {
               {isAdmin && (
                 <Button
                   size="sm"
-                  variant="ghost"
+                  variant="outline"
                   className="h-7 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
                   onClick={(e) => { e.stopPropagation(); setDeleteTarget(order.id); }}
                 >
@@ -519,7 +519,7 @@ export default function OrdersPage() {
         />
 
         {hasFilters && (
-          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={clearFilters}>
+          <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={clearFilters}>
             <X className="w-3.5 h-3.5" /> Effacer
           </Button>
         )}

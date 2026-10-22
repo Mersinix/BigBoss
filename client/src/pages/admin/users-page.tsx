@@ -780,7 +780,7 @@ export default function UsersPage() {
             </SelectContent>
           </Select>
           {(roleFilter !== "all" || statusFilter !== "all") && (
-            <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-xs text-muted-foreground shrink-0" onClick={() => { setRoleFilter("all"); setStatusFilter("all"); }} data-testid="button-clear-users-filters">
+            <Button variant="outline" size="sm" className="h-8 gap-1.5 text-xs text-muted-foreground shrink-0" onClick={() => { setRoleFilter("all"); setStatusFilter("all"); }} data-testid="button-clear-users-filters">
               <X className="w-3.5 h-3.5" /> Effacer
             </Button>
           )}
@@ -861,7 +861,7 @@ export default function UsersPage() {
                             )}
                           </>
                         )}
-                        <Button size="sm" variant="ghost"
+                        <Button size="sm" variant="outline"
                           className="h-7 w-7 p-0 text-destructive hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-destructive ml-auto"
                           onClick={() => setDeletingUser(u)}
                           data-testid={`button-delete-${u.id}`}>

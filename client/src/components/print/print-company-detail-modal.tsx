@@ -432,7 +432,7 @@ export function PrintCompanyDetailModal({
           </div>
           <Textarea placeholder="Décrivez le problème…" rows={3} value={reportReason} onChange={(e) => setReportReason(e.target.value)} className={t.inputBg} data-testid="input-report-reason" />
           <div className="flex gap-2 justify-end pt-1">
-            <Button size="sm" variant="ghost" className={t.textPrimary} onClick={() => { setReportModalOpen(false); setReportReason(""); }}>Annuler</Button>
+            <Button size="sm" variant="outline" className={t.textPrimary} onClick={() => { setReportModalOpen(false); setReportReason(""); }}>Annuler</Button>
             <Button size="sm" variant="destructive" onClick={submitReport} disabled={!reportReason.trim() || reportPrinter.isPending} data-testid="button-submit-report">
               {reportPrinter.isPending ? "Envoi…" : "Envoyer le signalement"}
             </Button>

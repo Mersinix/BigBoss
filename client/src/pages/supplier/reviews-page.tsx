@@ -100,7 +100,7 @@ function ReviewCard({ review, onReport }: { review: SupplierProductReview & { ca
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">{formatDate(review.createdAt)}</span>
                 <Button
-                  variant="ghost"
+                  variant="outline"
                   size="sm"
                   className="h-7 px-2 text-muted-foreground hover:text-destructive"
                   onClick={() => onReport(review.id)}
@@ -363,7 +363,7 @@ export default function ReviewsPage() {
             </SelectContent>
           </Select>
           {(categoryFilter || subCategoryFilter) && (
-            <Button variant="ghost" size="sm" className="h-9" onClick={() => { setCategoryFilter(""); setSubCategoryFilter(""); }}>
+            <Button variant="outline" size="sm" className="h-9" onClick={() => { setCategoryFilter(""); setSubCategoryFilter(""); }}>
               Clear filters
             </Button>
           )}

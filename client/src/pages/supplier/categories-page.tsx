@@ -159,10 +159,10 @@ function CategoryMappingCard({
                 <Snowflake className="w-3 h-3 mr-1" />{isFrozen ? "Unfreeze" : "Freeze"}
               </Button>
             )}
-            <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive" onClick={onRemove} disabled={isActionPending}>
+            <Button size="sm" variant="outline" className="h-7 text-xs text-destructive hover:text-destructive" onClick={onRemove} disabled={isActionPending}>
               <Trash2 className="w-3 h-3 mr-1" />Remove
             </Button>
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { if (!expanded) onSelect(); setExpanded(e => !e); }} data-testid={`button-toggle-cat-${category.id}`}>
+            <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => { if (!expanded) onSelect(); setExpanded(e => !e); }} data-testid={`button-toggle-cat-${category.id}`}>
               {expanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </Button>
           </div>
@@ -575,8 +575,8 @@ function CategoryRequestsSection() {
                   <TableCell>
                     {s.status === 'PENDING' && (
                       <div className="flex gap-1 justify-end">
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(s)} data-testid={`button-edit-suggestion-${s.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(s)} data-testid={`button-delete-suggestion-${s.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+                        <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => openEdit(s)} data-testid={`button-edit-suggestion-${s.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                        <Button size="icon" variant="outline" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(s)} data-testid={`button-delete-suggestion-${s.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
                       </div>
                     )}
                   </TableCell>

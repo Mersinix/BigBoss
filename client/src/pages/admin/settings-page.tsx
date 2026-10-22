@@ -115,7 +115,7 @@ export default function AdminSettingsPage() {
           Changer le mot de passe
         </Button>
         <Separator className="my-4" />
-        <Button variant="ghost" className="text-destructive hover:text-destructive gap-2" onClick={() => logout()} disabled={isLoggingOut}>
+        <Button variant="outline" className="text-destructive hover:text-destructive gap-2" onClick={() => logout()} disabled={isLoggingOut}>
           <LogOut className="w-4 h-4" /> Se déconnecter
         </Button>
       </SectionCard>

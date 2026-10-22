@@ -111,10 +111,10 @@ function TaxonomyList({ items, onRefresh }: { items: TaxonomyItem[]; onRefresh: 
         }} /> : <span className="flex-1 text-sm font-medium">{item.name}</span>}
         {item.isFrozen && <Badge variant="outline" className="text-xs text-blue-600"><Snowflake className="h-3 w-3 mr-1" />Gelé</Badge>}
         {!item.isActive && <Badge variant="secondary" className="text-xs">Inactif</Badge>}
-        {editing === item.id ? <Button size="sm" onClick={() => editValue.trim() && update.mutate({ id: item.id, data: { name: editValue.trim() } })}>OK</Button> : <Button variant="ghost" size="icon" onClick={() => { setEditing(item.id); setEditValue(item.name); }}><Pencil className="h-3.5 w-3.5" /></Button>}
-        <Button variant="ghost" size="icon" title={item.isFrozen ? "Dégeler" : "Geler"} onClick={() => update.mutate({ id: item.id, data: { isFrozen: !item.isFrozen } })}><Snowflake className={`h-3.5 w-3.5 ${item.isFrozen ? "text-blue-600" : ""}`} /></Button>
-        <Button variant="ghost" size="icon" title={item.isActive ? "Désactiver" : "Activer"} onClick={() => update.mutate({ id: item.id, data: { isActive: !item.isActive } })}><CheckCircle className={`h-3.5 w-3.5 ${item.isActive ? "text-green-600" : "text-muted-foreground"}`} /></Button>
-        <Button variant="ghost" size="icon" className="text-destructive" onClick={() => remove.mutate(item.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+        {editing === item.id ? <Button size="sm" onClick={() => editValue.trim() && update.mutate({ id: item.id, data: { name: editValue.trim() } })}>OK</Button> : <Button variant="outline" size="icon" onClick={() => { setEditing(item.id); setEditValue(item.name); }}><Pencil className="h-3.5 w-3.5" /></Button>}
+        <Button variant="outline" size="icon" title={item.isFrozen ? "Dégeler" : "Geler"} onClick={() => update.mutate({ id: item.id, data: { isFrozen: !item.isFrozen } })}><Snowflake className={`h-3.5 w-3.5 ${item.isFrozen ? "text-blue-600" : ""}`} /></Button>
+        <Button variant="outline" size="icon" title={item.isActive ? "Désactiver" : "Activer"} onClick={() => update.mutate({ id: item.id, data: { isActive: !item.isActive } })}><CheckCircle className={`h-3.5 w-3.5 ${item.isActive ? "text-green-600" : "text-muted-foreground"}`} /></Button>
+        <Button variant="outline" size="icon" className="text-destructive" onClick={() => remove.mutate(item.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
       </div>)}
     </CardContent>
   </Card>;
@@ -195,10 +195,10 @@ function SubCategoryManager({ categories, subcategories, onRefresh }: {
                 {!item.isActive && <Badge variant="secondary" className="text-xs">Inactif</Badge>}
                 {editing === item.id
                   ? <Button size="sm" onClick={() => editValue.trim() && update.mutate({ id: item.id, data: { name: editValue.trim() } })}>OK</Button>
-                  : <Button variant="ghost" size="icon" onClick={() => { setEditing(item.id); setEditValue(item.name); }}><Pencil className="h-3.5 w-3.5" /></Button>}
-                <Button variant="ghost" size="icon" title={item.isFrozen ? "Dégeler" : "Geler"} onClick={() => update.mutate({ id: item.id, data: { isFrozen: !item.isFrozen } })}><Snowflake className={`h-3.5 w-3.5 ${item.isFrozen ? "text-blue-600" : ""}`} /></Button>
-                <Button variant="ghost" size="icon" title={item.isActive ? "Désactiver" : "Activer"} onClick={() => update.mutate({ id: item.id, data: { isActive: !item.isActive } })}><CheckCircle className={`h-3.5 w-3.5 ${item.isActive ? "text-green-600" : "text-muted-foreground"}`} /></Button>
-                <Button variant="ghost" size="icon" className="text-destructive" onClick={() => remove.mutate(item.id)} data-testid={`button-delete-marketing-subcategory-${item.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  : <Button variant="outline" size="icon" onClick={() => { setEditing(item.id); setEditValue(item.name); }}><Pencil className="h-3.5 w-3.5" /></Button>}
+                <Button variant="outline" size="icon" title={item.isFrozen ? "Dégeler" : "Geler"} onClick={() => update.mutate({ id: item.id, data: { isFrozen: !item.isFrozen } })}><Snowflake className={`h-3.5 w-3.5 ${item.isFrozen ? "text-blue-600" : ""}`} /></Button>
+                <Button variant="outline" size="icon" title={item.isActive ? "Désactiver" : "Activer"} onClick={() => update.mutate({ id: item.id, data: { isActive: !item.isActive } })}><CheckCircle className={`h-3.5 w-3.5 ${item.isActive ? "text-green-600" : "text-muted-foreground"}`} /></Button>
+                <Button variant="outline" size="icon" className="text-destructive" onClick={() => remove.mutate(item.id)} data-testid={`button-delete-marketing-subcategory-${item.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>
               </div>
             ))}
           </>
@@ -367,7 +367,7 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
               <div className="space-y-2">
                 <Textarea placeholder="Motif du refus (visible par le professionnel)…" value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} rows={2} />
                 <div className="flex gap-2 justify-end">
-                  <Button size="sm" variant="ghost" onClick={() => { setRejecting(false); setRejectionReason(""); }}>Annuler</Button>
+                  <Button size="sm" variant="outline" onClick={() => { setRejecting(false); setRejectionReason(""); }}>Annuler</Button>
                   <Button size="sm" variant="destructive" disabled={publicationMutation.isPending} onClick={() => publicationMutation.mutate({ decision: "REJECTED", rejectionReason })} data-testid="button-reject-marketing-publication">
                     {publicationMutation.isPending ? "…" : "Confirmer le refus"}
                   </Button>
@@ -839,7 +839,7 @@ export default function MarketingAdminPage() {
           <Select value={category} onValueChange={setCategory}><SelectTrigger className="w-[180px] shrink-0"><SelectValue placeholder="Service" /></SelectTrigger><SelectContent><SelectItem value="all">Services</SelectItem>{filterOptions.categories.map((value) => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
           <Select value={rating} onValueChange={setRating}><SelectTrigger className="w-[150px] shrink-0"><SelectValue placeholder="Note" /></SelectTrigger><SelectContent><SelectItem value="all">Notes</SelectItem><SelectItem value="rated">Avec avis</SelectItem><SelectItem value="4">4+ étoiles</SelectItem><SelectItem value="3">3+ étoiles</SelectItem></SelectContent></Select>
           {(search || status !== "all" || visibility !== "all" || profileType !== "all" || category !== "all" || rating !== "all") && (
-            <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setSearch(""); setStatus("all"); setVisibility("all"); setProfileType("all"); setCategory("all"); setRating("all"); }} data-testid="button-clear-marketing-account-filters">
+            <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setSearch(""); setStatus("all"); setVisibility("all"); setProfileType("all"); setCategory("all"); setRating("all"); }} data-testid="button-clear-marketing-account-filters">
               <X className="w-3.5 h-3.5" /> Effacer
             </Button>
           )}
@@ -952,7 +952,7 @@ export default function MarketingAdminPage() {
             </SelectContent>
           </Select>
           {hasServiceFilters && (
-            <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={resetServiceFilters} data-testid="button-clear-service-filters">
+            <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={resetServiceFilters} data-testid="button-clear-service-filters">
               <X className="w-3.5 h-3.5" /> Effacer
             </Button>
           )}

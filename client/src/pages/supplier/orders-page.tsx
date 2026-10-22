@@ -238,7 +238,7 @@ export default function SupplierOrdersPage() {
         />
 
         {hasFilters && (
-          <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground" onClick={clearFilters}>
+          <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground" onClick={clearFilters}>
             <X className="w-3.5 h-3.5" /> Effacer
           </Button>
         )}
@@ -325,7 +325,7 @@ export default function SupplierOrdersPage() {
                             {ns.label}
                           </Button>
                         ))}
-                        <Button size="sm" variant="ghost" className="h-7 text-xs text-primary"
+                        <Button size="sm" variant="outline" className="h-7 text-xs text-primary"
                           onClick={() => setSelectedOrderId(so._order.id)}
                         >
                           Détails

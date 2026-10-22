@@ -714,7 +714,7 @@ function ServiceHeroCustomizationSection() {
                         className="rounded-lg text-sm"
                         data-testid={`input-hero-bg-image-${i}`}
                       />
-                      <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-destructive" onClick={() => setField("backgroundImages", draft.backgroundImages.filter((_, idx) => idx !== i))} data-testid={`button-remove-hero-bg-image-${i}`}>
+                      <Button size="icon" variant="outline" className="h-8 w-8 shrink-0 text-destructive" onClick={() => setField("backgroundImages", draft.backgroundImages.filter((_, idx) => idx !== i))} data-testid={`button-remove-hero-bg-image-${i}`}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </div>
@@ -921,7 +921,7 @@ function ServiceHeroCustomizationSection() {
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-muted-foreground">Texte affiché sous le titre.</p>
                         {draft.subtitle != null && (
-                          <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-muted-foreground" onClick={() => setField("subtitle", null)} data-testid="button-clear-hero-subtitle">
+                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-muted-foreground" onClick={() => setField("subtitle", null)} data-testid="button-clear-hero-subtitle">
                             <X className="w-3 h-3" /> Revenir au défaut
                           </Button>
                         )}
@@ -954,7 +954,7 @@ function ServiceHeroCustomizationSection() {
                                 data-testid={`input-hero-${field}`}
                               />
                               {draft[field] && (
-                                <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-muted-foreground" onClick={() => setField(field, "")} aria-label={`${label} — revenir au défaut`}>
+                                <Button size="icon" variant="outline" className="h-8 w-8 shrink-0 text-muted-foreground" onClick={() => setField(field, "")} aria-label={`${label} — revenir au défaut`}>
                                   <X className="w-3.5 h-3.5" />
                                 </Button>
                               )}
@@ -1748,7 +1748,7 @@ function DeliveryPricingSection() {
                 <div className="flex items-center gap-2">
                   <Input className="h-8 flex-1" placeholder="Nom (ex: Déjeuner)" defaultValue={w.label} onBlur={(e) => updatePeakHourWindow(w.id, { label: e.target.value })} />
                   <Switch checked={w.isActive} onCheckedChange={(v) => updatePeakHourWindow(w.id, { isActive: v })} />
-                  <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-red-500" onClick={() => removePeakHourWindow(w.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                  <Button type="button" size="icon" variant="outline" className="h-8 w-8 text-red-500" onClick={() => removePeakHourWindow(w.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex gap-1">
@@ -1799,7 +1799,7 @@ function DeliveryPricingSection() {
                   defaultValue={z.minFeeOverrideCents != null ? z.minFeeOverrideCents / 100 : ""} placeholder="Frais min"
                   onBlur={(e) => updateZone(z.id, { minFeeOverrideCents: e.target.value.trim() === "" ? undefined : Math.max(0, Math.round(parseFloat(e.target.value) * 100)) })} />
                 <Switch checked={z.isActive} onCheckedChange={(v) => updateZone(z.id, { isActive: v })} />
-                <Button type="button" size="icon" variant="ghost" className="h-8 w-8 text-red-500" onClick={() => removeZone(z.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                <Button type="button" size="icon" variant="outline" className="h-8 w-8 text-red-500" onClick={() => removeZone(z.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
               </div>
             ))}
           </div>

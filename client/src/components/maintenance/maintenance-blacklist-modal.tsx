@@ -132,7 +132,7 @@ export function MaintenanceBlacklistModal({ open, onClose, isDark }: { open: boo
               </Select>
               <Textarea placeholder="Décrivez le problème…" rows={3} value={reason} onChange={(e) => setReason(e.target.value)} className={t.inputBg} data-testid="input-maintenance-report-form-reason" />
               <div className="flex gap-2 justify-end pt-1">
-                <Button size="sm" variant="ghost" className={t.textPrimary} onClick={() => { setFormOpen(false); setTargetUserId(""); setReason(""); }}>Annuler</Button>
+                <Button size="sm" variant="outline" className={t.textPrimary} onClick={() => { setFormOpen(false); setTargetUserId(""); setReason(""); }}>Annuler</Button>
                 <Button size="sm" variant="destructive" onClick={() => submitReport.mutate()} disabled={!targetUserId || !reason.trim() || submitReport.isPending} data-testid="button-submit-maintenance-report-form">
                   {submitReport.isPending ? "Envoi…" : "Envoyer le signalement"}
                 </Button>

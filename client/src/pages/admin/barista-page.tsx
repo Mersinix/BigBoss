@@ -230,10 +230,10 @@ function TaxonomySection({ title, items, placeholder, testIdPrefix, create, upda
             {!item.isActive && <Badge variant="secondary" className="text-xs">Inactif</Badge>}
             {editing === item.id
               ? <Button size="sm" onClick={() => editValue.trim() && runUpdate(item.id, { name: editValue.trim() })}>OK</Button>
-              : <Button variant="ghost" size="icon" onClick={() => { setEditing(item.id); setEditValue(item.name); }}><Pencil className="h-3.5 w-3.5" /></Button>}
-            <Button variant="ghost" size="icon" title={item.isFrozen ? "Dégeler" : "Geler"} onClick={() => runUpdate(item.id, { isFrozen: !item.isFrozen })}><Snowflake className={`h-3.5 w-3.5 ${item.isFrozen ? "text-blue-600" : ""}`} /></Button>
-            <Button variant="ghost" size="icon" title={item.isActive ? "Désactiver" : "Activer"} onClick={() => runUpdate(item.id, { isActive: !item.isActive })}><CheckCircle className={`h-3.5 w-3.5 ${item.isActive ? "text-green-600" : "text-muted-foreground"}`} /></Button>
-            <Button variant="ghost" size="icon" className="text-destructive" onClick={() => runRemove(item.id)} data-testid={`button-delete-${testIdPrefix}-${item.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>
+              : <Button variant="outline" size="icon" onClick={() => { setEditing(item.id); setEditValue(item.name); }}><Pencil className="h-3.5 w-3.5" /></Button>}
+            <Button variant="outline" size="icon" title={item.isFrozen ? "Dégeler" : "Geler"} onClick={() => runUpdate(item.id, { isFrozen: !item.isFrozen })}><Snowflake className={`h-3.5 w-3.5 ${item.isFrozen ? "text-blue-600" : ""}`} /></Button>
+            <Button variant="outline" size="icon" title={item.isActive ? "Désactiver" : "Activer"} onClick={() => runUpdate(item.id, { isActive: !item.isActive })}><CheckCircle className={`h-3.5 w-3.5 ${item.isActive ? "text-green-600" : "text-muted-foreground"}`} /></Button>
+            <Button variant="outline" size="icon" className="text-destructive" onClick={() => runRemove(item.id)} data-testid={`button-delete-${testIdPrefix}-${item.id}`}><Trash2 className="h-3.5 w-3.5" /></Button>
           </div>
         ))}
       </CardContent>
@@ -482,7 +482,7 @@ function BaristaDetail({ barista, onClose, onRefresh }: { barista: AdminBarista 
                 <div className="space-y-2">
                   <Textarea placeholder="Motif du refus (visible par le professionnel)…" value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} rows={2} data-testid="input-barista-publication-rejection-reason" />
                   <div className="flex gap-2 justify-end">
-                    <Button size="sm" variant="ghost" onClick={() => { setRejecting(false); setRejectionReason(""); }}>Annuler</Button>
+                    <Button size="sm" variant="outline" onClick={() => { setRejecting(false); setRejectionReason(""); }}>Annuler</Button>
                     <Button size="sm" variant="destructive" disabled={publicationMutation.isPending} onClick={() => publicationMutation.mutate({ decision: "REJECTED", rejectionReason })} data-testid="button-reject-barista-publication">
                       {publicationMutation.isPending ? "…" : "Confirmer le refus"}
                     </Button>
@@ -923,7 +923,7 @@ export default function AdminBaristaPage() {
               <SelectContent><SelectItem value="all">Tous niveaux</SelectItem><SelectItem value="BEGINNER">Débutant</SelectItem><SelectItem value="ADVANCED">Avancé</SelectItem><SelectItem value="EXPERT">Expert</SelectItem></SelectContent>
             </Select>
             {(baristaSearch || baristaStatus !== "all" || baristaLevel !== "all") && (
-              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setBaristaSearch(""); setBaristaStatus("all"); setBaristaLevel("all"); }} data-testid="button-clear-baristas-filters">
+              <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setBaristaSearch(""); setBaristaStatus("all"); setBaristaLevel("all"); }} data-testid="button-clear-baristas-filters">
                 <X className="w-3.5 h-3.5" /> Effacer
               </Button>
             )}
@@ -1063,7 +1063,7 @@ export default function AdminBaristaPage() {
               <SelectContent><SelectItem value="all">Tous les statuts</SelectItem>{Object.entries(JOB_POST_STATUS_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}</SelectContent>
             </Select>
             {(jobPostSearch || jobPostStatus !== "all") && (
-              <Button variant="ghost" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setJobPostSearch(""); setJobPostStatus("all"); }} data-testid="button-clear-jobposts-filters">
+              <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground shrink-0" onClick={() => { setJobPostSearch(""); setJobPostStatus("all"); }} data-testid="button-clear-jobposts-filters">
                 <X className="w-3.5 h-3.5" /> Effacer
               </Button>
             )}

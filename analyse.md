@@ -9108,3 +9108,481 @@ appelé une seule fois pour toute la page), un nouveau champ additif
   (claire/sombre) — seule la classe CSS copiée à l'identique depuis un
   composant déjà vérifié visuellement par le passé (`EditListingModal`)
   garantit la cohérence.
+
+---
+
+# Tâche : Admin Product Management — Liste simplifiée & recadrage d'image progressif persistant
+
+## 1. Audit
+
+### 1.1 List view actuelle (`AdminProductsPage`, `products-page.tsx` ~L1988)
+
+Table à 5 colonnes (L2331-2368) : image / Name / Taxonomy / Status /
+Actions (boutons Edit + Delete). La vue GRID du MÊME composant (L2295-2327)
+est déjà entièrement cliquable (`onClick={() => openEdit(p)}` sur la carte
+entière, aucun bouton séparé) — motif déjà établi dans ce même fichier à
+reprendre pour la liste plutôt qu'à inventer. Le Delete existe déjà DANS
+`ProductFormModal` (`onDelete` prop déjà câblé, L2394) — rien à ajouter là.
+
+### 1.2 Contrôles de zoom actuels — `ImageAdjustPreview` (L144-200)
+
+État purement LOCAL et ÉPHÉMÈRE : `const [imgAdj, setImgAdj] =
+useState<Record<number, ImgAdj>>({})` dans `ProductFormModal`, clé = INDEX
+(`0` = image principale, `idx+1` = image additionnelle). `handleSave()`
+(L346-367) ne l'inclut JAMAIS dans le payload envoyé au serveur —
+confirmé : **aucune persistance n'existe aujourd'hui**, les réglages sont
+perdus à la fermeture du modal. Le modèle actuel est un pan `x/y` (en
+pixels, via `object-position`) + un zoom `scale` (facteur CSS brut, boutons
++/-) — ni normalisé 0-100 %, ni borné de façon déterministe, ni défini en
+fonction des dimensions réelles de l'image.
+
+### 1.3 Schéma produit (`shared/schema.ts`)
+
+`products.imageUrl: text`, `products.imageUrls: text[]` (tableau de
+chaînes brutes, pas de métadonnée associée). Aucune structure de métadonnée
+d'image existante à réutiliser → nouvelle colonne additive nécessaire.
+`Product`/`ProductWithTaxonomy`/`MarketplaceProduct` sont tous dérivés de
+`typeof products.$inferSelect` (`Product`) par extension (`&`) — un ajout
+de colonne sur `products` se propage automatiquement à ces 3 types sans
+changement manuel. `enrichProduct()` (storage.ts ~L612) fait un simple
+spread `{...p, ...}` — une nouvelle colonne y transite automatiquement.
+
+### 1.4 Chemins de sauvegarde (create/update)
+
+`POST /api/admin/products` et `PATCH /api/admin/products/:id`
+(`server/routes.ts` ~L5270-5325) utilisent une liste blanche explicite de
+champs acceptés (pas de spread aveugle de `req.body`) — nouveau champ à
+ajouter explicitement des deux côtés, avec validation serveur (jamais
+confiance aveugle au client, conformément à la section 7 de la tâche).
+`storage.createProduct`/`updateProduct` (storage.ts ~L877-885) sont déjà
+un passthrough générique (`.values(data)`/`.set(updates)`) — aucune
+modification nécessaire là, juste inclure le nouveau champ dans l'objet
+transmis par la route.
+
+### 1.5 Modèle de recadrage retenu — défini et borné explicitement
+
+Le composant actuel utilise déjà `object-fit: cover` + `transform:
+scale()` + `object-position` — mais `cover` recadre DÉJÀ par défaut dès
+que l'image n'est pas exactement carrée, ce qui contredit l'exigence « 0 %
+= image complète, aucun recadrage ». Le nouveau modèle retenu :
+- Base `object-fit: contain` (jamais de recadrage implicite, aspect ratio
+  toujours préservé, jamais d'étirement).
+- `scale(1)` à 0 % = exactement l'état `contain` = image entière visible.
+- Le point « cover naturel » (`coverScale`) est calculé à partir des
+  VRAIES dimensions de l'image (`naturalWidth`/`naturalHeight`, capturées
+  via `onLoad`) rapportées à l'aspect ratio réel du conteneur — gère
+  correctement portrait/paysage/carré sans distorsion.
+- **Définition explicite et documentée du maximum à 100 %** (exigée par la
+  tâche) : `coverScale × 1.5` — 50 % de zoom supplémentaire au-delà du
+  point où l'image remplit déjà le conteneur, une marge volontairement
+  bornée pour ne jamais perdre le sujet principal ni produire de
+  dimensions invalides.
+- Interpolation linéaire continue entre les deux : `scale(pct) = 1 +
+  (pct/100) × (coverScale×1.5 − 1)`.
+
+### 1.6 Consommateurs Coffee Owner identifiés (produits mappés)
+
+- `client/src/pages/cafe/browse-products.tsx` — `ProductCard`, image de la
+  grille `/products` (déjà un hover `group-hover:scale-105` sur le `<img>`
+  lui-même).
+- `client/src/pages/cafe/store-detail-page.tsx` — carte produit
+  équivalente sur la page boutique d'un fournisseur.
+- `client/src/components/product-detail-content.tsx` — galerie d'image
+  principale + vignettes, PARTAGÉE par `product-quick-view-modal.tsx` ET
+  `product-detail-page.tsx` (un seul composant à corriger couvre les deux
+  vues). Contient déjà un effet de zoom au survol (`group-hover:scale-[2]`
+  + `onMouseMove` pilotant `transformOrigin` via `ref`) — à ne jamais
+  écraser.
+
+**Conflit identifié et résolu** : appliquer le `transform: scale()` du
+recadrage DIRECTEMENT sur le même `<img>` qui porte déjà un effet de hover
+existant (`group-hover:scale-105`/`scale-[2]`) écraserait cet effet (un
+`style` inline prime toujours sur une classe Tailwind). Solution retenue :
+le recadrage s'applique à un **conteneur intermédiaire** (nouveau niveau
+de wrapping, `transform: scale(coverAdjust)`), tandis que le `<img>`
+intérieur garde sa classe de hover existante intacte — les deux
+transforms se composent naturellement (multiplicatif), zéro conflit, zéro
+régression visuelle sur l'effet déjà en place.
+
+### 1.7 Implémentation partagée retenue
+
+Nouveau module `client/src/lib/image-adjustment.ts` : fonctions pures
+(`clampAdjustmentPct`, `computeAdjustScale`, `getAdjustmentFor`) +
+un hook `useImageAdjustStyle(pct, containerAspect)` qui capture la vraie
+dimension de l'image au chargement et retourne des styles prêts à
+appliquer (`wrapperStyle` pour le conteneur intermédiaire, `imgStyle` pour
+le `<img>` lui-même, `onLoad` à brancher). Réutilisé identiquement par
+l'aperçu Admin ET tous les consommateurs Coffee Owner — un seul calcul,
+jamais dupliqué (conforme à la section 5.1 de la tâche).
+
+### 1.8 Association image ↔ réglage — jamais par index
+
+Les images additionnelles sont ajoutées/éditées/supprimées PAR INDEX dans
+le tableau actuel (`updated[idx] = ...`, `.filter((_, i) => i !== idx)`) —
+si l'ajustement était lui aussi stocké par index, supprimer une image du
+milieu décalerait silencieusement les réglages des images suivantes.
+Retenu : `imageAdjustments: Record<string, number>` **indexé par l'URL de
+l'image elle-même** (image principale et images additionnelles partagent
+la même map) — survit intrinsèquement à l'ajout/suppression, conforme à
+l'avertissement explicite de la tâche à ce sujet.
+
+### 1.9 Synchronisation temps réel (section 6 de la tâche)
+
+Déjà entièrement couverte par le mécanisme existant : le `save` de
+`ProductFormModal` invalide déjà `["/api/admin/products"]` ET appelle déjà
+`invalidateMarketplace(qc)` (le helper partagé déjà utilisé par toutes les
+mutations produit/listing de cette session) — aucun changement
+supplémentaire requis pour que les vues Coffee Owner se rafraîchissent
+sans rechargement manuel, juste ne pas casser cet appel existant.
+
+### 1.10 Portée retenue pour les consommateurs Coffee Owner
+
+Pour rester dans un périmètre raisonnable tout en couvrant les emplacements
+explicitement cités par la tâche (« product listing and mapped-product
+cards », « product detail pages and product image galleries », « shop or
+category results ») : `browse-products.tsx` (grille `/products`),
+`store-detail-page.tsx` (grille boutique), et `product-detail-content.tsx`
+(galerie de détail, couvre modal + page grâce au composant déjà partagé)
+sont mis à jour. Les aperçus internes au flux Fournisseur (non
+« Coffee Owner ») restent hors périmètre, conformément à la tâche.
+
+### 1.11 Risques de régression
+
+- Aucun changement aux URLs d'image elles-mêmes, à la génération de
+  fichiers, ni aux logos/avatars/images de packs (hors périmètre explicite
+  de la tâche).
+- Aucun changement aux permissions Admin existantes (`requireAdmin` déjà
+  en place sur les 3 routes produit, inchangé).
+- Le payload `imageAdjustments` est additif sur les 2 routes déjà en
+  liste blanche — aucun champ existant retiré ou modifié.
+- Défaut rétrocompatible : `imageAdjustments: {}` (colonne `NOT NULL
+  DEFAULT '{}'::jsonb`) — tout produit existant sans réglage reste à 0 %
+  (image complète), comportement actuel préservé à l'identique.
+
+---
+
+## 2. Implémentation
+
+### 2.1 Fichiers modifiés
+
+- `shared/schema.ts` — colonne `products.imageAdjustments` (jsonb,
+  `Record<string, number>`, `NOT NULL DEFAULT '{}'`). Appliquée via
+  `npm run db:push` ; vérifiée en base (type `jsonb`, défaut `{}`, lignes
+  existantes rétro-compatibles).
+- `client/src/lib/image-adjustment.ts` (nouveau) — module partagé unique :
+  - `clampAdjustmentPct`, `computeAdjustScale`, `getAdjustmentFor` et le
+    hook `useImageAdjustStyle` (modèle `object-fit: contain` + mise à
+    l'échelle jusqu'à `coverScale × 1.5`), utilisés par l'aperçu Admin.
+  - `computeCoverZoomScale` / `useCoverZoomStyle` (nouveau, ajouté pendant
+    l'implémentation — voir 2.4 ci-dessous pour la raison de cet écart par
+    rapport au plan initial de la section 1.7).
+- `server/routes.ts` — `sanitizeImageAdjustments()` + branchement sur
+  `POST /api/admin/products` et `PATCH /api/admin/products/:id`
+  (validation serveur : objet uniquement, clé = URL non vide, valeur
+  clampée 0-100, toute entrée invalide silencieusement ignorée).
+- `client/src/pages/admin/products-page.tsx` :
+  - Ancien système de pan/zoom par boutons (`ImgAdj`, `DEFAULT_ADJ`,
+    `ADJ_STEP`, `SCALE_STEP`, les icônes `ChevronUp/Down/Left/Right`,
+    `ZoomIn/Out`) entièrement supprimé.
+  - `ImageAdjustPreview` redevenu un composant d'aperçu pur (`pct`
+    uniquement, plus de `adj`/`onChange`) ; nouveau `ImageAdjustSlider`
+    (shadcn `Slider`, 0-100, pas de 1, libellé `{pct}%`) placé directement
+    sous le champ URL principal et sous chaque champ d'image
+    additionnelle.
+  - État du formulaire `imgAdj` converti d'indexé-par-position
+    (`Record<number, ImgAdj>`) à **indexé par URL**
+    (`ImageAdjustmentMap = Record<string, number>`), initialisé depuis
+    `editing?.imageAdjustments`. `handleSave()` envoie désormais
+    `imageAdjustments: imgAdj` dans le payload de sauvegarde.
+  - Vue Liste (`AdminProductsPage`) réduite aux colonnes **Nom + Taxonomie**
+    uniquement ; colonne Statut et boutons Modifier/Supprimer retirés de la
+    ligne ; la ligne entière est désormais cliquable
+    (`onClick={() => openEdit(p)}`), à l'identique du motif déjà utilisé par
+    la vue Grille du même composant. La suppression reste disponible dans
+    la modale (`onDelete={() => setDeleting(editing)}`, déjà branché avant
+    cette tâche) — aucune régression de fonctionnalité.
+- `client/src/pages/cafe/browse-products.tsx`, `store-detail-page.tsx`,
+  `client/src/components/product-detail-content.tsx` — image principale
+  (et vignettes pour `product-detail-content.tsx`) enveloppée dans un
+  `<div>` intermédiaire portant le `transform: scale(...)` du recadrage ;
+  le `<img>` lui-même garde sa classe/ref/effet de hover existant
+  (`group-hover:scale-105`, zoom curseur `group-hover:scale-[2]`) intact —
+  aucune régression visuelle sur l'effet déjà en place.
+
+### 2.2 Décision de compatibilité des données
+
+`imageAdjustments` est indexé par l'URL de l'image elle-même, jamais par
+position — survit à l'ajout/suppression/réédition d'images additionnelles
+dans le formulaire Admin. Tout produit existant (créé avant cette tâche)
+n'a pas d'entrée pour ses URLs → `getAdjustmentFor` retourne `0` par
+défaut → rendu strictement identique à l'existant tant qu'aucun admin n'a
+explicitly réglé le curseur.
+
+### 2.3 Sécurité
+
+- `requireAdmin` déjà en place sur les 3 routes produit, inchangé.
+- Le payload `imageAdjustments` envoyé par le client n'est jamais fait
+  confiance tel quel : `sanitizeImageAdjustments()` côté serveur rejette
+  tout ce qui n'est pas un objet simple, ignore les clés vides, et clampe
+  chaque valeur à un entier 0-100 — un client malicieux ne peut pas
+  injecter une valeur hors bornes ou un type inattendu dans la colonne.
+- Aucun contrat d'API existant modifié (champ additif uniquement) ; aucune
+  URL d'image existante modifiée.
+
+### 2.4 Écart par rapport au plan initial (section 1.7) — pourquoi deux modèles de calcul
+
+Le plan d'audit prévoyait de réutiliser `useImageAdjustStyle`
+(`object-fit: contain`) à l'identique partout. En implémentant les 3
+consommateurs Coffee Owner, j'ai constaté que leurs cartes/galeries
+utilisent **déjà** `object-fit: cover` aujourd'hui (remplissage total de
+la case, rognage automatique selon le ratio) — comportement existant à
+préserver tel quel pour tout produit non ajusté (0 %). Basculer ces
+éléments vers `object-fit: contain` aurait changé l'apparence visuelle
+de **tous** les produits dès 0 %, même sans réglage admin (apparition de
+bandes de lettrboxing là où l'image remplit aujourd'hui la carte) — une
+régression visuelle que la tâche interdit explicitement (« preserve all
+existing layouts/dimensions/responsive behavior »).
+
+Solution retenue : un second couple de fonctions pures,
+`computeCoverZoomScale(pct)` / `useCoverZoomStyle(pct)`, qui réutilise la
+**même constante documentée** `MAX_EXTRA_ZOOM_BEYOND_COVER = 1.5` et la
+même forme de courbe linéaire, mais sans suivi du ratio naturel de
+l'image (inutile puisque `cover` remplit déjà la case quel que soit ce
+ratio) : `1` à 0 % (rendu actuel inchangé), jusqu'à `1.5` à 100 % (zoom
+supplémentaire par rapport au rendu `cover` actuel). C'est le même
+« modèle de recadrage partagé » exigé par la tâche (même constante, même
+courbe, un seul fichier `image-adjustment.ts`), adapté au point d'entrée
+réel de chaque surface plutôt qu'une réutilisation littérale forcée qui
+aurait cassé l'apparence existante. L'aperçu Admin, lui, utilise bien
+`useImageAdjustStyle` (modèle `contain`) sans changement.
+
+### 2.5 Tests réellement exécutés
+
+- `npx tsc --noEmit` — **succès** (code de sortie 0), après l'ensemble des
+  modifications ci-dessus (import corrigé, état `imgAdj` ré-indexé, vue
+  Liste simplifiée, 3 fichiers Coffee Owner mis à jour).
+- `npm run build` — **succès** (code de sortie 0).
+- Vérification directe en base (`node -e` + `pg.Pool`) : colonne
+  `image_adjustments` toujours `jsonb`, `NOT NULL`, défaut `{}` sur des
+  lignes existantes (ids 1, 2, 25).
+- Vérification directe via `storage.*` (script `npx tsx` temporaire,
+  `.tmp-verify-image-adjust.ts`, supprimé après exécution) sur un produit
+  Admin jetable créé puis détruit par le script lui-même :
+  - `createProduct({..., imageAdjustments: {url_a: 40}})` → la ligne créée
+    retourne bien `{url_a: 40}`.
+  - `updateProduct(id, {imageAdjustments: {url_a: 40, url_b: 90}})` → la
+    ligne mise à jour retourne bien la map complète à 2 clés.
+  - `createProduct(...)` **sans** `imageAdjustments` → la ligne retourne
+    `{}` par défaut (rétrocompatibilité confirmée pour tout produit créé
+    sans réglage).
+  - Nettoyage : les 2 produits jetables ont été supprimés par le script
+    lui-même (`deleteProduct`), aucune donnée réelle touchée.
+- **Non vérifié en conditions réelles (limite explicitement assumée)** :
+  le compte `admin@bigbosscoffee.com` référencé dans un contexte antérieur
+  de cette session n'existe pas dans cette base (`401 Invalid credentials`
+  confirmé par un appel direct à `/api/auth/login`) ; le seul compte
+  SUPER_ADMIN réel de cette base est celui de l'utilisateur lui-même
+  (`seifallah.mersini@gmail.com`), dont le mot de passe n'est pas connu et
+  ne doit pas être modifié (contrainte explicite de la session : « Do not
+  reset account passwords, modify user accounts, or change authentication
+  data »). Je n'ai donc **pas** pu vérifier en navigateur réel (Playwright)
+  le rendu du curseur dans la modale Admin, ni le rendu du recadrage sur
+  les cartes Coffee Owner avec un vrai produit ayant une vraie valeur
+  `imageAdjustments` non nulle. La vérification ci-dessus (DB directe +
+  appels directs à `storage.*`) couvre la persistance et la
+  rétrocompatibilité des données, mais pas le rendu visuel final dans le
+  navigateur. Si un compte Admin de test valide est fourni, cette
+  vérification visuelle pourra être complétée.
+
+### 2.6 Limites restantes
+
+- Le rendu visuel final (navigateur réel) du curseur et du recadrage
+  n'a pas pu être vérifié par manque de compte Admin de test valide (voir
+  2.5). La logique de calcul (`computeAdjustScale`, `computeCoverZoomScale`)
+  a été relue et vérifiée mathématiquement (bornes 0→1 et 100→cible,
+  clamp 0-100) mais pas observée pixel par pixel.
+- Les aperçus internes au flux Fournisseur (ex. `Pack Quick View`, qui
+  affiche aussi `product.imageUrl` dans certains contextes) n'ont pas été
+  parcourus pour un éventuel 4ème consommateur — hors périmètre explicite
+  de la tâche (« Coffee Owner experience » uniquement), non modifiés.
+
+---
+
+## 3. Tâche de suivi — Synchronisation du recadrage d'image Admin sur le côté Fournisseur
+
+### 3.1 Constat initial
+
+Après la tâche précédente, le recadrage Admin s'applique bien côté Admin
+et côté Coffee Owner, mais **aucun composant Fournisseur ne lit jamais
+`imageAdjustments`** — tous les rendus `<img>` des produits mappés par
+l'Admin restent bruts (`object-cover` sans transform additionnel) côté
+Fournisseur. Audit mené avant toute modification : relecture de la
+section 1-2 ci-dessus, puis traçage de chaque rendu `product.imageUrl` /
+`listing.product.imageUrl` côté Fournisseur jusqu'à sa source de données.
+
+### 3.2 Cause racine (double nature — confirmée par lecture directe du code)
+
+**A. Composants déjà alimentés avec `imageAdjustments`, mais ne le lisant
+jamais (gap purement client).** `storage.getAdminProducts()` et
+`storage.getSupplierListings()` passent tous deux par `enrichProduct()`
+(`...p` spread), donc `product.imageAdjustments` était **déjà présent**
+dans la réponse API consommée par :
+- `manage-products.tsx` — `AdminProductsTab` (grille + liste),
+  `ProductDetailModal`, `AddListingModal` (vignette + `ListingLivePreview`),
+  `EditListingModal` (`ListingLivePreview`), `MyProductsTab` (grille +
+  liste).
+- `manage-packs.tsx` — les deux listes de construction de pack
+  (`listing.product.imageUrl`, onglet Nouveau Pack et onglet Pack
+  existant).
+
+Dans tous ces cas, le seul problème était le rendu JSX lui-même, qui
+n'appliquait jamais `getAdjustmentFor`/`useCoverZoomStyle` — **aucune
+donnée manquante, aucun changement serveur nécessaire.**
+
+**B. Deux endpoints Fournisseur qui construisent leur propre DTO aplati
+à la main et qui, eux, ont réellement perdu le champ en route (gap
+serveur réel) :**
+- `server/storage.ts` → `buildInventoryItems()` (alimente la page
+  Inventaire Fournisseur) copie `imageUrl: prod.imageUrl` mais ne
+  copiait jamais `imageAdjustments` — type `InventoryItem` lui-même ne
+  déclarait même pas ce champ (`shared/schema.ts`).
+- `server/routes.ts` → `GET /api/promotions/my-listings` construit sa
+  réponse via un `.map()` inline qui ne recopiait, lui non plus, jamais
+  `imageAdjustments`.
+
+C'est exactement la réponse à la question posée par la tâche : le
+recadrage « s'applique » déjà sur Coffee Owner parce que ces
+composants-là ont été explicitement mis à jour dans la tâche précédente ;
+côté Fournisseur, rien n'avait jamais été branché, ni côté lecture (A) ni,
+pour 2 endpoints, côté transport des données (B).
+
+### 3.3 Sources d'image explicitement **non** admin-managées — vérifiées une par une, non modifiées
+
+Conformément à l'avertissement de la tâche (« Do not assume every
+Supplier image is Admin-managed »), chaque source d'image Fournisseur a
+été tracée avant modification :
+- `SupplierProductFormModal` / `NewProductTab` (`manage-products.tsx`,
+  endpoint `/api/supplier/created-products`) : produit **créé par le
+  fournisseur lui-même**, soumis à l'approbation Admin — son image est
+  fournie par le fournisseur, jamais par un produit Admin mappé. Les 2
+  rendus (`p.imageUrl` aux lignes ~1340 et ~1365 du fichier, dans la
+  liste "mes produits créés") restent **intentionnellement inchangés**.
+- `pack.imageUrl` / `pack.imageUrls` / `PackImageGallery`
+  (`manage-packs.tsx`) : image du **Pack lui-même**, uploadée par le
+  fournisseur, entité distincte sans colonne `imageAdjustments` —
+  **inchangée**.
+- Les icônes produit à l'intérieur du constructeur de Pack
+  (`listing.product.imageUrl`, lignes ~582 et ~1149 d'origine) référencent
+  en revanche bel et bien l'image du produit Admin mappé — ce sont des
+  « other Supplier product cards... that render these same mapped
+  product images » au sens explicite de la tâche → corrigées (voir 3.4).
+- `item.productImageUrl` dans `pack-quick-view-modal.tsx` (liste des
+  variantes à l'intérieur d'un Pack, utilisée à la fois par la Pack
+  Detail Live Preview Fournisseur et par la vue Coffee Owner) :
+  **identifié mais volontairement laissé hors périmètre** — voir 3.6.
+
+### 3.4 Implémentation (gap A — lecture client, réutilisation stricte du modèle existant)
+
+Aucune nouvelle formule de recadrage introduite. Chaque rendu listé en
+3.2-A a été encapsulé dans un `<div>` intermédiaire portant
+`transform: scale(computeCoverZoomScale(pct))` (même constante
+`MAX_EXTRA_ZOOM_BEYOND_COVER = 1.5`, même fonction que celle déjà créée
+pour Coffee Owner dans `client/src/lib/image-adjustment.ts`), le `<img>`
+intérieur gardant sa classe `object-cover` et ses dimensions
+inchangées — aucune mise en page existante modifiée. Pour les rendus
+situés directement dans le corps d'un composant (pas dans un `.map()`),
+le hook `useCoverZoomStyle` est utilisé ; pour les rendus à l'intérieur
+d'un `.map()` (règles des Hooks), la fonction pure
+`computeCoverZoomScale` + `getAdjustmentFor` est appliquée directement,
+exactement le même motif déjà utilisé pour les vignettes de
+`product-detail-content.tsx` dans la tâche précédente.
+
+Fichiers modifiés :
+- `client/src/pages/supplier/manage-products.tsx` — import du module
+  partagé ; `ProductDetailModal`, `ListingLivePreview` (image principale
+  + images additionnelles), `AddListingModal` (vignette d'en-tête),
+  `AdminProductsTab` (grille + liste), `MyProductsTab` (grille + liste).
+- `client/src/pages/supplier/manage-packs.tsx` — les 2 icônes produit du
+  constructeur de pack (onglet Nouveau Pack et onglet Pack existant).
+
+### 3.5 Implémentation (gap B — transport serveur manquant)
+
+- `shared/schema.ts` — ajout de `imageAdjustments?: Record<string, number>
+  | null` au type `InventoryItem` (type TypeScript pur, pas de colonne
+  DB — aucune migration nécessaire).
+- `server/storage.ts` → `buildInventoryItems()` — ajoute
+  `imageAdjustments: prod.imageAdjustments ?? {}` à l'objet poussé dans
+  `items[]`.
+- `server/routes.ts` → `GET /api/promotions/my-listings` — ajoute
+  `imageAdjustments: l.product.imageAdjustments ?? {}` au `.map()`.
+- `client/src/pages/supplier/inventory/inventory-table.tsx` — applique
+  `computeCoverZoomScale`/`getAdjustmentFor` sur la vignette produit de
+  chaque ligne.
+- `client/src/pages/supplier/promotions-page.tsx` — ajoute
+  `imageAdjustments` au type local `ListingItem` ; applique le même
+  calcul sur la vignette de la liste d'assignation de promotion.
+
+### 3.6 Décision de périmètre — `pack-quick-view-modal.tsx` (`item.productImageUrl`)
+
+Identifié pendant l'audit (3.3) mais **volontairement laissé hors
+périmètre** de cette tâche : ce rendu lit `item.productImageUrl`, un
+champ construit à l'intérieur du type `PackDetail`/`items[]` (partagé
+avec le côté Coffee Owner et déjà assemblé par `buildPackDetails` côté
+serveur — zone déjà identifiée comme sensible lors d'une tâche
+antérieure de cette session, cf. section « Hide/Show Visibility »
+ci-dessus). Brancher le recadrage ici exigerait de faire transiter
+`imageAdjustments` à travers tout ce pipeline partagé (type `PackDetail`,
+`buildPackDetails`, assemblage de l'aperçu local de
+`manage-packs.tsx`) — un changement de bien plus grande ampleur que les
+« other Supplier product cards/previews » explicitement visées par la
+tâche, et qui touche une logique métier (composition de Pack) que la
+tâche demande explicitement de ne pas modifier (section 5 : « Do not
+change: Pack composition or pack availability »). De plus, ce même gap
+existe **identiquement côté Coffee Owner** (ni l'un ni l'autre
+n'appliquait de recadrage sur cette liste avant cette tâche) — le
+laisser tel quel ne crée donc aucune incohérence nouvelle entre les deux
+côtés, contrairement aux gaps A et B ci-dessus qui, eux, créaient une
+divergence Coffee Owner ↔ Fournisseur. Recommandé comme amélioration de
+suivi si souhaité, hors de cette tâche.
+
+### 3.7 Tests réellement exécutés
+
+- `npx tsc --noEmit` — **succès** (code de sortie 0), après l'ensemble
+  des modifications des sections 3.4 et 3.5.
+- `npm run build` — **succès** (code de sortie 0).
+- Vérification directe en base + via `storage.*` (script `npx tsx`
+  temporaire `.tmp-verify-supplier-crop.ts`, supprimé après exécution) :
+  - Sélection d'un listing/produit **réel existant** (listing 100,
+    fournisseur 6, produit 26) possédant une image.
+  - Réglage temporaire de `imageAdjustments` à `{ [imageUrl]: 55 }` sur
+    ce produit réel.
+  - `storage.buildInventoryItems(supplierId)` → l'item retourné expose
+    bien `imageAdjustments: { [imageUrl]: 55 }` (confirme le correctif
+    3.5 côté Inventaire).
+  - `storage.getSupplierListings(supplierId)` → `listing.product.
+    imageAdjustments` expose bien la même valeur (confirme que le
+    chemin déjà utilisé par `manage-products.tsx`/`manage-packs.tsx`
+    porte bien la donnée, cohérent avec le constat 3.2-A).
+  - **Restauration immédiate** de la valeur d'origine (`{}`) sur ce
+    produit réel dans le même script, avant sa suppression — aucune
+    donnée réelle laissée modifiée. Vérifié par une relecture finale de
+    la ligne (`restored: {}`).
+- **Non vérifié en conditions réelles (même limite qu'en section 2.5)** :
+  pas de compte Admin ni Fournisseur de test valide disponible dans cette
+  base pour une vérification visuelle en navigateur réel (Playwright) du
+  rendu du recadrage sur les pages Admin Products / My Products /
+  Variant Builder / Live Preview / Inventaire / Promotions. La
+  vérification ci-dessus couvre la propagation exacte de la donnée
+  (serveur → type → composant) mais pas le rendu pixel final.
+
+### 3.8 Limites restantes
+
+- Rendu visuel navigateur réel non vérifié (voir 3.7) — même contrainte
+  de compte de test que la section 2.6.
+- `pack-quick-view-modal.tsx` (`item.productImageUrl`) reste sans
+  recadrage, de façon symétrique entre Coffee Owner et Fournisseur (voir
+  3.6) — amélioration de suivi possible si demandée explicitement.
+- Aucun autre endpoint Fournisseur construisant un DTO produit aplati
+  n'a été trouvé lors de la recherche exhaustive (`grep "imageUrl:"` sur
+  `server/routes.ts` et `server/storage.ts`) en dehors des deux corrigés
+  en 3.5 et des champs Pack/portfolio explicitement hors périmètre.

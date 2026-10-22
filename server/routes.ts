@@ -5267,6 +5267,24 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
+  // Server-side validation for the admin-set per-image crop percentages
+  // (task: "Progressive Image Cropping Controls") — client values are
+  // never trusted as-is: non-object input is dropped entirely, each key
+  // must be a non-empty string (the image URL) and each value is clamped
+  // to an integer 0-100, mirroring the same clamp the client's own slider
+  // already enforces (client/src/lib/image-adjustment.ts).
+  function sanitizeImageAdjustments(input: unknown): Record<string, number> | null {
+    if (!input || typeof input !== "object" || Array.isArray(input)) return null;
+    const out: Record<string, number> = {};
+    for (const [key, raw] of Object.entries(input as Record<string, unknown>)) {
+      if (typeof key !== "string" || !key.trim()) continue;
+      const n = typeof raw === "number" ? raw : Number(raw);
+      if (!Number.isFinite(n)) continue;
+      out[key] = Math.max(0, Math.min(100, Math.round(n)));
+    }
+    return out;
+  }
+
   app.post("/api/admin/products", requireAdmin, async (req, res) => {
     try {
       const user = await storage.getUser(req.session.userId!);
@@ -5276,6 +5294,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         description: req.body.description?.trim() || null,
         imageUrl: req.body.imageUrl?.trim() || null,
         imageUrls: Array.isArray(req.body.imageUrls) ? req.body.imageUrls.filter((u: string) => u?.trim()) : null,
+        imageAdjustments: sanitizeImageAdjustments(req.body.imageAdjustments) ?? {},
         category: req.body.category || "",
         categoryId: req.body.categoryId ? parseInt(req.body.categoryId) : null,
         subCategoryId: req.body.subCategoryId ? parseInt(req.body.subCategoryId) : null,
@@ -5311,6 +5330,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (req.body.flavorIds !== undefined) updates.flavorIds = Array.isArray(req.body.flavorIds) ? req.body.flavorIds.map(Number) : null;
       if (req.body.sizeIds !== undefined) updates.sizeIds = Array.isArray(req.body.sizeIds) ? req.body.sizeIds.map(Number) : null;
       if (req.body.imageUrls !== undefined) updates.imageUrls = Array.isArray(req.body.imageUrls) ? req.body.imageUrls.filter((u: string) => u?.trim()) : null;
+      if (req.body.imageAdjustments !== undefined) updates.imageAdjustments = sanitizeImageAdjustments(req.body.imageAdjustments) ?? {};
       if (req.body.status !== undefined) {
         const ALLOWED_STATUSES = ['ACTIVE', 'INACTIVE', 'PENDING', 'FREEZE'];
         if (!ALLOWED_STATUSES.includes(req.body.status)) return res.status(400).json({ message: "Invalid status" });
@@ -9938,6 +9958,7 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
             productId: l.product.id,
             productName: l.product.name,
             imageUrl: l.product.imageUrl,
+            imageAdjustments: l.product.imageAdjustments ?? {},
             category: l.product.category,
             categoryId: l.product.categoryId,
             price: l.price,

@@ -7,6 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Package, MoreVertical, Plus, History, Pencil, Eye, EyeOff, Trash2, Layers, ChevronDown, ChevronRight } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import type { InventoryItem, InventoryVariantItem, StockStatus } from "@shared/schema";
+import { computeCoverZoomScale, getAdjustmentFor } from "@/lib/image-adjustment";
 
 const STOCK_BADGE: Record<StockStatus, string> = {
   IN_STOCK: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400",
@@ -87,7 +88,11 @@ export function InventoryTable({
                   <TableCell>
                     <div className="flex items-center gap-2.5">
                       {item.imageUrl ? (
-                        <img src={item.imageUrl} alt="" className="w-10 h-10 rounded-lg object-cover border border-border/50 shrink-0" />
+                        <div className="w-10 h-10 rounded-lg overflow-hidden border border-border/50 shrink-0">
+                          <div style={{ width: "100%", height: "100%", transform: `scale(${computeCoverZoomScale(getAdjustmentFor(item.imageAdjustments, item.imageUrl))})`, transformOrigin: "center" }}>
+                            <img src={item.imageUrl} alt="" className="w-full h-full object-cover" />
+                          </div>
+                        </div>
                       ) : (
                         <div className="w-10 h-10 rounded-lg bg-secondary flex items-center justify-center shrink-0"><Package className="w-4 h-4 text-muted-foreground" /></div>
                       )}

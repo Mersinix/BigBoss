@@ -26,6 +26,7 @@ import type { MarketplaceProduct, CategoryWithCount, StoreCard, PackDetail, Taxo
 import { FlashMode } from "@/components/flash-mode";
 import { useServiceHeroConfig } from "@/hooks/use-service-hero-config";
 import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY, getHeroSubtitleColorStyle } from "@/components/shared/service-hero";
+import { useCoverZoomStyle, getAdjustmentFor } from "@/lib/image-adjustment";
 
 // ── Access helper ─────────────────────────────────────────────────────────────
 
@@ -228,6 +229,8 @@ function ProductCard({
   const hasReviews = product.reviewCount > 0;
   const categoryName = product.categoryLabel?.name ?? product.category ?? null;
   const brandName = product.brandLabel?.name ?? null;
+  const adjustPct = getAdjustmentFor(product.imageAdjustments, product.imageUrl);
+  const { wrapperStyle: cropWrapperStyle } = useCoverZoomStyle(adjustPct);
 
   return (
     <div
@@ -238,11 +241,13 @@ function ProductCard({
       {/* Image */}
       <div className={`relative aspect-[4/3] overflow-hidden shrink-0 ${t.imageOverlay}`}>
         {product.imageUrl ? (
-          <img
-            src={product.imageUrl}
-            alt={product.name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-          />
+          <div style={cropWrapperStyle}>
+            <img
+              src={product.imageUrl}
+              alt={product.name}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            />
+          </div>
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <Package className={`w-10 h-10 ${t.emptyIcon}`} />

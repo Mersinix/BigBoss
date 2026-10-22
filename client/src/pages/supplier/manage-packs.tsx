@@ -27,6 +27,7 @@ import { FlashMode } from "@/components/flash-mode";
 import { PackImageGallery } from "@/components/pack-image-gallery";
 import { PackQuickViewModal } from "@/components/pack-quick-view-modal";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { computeCoverZoomScale, getAdjustmentFor } from "@/lib/image-adjustment";
 
 // ── Variant grouping helper ───────────────────────────────────────────────────
 // Groups individual flavor variants by size so the supplier works with
@@ -579,7 +580,13 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                   return (
                     <div key={listing.id} className="p-2">
                       <div className="flex items-center gap-2 text-sm font-medium mb-1">
-                        {listing.product.imageUrl ? <img src={listing.product.imageUrl} className="w-6 h-6 rounded object-cover" /> : <Package className="w-4 h-4 text-muted-foreground" />}
+                        {listing.product.imageUrl ? (
+                          <div className="w-6 h-6 rounded overflow-hidden shrink-0">
+                            <div style={{ width: "100%", height: "100%", transform: `scale(${computeCoverZoomScale(getAdjustmentFor(listing.product.imageAdjustments, listing.product.imageUrl))})`, transformOrigin: "center" }}>
+                              <img src={listing.product.imageUrl} className="w-full h-full object-cover" />
+                            </div>
+                          </div>
+                        ) : <Package className="w-4 h-4 text-muted-foreground" />}
                         {listing.product.name}
                         {(listing as any).onlyForPack && <Badge variant="outline" className="text-[10px]">Pack only</Badge>}
                       </div>
@@ -1147,7 +1154,13 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
               <div key={listing.id} className={`p-3 transition-colors ${anySelected ? "bg-primary/5" : ""}`}>
                 <div className="flex items-center gap-2 text-sm font-medium mb-2">
                   {listing.product.imageUrl
-                    ? <img src={listing.product.imageUrl} className="w-8 h-8 rounded object-cover" alt="" />
+                    ? (
+                      <div className="w-8 h-8 rounded overflow-hidden shrink-0">
+                        <div style={{ width: "100%", height: "100%", transform: `scale(${computeCoverZoomScale(getAdjustmentFor(listing.product.imageAdjustments, listing.product.imageUrl))})`, transformOrigin: "center" }}>
+                          <img src={listing.product.imageUrl} className="w-full h-full object-cover" alt="" />
+                        </div>
+                      </div>
+                    )
                     : <div className="w-8 h-8 rounded bg-secondary flex items-center justify-center"><Package className="w-4 h-4 text-muted-foreground" /></div>
                   }
                   <div className="flex-1 min-w-0">

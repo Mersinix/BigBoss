@@ -10,13 +10,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Pencil, Trash2, Package, Search, X, CheckCircle2, Clock, LayoutGrid, LayoutList, Layers, Eye, EyeOff, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from "lucide-react";
+import { Slider } from "@/components/ui/slider";
+import { Plus, Pencil, Trash2, Package, Search, X, CheckCircle2, Clock, LayoutGrid, LayoutList, Layers, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { useImageAdjustStyle, clampAdjustmentPct, getAdjustmentFor, type ImageAdjustmentMap } from "@/lib/image-adjustment";
 import type { ProductWithTaxonomy, CategoryWithCount, SubCategoryWithDetails, FlavorWithCount, SizeWithCount, BrandWithCount } from "@shared/schema";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -135,22 +137,17 @@ function ProductStatusBadge({ product }: { product: ProductWithTaxonomy }) {
 }
 
 // ── Image Adjust Preview ──────────────────────────────────────────────────────
+// Pure crop preview (task: "Progressive Image Cropping Controls") — the
+// actual 0-100% slider control lives next to each image URL input (see
+// ImageAdjustSlider below), not inside this preview; this component only
+// renders the result. `pct` is the persisted value (see
+// shared/schema.ts products.imageAdjustments, keyed by this image's own
+// URL); the crop math is centralized in client/src/lib/image-adjustment.ts
+// so the Admin preview and every Coffee Owner consumer render the exact
+// same result for the same value.
 
-type ImgAdj = { x: number; y: number; scale: number };
-const DEFAULT_ADJ: ImgAdj = { x: 0, y: 0, scale: 1 };
-const ADJ_STEP = 5;
-const SCALE_STEP = 0.1;
-
-function ImageAdjustPreview({
-  url, adj, onChange, compact = false,
-}: {
-  url: string;
-  adj: ImgAdj;
-  onChange: (a: ImgAdj) => void;
-  compact?: boolean;
-}) {
-  const iconCls = compact ? "w-3 h-3" : "w-3.5 h-3.5";
-  const btnCls = "bg-black/60 text-white rounded p-0.5 hover:bg-black/80 transition-colors";
+function ImageAdjustPreview({ url, pct, compact = false }: { url: string; pct: number; compact?: boolean }) {
+  const { wrapperStyle, imgStyle, onLoad } = useImageAdjustStyle(pct, 1);
   if (!url) {
     return (
       <div className={`${compact ? "w-full h-full" : "aspect-square"} bg-secondary flex items-center justify-center`}>
@@ -159,42 +156,35 @@ function ImageAdjustPreview({
     );
   }
   return (
-    <div className={`relative group overflow-hidden bg-secondary ${compact ? "w-full h-full" : "aspect-square"}`}>
-      <img
-        src={url}
-        alt=""
-        className="w-full h-full object-cover"
-        style={{
-          objectPosition: `calc(50% + ${adj.x}px) calc(50% + ${adj.y}px)`,
-          transform: `scale(${adj.scale})`,
-          transformOrigin: "center",
-        }}
-        onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-      />
-      <div className="absolute inset-0 flex flex-col items-center justify-between p-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none group-hover:pointer-events-auto bg-black/10">
-        <button type="button" onClick={() => onChange({ ...adj, y: adj.y - ADJ_STEP })} className={btnCls} title="Move up">
-          <ChevronUp className={iconCls} />
-        </button>
-        <div className="flex items-center justify-between w-full">
-          <button type="button" onClick={() => onChange({ ...adj, x: adj.x - ADJ_STEP })} className={btnCls} title="Move left">
-            <ChevronLeft className={iconCls} />
-          </button>
-          <div className="flex flex-col gap-0.5 items-center">
-            <button type="button" onClick={() => onChange({ ...adj, scale: Math.min(adj.scale + SCALE_STEP, 3) })} className={btnCls} title="Zoom in">
-              <ZoomIn className={iconCls} />
-            </button>
-            <button type="button" onClick={() => onChange({ ...adj, scale: Math.max(adj.scale - SCALE_STEP, 0.3) })} className={btnCls} title="Zoom out">
-              <ZoomOut className={iconCls} />
-            </button>
-          </div>
-          <button type="button" onClick={() => onChange({ ...adj, x: adj.x + ADJ_STEP })} className={btnCls} title="Move right">
-            <ChevronRight className={iconCls} />
-          </button>
-        </div>
-        <button type="button" onClick={() => onChange({ ...adj, y: adj.y + ADJ_STEP })} className={btnCls} title="Move down">
-          <ChevronDown className={iconCls} />
-        </button>
+    <div className={`overflow-hidden bg-secondary ${compact ? "w-full h-full" : "aspect-square"}`}>
+      <div style={wrapperStyle}>
+        <img
+          src={url}
+          alt=""
+          style={imgStyle}
+          onLoad={onLoad}
+          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
       </div>
+    </div>
+  );
+}
+
+// Slider control placed directly beneath each image URL input (task's own
+// explicit placement requirement) — independent percentage per image.
+function ImageAdjustSlider({ pct, onChange }: { pct: number; onChange: (pct: number) => void }) {
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <Slider
+        value={[pct]}
+        min={0}
+        max={100}
+        step={1}
+        onValueChange={([v]) => onChange(clampAdjustmentPct(v))}
+        className="flex-1"
+        data-testid="slider-image-adjust"
+      />
+      <span className="text-[11px] text-muted-foreground w-9 text-right tabular-nums">{pct}%</span>
     </div>
   );
 }
@@ -260,7 +250,11 @@ function ProductFormModal({
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const [imgAdj, setImgAdj] = useState<Record<number, ImgAdj>>({});
+  // URL-keyed (not index-keyed) so adjustments stay attached to the correct
+  // image even if additional images are reordered/removed in this form.
+  const [imgAdj, setImgAdj] = useState<ImageAdjustmentMap>(() => (editing as any)?.imageAdjustments ?? {});
+  const setImageAdjustFor = (url: string, pct: number) =>
+    setImgAdj(prev => (url ? { ...prev, [url]: pct } : prev));
 
   const [form, setForm] = useState<ProductForm>(() => {
     if (editing) {
@@ -363,6 +357,7 @@ function ProductFormModal({
       sizeIds: form.sizeIds.length > 0 ? form.sizeIds : null,
       category: cats.find(c => String(c.id) === form.categoryId)?.name ?? "",
       status: form.status,
+      imageAdjustments: imgAdj,
     });
   };
 
@@ -393,6 +388,12 @@ function ProductFormModal({
           <div className="space-y-1.5">
             <Label>Image URL</Label>
             <Input data-testid="input-prod-image" value={form.imageUrl} onChange={e => setField("imageUrl", e.target.value)} placeholder="https://..." />
+            {form.imageUrl.trim() && (
+              <ImageAdjustSlider
+                pct={getAdjustmentFor(imgAdj, form.imageUrl)}
+                onChange={pct => setImageAdjustFor(form.imageUrl, pct)}
+              />
+            )}
           </div>
 
           {/* Additional Images */}
@@ -400,26 +401,34 @@ function ProductFormModal({
             <Label>Additional Images</Label>
             <div className="space-y-2">
               {form.additionalImageUrls.map((url, idx) => (
-                <div key={idx} className="flex gap-2">
-                  <Input
-                    value={url}
-                    onChange={e => {
-                      const updated = [...form.additionalImageUrls];
-                      updated[idx] = e.target.value;
-                      setField("additionalImageUrls", updated);
-                    }}
-                    placeholder="https://..."
-                    className="flex-1 text-sm"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0 px-2"
-                    onClick={() => setField("additionalImageUrls", form.additionalImageUrls.filter((_, i) => i !== idx))}
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </Button>
+                <div key={idx} className="space-y-1">
+                  <div className="flex gap-2">
+                    <Input
+                      value={url}
+                      onChange={e => {
+                        const updated = [...form.additionalImageUrls];
+                        updated[idx] = e.target.value;
+                        setField("additionalImageUrls", updated);
+                      }}
+                      placeholder="https://..."
+                      className="flex-1 text-sm"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="shrink-0 px-2"
+                      onClick={() => setField("additionalImageUrls", form.additionalImageUrls.filter((_, i) => i !== idx))}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                  {url.trim() && (
+                    <ImageAdjustSlider
+                      pct={getAdjustmentFor(imgAdj, url)}
+                      onChange={pct => setImageAdjustFor(url, pct)}
+                    />
+                  )}
                 </div>
               ))}
               <Button
@@ -518,13 +527,12 @@ function ProductFormModal({
           <div className="lg:sticky lg:top-0">
             <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Live Preview</Label>
             {(form.imageUrl || form.additionalImageUrls.some(u => u.trim())) && (
-              <p className="text-xs text-muted-foreground mb-1.5">Hover an image to adjust its position and zoom.</p>
+              <p className="text-xs text-muted-foreground mb-1.5">Use the slider beneath each image URL to adjust its crop.</p>
             )}
             <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
               <ImageAdjustPreview
                 url={form.imageUrl}
-                adj={imgAdj[0] ?? DEFAULT_ADJ}
-                onChange={a => setImgAdj(prev => ({ ...prev, 0: a }))}
+                pct={getAdjustmentFor(imgAdj, form.imageUrl)}
               />
               {form.additionalImageUrls.filter(u => u.trim()).length > 0 && (
                 <div className="flex gap-1.5 p-2 border-t bg-secondary/20 flex-wrap">
@@ -532,8 +540,7 @@ function ProductFormModal({
                     <div key={idx} className="w-20 h-20 shrink-0 rounded-lg overflow-hidden border">
                       <ImageAdjustPreview
                         url={url}
-                        adj={imgAdj[idx + 1] ?? DEFAULT_ADJ}
-                        onChange={a => setImgAdj(prev => ({ ...prev, [idx + 1]: a }))}
+                        pct={getAdjustmentFor(imgAdj, url)}
                         compact
                       />
                     </div>
@@ -2333,13 +2340,11 @@ export default function AdminProductsPage() {
                 <TableHead className="w-14" />
                 <TableHead>Name</TableHead>
                 <TableHead>Taxonomy</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-20 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {pageDisplayed.map(p => (
-                <TableRow key={p.id} data-testid={`row-product-${p.id}`} className="hover:bg-secondary/20">
+                <TableRow key={p.id} data-testid={`row-product-${p.id}`} className="hover:bg-secondary/20 cursor-pointer" onClick={() => openEdit(p)}>
                   <TableCell className="p-3">
                     {p.imageUrl ? (
                       <img src={p.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-border/50" />
@@ -2352,15 +2357,6 @@ export default function AdminProductsPage() {
                     {p.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{p.description}</p>}
                   </TableCell>
                   <TableCell><TaxBadges product={p} /></TableCell>
-                  <TableCell><ProductStatusBadge product={p} /></TableCell>
-                  <TableCell className="text-right">
-                    <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => openEdit(p)} data-testid={`button-edit-product-${p.id}`}>
-                      <Pencil className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleting(p)} data-testid={`button-delete-product-${p.id}`}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
-                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

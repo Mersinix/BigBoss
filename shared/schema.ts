@@ -139,6 +139,12 @@ export const products = pgTable("products", {
   stock: integer("stock").notNull().default(0),
   imageUrl: text("image_url"),
   imageUrls: text("image_urls").array(),
+  // Admin-configured progressive crop (0-100) per image, keyed by the
+  // image's own URL — never by array position, so adjustments survive
+  // additional images being added/removed/edited in place (task:
+  // "Progressive Image Cropping Controls"). Absent key = 0 = full image,
+  // no crop — the existing behavior for every pre-existing product.
+  imageAdjustments: jsonb("image_adjustments").$type<Record<string, number>>().notNull().default({}),
   category: text("category").notNull().default(""),
   categoryId: integer("category_id"),
   subCategoryId: integer("sub_category_id"),
@@ -3903,6 +3909,11 @@ export type InventoryItem = {
   supplierId: number;
   productName: string;
   imageUrl: string | null;
+  // Admin-saved progressive crop percentages, keyed by image URL (task:
+  // "Synchronize Admin Product Image Cropping Across Supplier Views") —
+  // carried through so the Inventory table renders identically to the
+  // Admin/Coffee Owner views instead of always showing the full image.
+  imageAdjustments?: Record<string, number> | null;
   sku: string | null;
   barcode: string | null;
   categoryId: number | null;

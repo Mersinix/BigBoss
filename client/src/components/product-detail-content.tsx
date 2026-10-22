@@ -17,6 +17,7 @@ import { useQuickView } from "@/hooks/use-quick-view";
 import type { MarketplaceProduct, MarketplaceListing, MarketplaceVariant, ListingPromotion } from "@shared/schema";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import { ReviewModal } from "@/components/review-modal";
+import { useCoverZoomStyle, computeCoverZoomScale, getAdjustmentFor } from "@/lib/image-adjustment";
 
 // ── Promotion helpers ─────────────────────────────────────────────────────────
 
@@ -579,6 +580,8 @@ export function ProductDetailContent({
   }, [product]);
 
   const safeActiveIdx = Math.min(activeImageIdx, Math.max(0, allImages.length - 1));
+  const activeImageAdjustPct = getAdjustmentFor((product as any)?.imageAdjustments, allImages[safeActiveIdx]);
+  const { wrapperStyle: mainImageCropStyle } = useCoverZoomStyle(activeImageAdjustPct);
 
   // ── Flavors / Sizes ───────────────────────────────────────────────────────
   const { allFlavors, allSizes } = useMemo(() => {
@@ -815,13 +818,15 @@ export function ProductDetailContent({
         onMouseMove={handleImageMouseMove}
       >
         {allImages.length > 0 ? (
-          <img
-            ref={mainImgRef}
-            src={allImages[safeActiveIdx]}
-            alt={product.name}
-            className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-[2]"
-            style={{ transformOrigin: "50% 50%" }}
-          />
+          <div style={mainImageCropStyle}>
+            <img
+              ref={mainImgRef}
+              src={allImages[safeActiveIdx]}
+              alt={product.name}
+              className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-[2]"
+              style={{ transformOrigin: "50% 50%" }}
+            />
+          </div>
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <Package className={`w-16 h-16 opacity-20 ${isModal ? (dk ? "text-gray-600" : "text-gray-300") : "text-muted-foreground"}`} />
@@ -840,7 +845,9 @@ export function ProductDetailContent({
                   : isModal ? (dk ? "border-gray-700 hover:border-gray-500" : "border-gray-200 hover:border-gray-400") : "border-border hover:border-primary/50"
               }`}
             >
-              <img src={url} alt="" className="w-full h-full object-cover" />
+              <div style={{ width: "100%", height: "100%", transform: `scale(${computeCoverZoomScale(getAdjustmentFor((product as any)?.imageAdjustments, url))})`, transformOrigin: "center" }}>
+                <img src={url} alt="" className="w-full h-full object-cover" />
+              </div>
             </button>
           ))}
         </div>

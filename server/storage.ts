@@ -11511,6 +11511,7 @@ export class DatabaseStorage implements IStorage {
         supplierId: l.supplierId,
         productName: prod.name,
         imageUrl: prod.imageUrl ?? null,
+        imageAdjustments: prod.imageAdjustments ?? {},
         sku: l.sku ?? null,
         barcode: l.barcode ?? null,
         categoryId: prod.categoryId ?? null,

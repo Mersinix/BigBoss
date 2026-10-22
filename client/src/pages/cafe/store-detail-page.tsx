@@ -24,6 +24,7 @@ import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { calculateDistance, formatDistance } from "@/lib/distance";
+import { useCoverZoomStyle, getAdjustmentFor } from "@/lib/image-adjustment";
 import { useSearchLocationStore } from "@/store/search-location-store";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
@@ -539,6 +540,8 @@ function StoreProductCard({
   const avgRating = product.avgRating ?? 0;
   const reviewCount = product.reviewCount ?? 0;
   const hasReviews = hasCommercialAccess && reviewCount > 0;
+  const adjustPct = getAdjustmentFor(product.imageAdjustments, product.imageUrl);
+  const { wrapperStyle: cropWrapperStyle } = useCoverZoomStyle(adjustPct);
 
   return (
     <div
@@ -549,7 +552,9 @@ function StoreProductCard({
       {/* Image */}
       <div className={`relative aspect-[4/3] overflow-hidden shrink-0 ${t.imageOverlay}`}>
         {product.imageUrl ? (
-          <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          <div style={cropWrapperStyle}>
+            <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          </div>
         ) : (
           <div className="w-full h-full flex items-center justify-center">
             <Package className={`w-10 h-10 ${t.emptyIcon}`} />

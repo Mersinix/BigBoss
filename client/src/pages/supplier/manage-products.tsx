@@ -25,6 +25,7 @@ import type { ProductWithTaxonomy, FlavorWithCount, SizeWithCount, BrandWithCoun
 import { useSupplierCategoryStore } from "@/store/supplier-category-store";
 import { PackTab } from "./manage-packs";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { useCoverZoomStyle, computeCoverZoomScale, getAdjustmentFor } from "@/lib/image-adjustment";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -110,6 +111,7 @@ function ProductDetailModal({
   onClose: () => void;
   onAdd: () => void;
 }) {
+  const { wrapperStyle: detailCropStyle } = useCoverZoomStyle(getAdjustmentFor(product.imageAdjustments, product.imageUrl));
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent hideClose className="sm:max-w-md">
@@ -119,7 +121,11 @@ function ProductDetailModal({
         <DialogHeader><DialogTitle>{product.name}</DialogTitle></DialogHeader>
         <div className="space-y-3 mt-2">
           {product.imageUrl ? (
-            <img src={product.imageUrl} alt="" className="w-full h-44 object-cover rounded-lg border" />
+            <div className="w-full h-44 rounded-lg border overflow-hidden">
+              <div style={detailCropStyle}>
+                <img src={product.imageUrl} alt="" className="w-full h-full object-cover" />
+              </div>
+            </div>
           ) : (
             <div className="w-full h-44 bg-secondary rounded-lg flex items-center justify-center">
               <Package className="w-12 h-12 text-muted-foreground opacity-40" />
@@ -435,13 +441,22 @@ function ListingLivePreview({
     return [];
   }, [product]);
 
+  // Reuses the exact same shared crop model/constant as the Admin and
+  // Coffee Owner Live Previews (task: "Synchronize Admin Product Image
+  // Cropping Across Supplier Views") — never a second interpretation of
+  // the saved percentage.
+  const imageAdjustments = (product as any).imageAdjustments as Record<string, number> | undefined;
+  const { wrapperStyle: mainCropStyle } = useCoverZoomStyle(getAdjustmentFor(imageAdjustments, product.imageUrl));
+
   return (
     <div className="lg:sticky lg:top-0">
       <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Live Preview</Label>
       <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
         <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
           {product.imageUrl ? (
-            <img src={product.imageUrl} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            <div style={mainCropStyle}>
+              <img src={product.imageUrl} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            </div>
           ) : (
             <Package className="w-16 h-16 text-muted-foreground opacity-40" />
           )}
@@ -450,12 +465,14 @@ function ListingLivePreview({
           <div className="flex gap-1.5 p-2 border-t bg-secondary/20 flex-wrap">
             {additionalImages.map((url, idx) => (
               <div key={idx} className="w-16 h-16 shrink-0 rounded-lg overflow-hidden border bg-secondary">
-                <img
-                  src={url}
-                  alt=""
-                  className="w-full h-full object-cover"
-                  onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
+                <div style={{ width: "100%", height: "100%", transform: `scale(${computeCoverZoomScale(getAdjustmentFor(imageAdjustments, url))})`, transformOrigin: "center" }}>
+                  <img
+                    src={url}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -514,6 +531,7 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
 
   const [groups, setGroups] = useState<VariantGroup[]>([{ id: "default", sizeId: "", flavorIds: [], price: "", qty: "", flavorStocks: {} }]);
   const [onlyForPack, setOnlyForPack] = useState(false);
+  const { wrapperStyle: headerCropStyle } = useCoverZoomStyle(getAdjustmentFor(product.imageAdjustments, product.imageUrl));
 
   const qc = useQueryClient();
   const add = useMutation({
@@ -567,7 +585,11 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
           <div className="space-y-4">
             <div className="flex items-center gap-3 p-3 bg-secondary/40 rounded-lg">
               {product.imageUrl ? (
-                <img src={product.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover" />
+                <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0">
+                  <div style={headerCropStyle}>
+                    <img src={product.imageUrl} alt="" className="w-full h-full object-cover" />
+                  </div>
+                </div>
               ) : (
                 <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground" /></div>
               )}
@@ -1698,7 +1720,11 @@ function AdminProductsTab({
               {pageDisplayed.map((p: AdminProductWithListing) => (
                 <div key={p.id} className="border rounded-lg overflow-hidden bg-card hover:shadow-sm transition-shadow cursor-pointer" onClick={() => setDetailProduct(p)} data-testid={`card-admin-product-${p.id}`}>
                   <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
-                    {p.imageUrl ? <img src={p.imageUrl} alt="" className="w-full h-full object-cover" /> : <Package className="w-8 h-8 text-muted-foreground opacity-40" />}
+                    {p.imageUrl ? (
+                      <div style={{ width: "100%", height: "100%", transform: `scale(${computeCoverZoomScale(getAdjustmentFor(p.imageAdjustments, p.imageUrl))})`, transformOrigin: "center" }}>
+                        <img src={p.imageUrl} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    ) : <Package className="w-8 h-8 text-muted-foreground opacity-40" />}
                   </div>
                   <div className="p-2.5 space-y-1.5">
                     <p className="font-medium text-sm line-clamp-2">{p.name}</p>
@@ -1729,7 +1755,11 @@ function AdminProductsTab({
                     <TableRow key={p.id} className="hover:bg-secondary/20 cursor-pointer" onClick={() => setDetailProduct(p)} data-testid={`row-admin-product-${p.id}`}>
                       <TableCell className="p-3">
                         {p.imageUrl ? (
-                          <img src={p.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-border/50" />
+                          <div className="w-12 h-12 rounded-lg overflow-hidden border border-border/50">
+                            <div style={{ width: "100%", height: "100%", transform: `scale(${computeCoverZoomScale(getAdjustmentFor(p.imageAdjustments, p.imageUrl))})`, transformOrigin: "center" }}>
+                              <img src={p.imageUrl} alt="" className="w-full h-full object-cover" />
+                            </div>
+                          </div>
                         ) : (
                           <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground" /></div>
                         )}
@@ -2096,7 +2126,11 @@ function MyProductsTab({
                   data-testid={`card-my-listing-${l.id}`}
                 >
                   <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
-                    {l.product.imageUrl ? <img src={l.product.imageUrl} alt="" className="w-full h-full object-cover" /> : <Package className="w-8 h-8 text-muted-foreground opacity-40" />}
+                    {l.product.imageUrl ? (
+                      <div style={{ width: "100%", height: "100%", transform: `scale(${computeCoverZoomScale(getAdjustmentFor(l.product.imageAdjustments, l.product.imageUrl))})`, transformOrigin: "center" }}>
+                        <img src={l.product.imageUrl} alt="" className="w-full h-full object-cover" />
+                      </div>
+                    ) : <Package className="w-8 h-8 text-muted-foreground opacity-40" />}
                   </div>
                   <div className="p-2.5 space-y-1">
                     <p className="font-medium text-sm line-clamp-2">{l.product.name}</p>
@@ -2124,7 +2158,11 @@ function MyProductsTab({
                     <TableRow key={l.id} className="hover:bg-secondary/20" data-testid={`row-my-listing-${l.id}`}>
                       <TableCell className="p-3">
                         {l.product.imageUrl ? (
-                          <img src={l.product.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-border/50" />
+                          <div className="w-12 h-12 rounded-lg overflow-hidden border border-border/50">
+                            <div style={{ width: "100%", height: "100%", transform: `scale(${computeCoverZoomScale(getAdjustmentFor(l.product.imageAdjustments, l.product.imageUrl))})`, transformOrigin: "center" }}>
+                              <img src={l.product.imageUrl} alt="" className="w-full h-full object-cover" />
+                            </div>
+                          </div>
                         ) : (
                           <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground" /></div>
                         )}

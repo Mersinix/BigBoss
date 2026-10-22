@@ -23,6 +23,7 @@ import { useFormatCurrency, useCurrency } from "@/hooks/use-currency";
 import type { Promotion, PromotionType, PromotionStatus } from "@shared/schema";
 import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { computeCoverZoomScale, getAdjustmentFor } from "@/lib/image-adjustment";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 // ── API helpers ─────────────────────────────────────────────────────────────
@@ -396,6 +397,7 @@ type ListingItem = {
   productId: number;
   productName: string;
   imageUrl: string | null;
+  imageAdjustments?: Record<string, number> | null;
   category: string;
   categoryId: number | null;
   price: number;
@@ -585,7 +587,9 @@ function PromotionAssignmentDialog({
                     <Checkbox checked={checked} onCheckedChange={() => toggleId(listing.listingId)} className="shrink-0" onClick={e => e.stopPropagation()} />
                     <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-gray-700 overflow-hidden shrink-0">
                       {listing.imageUrl ? (
-                        <img src={listing.imageUrl} alt={listing.productName} className="w-full h-full object-cover" />
+                        <div style={{ width: "100%", height: "100%", transform: `scale(${computeCoverZoomScale(getAdjustmentFor(listing.imageAdjustments, listing.imageUrl))})`, transformOrigin: "center" }}>
+                          <img src={listing.imageUrl} alt={listing.productName} className="w-full h-full object-cover" />
+                        </div>
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <Package className="w-4 h-4 text-gray-300 dark:text-gray-500" />

@@ -46,9 +46,15 @@ function TaxBadges({ product }: { product: ProductWithTaxonomy }) {
     <div className="flex flex-wrap gap-1">
       {product.categoryLabel && <Badge variant="secondary" className="text-xs">{product.categoryLabel.name}</Badge>}
       {product.subCategoryLabel && <Badge variant="outline" className="text-xs">{product.subCategoryLabel.name}</Badge>}
-      {product.brandLabel && <Badge className="text-xs">{product.brandLabel.name}</Badge>}
-      {flavorLabels.map(f => <Badge key={f.id} className="text-xs bg-pink-300 text-pink-700 hover:bg-pink-300 dark:bg-pink-950/40 dark:text-pink-400 border-0">{f.name}</Badge>)}
-      {sizeLabels.map(s => <Badge key={s.id} className="text-xs bg-amber-400 text-amber-700 hover:bg-amber-400 dark:bg-amber-950/40 dark:text-amber-400 border-0">{s.name}</Badge>)}
+      {product.brandLabel && <Badge variant="secondary" className="text-xs">{product.brandLabel.name}</Badge>}
+      {flavorLabels.map(f => <Badge
+    key={f.id}
+    className="text-xs font-medium bg-rose-100/70 text-rose-800 dark:bg-rose-400/10 dark:text-rose-300 hover:bg-rose-100/70 border border-rose-200/70 dark:border-rose-400/20"
+  >{f.name}</Badge>)}
+      {sizeLabels.map(s => <Badge
+    key={s.id}
+    className="text-xs font-medium bg-amber-100/70 text-amber-800 dark:bg-amber-400/10 dark:text-amber-300 hover:bg-amber-100/70 border border-amber-200/70 dark:border-amber-400/20"
+  >{s.name}</Badge>)}
     </div>
   );
 }
@@ -494,7 +500,7 @@ function ListingLivePreview({
                     <div className="flex items-center gap-2 shrink-0">
                       {price > 0 && <span className="font-medium">{fmtDecimal(price)}</span>}
                       <span className={`text-xs px-1.5 py-0.5 rounded-md ${qty > 0 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" : "bg-secondary text-muted-foreground"}`}>
-                        {qty > 0 ? `${qty} in stock` : "No stock"}
+                        {qty > 0 ? `${qty} en stock` : "No stock"}
                       </span>
                     </div>
                   </div>
@@ -583,24 +589,9 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
           {/* Left – Builder */}
           <div className="space-y-4">
-            <div className="flex items-center gap-3 p-3 bg-secondary/40 rounded-lg">
-              {product.imageUrl ? (
-                <div className="w-12 h-12 rounded-lg overflow-hidden shrink-0">
-                  <div style={headerCropStyle}>
-                    <img src={product.imageUrl} alt="" className="w-full h-full object-cover" />
-                  </div>
-                </div>
-              ) : (
-                <div className="w-12 h-12 rounded-lg bg-secondary flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground" /></div>
-              )}
-              <div>
-                <p className="font-medium text-sm">{product.name}</p>
-                <TaxBadges product={product} />
-              </div>
-            </div>
+           
 
             <div>
-              <Label className="mb-2 block">Build custom variant groups (size + flavors + price + stock)</Label>
               <VariantGroupBuilder flavors={availableFlavors} sizes={availableSizes} groups={groups} onChange={setGroups} />
               <p className="text-xs text-muted-foreground mt-1.5">Products only appear in the shop when price &gt; 0 and stock &gt; 0.</p>
             </div>
@@ -753,7 +744,6 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
           {/* Left – Builder */}
           <div className="space-y-4">
             <div>
-              <Label className="mb-2 block">Manage variant groups (size + flavors + price + stock per flavor)</Label>
               <VariantGroupBuilder flavors={availableFlavors} sizes={availableSizes} groups={groups} onChange={setGroups} />
               <p className="text-xs text-muted-foreground mt-1.5">Variants with qty 0 will be hidden from café customers.</p>
             </div>
@@ -836,10 +826,13 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
 
 function StatusBadge({ status }: { status: string }) {
   const cls: Record<string, string> = {
-    PENDING: "bg-amber-400 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400",
-    ACTIVE: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400",
-    REJECTED: "bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400",
-  };
+  PENDING:
+    "font-medium bg-amber-100/70 text-amber-800 dark:bg-amber-400/10 dark:text-amber-300 border border-amber-200/70 dark:border-amber-400/20",
+  ACTIVE:
+    "font-medium bg-emerald-100/70 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-400/20",
+  REJECTED:
+    "font-medium bg-rose-100/70 text-rose-800 dark:bg-rose-400/10 dark:text-rose-300 border border-rose-200/70 dark:border-rose-400/20",
+};
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls[status] ?? "bg-secondary text-muted-foreground"}`}>
       {status}
@@ -1049,15 +1042,21 @@ function SupplierProductFormModal({ open, onClose, editing, cats, subs, flavs, s
                 <div className="flex flex-wrap gap-1 pt-1">
                   {form.categoryId && <Badge variant="secondary" className="text-xs">{supplierCats.find(c => String(c.id) === form.categoryId)?.name}</Badge>}
                   {form.subCategoryId && <Badge variant="outline" className="text-xs">{filteredSubs.find(s => String(s.id) === form.subCategoryId)?.name}</Badge>}
-                  {form.brandId && <Badge className="text-xs">{filteredBrnds.find(b => String(b.id) === form.brandId)?.name}</Badge>}
+                  {form.brandId && <Badge variant="secondary" className="text-xs">{filteredBrnds.find(b => String(b.id) === form.brandId)?.name}</Badge>}
                 </div>
                 {(form.flavorIds.length > 0 || form.sizeIds.length > 0) && (
                   <div className="flex flex-wrap gap-1">
                     {filteredFlavs.filter(f => form.flavorIds.includes(f.id)).map(f => (
-                      <Badge key={f.id} className="text-xs bg-pink-300 text-pink-700 border-0">{f.name}</Badge>
+                       <Badge
+      key={f.id}
+      className="text-xs font-medium bg-rose-100/70 text-rose-800 dark:bg-rose-400/10 dark:text-rose-300 hover:bg-rose-100/70 border border-rose-200/70 dark:border-rose-400/20"
+    >{f.name}</Badge>
                     ))}
                     {filteredSzs.filter(s => form.sizeIds.includes(s.id)).map(s => (
-                      <Badge key={s.id} className="text-xs bg-amber-400 text-amber-700 border-0">{s.name}</Badge>
+                       <Badge
+      key={s.id}
+      className="text-xs font-medium bg-amber-100/70 text-amber-800 dark:bg-amber-400/10 dark:text-amber-300 hover:bg-amber-100/70 border border-amber-200/70 dark:border-amber-400/20"
+    >{s.name}</Badge>
                     ))}
                   </div>
                 )}
@@ -1983,7 +1982,7 @@ function MyProductsTab({
           <span className="text-sm font-medium">{visibleListings.length} product{visibleListings.length !== 1 ? 's' : ''} in my catalog</span>
         </div>
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">{inStockCount} in stock · {outOfStockCount} out of stock</span>
+          <span className="text-sm text-muted-foreground">{inStockCount} en stock · {outOfStockCount} out of stock</span>
         </div>
       </div>
 
@@ -2135,7 +2134,7 @@ function MyProductsTab({
                   <div className="p-2.5 space-y-1">
                     <p className="font-medium text-sm line-clamp-2">{l.product.name}</p>
                     <p className="text-sm font-semibold">{fmt(l.price)}</p>
-                    <p className={`text-xs ${l.stock > 0 ? "text-emerald-600" : "text-red-600"}`}>{l.stock > 0 ? `${l.stock} in stock` : "Out of stock"}</p>
+                    <p className={`text-xs ${l.stock > 0 ? "text-emerald-600" : "text-red-600"}`}>{l.stock > 0 ? `${l.stock} en stock` : "Out of stock"}</p>
                   </div>
                 </div>
               ))}

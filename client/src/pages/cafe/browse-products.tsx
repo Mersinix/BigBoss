@@ -1397,10 +1397,10 @@ export default function BrowseProducts() {
                 {categories.find((c) => String(c.id) === categoryId)?.name ?? "Produits"}
               </h1>
             ) : (
-<h1 className={`font-bold text-lg flex items-center gap-1.5 ${t.textPrimary}`}>
-  <ShoppingBag className={`w-4 h-4 ${t.dk ? "text-amber-400" : "text-amber-500"}`} />
-  TOUS LES PRODUITS
-</h1>            )}
+              <h1 className={`font-bold text-lg flex items-center gap-1.5 ${t.textPrimary}`}>
+                <ShoppingBag className={`w-4 h-4 ${t.dk ? "text-amber-400" : "text-amber-500"}`} />
+                  TOUS LES PRODUITS
+              </h1>            )}
             {!isLoading && (
               <p className={`text-sm mt-0.5 ${t.textMuted}`}>
                 {filtered.length} produit{filtered.length !== 1 ? "s" : ""} 
@@ -1457,7 +1457,7 @@ export default function BrowseProducts() {
         onClose={() => setFlashOpen(false)}
         products={flashProducts as any[]}
         packs={packs}
-        storeName="BigBoss SHOP"
+        storeName="BigBossCoffee"
       />
     </div>
   );

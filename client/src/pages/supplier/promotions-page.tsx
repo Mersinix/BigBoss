@@ -603,7 +603,7 @@ function PromotionAssignmentDialog({
                     <div className="text-right shrink-0">
                       <p className="text-sm font-semibold">{fmt(listing.price)}</p>
                       <p className={`text-xs ${listing.stock === 0 ? "text-destructive" : listing.stock < 10 ? "text-yellow-600 dark:text-yellow-400" : "text-muted-foreground"}`}>
-                        {listing.stock === 0 ? "Out of stock" : `${listing.stock} in stock`}
+                        {listing.stock === 0 ? "Out of stock" : `${listing.stock} en stock`}
                       </p>
                     </div>
                     {checked && <Check className="w-4 h-4 text-amber-600 shrink-0" />}

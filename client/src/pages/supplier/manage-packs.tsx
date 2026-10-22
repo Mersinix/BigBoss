@@ -612,7 +612,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                                         ))}
                                       </span>
                                     ) : (
-                                      <span className="ml-1 text-gray-400">{g.totalStock} in stock</span>
+                                      <span className="ml-1 text-gray-400">{g.totalStock} en stock</span>
                                     )}
                                     <span className="ml-1 text-gray-400">· Original: {fmt(g.price)}</span>
                                   </span>
@@ -789,7 +789,7 @@ function PackPreviewModal({ pack, open, onClose, onEdit, onToggleVisibility, onD
           <div className="flex flex-wrap gap-1">
             {pack.categoryLabels.map(c => <Badge key={c.id} variant="secondary" className="text-xs">{c.name}</Badge>)}
             {pack.subCategoryLabels.map(c => <Badge key={c.id} variant="outline" className="text-xs">{c.name}</Badge>)}
-            {pack.brandLabels.map(b => <Badge key={b.id} className="text-xs">{b.name}</Badge>)}
+            {pack.brandLabels.map(b => <Badge key={b.id} variant="secondary" className="text-xs">{b.name}</Badge>)}
           </div>
           {pack.expirationDate && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -1197,7 +1197,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
                             data-testid={`checkbox-pack-product-${listing.id}-${g.key}`}
                           />
                           <span className="text-xs text-muted-foreground">
-                            {variantGroupLabel(g)} — {fmt(g.price)} · <span className="text-green-600">{g.totalStock} in stock</span>
+                            {variantGroupLabel(g)} — {fmt(g.price)} · <span className="text-green-600">{g.totalStock} en stock</span>
                           </span>
                         </label>
                         {isChecked && (

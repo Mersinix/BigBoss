@@ -143,7 +143,7 @@ function VariantRow({
   };
 
   const baseLabel = [variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "Default";
-  const label = outOfStock ? baseLabel : `${baseLabel} · ${variant.quantity} in stock`;
+  const label = outOfStock ? baseLabel : `${baseLabel} · ${variant.quantity} en stock`;
 
   const borderCls   = isDark ? "border-gray-700/40"  : "border-border/40";
   const labelCls    = isDark ? "text-white"           : "";

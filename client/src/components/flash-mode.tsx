@@ -385,7 +385,7 @@ export function FlashMode({
                   : "0 / 0"}
               </span>
               <button
-                className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center"
+                className="w-8 h-8 bg-black/55 backdrop-blur-sm rounded-full flex items-center justify-center"
                 onClick={onClose}
                 data-testid="button-flash-close"
               >
@@ -423,7 +423,7 @@ export function FlashMode({
               </p>
               <button
                 onClick={openFilter}
-                className="px-5 py-2.5 bg-white/20 backdrop-blur-sm rounded-full text-white text-sm font-semibold"
+                className="px-5 py-2.5 bg-black/55 backdrop-blur-sm rounded-full text-white text-sm font-semibold"
               >
                 Change filter
               </button>
@@ -528,7 +528,7 @@ export function FlashMode({
               className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${
                 hasActiveFilter
                   ? "bg-amber-500"
-                  : "bg-white/20 backdrop-blur-sm"
+                  : "bg-black/55 backdrop-blur-sm"
               }`}
               onClick={openFilter}
               data-testid="button-flash-filter"
@@ -540,7 +540,7 @@ export function FlashMode({
             {/* Details button — opens full Product or Pack detail modal */}
             {current && (
               <button
-                className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg transition-all active:scale-90"
+                className="w-8 h-8 rounded-full bg-black/55 backdrop-blur-sm flex items-center justify-center shadow-lg transition-all active:scale-90"
                 onClick={handleOpenDetails}
                 data-testid="button-flash-details"
                 title="View full details"
@@ -553,7 +553,7 @@ export function FlashMode({
             {current && (
               <button
                 className={`w-8 h-8 rounded-full flex items-center justify-center shadow-lg transition-all active:scale-90 ${
-                  favedCurrent ? "bg-rose-500" : "bg-white/20 backdrop-blur-sm"
+                  favedCurrent ? "bg-rose-500" : "bg-black/55 backdrop-blur-sm"
                 }`}
                 onClick={triggerFavorite}
                 data-testid="button-flash-favorite"

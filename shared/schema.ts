@@ -3866,6 +3866,12 @@ export type ProductWithTaxonomy = Product & {
 export type SupplierListingWithProduct = SupplierProductListing & {
   product: ProductWithTaxonomy;
   variants?: SupplierVariantWithLabels[];
+  // Number of distinct packs (any state — active or archived) that
+  // reference this listing, computed in one batched query by
+  // getSupplierListings. Used to reliably disable "Remove" client-side
+  // without an extra per-row network request — the server still re-checks
+  // this before actually deleting.
+  packUsageCount?: number;
 };
 
 export type SupplierVariantWithLabels = SupplierProductVariant & {

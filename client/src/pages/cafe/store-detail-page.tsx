@@ -436,7 +436,7 @@ function StorePacksSection({ packs, filters, search, hasCommercialAccess, isDark
             className={`text-xs font-semibold h-8 px-3 ${t.sectionBtnPack}`}
             onClick={() => setExpanded((e) => !e)}
           >
-            {expanded ? "Show Less" : `See More (${filtered.length - INITIAL_LIMIT}+)`}
+            {expanded ? "Afficher Moins" : `Voir Plus (${filtered.length - INITIAL_LIMIT}+)`}
           </Button>
         )}
       </div>

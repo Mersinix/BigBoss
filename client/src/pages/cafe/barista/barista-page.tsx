@@ -119,9 +119,9 @@ function useTheme(isDark: boolean) {
 const DEFAULT_SKILL_ICON = "☕";
 
 const BARISTA_LEVEL_COLORS: Record<string, string> = {
-  BEGINNER: "bg-green-100 text-green-700",
-  ADVANCED: "bg-blue-100 text-blue-700",
-  EXPERT: "bg-purple-100 text-purple-700",
+  BEGINNER: "bg-black/55 backdrop-blur-sm text-green-400 border border-green-700",
+  ADVANCED: "bg-black/55 backdrop-blur-sm text-blue-400 border border-blue-700",
+  EXPERT: "bg-black/55 backdrop-blur-sm text-purple-400 border border-purple-700",
 };
 
 const BARISTA_LEVEL_LABELS: Record<string, string> = {

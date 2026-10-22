@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation,
+ Gift, Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation,
   Plus, ShoppingBag, Layers, Star, MapPin, Zap, Search,
 } from "lucide-react";
 import type { ListingPromotion } from "@shared/schema";
@@ -471,7 +471,11 @@ function StoresSection({
     <div className="mb-8">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h2 className={`font-bold text-lg ${t.textPrimary}`}>Marques populaires</h2>
+          {/* <h2 className={`font-bold text-lg ${t.textPrimary}`}>MARQUES & FOURNISSEURS</h2> */}
+          <h2 className={`font-bold text-lg flex items-center gap-1.5 ${t.textPrimary}`}>
+          <Store className={`w-4 h-4 ${t.dk ? "text-amber-400" : "text-amber-500"}`} />
+              MARQUES & FOURNISSEURS
+          </h2>
           <p className={`text-xs mt-0.5 ${t.textMuted}`}>
             {filteredStores.length} store{filteredStores.length !== 1 ? "s" : ""}
           </p>
@@ -484,7 +488,7 @@ function StoresSection({
             onClick={() => setExpanded((e) => !e)}
             data-testid="button-toggle-stores"
           >
-            {expanded ? "Show Less" : `See More (${filteredStores.length - INITIAL_LIMIT}+)`}
+            {expanded ? "Afficher Moins" : `Voir Plus (${filteredStores.length - INITIAL_LIMIT}+)`}
           </Button>
         )}
       </div>
@@ -755,7 +759,7 @@ function PacksSection({
       <div className="flex items-center justify-between mb-3">
         <div>
           <h2 className={`font-bold text-lg flex items-center gap-1.5 ${t.textPrimary}`}>
-            <Layers className={`w-4 h-4 ${t.dk ? "text-amber-400" : "text-amber-500"}`} />Packs
+            <Gift  className={`w-4 h-4 ${t.dk ? "text-amber-400" : "text-amber-500"}`} />PROMO PACK
           </h2>
           <p className={`text-xs mt-0.5 ${t.textMuted}`}>
             {filteredPacks.length} pack{filteredPacks.length !== 1 ? "s" : ""}
@@ -769,7 +773,7 @@ function PacksSection({
             onClick={() => setExpanded((e) => !e)}
             data-testid="button-toggle-packs"
           >
-            {expanded ? "Show Less" : `See More (${filteredPacks.length - INITIAL_LIMIT}+)`}
+            {expanded ? "Afficher Moins" : `Voir Plus (${filteredPacks.length - INITIAL_LIMIT}+)`}
           </Button>
         )}
       </div>
@@ -1388,11 +1392,13 @@ export default function BrowseProducts() {
                 {categories.find((c) => String(c.id) === categoryId)?.name ?? "Produits"}
               </h1>
             ) : (
-              <h1 className={`font-bold text-lg ${t.textPrimary}`}>Tous les produits</h1>
-            )}
+<h1 className={`font-bold text-lg flex items-center gap-1.5 ${t.textPrimary}`}>
+  <ShoppingBag className={`w-4 h-4 ${t.dk ? "text-amber-400" : "text-amber-500"}`} />
+  TOUS LES PRODUITS
+</h1>            )}
             {!isLoading && (
               <p className={`text-sm mt-0.5 ${t.textMuted}`}>
-                {filtered.length} produit{filtered.length !== 1 ? "s" : ""} disponible{filtered.length !== 1 ? "s" : ""}
+                {filtered.length} produit{filtered.length !== 1 ? "s" : ""} 
               </p>
             )}
           </div>

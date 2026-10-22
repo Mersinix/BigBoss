@@ -11344,6 +11344,25 @@ export class DatabaseStorage implements IStorage {
       variantsByListing.get(v.listingId)!.push(v);
     }
 
+    // Pack usage — one batched query (never one per listing) so the client
+    // can reliably disable "Remove" for a pack-used listing without an N+1
+    // round trip (task: "Prevent removing products used in packs"). Counts
+    // DISTINCT packs regardless of archived state, matching the same
+    // "any pack state" rule the authoritative /pack-usage endpoint already
+    // uses — a listing still referenced by an Old (archived) pack must stay
+    // just as protected as one referenced by an active pack.
+    const listingIds = listings.map((l) => l.id);
+    const usageRows = listingIds.length
+      ? await db.select({ listingId: packItems.listingId, packId: packItems.packId })
+          .from(packItems)
+          .where(inArray(packItems.listingId, listingIds))
+      : [];
+    const packIdsByListing = new Map<number, Set<number>>();
+    for (const row of usageRows) {
+      if (!packIdsByListing.has(row.listingId)) packIdsByListing.set(row.listingId, new Set());
+      packIdsByListing.get(row.listingId)!.add(row.packId);
+    }
+
     let result = listings.map((l) => {
       const prod = productMap.get(l.productId);
       if (!prod) return null;
@@ -11352,7 +11371,7 @@ export class DatabaseStorage implements IStorage {
         flavorName: v.flavorId ? (tx.flvMap.get(v.flavorId)?.name ?? null) : null,
         sizeName: v.sizeId ? (tx.szMap.get(v.sizeId)?.name ?? null) : null,
       }));
-      return { ...l, product: enrichProduct(prod, tx), variants };
+      return { ...l, product: enrichProduct(prod, tx), variants, packUsageCount: packIdsByListing.get(l.id)?.size ?? 0 };
     }).filter(Boolean) as SupplierListingWithProduct[];
 
     if (filters?.categoryId) result = result.filter((l) => l.product.categoryId === filters.categoryId);
@@ -11373,22 +11392,27 @@ export class DatabaseStorage implements IStorage {
     return updated;
   }
 
+  // Task: "Prevent removing products used in packs" — this used to archive
+  // every referencing pack and delete its packItems as a side effect of
+  // removal. Replaced with an outright rejection: a listing referenced by
+  // ANY pack (active or archived — an Old Pack's own display still resolves
+  // productName/listingVariants through this exact listing row) can no
+  // longer be removed at all, so pack composition, items, and history are
+  // never touched by this operation. Re-checked here (not just client-side)
+  // so a stale/bypassed client request can't slip through; the authoritative
+  // relationship (packItems.listingId) is the same one GET .../pack-usage
+  // and the batched packUsageCount in getSupplierListings both already use.
   async deleteSupplierListing(id: number) {
-    const affectedRows = await db.select({ packId: packItems.packId })
-      .from(packItems)
-      .innerJoin(packs, eq(packItems.packId, packs.id))
-      .where(and(eq(packItems.listingId, id), eq(packs.isArchived, false)));
-    const archivedPackIds = Array.from(new Set(affectedRows.map((row) => row.packId)));
-    if (archivedPackIds.length > 0) {
-      await db.update(packs)
-        .set({ isArchived: true, updatedAt: new Date() })
-        .where(inArray(packs.id, archivedPackIds));
+    const usageRows = await db.select({ packId: packItems.packId }).from(packItems).where(eq(packItems.listingId, id));
+    if (usageRows.length > 0) {
+      const err: any = new Error("This product cannot be removed because it is used in one or more packs.");
+      err.code = "LISTING_USED_IN_PACK";
+      throw err;
     }
     await db.delete(supplierProductVariants).where(eq(supplierProductVariants.listingId, id));
-    await db.delete(packItems).where(eq(packItems.listingId, id));
     await db.delete(inventoryAdjustments).where(eq(inventoryAdjustments.listingId, id));
     await db.delete(supplierProductListings).where(eq(supplierProductListings.id, id));
-    return archivedPackIds;
+    return [] as number[];
   }
 
   async removeSupplierListingFromPacks(id: number): Promise<number[]> {

@@ -555,7 +555,7 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent hideClose className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent hideClose className="sm:max-w-4xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-add-listing">
           <X className="w-4 h-4" />
         </button>
@@ -666,6 +666,11 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
     onError: () => toast({ title: "Failed to update visibility", variant: "destructive" }),
   });
 
+  // Task: "Prevent removing products used in packs" — packUsageCount comes
+  // from the same batched, server-computed signal getSupplierListings
+  // already enriches every listing with (never a per-modal-open fetch).
+  const usedInPacks = (listing.packUsageCount ?? 0) > 0;
+
   const availableFlavors = useMemo(() => {
     const ids = listing.product.flavorIds?.length ? listing.product.flavorIds : (listing.product.flavorId ? [listing.product.flavorId] : []);
     return ids.length > 0 ? flavs.filter(f => ids.includes(f.id)) : [];
@@ -752,13 +757,20 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
               </label>
             </div>
 
+            {usedInPacks && (
+              <p className="text-xs text-muted-foreground -mt-2" data-testid="text-remove-blocked-reason">
+                This product cannot be removed because it is used in {listing.packUsageCount} pack{listing.packUsageCount === 1 ? "" : "s"}.
+              </p>
+            )}
+
             <div className="flex flex-wrap gap-2 justify-end items-center pt-2">
               {onDelete && (
                 <Button
                   type="button"
                   variant="outline"
-                  className="text-destructive hover:text-destructive mr-auto"
+                  className="text-destructive hover:text-destructive mr-auto disabled:text-muted-foreground"
                   onClick={onDelete}
+                  disabled={usedInPacks}
                   data-testid="button-delete-listing-modal"
                 >
                   <Trash2 className="w-3.5 h-3.5 mr-1.5" />Remove
@@ -1805,7 +1817,6 @@ function MyProductsTab({
   const myProdSearchInputRef = useRef<HTMLInputElement>(null);
 
   const { selectedCategoryId, selectedSubCategoryId, setSelectedCategory, setSelectedSubCategory } = useSupplierCategoryStore();
-  const [removeTarget, setRemoveTarget] = useState<{ id: number; name: string; packs: PackUsage[] } | null>(null);
 
   const hasMappings = mappings.length > 0;
 
@@ -1916,21 +1927,21 @@ function MyProductsTab({
       invalidateMarketplace(qc);
       toast({ title: "Removed from your products" });
     },
-    onError: () => toast({ title: "Error removing", variant: "destructive" }),
+    onError: (err: any) => toast({ title: err?.message ?? "Error removing", variant: "destructive" }),
   });
 
-  const requestRemove = async (listing: SupplierListingWithProduct) => {
-    try {
-      const res = await fetch(`/api/supplier/listings/${listing.id}/pack-usage`, { credentials: "include" });
-      const usage = res.ok ? await res.json() as { packs: PackUsage[] } : { packs: [] };
-      if (usage.packs.length > 0) {
-        setRemoveTarget({ id: listing.id, name: listing.product.name, packs: usage.packs });
-        return;
-      }
-      if (confirm(`Remove "${listing.product.name}" from your products?`)) removeMutation.mutate(listing.id);
-    } catch {
-      toast({ title: "Unable to check Pack usage", variant: "destructive" });
+  // Task: "Prevent removing products used in packs" — packUsageCount is
+  // already computed server-side (batched, no per-row request) by
+  // getSupplierListings, so the Remove control can be reliably disabled
+  // up front; this handler stays as a defensive fallback (e.g. a stale
+  // listing object) rather than the primary safeguard — the server
+  // re-checks and rejects regardless (DELETE .../listings/:id → 409).
+  const requestRemove = (listing: SupplierListingWithProduct) => {
+    if ((listing.packUsageCount ?? 0) > 0) {
+      toast({ title: "Cannot remove", description: "This product is used in one or more packs.", variant: "destructive" });
+      return;
     }
+    if (confirm(`Remove "${listing.product.name}" from your products?`)) removeMutation.mutate(listing.id);
   };
 
   return (
@@ -2133,7 +2144,15 @@ function MyProductsTab({
                         <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setEditingListing(l)} data-testid={`button-edit-listing-${l.id}`}>
                           <Pencil className="w-3.5 h-3.5" />
                         </Button>
-                        <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => requestRemove(l)} data-testid={`button-remove-listing-${l.id}`}>
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          className="h-8 w-8 text-destructive hover:text-destructive disabled:text-muted-foreground disabled:hover:text-muted-foreground"
+                          onClick={() => requestRemove(l)}
+                          disabled={(l.packUsageCount ?? 0) > 0}
+                          title={(l.packUsageCount ?? 0) > 0 ? `Used in ${l.packUsageCount} pack${l.packUsageCount === 1 ? "" : "s"} — cannot be removed` : undefined}
+                          data-testid={`button-remove-listing-${l.id}`}
+                        >
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </TableCell>
@@ -2167,30 +2186,6 @@ function MyProductsTab({
           onDelete={() => { const l = editingListing; setEditingListing(null); requestRemove(l); }}
         />
       )}
-      <AlertDialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Product used in Pack(s)</AlertDialogTitle>
-            <AlertDialogDescription>
-              <strong>{removeTarget?.name}</strong> is currently used by one or more Packs.
-              Confirming removal will remove the product and move every affected Pack from New Packs to Old Packs.
-              Existing Pack history and orders will be preserved.
-              <span className="block mt-2 font-medium">
-                Affected Packs: {removeTarget?.packs.map(pack => pack.name).join(", ")}
-              </span>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => { if (removeTarget) removeMutation.mutate(removeTarget.id); setRemoveTarget(null); }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Remove product and archive Packs
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

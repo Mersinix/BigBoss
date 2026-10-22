@@ -8867,3 +8867,244 @@ conformément à la consigne.
   le Live Preview (`ListingLivePreview`), non touché, continue d'afficher
   l'image, le nom, les badges de taxonomie et le détail des variantes
   exactement comme avant.
+
+---
+
+# Tâche : Filtres synchronisés sur les 3 pages Pack, scrollbar standardisée, suppression bloquée si produit utilisé dans un pack
+
+## 1. Audit
+
+### 1.1 Filtres — état actuel des 3 pages (toutes dans `manage-packs.tsx`)
+
+- **Pack Products** (`PackProductsTab`, L878+) : 5 filtres (catégorie/
+  sous-catégorie/marque/saveur/taille) déjà présents visuellement, MAIS
+  leurs options (`categories`/`subCategories`/`brands`/`flavors`/`sizes`,
+  L932-936) sont TOUTES dérivées de la même liste statique `eligible`,
+  jamais narrowées par les AUTRES filtres actifs — aucune synchronisation
+  réelle, juste 5 listes indépendantes toujours complètes.
+- **New Packs** (dans `PackTab`, état L1363-1367, dérivation L1373-1377,
+  rendu L1526-1590) : MÊME défaut exact — 5 filtres déjà visibles,
+  options dérivées uniquement de `activePacks` brut, jamais les unes des
+  autres.
+- **Old Packs** (même fichier, rendu L1636-1646) : **aucun filtre du
+  tout**, seulement une recherche texte. À ajouter entièrement.
+
+### 1.2 Motif déjà établi ailleurs dans l'app pour la synchronisation
+
+`withoutDim(exclude)` / `withoutSelf(exclude)` — déjà utilisé dans
+`maintenance-page.tsx`, `print-page.tsx`, `marketing-page.tsx`,
+`barista-page.tsx`, `browse-products.tsx` : une fonction qui renarrowe la
+liste de BASE (déjà filtrée par recherche/autres critères non liés) par
+CHAQUE filtre actif SAUF celui en cours de dérivation, combinée à un
+`useEffect` par filtre qui ne fait QUE réinitialiser (jamais fixer) une
+sélection devenue invalide une fois les nouvelles options recalculées —
+motif strictement monotone, ne peut pas boucler. Repris ici à l'identique
+(même structure, adapté aux 5 dimensions de cette page) plutôt que
+d'inventer un nouveau mécanisme.
+
+### 1.3 Duplication à éviter — hook partagé
+
+« New Packs » et « Old Packs » opèrent tous deux sur `PackDetail[]`
+(même forme exacte : `categoryLabels`/`subCategoryLabels`/`brandLabels`/
+`items[].flavorName`/`items[].sizeName`) — logique de filtrage
+réellement identique entre les deux, donc extraite dans un hook partagé
+`usePackCardFilters(packs, search)` (nouveau, local à
+`manage-packs.tsx`), réutilisé par les deux. « Pack Products » opère sur
+`SupplierListingWithProduct[]` (forme différente : `product.categoryLabel`
+singulier + `variants[].flavorName/sizeName`, règles d'éligibilité
+propres) — logique gardée locale à `PackProductsTab`, pas de duplication
+réelle à éviter vu la forme de données différente.
+
+Filtrer un TABLEAU DE PACKS (un `.filter()` sur `activePacks`/
+`archivedPacks`, jamais un `.flatMap()` sur leurs items) garantit
+structurellement qu'aucune carte de pack ne peut apparaître en double,
+même si un pack contient plusieurs variantes/saveurs/tailles éligibles —
+même garantie que l'implémentation déjà existante de « New Packs ».
+
+### 1.4 Scrollbar — écart identifié
+
+`AddListingModal` (« Add to My Products — Variant Builder »,
+`DialogContent` L558) : `className="sm:max-w-4xl max-h-[90vh] overflow-y-auto"`
+— ne porte PAS les classes utilitaires de scrollbar déjà standardisées et
+déjà utilisées par `EditListingModal` et `PackFormModal` dans ce même
+fichier : `[&::-webkit-scrollbar]:w-1
+[&::-webkit-scrollbar-track]:bg-transparent
+[&::-webkit-scrollbar-thumb]:rounded-full
+[&::-webkit-scrollbar-thumb]:bg-gray-700
+hover:[&::-webkit-scrollbar-thumb]:bg-gray-600`. Correctif : ajouter ces
+mêmes classes, aucun autre changement.
+
+### 1.5 Suppression de produit utilisé dans un pack — comportement actuel (à remplacer)
+
+**Découverte clé** : le comportement actuel n'est PAS « bloqué » mais
+« avertir puis supprimer quand même, en archivant les packs concernés » :
+- `storage.deleteSupplierListing(id)` (`server/storage.ts` L11376) :
+  trouve les packs NON archivés référençant ce listing, les ARCHIVE
+  (`isArchived: true`), PUIS supprime les variantes, les `packItems`, et
+  le listing lui-même.
+- Côté client, `MyProductsTab.requestRemove()` (`manage-products.tsx`
+  L1922) appelle déjà `GET /api/supplier/listings/:id/pack-usage`
+  (endpoint déjà existant et déjà autorisé — vérifie
+  `listing.supplierId === req.session.userId`, retourne TOUS les packs
+  référençant ce listing, archivés ou non) ; si des packs sont trouvés,
+  affiche un `AlertDialog` (« Product used in Pack(s) » / « Remove
+  product and archive Packs ») qui, une fois confirmé, supprime quand
+  même le produit et archive les packs concernés.
+
+Ce comportement entre directement en conflit avec les nouvelles
+exigences explicites de la tâche (« Do not automatically remove the
+product from packs… or modify existing pack compositions », « Prevent
+the supplier from removing the product »). Le flux « avertir + supprimer
++ archiver » doit donc être **remplacé**, pas conservé en parallèle.
+
+### 1.6 Portée exacte retenue
+
+Uniquement le flux de SUPPRESSION DE LISTING complète (« My Products →
+Edit Pricing & Stock → Remove », `DELETE /api/supplier/listings/:id`).
+**Non touché** : l'action distincte « Remove from Pack Products »
+(`PackProductsTab.removeFromPack`, `PATCH .../listings/:id` avec
+`onlyForMyProducts:true`) — retire seulement l'éligibilité aux packs
+futurs, action différente et hors périmètre de cette tâche ; ni le flux
+« Admin Products → New Product » (`/api/supplier/created-products/:id/pack-usage`,
+`SupplierProductFormModal`/`NewProductTab`) — concept différent (produits
+créés par le fournisseur), non mentionné par la tâche.
+
+### 1.7 Mécanisme retenu pour un blocage fiable et efficace
+
+`GET /api/supplier/listings/:id/pack-usage` est déjà la source
+d'information fiable et déjà autorisée (relation `packItems → packs`,
+tous états confondus). Pour permettre au bouton Remove d'être désactivé
+PROACTIVEMENT (avant tout clic), sans effectuer un appel réseau
+supplémentaire par ligne de la liste (`getSupplierListings` est déjà
+appelé une seule fois pour toute la page), un nouveau champ additif
+`packUsageCount` est calculé en UNE requête batch (groupée par
+`listingId`, jamais une requête par ligne) directement dans
+`storage.getSupplierListings()`, puis exposé sur chaque
+`SupplierListingWithProduct` — zéro requête N+1, zéro nouvel endpoint.
+
+### 1.8 Risques de régression
+
+- Aucun changement à `removeSupplierListingFromPacks`/« Remove from Pack
+  Products », à la création/édition de pack, aux calculs de prix/stock,
+  ni aux règles d'éligibilité des packs côté Coffee Owner.
+- La vérification d'autorisation serveur existante
+  (`listing.supplierId !== user.id → 403`) reste strictement inchangée ;
+  seul le comportement APRÈS cette vérification change (rejet au lieu
+  d'archivage en cascade).
+- Le filtrage synchronisé n'altère que les LISTES D'OPTIONS affichées —
+  jamais `items`/`selected`/la sélection de variantes en cours
+  d'assemblage d'un pack (conformité stricte à la section 2.B de la
+  tâche).
+
+## 2. Implémentation
+
+- `client/src/pages/supplier/manage-packs.tsx` :
+  - `PackProductsTab` : options des 5 filtres réécrites avec un
+    `withoutDim(exclude)` local (même motif que `print-page.tsx`), un
+    `searchFiltered` intermédiaire (recherche + éligibilité), et un
+    `useEffect` par filtre qui réinitialise uniquement la sélection
+    devenue invalide.
+  - Nouveau hook partagé `usePackCardFilters(packs, search)` (même motif,
+    appliqué à `PackDetail[]`), utilisé deux fois dans `PackTab` : une
+    fois pour « New Packs » (remplace l'ancien état/dérivation locale à
+    l'identique, alias de déstructuration choisis pour que le JSX de
+    rendu existant reste inchangé), une fois pour « Old Packs ».
+  - Nouveau bloc de filtres (catégorie/sous-catégorie/marque/saveur/
+    taille) ajouté à l'onglet « Old Packs », même style/ordre/labels que
+    « New Packs » (`w-32`/`w-36 shrink-0`, `h-8 text-xs`, sentinelle
+    `"__all__"`, bouton « Clear filters »).
+- `client/src/pages/supplier/manage-products.tsx` : `AddListingModal` —
+  classes de scrollbar standardisées ajoutées au `DialogContent` (copie
+  exacte de celles déjà utilisées par `EditListingModal`/`PackFormModal`).
+- `shared/schema.ts` : `SupplierListingWithProduct.packUsageCount?: number`
+  (champ additif).
+- `server/storage.ts` :
+  - `getSupplierListings` : une requête batch supplémentaire
+    (`packItems` groupés par `listingId`, jamais une requête par ligne)
+    calcule `packUsageCount` pour chaque listing retourné.
+  - `deleteSupplierListing` : l'ancien comportement « archiver les packs
+    non archivés référençant ce listing, puis supprimer quand même » est
+    remplacé par un rejet immédiat (`throw` avec `code:
+    "LISTING_USED_IN_PACK"`) dès qu'AU MOINS UN `packItems` référence ce
+    listing, quel que soit l'état du pack (actif ou archivé) — plus
+    aucune archive-cascade, plus aucune suppression de `packItems`
+    déclenchée par cette fonction.
+- `server/routes.ts` : `DELETE /api/supplier/listings/:id` — le `catch`
+  reconnaît `err.code === "LISTING_USED_IN_PACK"` et répond `409` avec le
+  message exact, au lieu du `500` générique précédent. Vérification
+  d'autorisation existante (`listing.supplierId !== user.id → 403`)
+  strictement inchangée, exécutée avant.
+- `client/src/pages/supplier/manage-products.tsx` (`MyProductsTab`) :
+  - `requestRemove` simplifié : lit `listing.packUsageCount` directement
+    (déjà présent sur l'objet listing, zéro requête réseau
+    supplémentaire) ; bloque avec un toast explicatif si > 0, sinon
+    confirme puis supprime exactement comme avant.
+  - `removeTarget`/l'`AlertDialog` « Product used in Pack(s) / Remove
+    product and archive Packs » supprimés entièrement (comportement
+    obsolète, remplacé).
+  - Bouton Remove de la ligne (vue liste) : `disabled` +
+    `title` explicatif quand `packUsageCount > 0`.
+  - `EditListingModal` : nouveau `usedInPacks = (listing.packUsageCount ?? 0) > 0`,
+    bouton Remove `disabled` en conséquence, texte explicatif affiché
+    juste au-dessus de la zone d'actions quand bloqué (« This product
+    cannot be removed because it is used in N pack(s). », N = le vrai
+    compte serveur, jamais inventé).
+
+## 3. Tests exécutés (réels)
+
+- `npx tsc --noEmit` → 0 erreur. `npm run build` → succès.
+- Redémarrage du serveur de développement (même autorisation que la
+  tâche précédente, nécessaire pour activer les changements serveur).
+- **Suppression bloquée — vérification directe de la fonction serveur**
+  (contournant volontairement l'authentification HTTP, faute de compte
+  Supplier approuvé disponible — même méthode que la tâche précédente) :
+  - `storage.getSupplierListings(11)` → `listing 110` (« Robusta Dark
+    Roast Beans 1kg », déjà référencé par le pack réel « Summer Gifts »)
+    rapporte bien `packUsageCount: 1`.
+  - `storage.deleteSupplierListing(110)` → rejeté avec
+    `code: "LISTING_USED_IN_PACK"`, listing toujours présent après coup,
+    pack `18` toujours `isArchived: false` avec son item intact — la
+    cascade d'archivage a bien disparu, rien n'a été modifié côté pack.
+  - Cas positif : un listing JETABLE créé pour le test (id 152, jamais
+    référencé par aucun pack, supprimé par le test lui-même) rapporte
+    `packUsageCount: 0` et se supprime normalement — confirme que le
+    blocage ne s'applique qu'aux listings réellement utilisés.
+- **Filtres synchronisés — simulation fidèle contre données réelles** :
+  la logique exacte de `withoutDim`/dérivation d'options a été rejouée en
+  Node contre les 8 vrais packs du fournisseur 11
+  (`GET /api/marketplace/packs?supplierId=11`) :
+  - Sans filtre : 5 catégories, 7 marques (liste complète).
+  - `category=CAFE` : marques narrowées à `[Lavazza, Nespresso]`,
+    saveurs à `[Coconut, Vanilla]`, tailles à `[1kg Bag, 500g Bag,
+    6-Pack]` — correspond exactement aux 2 vrais packs CAFE — tandis que
+    les OPTIONS de catégorie elles-mêmes restent les 5 complètes (une
+    dimension ne se narrowe jamais elle-même).
+  - `category=CAFE` + `brand=Nespresso` : un seul pack correspondant
+    (« Pack Ellouze Pro MAX »), saveurs re-narrowées en conséquence.
+  - Simulation d'une sélection devenue invalide (`flavor=Mint`, propre à
+    « Tea & Herbal ») après passage à `category=CAFE` : confirmé absente
+    des nouvelles options valides — déclencherait bien le `useEffect` de
+    réinitialisation correspondant dans le composant réel (même calcul,
+    simplement rejoué hors React).
+- `git status --short` final (fichiers de cette tâche uniquement) :
+  `shared/schema.ts`, `server/storage.ts`, `server/routes.ts`,
+  `client/src/pages/supplier/manage-packs.tsx`,
+  `client/src/pages/supplier/manage-products.tsx` — conforme au plan,
+  rien d'autre touché. (Note : `git status` affiche aussi
+  `barista-page.tsx`/`browse-products.tsx` modifiés — vérifié non liés à
+  cette tâche, diff montré confirme un travail distinct déjà en cours,
+  non touché.)
+
+## 4. Limites
+
+- Comme pour les 2 tâches précédentes, aucun clic réel dans un
+  navigateur (sélection de filtres, ouverture du Variant Builder « Add
+  to My Products », clic sur Remove désactivé) n'a pu être effectué,
+  faute de compte Supplier approuvé. La vérification directe de la
+  logique de filtrage contre des données réelles et des appels directs
+  aux fonctions serveur réelles (sans mock) constituent le niveau de
+  preuve disponible dans cet environnement pour cette tâche.
+- La scrollbar standardisée n'a pas pu être comparée visuellement
+  (claire/sombre) — seule la classe CSS copiée à l'identique depuis un
+  composant déjà vérifié visuellement par le passé (`EditListingModal`)
+  garantit la cohérence.

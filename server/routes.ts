@@ -8660,7 +8660,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         broadcast("pack_updated", { packId, supplierId: user!.id });
       }
       res.json({ message: "Removed", archivedPackIds });
-    } catch { res.status(500).json({ message: "Error" }); }
+    } catch (err: any) {
+      if (err?.code === "LISTING_USED_IN_PACK") return res.status(409).json({ message: err.message });
+      res.status(500).json({ message: "Error" });
+    }
   });
 
   app.get("/api/supplier/listings/:id/pack-usage", requireApprovedSupplier, async (req, res) => {

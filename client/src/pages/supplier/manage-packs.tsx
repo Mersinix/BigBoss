@@ -928,30 +928,64 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
       getVariantGroups(l).length > 0
     ), [listings]);
 
-  // Extract unique filter values from eligible listings
-  const categories = useMemo(() => Array.from(new Set(eligible.map(l => l.product.categoryLabel?.name).filter((n): n is string => !!n))).sort(), [eligible]);
-  const subCategories = useMemo(() => Array.from(new Set(eligible.map(l => l.product.subCategoryLabel?.name).filter((n): n is string => !!n))).sort(), [eligible]);
-  const brands = useMemo(() => Array.from(new Set(eligible.map(l => l.product.brandLabel?.name).filter((n): n is string => !!n))).sort(), [eligible]);
-  const flavors = useMemo(() => Array.from(new Set(eligible.flatMap(l => (l.variants ?? []).map(v => v.flavorName)).filter((n): n is string => !!n))).sort(), [eligible]);
-  const sizes = useMemo(() => Array.from(new Set(eligible.flatMap(l => (l.variants ?? []).map(v => v.sizeName)).filter((n): n is string => !!n))).sort(), [eligible]);
+  // Search-scoped base (task: "Synchronized Pack Filters") — every option
+  // list and the final result are derived from this, so search always
+  // narrows the filter options too, not just the displayed list.
+  const searchFiltered = useMemo(() => {
+    if (!search.trim()) return eligible;
+    const q = search.toLowerCase();
+    return eligible.filter(l =>
+      l.product.name.toLowerCase().includes(q) ||
+      l.product.categoryLabel?.name.toLowerCase().includes(q) ||
+      l.product.brandLabel?.name.toLowerCase().includes(q)
+    );
+  }, [eligible, search]);
+
+  // Cross-filter-aware option derivation — same established pattern as
+  // print-page.tsx/maintenance-page.tsx's own withoutDim: narrows
+  // searchFiltered by every OTHER active filter, excluding the dimension
+  // currently being derived, so each dropdown's options always reflect the
+  // intersection of the other active selections instead of the full
+  // unfiltered catalog.
+  const withoutDim = (exclude: "category" | "subCategory" | "brand" | "flavor" | "size") => {
+    let list = searchFiltered;
+    if (exclude !== "category" && filterCategory !== "__all__") list = list.filter(l => l.product.categoryLabel?.name === filterCategory);
+    if (exclude !== "subCategory" && filterSubCategory !== "__all__") list = list.filter(l => l.product.subCategoryLabel?.name === filterSubCategory);
+    if (exclude !== "brand" && filterBrand !== "__all__") list = list.filter(l => l.product.brandLabel?.name === filterBrand);
+    if (exclude !== "flavor" && filterFlavor !== "__all__") list = list.filter(l => (l.variants ?? []).some(v => v.flavorName === filterFlavor));
+    if (exclude !== "size" && filterSize !== "__all__") list = list.filter(l => (l.variants ?? []).some(v => v.sizeName === filterSize));
+    return list;
+  };
+
+  const categories = useMemo(() => Array.from(new Set(withoutDim("category").map(l => l.product.categoryLabel?.name).filter((n): n is string => !!n))).sort(),
+    [searchFiltered, filterSubCategory, filterBrand, filterFlavor, filterSize]);
+  const subCategories = useMemo(() => Array.from(new Set(withoutDim("subCategory").map(l => l.product.subCategoryLabel?.name).filter((n): n is string => !!n))).sort(),
+    [searchFiltered, filterCategory, filterBrand, filterFlavor, filterSize]);
+  const brands = useMemo(() => Array.from(new Set(withoutDim("brand").map(l => l.product.brandLabel?.name).filter((n): n is string => !!n))).sort(),
+    [searchFiltered, filterCategory, filterSubCategory, filterFlavor, filterSize]);
+  const flavors = useMemo(() => Array.from(new Set(withoutDim("flavor").flatMap(l => (l.variants ?? []).map(v => v.flavorName)).filter((n): n is string => !!n))).sort(),
+    [searchFiltered, filterCategory, filterSubCategory, filterBrand, filterSize]);
+  const sizes = useMemo(() => Array.from(new Set(withoutDim("size").flatMap(l => (l.variants ?? []).map(v => v.sizeName)).filter((n): n is string => !!n))).sort(),
+    [searchFiltered, filterCategory, filterSubCategory, filterBrand, filterFlavor]);
+
+  // Reconcile a selection a sibling filter change just made invalid — clears
+  // only the one no longer compatible, never resets an unrelated filter, and
+  // can't loop (each effect only ever clears, never re-sets a value).
+  useEffect(() => { if (filterCategory !== "__all__" && !categories.includes(filterCategory)) setFilterCategory("__all__"); }, [categories]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (filterSubCategory !== "__all__" && !subCategories.includes(filterSubCategory)) setFilterSubCategory("__all__"); }, [subCategories]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (filterBrand !== "__all__" && !brands.includes(filterBrand)) setFilterBrand("__all__"); }, [brands]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (filterFlavor !== "__all__" && !flavors.includes(filterFlavor)) setFilterFlavor("__all__"); }, [flavors]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (filterSize !== "__all__" && !sizes.includes(filterSize)) setFilterSize("__all__"); }, [sizes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = useMemo(() => {
-    let result = eligible;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter(l =>
-        l.product.name.toLowerCase().includes(q) ||
-        l.product.categoryLabel?.name.toLowerCase().includes(q) ||
-        l.product.brandLabel?.name.toLowerCase().includes(q)
-      );
-    }
+    let result = searchFiltered;
     if (filterCategory !== "__all__") result = result.filter(l => l.product.categoryLabel?.name === filterCategory);
     if (filterSubCategory !== "__all__") result = result.filter(l => l.product.subCategoryLabel?.name === filterSubCategory);
     if (filterBrand !== "__all__") result = result.filter(l => l.product.brandLabel?.name === filterBrand);
     if (filterFlavor !== "__all__") result = result.filter(l => (l.variants ?? []).some(v => v.flavorName === filterFlavor));
     if (filterSize !== "__all__") result = result.filter(l => (l.variants ?? []).some(v => v.sizeName === filterSize));
     return result;
-  }, [eligible, search, filterCategory, filterSubCategory, filterBrand, filterFlavor, filterSize]);
+  }, [searchFiltered, filterCategory, filterSubCategory, filterBrand, filterFlavor, filterSize]);
 
   const packProdPagination = usePagination(filtered.length);
   useEffect(() => { packProdPagination.resetPage(); }, [search, filterCategory, filterSubCategory, filterBrand, filterFlavor, filterSize]);
@@ -1341,6 +1375,99 @@ function ArchivedPackRow({ pack, onToggleVisibility, onUnarchive, onDelete, onEd
   );
 }
 
+// ── Synchronized pack card filters (shared by New Packs + Old Packs) ──────────
+// Both operate on the exact same PackDetail[] shape (categoryLabels/
+// subCategoryLabels/brandLabels + items[].flavorName/sizeName), so this one
+// hook replaces what would otherwise be two near-identical copies of the
+// same withoutDim-based synchronization logic (task: "Synchronized Pack
+// Filters"). Filters a PACK ARRAY with .filter()/.some() — never flatMaps
+// into one row per item/variant — so a pack with several matching variants
+// can never render as a duplicate card.
+type PackFilterDim = "category" | "subCategory" | "brand" | "flavor" | "size";
+
+function usePackCardFilters(packs: PackDetail[], search: string) {
+  const [filterCategory, setFilterCategory] = useState("__all__");
+  const [filterSubCategory, setFilterSubCategory] = useState("__all__");
+  const [filterBrand, setFilterBrand] = useState("__all__");
+  const [filterFlavor, setFilterFlavor] = useState("__all__");
+  const [filterSize, setFilterSize] = useState("__all__");
+
+  const searchFiltered = useMemo(() => {
+    if (!search.trim()) return packs;
+    const q = search.toLowerCase();
+    return packs.filter(p => p.name.toLowerCase().includes(q));
+  }, [packs, search]);
+
+  const withoutDim = (exclude: PackFilterDim) => {
+    let list = searchFiltered;
+    if (exclude !== "category" && filterCategory !== "__all__") list = list.filter(p => p.categoryLabels.some(c => c.name === filterCategory));
+    if (exclude !== "subCategory" && filterSubCategory !== "__all__") list = list.filter(p => p.subCategoryLabels.some(c => c.name === filterSubCategory));
+    if (exclude !== "brand" && filterBrand !== "__all__") list = list.filter(p => p.brandLabels.some(c => c.name === filterBrand));
+    if (exclude !== "flavor" && filterFlavor !== "__all__") list = list.filter(p => p.items.some(i => i.flavorName === filterFlavor));
+    if (exclude !== "size" && filterSize !== "__all__") list = list.filter(p => p.items.some(i => i.sizeName === filterSize));
+    return list;
+  };
+
+  const categories = useMemo(() => {
+    const set = new Set<string>();
+    withoutDim("category").forEach(p => p.categoryLabels.forEach(c => set.add(c.name)));
+    return Array.from(set).sort();
+  }, [searchFiltered, filterSubCategory, filterBrand, filterFlavor, filterSize]);
+
+  const subCategories = useMemo(() => {
+    const set = new Set<string>();
+    withoutDim("subCategory").forEach(p => p.subCategoryLabels.forEach(c => set.add(c.name)));
+    return Array.from(set).sort();
+  }, [searchFiltered, filterCategory, filterBrand, filterFlavor, filterSize]);
+
+  const brands = useMemo(() => {
+    const set = new Set<string>();
+    withoutDim("brand").forEach(p => p.brandLabels.forEach(c => set.add(c.name)));
+    return Array.from(set).sort();
+  }, [searchFiltered, filterCategory, filterSubCategory, filterFlavor, filterSize]);
+
+  const flavors = useMemo(() => {
+    const set = new Set<string>();
+    withoutDim("flavor").forEach(p => p.items.forEach(i => { if (i.flavorName) set.add(i.flavorName); }));
+    return Array.from(set).sort();
+  }, [searchFiltered, filterCategory, filterSubCategory, filterBrand, filterSize]);
+
+  const sizes = useMemo(() => {
+    const set = new Set<string>();
+    withoutDim("size").forEach(p => p.items.forEach(i => { if (i.sizeName) set.add(i.sizeName); }));
+    return Array.from(set).sort();
+  }, [searchFiltered, filterCategory, filterSubCategory, filterBrand, filterFlavor]);
+
+  useEffect(() => { if (filterCategory !== "__all__" && !categories.includes(filterCategory)) setFilterCategory("__all__"); }, [categories]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (filterSubCategory !== "__all__" && !subCategories.includes(filterSubCategory)) setFilterSubCategory("__all__"); }, [subCategories]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (filterBrand !== "__all__" && !brands.includes(filterBrand)) setFilterBrand("__all__"); }, [brands]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (filterFlavor !== "__all__" && !flavors.includes(filterFlavor)) setFilterFlavor("__all__"); }, [flavors]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (filterSize !== "__all__" && !sizes.includes(filterSize)) setFilterSize("__all__"); }, [sizes]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const filtered = useMemo(() => {
+    let result = searchFiltered;
+    if (filterCategory !== "__all__") result = result.filter(p => p.categoryLabels.some(c => c.name === filterCategory));
+    if (filterSubCategory !== "__all__") result = result.filter(p => p.subCategoryLabels.some(c => c.name === filterSubCategory));
+    if (filterBrand !== "__all__") result = result.filter(p => p.brandLabels.some(c => c.name === filterBrand));
+    if (filterFlavor !== "__all__") result = result.filter(p => p.items.some(i => i.flavorName === filterFlavor));
+    if (filterSize !== "__all__") result = result.filter(p => p.items.some(i => i.sizeName === filterSize));
+    return result;
+  }, [searchFiltered, filterCategory, filterSubCategory, filterBrand, filterFlavor, filterSize]);
+
+  const hasActiveFilters = filterCategory !== "__all__" || filterSubCategory !== "__all__" || filterBrand !== "__all__" || filterFlavor !== "__all__" || filterSize !== "__all__";
+
+  const clearAll = () => {
+    setFilterCategory("__all__"); setFilterSubCategory("__all__"); setFilterBrand("__all__"); setFilterFlavor("__all__"); setFilterSize("__all__");
+  };
+
+  return {
+    filterCategory, setFilterCategory, filterSubCategory, setFilterSubCategory,
+    filterBrand, setFilterBrand, filterFlavor, setFilterFlavor, filterSize, setFilterSize,
+    categories, subCategories, brands, flavors, sizes,
+    filtered, hasActiveFilters, clearAll,
+  };
+}
+
 // ── Main PackTab ──────────────────────────────────────────────────────────────
 
 export function PackTab() {
@@ -1360,41 +1487,31 @@ export function PackTab() {
   const [packsSearch, setPacksSearch] = useState("");
   const [packsSearchOpen, setPacksSearchOpen] = useState(false);
   const packsSearchInputRef = useRef<HTMLInputElement>(null);
-  const [packsFilterCategory, setPacksFilterCategory] = useState("__all__");
-  const [packsFilterSubCategory, setPacksFilterSubCategory] = useState("__all__");
-  const [packsFilterBrand, setPacksFilterBrand] = useState("__all__");
-  const [packsFilterFlavor, setPacksFilterFlavor] = useState("__all__");
-  const [packsFilterSize, setPacksFilterSize] = useState("__all__");
 
   // Expired packs automatically appear in "Old Packs" — not in "New Packs"
   const activePacks = packRows.filter(p => !p.isArchived && !p.isExpired);
   const archivedPacks = packRows.filter(p => p.isArchived || p.isExpired);
 
-  const packsCategories = useMemo(() => Array.from(new Set(activePacks.flatMap(p => p.categoryLabels.map(c => c.name)))).sort(), [activePacks]);
-  const packsSubCategories = useMemo(() => Array.from(new Set(activePacks.flatMap(p => p.subCategoryLabels.map(c => c.name)))).sort(), [activePacks]);
-  const packsBrands = useMemo(() => Array.from(new Set(activePacks.flatMap(p => p.brandLabels.map(c => c.name)))).sort(), [activePacks]);
-  const packsFlavors = useMemo(() => Array.from(new Set(activePacks.flatMap(p => p.items.map(i => i.flavorName).filter((n): n is string => !!n)))).sort(), [activePacks]);
-  const packsSizes = useMemo(() => Array.from(new Set(activePacks.flatMap(p => p.items.map(i => i.sizeName).filter((n): n is string => !!n)))).sort(), [activePacks]);
-
-  const filteredActivePacks = useMemo(() => {
-    let result = activePacks;
-    if (packsSearch.trim()) {
-      const q = packsSearch.toLowerCase();
-      result = result.filter(p => p.name.toLowerCase().includes(q));
-    }
-    if (packsFilterCategory !== "__all__") result = result.filter(p => p.categoryLabels.some(c => c.name === packsFilterCategory));
-    if (packsFilterSubCategory !== "__all__") result = result.filter(p => p.subCategoryLabels.some(c => c.name === packsFilterSubCategory));
-    if (packsFilterBrand !== "__all__") result = result.filter(p => p.brandLabels.some(c => c.name === packsFilterBrand));
-    if (packsFilterFlavor !== "__all__") result = result.filter(p => p.items.some(i => i.flavorName === packsFilterFlavor));
-    if (packsFilterSize !== "__all__") result = result.filter(p => p.items.some(i => i.sizeName === packsFilterSize));
-    return result;
-  }, [activePacks, packsSearch, packsFilterCategory, packsFilterSubCategory, packsFilterBrand, packsFilterFlavor, packsFilterSize]);
+  // Synchronized filters (task: "Synchronized Pack Filters, Consistent
+  // Scrollbars, and Safe Product Removal") — shared hook, see its own
+  // comment above PackTab for why New Packs and Old Packs can reuse the
+  // exact same logic (identical PackDetail[] shape) without duplicating it.
+  const {
+    filterCategory: packsFilterCategory, setFilterCategory: setPacksFilterCategory,
+    filterSubCategory: packsFilterSubCategory, setFilterSubCategory: setPacksFilterSubCategory,
+    filterBrand: packsFilterBrand, setFilterBrand: setPacksFilterBrand,
+    filterFlavor: packsFilterFlavor, setFilterFlavor: setPacksFilterFlavor,
+    filterSize: packsFilterSize, setFilterSize: setPacksFilterSize,
+    categories: packsCategories, subCategories: packsSubCategories, brands: packsBrands,
+    flavors: packsFlavors, sizes: packsSizes,
+    filtered: filteredActivePacks, hasActiveFilters: packsFilterActive, clearAll: clearPacksFilters,
+  } = usePackCardFilters(activePacks, packsSearch);
 
   const activePacksPagination = usePagination(filteredActivePacks.length);
   useEffect(() => { activePacksPagination.resetPage(); }, [packsSearch, packsFilterCategory, packsFilterSubCategory, packsFilterBrand, packsFilterFlavor, packsFilterSize]);
   const pageActivePacks = filteredActivePacks.slice(activePacksPagination.start, activePacksPagination.end);
 
-  const packsHasActiveFilters = packsSearch !== "" || packsFilterCategory !== "__all__" || packsFilterSubCategory !== "__all__" || packsFilterBrand !== "__all__" || packsFilterFlavor !== "__all__" || packsFilterSize !== "__all__";
+  const packsHasActiveFilters = packsSearch !== "" || packsFilterActive;
 
   // Always derive preview pack from live data to fix stale visibility/state
   const livePreviewPack = useMemo(() =>
@@ -1402,15 +1519,22 @@ export function PackTab() {
     [previewPackId, packRows]
   );
 
-  const filteredArchived = useMemo(() => {
-    if (!archivedSearch.trim()) return archivedPacks;
-    const q = archivedSearch.toLowerCase();
-    return archivedPacks.filter(p => p.name.toLowerCase().includes(q));
-  }, [archivedPacks, archivedSearch]);
+  const {
+    filterCategory: archivedFilterCategory, setFilterCategory: setArchivedFilterCategory,
+    filterSubCategory: archivedFilterSubCategory, setFilterSubCategory: setArchivedFilterSubCategory,
+    filterBrand: archivedFilterBrand, setFilterBrand: setArchivedFilterBrand,
+    filterFlavor: archivedFilterFlavor, setFilterFlavor: setArchivedFilterFlavor,
+    filterSize: archivedFilterSize, setFilterSize: setArchivedFilterSize,
+    categories: archivedCategories, subCategories: archivedSubCategories, brands: archivedBrands,
+    flavors: archivedFlavors, sizes: archivedSizes,
+    filtered: filteredArchived, hasActiveFilters: archivedFilterActive, clearAll: clearArchivedFilters,
+  } = usePackCardFilters(archivedPacks, archivedSearch);
 
   const archivedPagination = usePagination(filteredArchived.length);
-  useEffect(() => { archivedPagination.resetPage(); }, [archivedSearch]);
+  useEffect(() => { archivedPagination.resetPage(); }, [archivedSearch, archivedFilterCategory, archivedFilterSubCategory, archivedFilterBrand, archivedFilterFlavor, archivedFilterSize]);
   const pageArchived = filteredArchived.slice(archivedPagination.start, archivedPagination.end);
+
+  const archivedHasActiveFilters = archivedSearch !== "" || archivedFilterActive;
 
   const toggleVisibility = useMutation({
     mutationFn: (p: PackDetail) => apiRequest("PATCH", `/api/supplier/packs/${p.id}`, { visibility: p.visibility === "VISIBLE" ? "HIDDEN" : "VISIBLE" }),
@@ -1644,6 +1768,80 @@ export function PackTab() {
                 onChange={e => setArchivedSearch(e.target.value)}
               />
             </div>
+            {archivedPacks.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
+                {archivedCategories.length > 0 && (
+                  <div className="w-32 shrink-0">
+                    <Select value={archivedFilterCategory} onValueChange={setArchivedFilterCategory}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-old-packs-category">
+                        <SelectValue placeholder="Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__">All categories</SelectItem>
+                        {archivedCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {archivedSubCategories.length > 0 && (
+                  <div className="w-36 shrink-0">
+                    <Select value={archivedFilterSubCategory} onValueChange={setArchivedFilterSubCategory}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-old-packs-subcategory">
+                        <SelectValue placeholder="Sub Category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__">All sub-categories</SelectItem>
+                        {archivedSubCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {archivedBrands.length > 0 && (
+                  <div className="w-32 shrink-0">
+                    <Select value={archivedFilterBrand} onValueChange={setArchivedFilterBrand}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-old-packs-brand">
+                        <SelectValue placeholder="Brand" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__">All brands</SelectItem>
+                        {archivedBrands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {archivedFlavors.length > 0 && (
+                  <div className="w-32 shrink-0">
+                    <Select value={archivedFilterFlavor} onValueChange={setArchivedFilterFlavor}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-old-packs-flavor">
+                        <SelectValue placeholder="Flavor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__">All flavors</SelectItem>
+                        {archivedFlavors.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {archivedSizes.length > 0 && (
+                  <div className="w-32 shrink-0">
+                    <Select value={archivedFilterSize} onValueChange={setArchivedFilterSize}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="filter-old-packs-size">
+                        <SelectValue placeholder="Size" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__all__">All sizes</SelectItem>
+                        {archivedSizes.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {archivedHasActiveFilters && (
+                  <Button variant="outline" size="sm" className="h-8 text-xs px-2 text-muted-foreground shrink-0" onClick={() => { setArchivedSearch(""); clearArchivedFilters(); }}>
+                    Clear filters
+                  </Button>
+                )}
+              </div>
+            )}
             {archivedPacks.length === 0 ? (
               <Card>
                 <CardContent className="p-8 text-center text-muted-foreground">

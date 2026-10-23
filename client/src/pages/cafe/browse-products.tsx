@@ -653,25 +653,7 @@ export function PackCardTile({
           {pack.description || "\u00A0"}
         </p>
 
-        {/* Row 3: Price (right-of-symbol) / old price / 📦 quantity — single line */}
-        <div className="flex items-center gap-1.5 mt-1.5 flex-nowrap overflow-hidden">
-        
-            <>
-              <span className={`font-bold text-sm shrink-0 ${priceColor}`}>
-                {fmtRight(pack.price)}
-              </span>
-              {individualTotal > pack.price && (
-                <span className={`text-xs line-through shrink-0 ${t.textMuted}`}>{fmtRight(individualTotal)}</span>
-              )}
-              {/* 📦 quantity — amber, aligned right */}
-              <span className={`flex items-center gap-0.5 ml-auto shrink-0 text-[11px] font-medium ${priceColor}`}>
-                <Package className="w-3 h-3" />{maxQty}
-              </span>
-            </>
-         
-        </div>
-
-        {/* Row 4: Categories — single line, each chip shows only its own correct brands */}
+{/* Row 4: Categories — single line, each chip shows only its own correct brands */}
         <div className="flex items-center gap-1 mt-1.5 flex-nowrap overflow-hidden min-h-[20px]">
           {visibleCats.map((c) => {
             const brands = catBrandMap.get(c.id) ?? [];
@@ -690,8 +672,8 @@ export function PackCardTile({
             <span className={`text-[10px] shrink-0 ${t.textMuted}`}>+{hiddenCatCount}</span>
           )}
         </div>
-
-        {/* Row 4b: Supplier name (left) + supplier rating (right) */}
+        
+         {/* Row 4b: Supplier name (left) + supplier rating (right) */}
         {pack.supplierName && (
           <div className="flex items-center gap-1 mt-1 min-w-0">
             
@@ -704,6 +686,28 @@ export function PackCardTile({
             )}
           </div>
         )}
+
+        {/* Row 3: Price (right-of-symbol) / old price / 📦 quantity — single line */}
+        <div className="flex items-center gap-1.5 mt-1.5 flex-nowrap overflow-hidden">
+        
+            <>
+              <span className={`font-bold text-sm shrink-0 ${priceColor}`}>
+                {fmtRight(pack.price)}
+              </span>
+              {individualTotal > pack.price && (
+                <span className={`text-xs line-through shrink-0 ${t.textMuted}`}>{fmtRight(individualTotal)}</span>
+              )}
+              {/* 📦 quantity — amber, aligned right */}
+              <span className={`flex items-center gap-0.5 ml-auto shrink-0 text-[11px] font-medium ${priceColor}`}>
+                <Package className="w-3 h-3" />{maxQty}
+              </span>
+            </>
+         
+        </div>
+
+        
+
+       
 
         {/* Row 5 (bottom): Expiry left · Distance center · Rating right */}
         <div className={`flex items-center justify-between gap-1 mt-auto pt-1.5 border-t ${t.priceBorder}`}>

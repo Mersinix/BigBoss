@@ -504,7 +504,7 @@ export function FlashMode({
                   {getItemTaxonomyLabels(current!).map((label, index) => (
                     <span
                       key={`${label.name}-${index}`}
-                      className={`${label.tone === "accent" ? "bg-amber-500/80" : "bg-white/20"} backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full`}
+                      className={`${label.tone === "accent" ? "bg-amber-500/80" : "bg-black/55"} backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full`}
                     >
                       {label.name}
                     </span>

@@ -91,7 +91,7 @@ function useTheme(isDark: boolean) {
     summaryCard:    dk ? "bg-amber-900/30 border-amber-800/50" : "bg-amber-50 border-amber-100",
     emptyIcon:      dk ? "text-gray-700"                      : "text-gray-300",
     badgePack:      dk ? "bg-amber-900/50 text-amber-400 border-amber-800/60" : "bg-amber-100 text-amber-700 border-amber-200",
-    badgeBrand:     dk ? "bg-gray-700 text-gray-300 border-gray-600" : "bg-gray-100 text-gray-600 border-gray-200",
+    badgeBrand:     dk ? "bg-amber-500/15 border-amber-500/30 text-amber-400" : "bg-amber-50 border-amber-200 text-amber-700",
     badgeCat:       dk ? "bg-gray-700/60 text-gray-400 border-gray-700" : "bg-gray-50 text-gray-500 border-gray-200",
     flavorRow:      dk ? "bg-gray-900/50 border-gray-700/40"  : "bg-white border-gray-100",
     inputCls:       dk ? "bg-gray-700 border-gray-600 text-gray-200 placeholder:text-gray-500" : "",
@@ -761,7 +761,7 @@ export function PackQuickViewModal({ previewPack, previewOpen, onPreviewClose }:
                   imageUrl={pack.imageUrl}
                   imageUrls={pack.imageUrls}
                   alt={pack.name}
-                  mainClassName={`relative w-full h-56 sm:h-72 shrink-0 ${t.imgBg}`}
+                  mainClassName={`relative w-full h-80 sm:h-[420px] shrink-0 ${t.imgBg}`}
                   mainRoundedClassName="rounded-t-3xl"
                   emptyClassName={t.emptyIcon}
                   thumbnailClassName="px-3 sm:px-5 pt-1"
@@ -822,11 +822,12 @@ export function PackQuickViewModal({ previewPack, previewOpen, onPreviewClose }:
                   <Badge className={`text-[10px] font-semibold border px-2 py-0.5 ${t.badgePack}`}>
                     <Layers className="w-3 h-3 mr-1 inline" />Pack
                   </Badge>
-                  {pack.brandLabels.map(b => (
-                    <Badge key={b.id} className={`text-[10px] border px-2 py-0.5 ${t.badgeBrand}`}>{b.name}</Badge>
-                  ))}
+                 
                   {pack.categoryLabels.map(c => (
                     <Badge key={c.id} className={`text-[10px] border px-2 py-0.5 ${t.badgeCat}`}>{c.name}</Badge>
+                  ))}
+                   {pack.brandLabels.map(b => (
+                    <Badge key={b.id} className={`text-[10px] border px-2 py-0.5 ${t.badgeBrand}`}>{b.name}</Badge>
                   ))}
                 </div>
 

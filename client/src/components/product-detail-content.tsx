@@ -871,7 +871,7 @@ export function ProductDetailContent({
           </Badge>
         )}
         {product.brandLabel && (
-          <Badge className={`text-xs ${isModal && dk ? "bg-gray-700 text-gray-200" : ""}`}>
+          <Badge className={`text-xs ${isModal && dk ? "bg-amber-500/15 border-amber-500/30 text-amber-400" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
             {product.brandLabel.name}
           </Badge>
         )}

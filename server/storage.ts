@@ -631,6 +631,36 @@ function enrichProduct(
   };
 }
 
+// ── Supplier offer eligibility (shared) ─────────────────────────────────────
+// Task: "Fix Invalid Supplier Product Mappings and Empty Products in the
+// Coffee Owner Marketplace". A `supplierProductListings` row's own `price`/
+// `stock` columns are maintained purely as a CACHE of its variants —
+// `saveVariants()` recomputes them as min(price)/sum(quantity) on every save
+// and explicitly zeroes both the moment a listing's variants become empty.
+// Under that invariant, a listing with zero real variant rows can only ever
+// have price=0/stock=0 through the app's own write path; a zero-variant
+// listing whose cache still shows a positive price/stock is stale/orphaned
+// data (e.g. a record from before this cache-sync logic existed), never a
+// legitimate "variant-less" product — the app always persists at least one
+// variant row (flavorId/sizeId possibly both null) for those. Every
+// marketplace/store/eligibility computation must therefore derive a
+// listing's real offer from its persisted variants ONLY, never from the
+// listing's own price/stock columns — this is the one shared implementation
+// for that rule (task section 6).
+function computeListingOffer(variants: { price: number; quantity: number }[]): { eligible: boolean; minPrice: number; totalStock: number } {
+  // Preserves the pre-existing rule: a variant must have both a positive
+  // price AND positive stock to count as a currently purchasable offer — a
+  // zero-stock variant is valid CONFIGURATION (kept, shown to the Coffee
+  // Owner as unavailable) but never counted into price/stock aggregates.
+  const purchasable = variants.filter((v) => v.price > 0 && v.quantity > 0);
+  if (!purchasable.length) return { eligible: false, minPrice: 0, totalStock: 0 };
+  return {
+    eligible: true,
+    minPrice: Math.min(...purchasable.map((v) => v.price)),
+    totalStock: purchasable.reduce((s, v) => s + v.quantity, 0),
+  };
+}
+
 // ── DatabaseStorage ───────────────────────────────────────────────────────────
 
 export class DatabaseStorage implements IStorage {
@@ -5839,8 +5869,10 @@ export class DatabaseStorage implements IStorage {
               price: v.price,
               quantity: v.quantity,
             }));
-          const totalStock = variants.length ? variants.reduce((s, v) => s + v.quantity, 0) : (l.stock > 0 && l.price > 0 ? l.stock : 0);
-          const minPrice = variants.length ? Math.min(...variants.map((v) => v.price)) : (l.price > 0 ? l.price : 0);
+          // Derived from real persisted variants only — never the listing's
+          // own price/stock cache (see computeListingOffer) — so a listing
+          // with zero variants is never treated as a flat single offer.
+          const { totalStock, minPrice } = computeListingOffer(variants);
           const sup = supplierMap.get(l.supplierId);
           return { id: l.id, supplierId: l.supplierId, supplierName: sup?.name ?? "", supplierLat: sup?.lat ?? null, supplierLng: sup?.lng ?? null, storeLogoUrl: storeLogoMap.get(l.supplierId) ?? null, variants, totalStock, minPrice };
         })
@@ -10875,52 +10907,52 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async saveVariants(listingId: number, variants: { flavorId?: number | null; sizeId?: number | null; price: number; quantity: number }[]): Promise<SupplierVariantWithLabels[]> {
+  async saveVariants(listingId: number, variants: { flavorId?: number | null; sizeId?: number | null; price: number; quantity: number }[], client: any = db): Promise<SupplierVariantWithLabels[]> {
     // Variant rows are recreated on every save. Keep Pack references attached to
     // the same flavor/size slot when it still exists, and remove references to
     // slots that were actually removed.
-    const previousVariants = await db.select().from(supplierProductVariants)
+    const previousVariants = await client.select().from(supplierProductVariants)
       .where(eq(supplierProductVariants.listingId, listingId));
-    const previousVariantIds = previousVariants.map((v) => v.id);
+    const previousVariantIds = previousVariants.map((v: any) => v.id);
     const previousPackItems = previousVariantIds.length
-      ? await db.select().from(packItems).where(inArray(packItems.variantId, previousVariantIds))
+      ? await client.select().from(packItems).where(inArray(packItems.variantId, previousVariantIds))
       : [];
 
-    await db.delete(supplierProductVariants).where(eq(supplierProductVariants.listingId, listingId));
+    await client.delete(supplierProductVariants).where(eq(supplierProductVariants.listingId, listingId));
     if (!variants.length) {
       if (previousPackItems.length) {
-        await db.delete(packItems).where(inArray(packItems.id, previousPackItems.map((item) => item.id)));
+        await client.delete(packItems).where(inArray(packItems.id, previousPackItems.map((item: any) => item.id)));
       }
-      await db.update(supplierProductListings).set({ price: 0, stock: 0 }).where(eq(supplierProductListings.id, listingId));
+      await client.update(supplierProductListings).set({ price: 0, stock: 0 }).where(eq(supplierProductListings.id, listingId));
       return [];
     }
-    const inserted = await db.insert(supplierProductVariants).values(variants.map((v) => ({ listingId, flavorId: v.flavorId ?? null, sizeId: v.sizeId ?? null, price: v.price, quantity: v.quantity }))).returning();
-    const aggPrice = Math.min(...inserted.map((v) => v.price));
-    const aggStock = inserted.reduce((s, v) => s + v.quantity, 0);
-    await db.update(supplierProductListings).set({ price: aggPrice, stock: aggStock }).where(eq(supplierProductListings.id, listingId));
+    const inserted = await client.insert(supplierProductVariants).values(variants.map((v) => ({ listingId, flavorId: v.flavorId ?? null, sizeId: v.sizeId ?? null, price: v.price, quantity: v.quantity }))).returning();
+    const aggPrice = Math.min(...inserted.map((v: any) => v.price));
+    const aggStock = inserted.reduce((s: number, v: any) => s + v.quantity, 0);
+    await client.update(supplierProductListings).set({ price: aggPrice, stock: aggStock }).where(eq(supplierProductListings.id, listingId));
 
-    const insertedBySlot = new Map(inserted.map((v) => [`${v.flavorId ?? "null"}:${v.sizeId ?? "null"}`, v]));
-    const previousById = new Map(previousVariants.map((v) => [v.id, v]));
+    const insertedBySlot = new Map(inserted.map((v: any) => [`${v.flavorId ?? "null"}:${v.sizeId ?? "null"}`, v]));
+    const previousById = new Map(previousVariants.map((v: any) => [v.id, v]));
     for (const item of previousPackItems) {
-      const previous = previousById.get(item.variantId!);
-      const replacement = previous
+      const previous = previousById.get(item.variantId!) as any;
+      const replacement: any = previous
         ? insertedBySlot.get(`${previous.flavorId ?? "null"}:${previous.sizeId ?? "null"}`)
         : undefined;
       if (replacement) {
-        await db.update(packItems).set({ variantId: replacement.id }).where(eq(packItems.id, item.id));
+        await client.update(packItems).set({ variantId: replacement.id }).where(eq(packItems.id, item.id));
       } else {
-        await db.delete(packItems).where(eq(packItems.id, item.id));
+        await client.delete(packItems).where(eq(packItems.id, item.id));
       }
     }
     // A listing that changes from a non-variant product to a variant product
     // can no longer satisfy an old listing-level Pack component.
-    await db.delete(packItems).where(and(
+    await client.delete(packItems).where(and(
       eq(packItems.listingId, listingId),
       isNull(packItems.variantId),
     ));
 
     const tx = await buildTaxonomyCache();
-    return inserted.map((v) => ({
+    return inserted.map((v: any) => ({
       ...v,
       flavorName: v.flavorId ? (tx.flvMap.get(v.flavorId)?.name ?? null) : null,
       sizeName: v.sizeId ? (tx.szMap.get(v.sizeId)?.name ?? null) : null,
@@ -11398,9 +11430,31 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async createSupplierListing(data: Partial<InsertSupplierProductListing>) {
-    const [created] = await db.insert(supplierProductListings).values(data as any).returning();
+  async createSupplierListing(data: Partial<InsertSupplierProductListing>, client: any = db) {
+    const [created] = await client.insert(supplierProductListings).values(data as any).returning();
     return created;
+  }
+
+  // Atomic create (task: "Fix Invalid Supplier Product Mappings and Empty
+  // Products") — the listing row and its variant rows used to be written by
+  // two separate, non-transactional calls; a failure between them (crash,
+  // DB error) could leave a listing persisted with zero variant rows, which
+  // is exactly the orphaned/invalid-mapping shape this task fixes elsewhere.
+  // Wrapping both in one transaction makes that specific failure mode
+  // impossible going forward — either both rows land, or neither does.
+  async createSupplierListingWithVariants(
+    data: Partial<InsertSupplierProductListing>,
+    variants: { flavorId?: number | null; sizeId?: number | null; price: number; quantity: number }[],
+  ) {
+    return db.transaction(async (tx) => {
+      const listing = await this.createSupplierListing(data, tx);
+      const savedVariants = await this.saveVariants(listing.id, variants, tx);
+      // saveVariants recomputes the listing's cached price/stock as a side
+      // effect — re-read so the returned row reflects that, not the
+      // pre-sync price:0/stock:0 snapshot from the moment of insertion.
+      const [synced] = await tx.select().from(supplierProductListings).where(eq(supplierProductListings.id, listing.id));
+      return { listing: synced ?? listing, variants: savedVariants };
+    });
   }
 
   async updateSupplierListing(id: number, updates: { price?: number; stock?: number; availableFlavorIds?: number[]; availableSizeIds?: number[]; availableBrandIds?: number[] }) {
@@ -12478,6 +12532,19 @@ export class DatabaseStorage implements IStorage {
       db.select().from(supplierProductListings).where(inArray(supplierProductListings.supplierId, supplierIds)),
       db.select().from(products),
     ]);
+    // Real offer eligibility (task: "Fix Invalid Supplier Product Mappings
+    // and Empty Products") — derived from persisted variants via
+    // computeListingOffer, never from l.price/l.stock directly (see that
+    // function's comment for why those columns can go stale).
+    const listingIds = allListings.map((l) => l.id);
+    const allVariants = listingIds.length
+      ? await db.select().from(supplierProductVariants).where(inArray(supplierProductVariants.listingId, listingIds))
+      : [];
+    const variantsByListing = new Map<number, typeof allVariants>();
+    for (const v of allVariants) {
+      if (!variantsByListing.has(v.listingId)) variantsByListing.set(v.listingId, []);
+      variantsByListing.get(v.listingId)!.push(v);
+    }
     const userMap = new Map(allUsers.map((u) => [u.id, u]));
     const productMap = new Map(allProducts.map((p) => [p.id, p]));
     const listingsBySupplier = new Map<number, typeof allListings>();
@@ -12488,7 +12555,8 @@ export class DatabaseStorage implements IStorage {
     return stores.map((store) => {
       const supplier = userMap.get(store.supplierId);
        const listings = (listingsBySupplier.get(store.supplierId) ?? []).filter(
-         (l) => l.visibility === 'VISIBLE' && l.isIndividuallyVisible && !l.onlyForPack && l.stock > 0 && l.price > 0,
+         (l) => l.visibility === 'VISIBLE' && l.isIndividuallyVisible && !l.onlyForPack
+           && computeListingOffer(variantsByListing.get(l.id) ?? []).eligible,
        );
       const categoryIds = new Set<number>();
       const subCategoryIds = new Set<number>();
@@ -12593,10 +12661,23 @@ export class DatabaseStorage implements IStorage {
         and(eq(supplierProductReviews.supplierId, store.supplierId), eq(supplierProductReviews.reviewType as any, 'SUPPLIER'))
       ),
     ]);
+    // Real offer eligibility derived from persisted variants, not from
+    // l.price/l.stock (see computeListingOffer) — task: "Fix Invalid
+    // Supplier Product Mappings and Empty Products".
+    const allListingIds = listings.map((l) => l.id);
+    const allListingVariants = allListingIds.length
+      ? await db.select().from(supplierProductVariants).where(inArray(supplierProductVariants.listingId, allListingIds))
+      : [];
+    const listingVariantsMap = new Map<number, typeof allListingVariants>();
+    for (const v of allListingVariants) {
+      if (!listingVariantsMap.has(v.listingId)) listingVariantsMap.set(v.listingId, []);
+      listingVariantsMap.get(v.listingId)!.push(v);
+    }
+    const offerByListing = new Map(listings.map((l) => [l.id, computeListingOffer(listingVariantsMap.get(l.id) ?? [])]));
     const activeListings = listings.filter(
       // isIndividuallyVisible is standalone-listing-only (see schema comment) —
       // never checked by pack retrieval, so this store's packs are unaffected.
-      (l) => l.visibility === 'VISIBLE' && l.isIndividuallyVisible && !l.onlyForPack && l.stock > 0 && l.price > 0,
+      (l) => l.visibility === 'VISIBLE' && l.isIndividuallyVisible && !l.onlyForPack && offerByListing.get(l.id)!.eligible,
     );
     const reviewCount = reviewRows.length;
     const avgRating = reviewCount ? reviewRows.reduce((s, r) => s + r.rating, 0) / reviewCount : 0;
@@ -12625,10 +12706,11 @@ export class DatabaseStorage implements IStorage {
     const tx = await buildTaxonomyCache();
     const enriched = prods.map((p) => {
       const listing = listingByProduct.get(p.id)!;
+      const offer = offerByListing.get(listing.id)!;
       const stats = productReviewStats.get(p.id);
       return {
         ...enrichProduct(p, tx),
-        price: listing.price, bestPrice: listing.price, totalStock: listing.stock,
+        price: offer.minPrice, bestPrice: offer.minPrice, totalStock: offer.totalStock,
         listingId: listing.id,
         hasPromo: promoListingSet.has(listing.id),
          listingPromotions: promoListings.filter((promo) => promo.listingId === listing.id),

@@ -44,7 +44,7 @@ function useTheme(isDark: boolean) {
   return {
     dk,
     pageBg:           dk ? "bg-gray-900"                          : "bg-gray-50",
-    cardBg:           dk ? "bg-gray-800 border-gray-700/60"       : "bg-white border-gray-100",
+    cardBg:           dk ? "bg-gray-800 border-amber-900/40"       : "bg-white border-amber-100",
     textPrimary:      dk ? "text-white"                           : "text-gray-900",
     textMuted:        dk ? "text-gray-400"                        : "text-gray-500",
     textPrice:        dk ? "text-blue-400"                        : "text-blue-600",
@@ -59,7 +59,6 @@ function useTheme(isDark: boolean) {
     inputBg:          dk ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200",
     selectTrigger:    dk ? "border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700" : "border-gray-200 bg-gray-50",
     divider:          dk ? "border-gray-800"                      : "border-gray-100",
-    sectionBtn:       dk ? "text-blue-400 hover:text-blue-300 hover:bg-gray-800" : "text-blue-600 hover:text-blue-700 hover:bg-blue-50",
     sectionBtnPack:   dk ? "text-amber-400 hover:text-amber-300 hover:bg-gray-800" : "text-amber-600 hover:text-amber-700 hover:bg-amber-50",
     skeletonBg:       dk ? "bg-gray-800" : "bg-gray-100",
     imgBg:            dk ? "bg-gray-700" : "bg-gray-50",
@@ -489,7 +488,7 @@ function StoresSection({
           <Button
             variant="outline"
             size="sm"
-            className={`text-xs font-semibold h-8 px-3 ${t.sectionBtn}`}
+            className={`text-xs font-semibold h-8 px-3 ${t.sectionBtnPack}`}
             onClick={() => setExpanded((e) => !e)}
             data-testid="button-toggle-stores"
           >
@@ -567,7 +566,6 @@ export function PackCardTile({
   const searchLocation = useSearchLocationStore((s) => s.searchLocation);
   const maxQty = Math.min(pack.quantityAvailable, pack.maxBuildable);
 
-  const individualTotal = pack.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
 
   const distance = useMemo(() => {
     if (!searchLocation || !(pack as any).supplierLat || !(pack as any).supplierLng) return null;
@@ -653,7 +651,7 @@ export function PackCardTile({
           {pack.description || "\u00A0"}
         </p>
 
-{/* Row 4: Categories — single line, each chip shows only its own correct brands */}
+{/* Row 3: Categories — single line, each chip shows only its own correct brands */}
         <div className="flex items-center gap-1 mt-1.5 flex-nowrap overflow-hidden min-h-[20px]">
           {visibleCats.map((c) => {
             const brands = catBrandMap.get(c.id) ?? [];
@@ -673,7 +671,7 @@ export function PackCardTile({
           )}
         </div>
         
-         {/* Row 4b: Supplier name (left) + supplier rating (right) */}
+         {/* Row 3b: Supplier name (left) + supplier rating (right) */}
         {pack.supplierName && (
           <div className="flex items-center gap-1 mt-1 min-w-0">
             
@@ -687,16 +685,14 @@ export function PackCardTile({
           </div>
         )}
 
-        {/* Row 3: Price (right-of-symbol) / old price / 📦 quantity — single line */}
+        {/* Row 4: Price (right-of-symbol) / old price / 📦 quantity — single line */}
         <div className="flex items-center gap-1.5 mt-1.5 flex-nowrap overflow-hidden">
         
             <>
               <span className={`font-bold text-sm shrink-0 ${priceColor}`}>
                 {fmtRight(pack.price)}
               </span>
-              {individualTotal > pack.price && (
-                <span className={`text-xs line-through shrink-0 ${t.textMuted}`}>{fmtRight(individualTotal)}</span>
-              )}
+             
               {/* 📦 quantity — amber, aligned right */}
               <span className={`flex items-center gap-0.5 ml-auto shrink-0 text-[11px] font-medium ${priceColor}`}>
                 <Package className="w-3 h-3" />{maxQty}

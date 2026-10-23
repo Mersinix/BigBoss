@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Package, Search, X, Pencil, Trash2, CheckCircle2, ShoppingBag, Layers, LayoutGrid, LayoutList, Eye, EyeOff } from "lucide-react";
+import { Plus, Package, Search, X, Pencil, Trash2, CheckCircle2, ShoppingBag, Layers, LayoutGrid, LayoutList, Eye, EyeOff, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
@@ -26,6 +26,25 @@ import { useSupplierCategoryStore } from "@/store/supplier-category-store";
 import { PackTab } from "./manage-packs";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { useCoverZoomStyle, computeCoverZoomScale, getAdjustmentFor, useImageGallery } from "@/lib/image-adjustment";
+
+// apiRequest throws `Error("<status>: <raw response text>")` rather than parsing
+// the JSON body — this recovers the server's actual { message } (e.g. the new
+// "At least one variant needs a price and stock greater than zero" validation,
+// task: "Fix Invalid Supplier Product Mappings and Empty Products") so it can be
+// shown verbatim in a toast instead of the raw "400: {...}" string.
+function extractApiErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) {
+    const raw = error.message.replace(/^\d+:\s*/, "");
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.message === "string") return parsed.message;
+    } catch {
+      // not JSON — fall through to the raw text
+    }
+    return raw || fallback;
+  }
+  return fallback;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -621,7 +640,7 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
       onSuccess();
       onClose();
     },
-    onError: (err: any) => toast({ title: err?.message ?? "Error", variant: "destructive" }),
+    onError: (err: any) => toast({ title: extractApiErrorMessage(err, "Error"), variant: "destructive" }),
   });
 
   const entries = useMemo(() => groupsToEntries(groups, availableFlavors, availableSizes), [groups, availableFlavors, availableSizes]);
@@ -744,7 +763,7 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
     return ids.length > 0 ? szs.filter(s => ids.includes(s.id)) : [];
   }, [listing.product.sizeIds, listing.product.sizeId, szs]);
 
-  const { data: existingVariants = [] } = useQuery({
+  const { data: existingVariants = [], isSuccess: variantsLoaded } = useQuery({
     queryKey: ["/api/supplier/listings", listing.id, "variants"],
     queryFn: async () => {
       const res = await fetch(`/api/supplier/listings/${listing.id}/variants`, { credentials: "include" });
@@ -765,6 +784,15 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
     }
   }, [existingVariants, loaded, availableFlavors, availableSizes]);
 
+  // Distinguishes an ACTUALLY incomplete/invalid listing (the query resolved
+  // and confirmed zero persisted supplier variants — task: "Fix Invalid
+  // Supplier Product Mappings and Empty Products") from the loading state.
+  // The blank default `groups` state shown below is the recovery UI for this
+  // exact case — never Admin catalog flavors/sizes silently treated as if
+  // the supplier had configured them, just the same editable builder used
+  // for a normal edit, with a clear banner marking today's real state.
+  const hasNoPersistedVariants = variantsLoaded && (existingVariants as any[]).length === 0;
+
   const save = useMutation({
     mutationFn: async () => {
       const entries = groupsToEntries(groups, availableFlavors, availableSizes);
@@ -780,7 +808,7 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
       });
     },
     onSuccess: () => { toast({ title: "Variants updated" }); onSuccess(); onClose(); },
-    onError: (err: any) => toast({ title: err?.message ?? "Error updating", variant: "destructive" }),
+    onError: (err: any) => toast({ title: extractApiErrorMessage(err, "Error updating"), variant: "destructive" }),
   });
 
   return (
@@ -793,6 +821,15 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
           {/* Left – Builder */}
           <div className="space-y-4">
+            {hasNoPersistedVariants && (
+              <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300" data-testid="banner-incomplete-listing">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <p className="text-xs">
+                  This listing has no configured variant — it is currently <strong>invisible to Coffee Owners</strong> in
+                  the marketplace. Add at least one size/flavor combination with a price and stock below, then Save to fix it.
+                </p>
+              </div>
+            )}
             <div>
               <VariantGroupBuilder flavors={availableFlavors} sizes={availableSizes} groups={groups} onChange={setGroups} />
               <p className="text-xs text-muted-foreground mt-1.5">Variants with qty 0 will be hidden from café customers.</p>

@@ -8553,13 +8553,21 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         productId: z.number(),
         onlyForPack: z.boolean().optional(),
         onlyForMyProducts: z.boolean().optional(),
+        // Required with >=1 entry (task: "Fix Invalid Supplier Product
+        // Mappings and Empty Products") — a mapping with zero variants is
+        // exactly the invalid/orphaned state this task eliminates; the
+        // client's own "Add" button has always required this (hasAnyPrice),
+        // this just makes the rule authoritative server-side too.
         variants: z.array(z.object({
           flavorId: z.number().nullable().optional(),
           sizeId: z.number().nullable().optional(),
           price: z.number().min(0),
           quantity: z.number().min(0),
-        })).optional(),
-      }).parse(req.body);
+        })).min(1, "At least one variant is required"),
+      }).refine(
+        (b) => b.variants.some((v) => v.price > 0 && v.quantity > 0),
+        { message: "At least one variant needs a price and stock greater than zero" },
+      ).parse(req.body);
 
       const allowed = await storage.isProductAllowedForSupplier(user!.id, body.productId);
       if (!allowed) return res.status(403).json({ message: "Product is not in your approved categories" });
@@ -8574,7 +8582,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         return res.status(400).json({ message: "A listing cannot be both 'Only for Pack' and 'Only for My Products' at the same time" });
       }
 
-      const listing = await storage.createSupplierListing({
+      // Listing + variants created atomically (see createSupplierListingWithVariants) —
+      // a failure partway through can never leave a listing persisted with zero variants.
+      const { listing } = await storage.createSupplierListingWithVariants({
         supplierId: user!.id,
         productId: body.productId,
         price: 0,
@@ -8584,16 +8594,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         availableBrandIds: null,
         onlyForPack,
         onlyForMyProducts,
-      });
-
-      if (body.variants && body.variants.length > 0) {
-        await storage.saveVariants(listing.id, body.variants.map(v => ({
-          flavorId: v.flavorId ?? null,
-          sizeId: v.sizeId ?? null,
-          price: Math.round(v.price * 100),
-          quantity: v.quantity,
-        })));
-      }
+      }, body.variants.map(v => ({
+        flavorId: v.flavorId ?? null,
+        sizeId: v.sizeId ?? null,
+        price: Math.round(v.price * 100),
+        quantity: v.quantity,
+      })));
 
       broadcast("product_updated", { productId: body.productId, listingId: listing.id, supplierId: user!.id });
       res.status(201).json(listing);
@@ -8621,7 +8627,16 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
           price: z.number().min(0),
           quantity: z.number().min(0),
         })).optional(),
-      }).parse(req.body);
+      }).refine(
+        // Only checked when the supplier is actually submitting a variants
+        // array (task: "Fix Invalid Supplier Product Mappings and Empty
+        // Products") — editing variants down to zero would re-create the
+        // exact orphaned/invalid-mapping state this task eliminates. A
+        // supplier who wants to stop selling a product has Remove for that;
+        // Save must always leave >=1 valid variant on an active listing.
+        (b) => b.variants === undefined || b.variants.some((v) => v.price > 0 && v.quantity > 0),
+        { message: "At least one variant needs a price and stock greater than zero" },
+      ).parse(req.body);
 
       // Enforce mutual exclusivity server-side
       const resolvedOnlyForPack = body.onlyForPack !== undefined ? body.onlyForPack : listing.onlyForPack;
@@ -8662,6 +8677,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       }
       res.json(updated ?? { id: listingId });
     } catch (err) {
+      // Surfaces the specific validation message (e.g. the new "at least one
+      // variant needs a price and stock greater than zero" rule) instead of
+      // the generic "Invalid" — task: "Fix Invalid Supplier Product
+      // Mappings and Empty Products" explicitly asks for an actionable
+      // message, not just a rejection.
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
       console.error(err);
       res.status(400).json({ message: "Invalid" });
     }

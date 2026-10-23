@@ -9995,3 +9995,291 @@ la galerie d'images et la portée de l'invalidation de cache changent.
   mécanisme exact qui a été corrigé (la liste d'invalidation côté
   client sur l'événement `product_updated`), mais pas la diffusion
   initiale depuis une vraie session Admin.
+
+---
+
+## 6. Tâche de suivi — Mappings Fournisseur invalides et produits « vides » dans le Marketplace Coffee Owner
+
+### 6.1 Audit — cause racine trouvée par inspection directe de la base
+
+Exemple cité par la tâche, vérifié en premier : **« Illy Classico Arabica
+Beans 500g »** (produit id 5) a 4 listings fournisseur. Le listing 45
+(fournisseur 6) a `price=2300, stock=94` directement sur la ligne
+`supplier_product_listings`, mais **zéro ligne** dans
+`supplier_product_variants`. Or le produit a bien des saveurs/tailles
+assignées (`flavor_ids=[9,6,1]`, `size_ids=[6,5,7,1,9]`) — une
+configuration de variantes était donc attendue.
+
+**Mécanisme découvert (`server/storage.ts`, `saveVariants`)** : la
+colonne `price`/`stock` d'un listing n'est **pas** une source de vérité
+indépendante — c'est un **cache** recalculé à chaque sauvegarde de
+variantes (`aggPrice = min(prix insérés)`, `aggStock = somme des
+quantités insérées`), et **explicitement remis à `{price:0, stock:0}`**
+dès que la liste de variantes devient vide (`if (!variants.length) {
+...set({price:0, stock:0})... }`). Sous ce flux, un listing à zéro
+variante a **toujours** `price=0/stock=0` — jamais une valeur positive.
+Le listing 45 (prix/stock positifs, zéro variante) est donc forcément
+un enregistrement **orphelin/périmé** — soit antérieur à l'introduction
+de cette logique de cache, soit une donnée de seed insérée hors de
+l'application — jamais quelque chose que le flux actuel peut produire.
+
+**Confirmation que la route actuelle ne peut PAS créer un tel listing
+« légitimement vide » :** `POST /api/supplier/listings` crée toujours le
+listing avec `price:0, stock:0` ; l'unique façon d'obtenir un prix/stock
+positif est `saveVariants` avec au moins une variante réelle. Même un
+produit sans saveur/taille obtient **une vraie ligne de variante**
+(`flavorId:null, sizeId:null`) via `buildEntries`/`groupsToEntries` — il
+n'existe **aucun** chemin actuel, via l'UI normale, pour obtenir un
+listing à la fois « zéro variante » et « prix/stock positifs ».
+
+**Où le cache est ensuite consommé à tort comme une offre valide** —
+trouvé par recherche exhaustive du motif dans `storage.ts` :
+1. `getMarketplaceProducts` (marketplace principal + détail produit) —
+   repli `variants.length ? ... : (l.stock>0 && l.price>0 ? ... : 0)`.
+2. `buildStoreCards` (cartes Boutique, badge nombre de produits) —
+   filtrait directement sur `l.stock > 0 && l.price > 0`, **sans même
+   relire les variantes**.
+3. `getStoreDetail` (**« From this store »**, explicitement cité par la
+   tâche) — même filtre direct sur `l.stock`/`l.price`, et les champs
+   affichés (`price`, `bestPrice`, `totalStock`) venaient directement de
+   `listing.price`/`listing.stock`, jamais des variantes réelles.
+
+C'est l'explication précise du symptôme décrit par la tâche (« la page
+détail produit affiche un prix… mais la section fournisseurs dit qu'il
+n'y a pas de correspondance ») : deux chemins de lecture différents
+faisaient confiance au même cache potentiellement périmé, de façon
+incohérente selon le contexte (produit filtré par fournisseur vs. page
+Boutique du fournisseur).
+
+### 6.2 Audit — pourquoi Edit Pricing & Stock affiche un groupe « normal »
+
+`EditListingModal` (`manage-products.tsx`) : `useEffect` ne remplit
+`groups` depuis les vraies variantes persistées QUE si
+`existingVariants.length > 0`. Pour un listing à zéro variante (comme
+45), cet effet ne se déclenche jamais, et `groups` reste à son état
+initial — **un unique groupe vide et éditable**, visuellement identique
+à l'état « nouveau listing pas encore configuré ». Rien ne distingue un
+listing **cassé** (devrait déjà avoir des variantes mais n'en a pas) d'un
+listing simplement « en cours de configuration ». Ce n'est PAS un cas de
+« catalogue Admin affiché comme si le Fournisseur l'avait configuré »
+(hypothèse de la tâche) — c'est un groupe vide générique, mais le
+résultat pratique (aucune indication d'un problème) est le même.
+
+### 6.3 Implémentation
+
+**A. Empêcher la création de nouveaux mappings invalides (section 2)**
+- `server/storage.ts` → `createSupplierListing`/`saveVariants` acceptent
+  désormais un paramètre `client` optionnel (défaut `db`, même
+  convention que `createDeliveryForSubOrder`) pour pouvoir s'exécuter
+  dans une transaction.
+- Nouvelle méthode `createSupplierListingWithVariants(data, variants)` —
+  crée le listing ET ses variantes dans un **seul `db.transaction()`** :
+  un échec entre les deux ne peut plus jamais laisser un listing
+  persistant avec zéro variante (c'est exactement la faille qui a permis
+  l'état du listing 45, qu'elle soit d'origine code ou seed).
+- `server/routes.ts` → `POST /api/supplier/listings` : `variants` devient
+  **obligatoire** (`.min(1)`) avec un `.refine()` exigeant qu'au moins
+  une entrée ait `price > 0 && quantity > 0` — règle déjà appliquée
+  côté client (`hasAnyPrice`, bouton « Add » désactivé sinon), désormais
+  **autoritaire côté serveur** (empêche le contournement par appel API
+  direct, exigé explicitement par la tâche). Utilise désormais
+  `createSupplierListingWithVariants` (transactionnel) au lieu des deux
+  appels séparés précédents.
+- `PATCH /api/supplier/listings/:id` : même `.refine()`, mais uniquement
+  quand `variants` est effectivement soumis (`b.variants === undefined
+  || ...`) — ne bloque jamais un simple Hide/Show ou changement
+  `onlyForPack`. Empêche désormais de **sauvegarder une édition qui
+  viderait** un listing valide à zéro variante (ce qui recréerait
+  exactement l'état invalide visé par la tâche) ; un fournisseur voulant
+  arrêter de vendre un produit doit utiliser « Remove », qui existe déjà.
+- Protection doublons : déjà couverte par le check `existing` (409 si un
+  listing existe déjà pour ce couple fournisseur/produit) + le bouton
+  « Add » déjà désactivé pendant `isPending` côté client — aucune
+  modification nécessaire, vérifié par lecture de code.
+
+**B. Mappings existants invalides (section 3)** — 4 listings orphelins
+identifiés en base par requête directe (voir 6.4), **tous appartenant au
+même fournisseur (id 6)**, **aucun référencé par un pack**
+(`pack_item_count: 0` pour les 4). Stratégie retenue — la plus sûre
+listée par la tâche elle-même : **ne rien supprimer ni fabriquer**,
+corriger uniquement la couche de lecture (6.1) pour qu'ils cessent
+d'apparaître comme des offres achetables, tout en restant visibles et
+réparables par le fournisseur dans My Products (voir C). Aucune
+migration destructive nécessaire ni exécutée.
+
+**C. `EditListingModal` — état clair au lieu d'un groupe fabriqué**
+(section 3C) — `client/src/pages/supplier/manage-products.tsx` :
+nouveau calcul `hasNoPersistedVariants = variantsLoaded &&
+existingVariants.length === 0` (distingue le chargement en cours d'un
+résultat confirmé à zéro), nouvelle bannière d'avertissement (icône
+`AlertTriangle`, texte explicite : « this listing has no configured
+variant — it is currently invisible to Coffee Owners… ») affichée
+au-dessus du `VariantGroupBuilder` existant. Le parcours de réparation
+réutilise l'éditeur de variantes déjà existant tel quel (aucune nouvelle
+UI) — le fournisseur ajoute une vraie variante et Save, qui passe
+maintenant par la validation serveur du point A.
+- Messages d'erreur : ajout d'un petit utilitaire local
+  `extractApiErrorMessage` (même logique que celle déjà existante dans
+  `cart-page.tsx`) câblé sur les 2 `onError` concernés (`AddListingModal`,
+  `EditListingModal`) pour que les nouveaux messages de validation serveur
+  s'affichent proprement dans le toast au lieu du JSON brut.
+
+**D. Éligibilité marketplace cohérente (sections 4 et 6)** —
+`server/storage.ts` : nouvelle fonction partagée `computeListingOffer(variants)`
+(documentée en détail dans le code — voir 6.1) — seule implémentation de
+la règle « offre achetable = au moins une variante avec prix>0 ET
+stock>0 », réutilisée par les 3 points trouvés en 6.1 :
+- `getMarketplaceProducts` : remplace le repli vers `l.price`/`l.stock`.
+- `buildStoreCards` : récupère désormais les variantes par lot
+  (`inArray` sur tous les `listingId` concernés) et filtre via
+  `computeListingOffer(...).eligible` au lieu de lire `l.price`/`l.stock`
+  directement.
+- `getStoreDetail` (« From this store ») : même traitement ; `price`,
+  `bestPrice`, `totalStock` affichés viennent désormais de
+  `computeListingOffer`, plus jamais du cache du listing.
+
+**E. Packs (section 5) — inspecté, volontairement non modifié.**
+`buildPackDetails`'s `validItems` a deux motifs similaires
+(`server/storage.ts`, recherche de `l.price > 0 && l.stock > 0`) pour un
+item de pack **sans `variantId`** (référence « directe » à un listing
+plutôt qu'à une variante précise) : `!variantsByListing.get(listingId)?.length
+&& listing.price > 0 && listing.stock > 0`. Même motif que 6.1, donc même
+risque de confiance envers un cache périmé. **Décision : laissé
+inchangé.** Raisons :
+- Requête directe en base : **aucun `pack_item` existant n'a
+  `variant_id IS NULL`** aujourd'hui — ce chemin de code n'est exercé par
+  **aucune** donnée réelle actuellement, dans un sens comme dans l'autre.
+- Le contourner différemment serait aussi sans effet pratique immédiat,
+  mais le modifier change le comportement d'auto-suppression déjà
+  existant de cette fonction (`invalidItemIds` → `DELETE FROM
+  pack_items`) pour un futur item de ce type — la tâche demande
+  explicitement de ne « jamais réécrire silencieusement la composition
+  d'un pack » suite à un correctif d'éligibilité côté listing autonome.
+- Recommandation documentée plutôt qu'appliquée : si ce chemin doit être
+  aligné sur `computeListingOffer`, cela mérite un examen dédié des
+  packs concernés avant tout changement, pas un correctif groupé avec
+  cette tâche.
+
+### 6.4 Portée des enregistrements affectés (audit, aucune suppression)
+
+Requête exhaustive sur toute la base — 4 listings orphelins trouvés, tous
+fournisseur 6, aucun dans un pack :
+
+| listing_id | produit | prix cache | stock cache | variantes | dans un pack |
+|---|---|---|---|---|---|
+| 45 | Illy Classico Arabica Beans 500g | 2300 | 94 | 0 | non |
+| 49 | Lavazza Super Crema Espresso 1kg | 1400 | 3978 | 0 | non |
+| 50 | Oatly Barista Edition 1L | 1700 | 3974 | 0 | non |
+| 51 | Oatly Barista 6×1L Pack | 3900 | 2978 | 0 | non |
+
+Après ce correctif, ces 4 listings : disparaissent du marketplace, des
+cartes Boutique et de « From this store » (plus jamais traités comme une
+offre achetable) ; restent visibles dans My Products du fournisseur 6
+avec la nouvelle bannière d'avertissement ; restent réparables (ajouter
+de vraies variantes) ou supprimables (bouton Remove, déjà existant) par
+ce fournisseur, à sa discrétion — aucune action automatique prise sur
+ces lignes par ce correctif.
+
+### 6.5 Ce qui ne change pas
+
+Schéma DB inchangé (aucune colonne ajoutée/supprimée). Aucune donnée
+supprimée ou réécrite automatiquement. Règle « quantité 0 masquée au
+Coffee Owner » préservée à l'identique (déjà `price>0 && quantity>0`,
+jamais modifiée). Permissions, ownership, comportement Hide/Show/Remove,
+composition des packs, taxonomie/description/images Admin : tous
+inchangés.
+
+### 6.6 Tests réellement exécutés
+
+- `npx tsc --noEmit` — **succès** (code de sortie 0), après l'ensemble
+  des modifications (3 passes, la 2ème et 3ème corrigeant des détails
+  trouvés pendant la vérification HTTP réelle — voir ci-dessous).
+- `npm run build` — **succès** (code de sortie 0).
+- Redémarrage du serveur de développement (changements `server/*.ts`,
+  même protocole que les tâches précédentes) puis vérification **HTTP
+  réelle** avec le compte Fournisseur existant déjà utilisé dans la
+  tâche précédente (`supplier@coffee.com`, approuvé, préexistant) :
+  - `GET /api/marketplace/5` (Illy Classico, authentifié) → **avant**
+    le correctif : `supplierCount` aurait inclus le fournisseur 6
+    (listing 45) ; **après** : `supplierCount: 3`, uniquement les
+    fournisseurs 8, 2, 11 (ceux qui ont de vraies variantes) — le
+    fournisseur 6 est bien exclu.
+  - `GET /api/stores/4` (boutique du fournisseur 6, celui qui détient
+    les 4 listings orphelins) → `productCount: 11`, et aucun des 4
+    produits concernés (Illy Classico, Lavazza Super Crema, Oatly
+    Barista Edition, Oatly Barista 6×1L) n'apparaît dans `products[]` —
+    confirme la cohérence Marketplace ↔ « From this store » visée par
+    la section 4B de la tâche.
+  - `POST /api/supplier/listings` avec `variants: []` → **400**,
+    `"At least one variant is required"`.
+  - `POST /api/supplier/listings` avec un variant `price:0, quantity:0`
+    → **400**, `"At least one variant needs a price and stock greater
+    than zero"`.
+  - `POST /api/supplier/listings` avec un variant valide (`price:15.5,
+    quantity:10`) → **201**, listing créé avec `price:1550, stock:10`
+    corrects (confirmé aussi par lecture directe en base : la ligne
+    `supplier_product_listings` ET la ligne `supplier_product_variants`
+    existent bien toutes les deux, écriture atomique confirmée) ; ligne
+    supprimée par le script de test lui-même immédiatement après
+    (`listing_id` 153 puis 154, deux itérations pendant la mise au point
+    du correctif de synchronisation de la réponse HTTP, voir plus bas).
+  - **Bug trouvé et corrigé pendant cette vérification** : la première
+    version de `createSupplierListingWithVariants` renvoyait l'objet
+    `listing` capturé **avant** l'exécution de `saveVariants` (donc
+    `price:0, stock:0` dans la réponse JSON, alors que la ligne réelle en
+    base était déjà correctement synchronisée à `price:1550, stock:10`
+    par `saveVariants`). Corrigé en relisant la ligne après
+    synchronisation, **dans la même transaction**, avant de la retourner.
+    Revérifié après correction : la réponse HTTP reflète maintenant
+    exactement l'état réel (`price:1550, stock:10`).
+  - `PATCH /api/supplier/listings/:id` avec `variants: []` sur un listing
+    valide existant → **400**, message clair (le bloc `catch` de cette
+    route renvoyait un message générique `"Invalid"` avant correction —
+    corrigé pour vérifier spécifiquement `z.ZodError` et renvoyer le
+    message précis, comme la route `POST` le faisait déjà).
+  - `PATCH /api/supplier/listings/:id` avec seulement
+    `{isIndividuallyVisible: false}` puis `{true}` (sans toucher
+    `variants`) → **200** les deux fois — confirme que la nouvelle règle
+    ne bloque jamais Hide/Show ni les autres mises à jour qui ne
+    touchent pas aux variantes.
+  - Toutes les lignes de test créées pendant cette vérification
+    (listings 153, 154, 155) ont été supprimées par les scripts de test
+    eux-mêmes ; vérifié en relisant la base après coup.
+- **Vérification navigateur réelle (Playwright)** — bannière
+  d'avertissement de `EditListingModal` (section 6.3.C) : un listing
+  jetable reproduisant exactement l'état cassé (zéro variante, cache
+  prix/stock non nul) a été inséré **directement en base** pour le
+  fournisseur de test (impossible de le créer via l'API désormais — la
+  nouvelle validation l'en empêche, comme prévu), ouvert via My Products
+  → la bannière ambre « This listing has no configured variant… » s'affiche
+  bien au-dessus du groupe de variantes vide (capture d'écran contrôlée
+  visuellement), le reste de la modale (Live Preview, galerie d'images,
+  taxonomie) reste fonctionnel. Ligne de test supprimée immédiatement
+  après (listing 156), vérifié absente en base après coup.
+- **Portée des 4 listings orphelins réels** (fournisseur 6, id 45/49/50/51)
+  — confirmés **inchangés** après tout le travail de vérification
+  (`price`/`stock` identiques à l'audit initial en 6.1/6.4) : aucune
+  des commandes de test ni du redémarrage serveur ne les a touchés.
+- **Non vérifié en conditions réelles** : le correctif pour le
+  fournisseur 6 lui-même (listing 45 notamment) n'a pas pu être observé
+  depuis SON propre compte (email `allodeleauu@gmail.com` — ressemble à
+  un compte réel, mot de passe inconnu, jamais tenté, conformément à la
+  contrainte de session sur les comptes existants) ; la vérification du
+  comportement « bannière d'incomplétude » a donc été faite avec une
+  ligne jetable reproduisant fidèlement le même état sur le compte de
+  test déjà utilisé, pas avec le listing 45 réel lui-même — mais la
+  donnée réelle (listing 45) a été confirmée avoir exactement la même
+  forme (zéro variante, cache positif), donc le même code s'applique.
+
+### 6.7 Limites restantes
+
+- Le correctif de `buildPackDetails` pour les items de pack sans
+  `variantId` (section 6.3.E) a été délibérément laissé inchangé — voir
+  le raisonnement détaillé en 6.3.E. Aucun pack existant n'est concerné
+  aujourd'hui (vérifié par requête directe), donc aucun risque immédiat,
+  mais ce chemin reste théoriquement incohérent avec
+  `computeListingOffer` si jamais un futur item de pack l'emprunte.
+- Les 4 listings orphelins identifiés restent en base tels quels (par
+  design — voir 6.3.B) ; seul le fournisseur 6 peut les réparer (ajouter
+  de vraies variantes) ou les supprimer, via My Products — aucune action
+  de masse n'a été proposée ni exécutée.

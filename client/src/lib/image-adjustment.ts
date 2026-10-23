@@ -129,3 +129,36 @@ export function useImageAdjustStyle(pct: number, containerAspect = 1) {
 
   return { wrapperStyle, imgStyle, onLoad, imageAspect };
 }
+
+/**
+ * Shared click-to-select gallery state (task: "Real-Time Image
+ * Synchronization, Interactive Image Galleries, and Supplier Product Detail
+ * Modal Redesign") — extracted from the pattern already used by the Coffee
+ * Owner product detail gallery (`product-detail-content.tsx`'s
+ * `allImages`/`safeActiveIdx`), so Admin's Edit Product preview and the
+ * Supplier variant builder's Live Preview select images the exact same way.
+ *
+ * Selection is tracked by INDEX, not by URL identity: editing the text of
+ * the currently-previewed image's own URL field must not bounce the
+ * selection back to the main image on every keystroke (it would, under a
+ * URL-identity comparison, since each keystroke produces a URL that isn't
+ * in the list yet). The index is clamped to the current image count, so a
+ * selection that falls off the end (its image was removed) automatically
+ * resolves to the last remaining image — "select a valid remaining image
+ * automatically" — matching the exact clamping behavior already accepted
+ * in `product-detail-content.tsx`. Removing a DIFFERENT (non-selected,
+ * non-trailing) image can shift which photo a given index shows; this is
+ * the same tradeoff already present in that existing gallery, not a new
+ * one introduced here.
+ */
+export function useImageGallery(
+  mainUrl: string | null | undefined,
+  additionalUrls?: (string | null | undefined)[] | null,
+) {
+  const allImages = [mainUrl, ...(additionalUrls ?? [])].filter(
+    (u): u is string => !!u && u.trim().length > 0,
+  );
+  const [rawIdx, setActiveIdx] = useState(0);
+  const activeIdx = allImages.length ? Math.min(rawIdx, allImages.length - 1) : 0;
+  return { allImages, activeIdx, setActiveIdx, activeUrl: allImages[activeIdx] ?? null };
+}

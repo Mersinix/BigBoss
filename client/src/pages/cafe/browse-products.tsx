@@ -326,7 +326,7 @@ function ProductCard({
               className={`w-full min-w-0 text-[10px] px-1.5 py-0 border ${
                 t.dk
                   ? "bg-gray-700 text-rose-500 border-gray-600"
-                  : "bg-gray-100 text-gray-600 border-gray-200"
+                  : "bg-gray-100 text-rose-500 border-gray-600/30"
               }`}
             >
               <span className="block min-w-0 truncate">
@@ -625,7 +625,7 @@ export function PackCardTile({
         )}
         {/* Pack badge */}
         <div className="absolute top-2 left-2">
-          <Badge className="bg-amber-500/90 text-white text-[10px] font-semibold shadow-sm border-0 px-2 backdrop-blur-sm">
+          <Badge className="bg-amber-500/90 text-white text-[10px] border-gray-600/30 font-semibold shadow-sm border-0 px-2 backdrop-blur-sm">
             <Layers className="w-3 h-3 mr-1 inline" />Pack
           </Badge>
         </div>
@@ -678,7 +678,7 @@ export function PackCardTile({
             return (
               <Badge
                 key={c.id}
-                className={`text-[10px] px-1.5 py-0 border shrink-0 ${t.dk ? "bg-gray-700 text-gray-300 border-gray-600" : "bg-gray-100 text-gray-600 border-gray-200"}`}
+                className={`text-[10px] px-1.5 py-0 border shrink-0 ${t.dk ? "bg-gray-700 text-gray-300 border-gray-600" : "bg-gray-100 text-gray-600 border-gray-600"}`}
               >
                 {c.name}{brands.map((b) => (
                   <span key={b.id} className={`ml-0.5 ${priceColor}`}> • {b.name}</span>

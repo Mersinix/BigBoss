@@ -9281,6 +9281,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { res.status(500).json({ message: 'Error' }); }
   });
 
+  // GET /api/marketplace/products/image-data?ids=1,2,3 — batched, lightweight
+  // image+crop lookup (task: "Synchronize Updated Product and Pack Images in
+  // Coffee Owner Cart") so a cart row can re-resolve a fresh image without
+  // one request per line. Never price/stock — no stripCommercialData needed.
+  // Must be defined BEFORE /api/marketplace/:productId to avoid the wildcard
+  // shadowing it (same reason as the /promotions route above).
+  app.get('/api/marketplace/products/image-data', async (req, res) => {
+    try {
+      const rawIds = req.query.ids as string;
+      if (!rawIds) return res.json([]);
+      const ids = rawIds.split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0);
+      const data = await storage.getProductImageData(ids);
+      res.json(data);
+    } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
   app.get("/api/marketplace/:productId", async (req, res) => {
     try {
       const supplierId = req.query.supplierId ? parseInt(req.query.supplierId as string) : undefined;

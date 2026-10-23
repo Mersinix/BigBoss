@@ -96,6 +96,19 @@ function invalidateProductQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/flavors"] });
   qc.invalidateQueries({ queryKey: ["/api/sizes"] });
   qc.invalidateQueries({ queryKey: ["/api/brands"] });
+  // Root cause (task: "Real-Time Image Synchronization... Supplier Product
+  // Detail Modal Redesign"): an Admin edit (image URL, additional images,
+  // crop %) already broadcasts product_updated over the existing WebSocket
+  // to every connected session, but this handler never invalidated the two
+  // Supplier-side queries that actually render Admin-managed product data —
+  // Admin Products tab/detail modal and My Products' Variant Builder/Live
+  // Preview (via getSupplierListings) both sat on stale cached data until an
+  // unrelated event (e.g. supplier_mapping_changed) happened to refresh
+  // them. Both are already invalidated together elsewhere in this file
+  // (invalidateSupplierMappingQueries) — added here too so every
+  // product_updated broadcast reaches them the same way.
+  qc.invalidateQueries({ queryKey: ["/api/supplier/admin-products"] });
+  qc.invalidateQueries({ queryKey: ["/api/supplier/listings"] });
 }
 
 function invalidateStoreQueries(qc: QueryClient) {

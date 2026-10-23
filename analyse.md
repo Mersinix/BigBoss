@@ -9586,3 +9586,412 @@ suivi si souhaité, hors de cette tâche.
   n'a été trouvé lors de la recherche exhaustive (`grep "imageUrl:"` sur
   `server/routes.ts` et `server/storage.ts`) en dehors des deux corrigés
   en 3.5 et des champs Pack/portfolio explicitement hors périmètre.
+
+---
+
+## 4. Tâche de suivi — Synchronisation des images Produit/Pack dans le panier Coffee Owner (`/cart`)
+
+### 4.1 Constat initial
+
+`client/src/hooks/use-cart.ts` (store `zustand` + middleware `persist`,
+clé localStorage `b2b-cart-v3`) confirme l'hypothèse de la tâche : **ce
+n'est pas un problème de cache navigateur** — `CartItem.productImageUrl`,
+`PackCartItem.packImageUrl` et `PackCartItemProduct.productImageUrl` sont
+des **copies figées**, écrites une seule fois au moment de `addItem`/
+`addPackItem`, puis jamais réécrites tant que la ligne reste dans le
+panier (persistées telles quelles dans `localStorage`). Aucun de ces 3
+types ne porte de champ `imageAdjustments` — donc même si l'URL de
+l'image n'avait pas changé, le recadrage configuré après coup par
+l'Admin ne pourrait de toute façon jamais s'afficher.
+
+### 4.2 Mécanisme déjà existant à réutiliser — `usePackAvailability`
+
+`client/src/hooks/use-pack-availability.ts` interroge déjà
+`GET /api/packs/:id` (→ `storage.getPackDetail` → `buildPackDetails`,
+l'unique fonction d'enrichissement serveur pour tout `PackDetail`) pour
+chaque Pack du panier, avec `staleTime: 30_000` et
+`refetchOnWindowFocus: true` — **sans** invalidation explicite câblée
+depuis les mutations Admin/Supplier, uniquement ce mécanisme déjà
+accepté dans ce projet pour garder les Packs du panier à jour (prix,
+nom, disponibilité). `cart-page.tsx` (ligne ~659) l'utilise déjà pour
+l'image **du Pack lui-même** :
+`displayImage = !frozen && liveDetail ? liveDetail.imageUrl : pack.packImageUrl`
+— donc l'image principale d'un Pack dans le panier est **déjà fraîche**
+aujourd'hui. Aucune colonne `imageAdjustments` n'existe sur la table
+`packs` (confirmé dans la tâche précédente) : l'image propre du Pack n'a
+jamais de recadrage à appliquer, et aucune recherche dans le code
+(`grep "imageUrl ?? ... product"`) n'a montré de repli Pack→image produit
+existant — la clause de la tâche à ce sujet ne correspond donc à aucun
+comportement réel actuel, pas de nouveau repli à inventer.
+
+### 4.3 Deux gaps réels confirmés par lecture directe du code
+
+**A. Panier SHOP (produits mappés par l'Admin, hors Pack)** —
+`cart-page.tsx` (ligne ~583) affiche directement
+`product.productImageUrl`, la copie figée du panier, sans jamais
+interroger la donnée produit vivante. **Aucun mécanisme de
+rafraîchissement n'existe ici, ni pour l'URL ni pour le recadrage.**
+
+**B. Détail des produits inclus dans un Pack, à l'intérieur du panier**
+— `cart-page.tsx` (ligne ~717-723) appelle
+`groupPackIncludedProducts(pack.includedProducts)`, qui regroupe
+toujours la copie figée du panier (`pack.includedProducts`), **jamais**
+`liveDetail.items` (pourtant déjà récupéré par `usePackAvailability` et
+déjà utilisé juste au-dessus pour l'image du Pack lui-même). Le prix/nom
+du Pack est donc déjà « vivant », mais le détail de ses produits inclus
+ne l'est pas.
+
+De plus, même `liveDetail.items[]` (type `PackItemDetail`,
+`shared/schema.ts`) ne porte **pas** de champ `imageAdjustments` — c'est
+exactement le gap identifié mais volontairement différé dans la tâche
+précédente (section 3.6, `pack-quick-view-modal.tsx`). Cette tâche-ci
+porte spécifiquement sur `/cart`, et `buildPackDetails` (la fonction qui
+calcule `PackItemDetail[]`) est une fonction de lecture pure, déjà
+étendue de façon additive à plusieurs reprises cette session
+(`enrichProduct`-like, jamais la fonction d'écriture entangled
+identifiée comme sensible) — l'étendre ici d'un champ supplémentaire est
+donc sûr et, en bonus, répare aussi le gap différé en 3.6 pour tout
+autre consommateur de `buildPackDetails` (effet secondaire positif, non
+requis mais sans risque).
+
+### 4.4 Plan retenu (le plus petit changement sûr)
+
+1. Nouveau point d'accès serveur **public, en lecture seule, par lots** :
+   `GET /api/marketplace/products/image-data?ids=1,2,3` → pour chaque id
+   de produit existant, `{ id, imageUrl, imageUrls, imageAdjustments }`
+   uniquement (aucune donnée commerciale/prix/stock — pas de passage par
+   `stripCommercialData`, inutile ici). Placé AVANT la route générique
+   `/api/marketplace/:productId` (même raison déjà documentée pour
+   `/api/marketplace/promotions`). Nouvelle méthode
+   `storage.getProductImageData(ids)` dédiée, requête batched unique
+   (`inArray`), jamais une requête par ligne de panier (conforme à la
+   section 6 de la tâche).
+2. Nouveau hook `client/src/hooks/use-product-image-data.ts` — calque
+   exact de `usePackAvailability` (même `staleTime: 30_000`, même
+   `refetchOnWindowFocus: true`, même absence de polling/infra
+   supplémentaire) — avec une différence volontaire : sa clé de requête
+   est imbriquée sous `["/api/marketplace", ...]`, ce qui la fait déjà
+   intercepter par l'invalidation existante
+   `invalidateMarketplace(qc)` (déjà appelée par **toutes** les
+   mutations Admin/Supplier de sauvegarde produit de cette session) —
+   rafraîchissement quasi immédiat dans l'onglet actif, en plus du filet
+   de sécurité `staleTime`/`refetchOnWindowFocus` pour un onglet déjà
+   ouvert ailleurs. Aucune nouvelle invalidation à câbler côté Admin.
+3. `shared/schema.ts` — ajoute `productImageAdjustments` à
+   `PackItemDetail` (type pur, pas de colonne DB).
+4. `server/storage.ts` → `buildPackDetails` — ajoute
+   `productImageAdjustments: product?.imageAdjustments ?? {}` à l'objet
+   `PackItemDetail` poussé (une seule ligne, même fonction, même
+   emplacement que `productImageUrl`).
+5. `cart-page.tsx` :
+   - Ligne SHOP (~583) : résout l'image/le recadrage via le nouveau hook
+     batched, clé par `product.productId`, avec repli sur la copie figée
+     du panier si la donnée vivante n'est pas (encore) disponible —
+     jamais d'URL cassée, jamais de flash vide.
+   - Détail des produits inclus dans un Pack (~717-723) : construit une
+     map `productId → { imageUrl, imageAdjustments }` à partir de
+     `liveDetail.items` (déjà récupéré pour l'image du Pack) et
+     l'utilise en priorité, avec repli sur `group.productImageUrl` (la
+     copie figée, recadrage 0 % implicite) si `liveDetail` est absent
+     (Pack non encore chargé, gelé, ou requête ayant échoué) — jamais de
+     dépendance à une nouvelle requête réseau supplémentaire par Pack.
+   - Le recadrage lui-même réutilise explicitement
+     `computeCoverZoomScale`/`getAdjustmentFor` de
+     `client/src/lib/image-adjustment.ts` (déjà utilisé pour Coffee
+     Owner et Fournisseur) — aucune nouvelle formule.
+
+### 4.5 Ce qui ne change pas (conforme à la section 5 de la tâche)
+
+Aucune des données suivantes n'est touchée : `listingId`/`flavorId`/
+`sizeId`/clés de regroupement du panier, quantités, prix unitaires/
+totaux/sous-totaux, séparation SHOP/PRINT, regroupement par fournisseur,
+distribution des produits inclus dans un Pack, adresse de livraison,
+codes promo, actions Modifier/Supprimer/Vider/Commander, règles de
+propriété/autorisation/stock. Seul le **rendu de l'image** (URL +
+recadrage) change ; aucune ligne de panier n'est recréée ni réécrite
+pour ce correctif.
+
+### 4.6 Repli legacy / image manquante (section 6 de la tâche)
+
+- Produit sans `imageAdjustments` enregistré (legacy ou simplement non
+  réglé par l'Admin) → `getAdjustmentFor` retourne `0`, rendu identique
+  à aujourd'hui.
+- Donnée vivante indisponible (requête échouée, produit supprimé, Pack
+  gelé) → repli sur la copie figée du panier, jamais d'URL cassée ni de
+  ligne vide.
+- Un seul appel réseau par lot pour tous les produits SHOP du panier
+  (pas un par ligne) ; les Packs réutilisent une requête déjà existante
+  (`usePackAvailability`), aucun appel réseau supplémentaire ajouté pour
+  eux.
+
+### 4.7 Order Summary (`order-confirmation-modal.tsx`) — également corrigé
+
+L'audit de la section 1 de la tâche citait explicitement « order
+summary » dans son périmètre. Vérification : `order-confirmation-modal.tsx`
+(ouvert depuis `/cart` pour confirmer la commande SHOP) utilise les
+**mêmes** `groupCartProducts`/`groupPackIncludedProducts` et affichait,
+lui aussi, les 3 mêmes champs figés (`product.productImageUrl`,
+`pack.packImageUrl`, `group.productImageUrl`) sans aucune donnée vivante
+— un gap identique, dans un fichier différent. Corrigé avec exactement
+la même technique : le composant appelle lui-même `useProductImageData`
+et `usePackAvailability` (mêmes clés de requête que `cart-page.tsx`) —
+react-query dédoublonnant par clé de cache, cela ne coûte **aucune**
+requête réseau supplémentaire quand la modale est ouverte depuis
+`/cart` (le cache est déjà chaud), et reste correct même si la modale
+était ouverte autrement. `PrintOrderConfirmationModal` (commandes
+PRINT) a été vérifié séparément : `PrintCartItem.imageUrl` est l'image
+du catalogue d'impression du Fournisseur lui-même (`catalogItemId`),
+jamais une image produit gérée par l'Admin — confirmé hors périmètre,
+non modifié (conforme à la consigne de ne pas supposer un périmètre).
+
+### 4.8 Fichiers modifiés (récapitulatif)
+
+- `shared/schema.ts` — `PackItemDetail.productImageAdjustments` (type
+  pur, additif).
+- `server/storage.ts` — `buildPackDetails` (1 ligne additive) ;
+  nouvelle méthode `getProductImageData(ids)` (requête batched unique).
+- `server/routes.ts` — nouvelle route
+  `GET /api/marketplace/products/image-data?ids=...`, placée avant le
+  wildcard `/api/marketplace/:productId`.
+- `client/src/hooks/use-product-image-data.ts` (nouveau) — hook
+  react-query, calque exact de `usePackAvailability`.
+- `client/src/pages/cafe/cart-page.tsx` — image SHOP (ligne produit) et
+  image de chaque produit inclus dans un Pack résolues en direct, avec
+  repli sur la copie figée du panier.
+- `client/src/components/cafe/order-confirmation-modal.tsx` — même
+  correctif, répliqué pour les 3 mêmes rendus (produit SHOP, image de
+  Pack, produits inclus dans un Pack).
+
+### 4.9 Tests réellement exécutés
+
+- `npx tsc --noEmit` — **succès** (code de sortie 0), après l'ensemble
+  des modifications ci-dessus.
+- `npm run build` — **succès** (code de sortie 0).
+- Vérification directe via `storage.*` (script `npx tsx` temporaire
+  `.tmp-verify-cart-image-sync.ts`, supprimé après exécution), sur un
+  Pack et un produit **réels déjà en base** (pack 13, produit 26),
+  réglage temporaire de `imageAdjustments` à `{ [imageUrl]: 42 }` sur ce
+  produit réel :
+  - `storage.getPackDetail(13)` → l'item du Pack retourné expose bien
+    `productImageAdjustments: { [imageUrl]: 42 }` (confirme le
+    correctif `buildPackDetails`).
+  - `storage.getProductImageData([26])` → retourne bien
+    `{ id: 26, imageUrl, imageUrls, imageAdjustments: { [imageUrl]: 42 } }`
+    (confirme le nouveau point d'accès serveur au niveau fonction).
+  - **Restauration immédiate** de la valeur d'origine (`{}`) sur ce
+    produit réel avant suppression du script — aucune donnée réelle
+    laissée modifiée (vérifié : `restored: {}`).
+- Redémarrage du serveur de développement (changements `server/*.ts` —
+  confirmation déjà donnée plus tôt dans cette session pour ce même
+  scénario à faible risque, narré ici par transparence) puis
+  vérification **HTTP réelle** (`curl`) :
+  - `GET /api/marketplace/products/image-data?ids=26` → retourne le
+    JSON attendu (200).
+  - `GET /api/marketplace/products/image-data` (sans `ids`) → `[]`,
+    pas d'erreur.
+  - `GET /api/marketplace/26` (route générique) → toujours 200,
+    confirmant que la nouvelle route ne masque pas le wildcard existant
+    et n'est pas masquée par lui.
+- **Non vérifié en conditions réelles** : rendu visuel navigateur réel
+  de `/cart` avec un vrai compte Coffee Owner (même limite de compte de
+  test que les sections 2.5/3.7 précédentes) — la vérification ci-dessus
+  couvre la propagation exacte de la donnée (serveur → type → hook →
+  composant) et le fonctionnement réel du nouvel endpoint HTTP, mais pas
+  le rendu pixel final dans un panier réel.
+
+### 4.10 Limites restantes
+
+- Rendu visuel navigateur réel non vérifié (voir 4.9) — même contrainte
+  de compte de test que les sections précédentes.
+- Aucune ligne de panier (`CartItem`/`PackCartItem`) n'a été modifiée en
+  forme ni en contenu — uniquement le rendu de l'image lors de
+  l'affichage, conformément à la section 5 de la tâche.
+
+---
+
+## 5. Tâche de suivi — Synchronisation temps réel Admin→Fournisseur, galeries interactives, refonte de la modale de détail produit Fournisseur
+
+### 5.1 Audit — pourquoi le Fournisseur ne voit pas les images Admin à jour
+
+Le mécanisme de synchronisation existant (WebSocket global, `server/ws.ts`
+`broadcast()` → tous les clients connectés, puis
+`client/src/hooks/use-realtime.ts`) diffuse déjà un événement
+`product_updated` à chaque `POST`/`PATCH /api/admin/products` — y compris
+les routes qui enregistrent `imageUrl`/`imageUrls`/`imageAdjustments`
+(confirmé par lecture directe, `server/routes.ts` lignes ~5311/5340).
+**Cause racine trouvée** : côté client, le handler de `product_updated`
+(`invalidateProductQueries`, `use-realtime.ts`) invalide déjà
+`/api/marketplace`, `/api/products`, les taxonomies, etc., mais
+**n'invalidait jamais** `/api/supplier/admin-products` ni
+`/api/supplier/listings` — les deux requêtes qui alimentent
+respectivement l'onglet Admin Products et l'onglet My Products (dont le
+Variant Builder / Live Preview, via `getSupplierListings`). Une fonction
+voisine du même fichier, `invalidateSupplierMappingQueries`, invalide
+déjà exactement ces deux clés — mais seulement pour les événements de
+mapping catégorie/sous-catégorie (`supplier_mapping_changed`...), jamais
+pour `product_updated`. Un Fournisseur ne voyait donc la nouvelle image
+qu'au hasard d'un autre événement non lié, ou jamais sans navigation
+complète — ce n'est pas un problème de cache navigateur ni d'absence
+d'infrastructure temps réel : l'infrastructure existe déjà et diffuse
+déjà l'événement, seule la liste d'invalidation était incomplète.
+
+**Correctif retenu (le plus petit changement sûr)** : ajouter les deux
+mêmes `invalidateQueries` déjà utilisés par
+`invalidateSupplierMappingQueries` à `invalidateProductQueries` — aucune
+nouvelle infrastructure, aucun nouvel événement WebSocket, juste la
+correction d'une liste d'invalidation incomplète sur un événement déjà
+diffusé. Comme `broadcast()` touche TOUTES les sessions connectées (pas
+seulement l'onglet courant), cela donne une synchronisation
+cross-session réellement temps réel, pas seulement un rafraîchissement
+local.
+
+### 5.2 Audit — galeries interactives existantes à réutiliser
+
+`client/src/components/product-detail-content.tsx` (modale de détail
+Coffee Owner, partagée par `product-quick-view-modal.tsx` et
+`product-detail-page.tsx`) a déjà exactement le motif demandé : état
+`activeImageIdx`, `allImages` dérivé de `imageUrl`+`imageUrls`,
+`safeActiveIdx` qui clampe à la longueur courante (jamais d'index hors
+limites), vignettes cliquables avec anneau `border-2` sur la vignette
+sélectionnée. Aucune des 2 autres galeries (Admin Live Preview, Fournisseur
+Live Preview) n'avait cette interactivité : l'image principale et les
+images additionnelles étaient affichées côte à côte **simultanément**,
+sans sélection — exactement le gap décrit par la tâche.
+
+**Décision** : extraire ce motif en un hook partagé
+`useImageGallery(mainUrl, additionalUrls)` dans
+`client/src/lib/image-adjustment.ts` (même fichier que tout le reste du
+modèle de recadrage — pas un second système), puis le brancher aux 2
+endroits manquants. Sélection par **index** (pas par identité d'URL) :
+modifier le texte de l'image actuellement sélectionnée ne doit jamais
+faire revenir l'aperçu sur l'image principale à chaque frappe clavier —
+un suivi par identité d'URL provoquerait exactement ça. L'index est
+clampé à la taille courante de la liste (`Math.min(idx, length-1)`),
+donc une sélection qui dépasse la fin (son image a été supprimée)
+retombe automatiquement sur une image valide — satisfait l'exigence
+« select a valid remaining image automatically » à l'identique du motif
+déjà accepté dans `product-detail-content.tsx`. Limite assumée et
+documentée dans le hook lui-même : supprimer une image DIFFÉRENTE de
+celle sélectionnée (au milieu de la liste) peut décaler quelle photo un
+index donné affiche — comportement déjà présent et accepté dans la
+galerie Coffee Owner existante, pas une régression introduite ici.
+
+### 5.3 Audit — modale de détail Fournisseur (Admin Products)
+
+`ProductDetailModal` (`manage-products.tsx`) actuelle : bouton de
+fermeture en position absolue sur tout le `DialogContent` (pas sur
+l'image), `DialogTitle` (nom) affiché AVANT l'image, image à hauteur
+fixe `h-44` avec marge interne, description puis badges, puis en bas
+`Close` + `Already in My Products`/`Add to My Products` côte à côte.
+Motif de référence déjà établi ailleurs dans l'app pour « image pleine
+largeur en haut + bouton fermer sur l'image » :
+`client/src/components/marketing/marketing-service-detail-modal.tsx`
+(`DialogContent` en `p-0`, image `w-full h-56 sm:h-72 rounded-t-2xl`,
+bouton fermer `absolute top-3 right-3` en cercle `bg-black/40
+backdrop-blur-sm` — lisible sur n'importe quelle image/thème sans
+dépendre d'un prop `isDark` manuel). Repris à l'identique pour rester
+cohérent avec l'app plutôt que d'inventer un nouveau style.
+
+### 5.4 Implémentation
+
+- `client/src/lib/image-adjustment.ts` — nouveau hook partagé
+  `useImageGallery` (voir 5.2).
+- `client/src/hooks/use-realtime.ts` — `invalidateProductQueries` invalide
+  désormais aussi `/api/supplier/admin-products` et
+  `/api/supplier/listings` (voir 5.1).
+- `client/src/pages/admin/products-page.tsx` — `ProductFormModal`'s Live
+  Preview utilise `useImageGallery(form.imageUrl, form.additionalImageUrls)` ;
+  l'aperçu principal affiche l'image sélectionnée (`activeUrl`), toutes les
+  images (principale + additionnelles) deviennent des vignettes cliquables
+  avec anneau de sélection (`border-primary` vs `border-border`). Les
+  curseurs de recadrage restent exactement où ils étaient (sous chaque
+  champ URL), totalement indépendants de la sélection de galerie —
+  cliquer une vignette ne modifie ni l'ordre ni les valeurs enregistrées.
+- `client/src/pages/supplier/manage-products.tsx` :
+  - `ListingLivePreview` (partagée par `AddListingModal` et
+    `EditListingModal` → « Edit Pricing & Stock — Variant Builder ») reçoit
+    le même traitement : `useImageGallery(product.imageUrl, imageUrls)`,
+    vignettes cliquables, aperçu principal = image sélectionnée.
+  - `ProductDetailModal` redessinée : image en pleine largeur en haut
+    (`w-full h-56 sm:h-64`, recadrage Admin déjà appliqué via
+    `useCoverZoomStyle`, inchangé), bouton fermer déplacé en
+    `absolute top-3 right-3` SUR l'image (cercle `bg-black/40
+    backdrop-blur-sm`, même gestionnaire `onClose` qu'avant — aucun second
+    mécanisme de fermeture), nom du produit déplacé juste sous l'image,
+    description juste sous le nom, badges de taxonomie inchangés. Le
+    bouton « Close » du bas supprimé ; « Already in My Products »/« Add to
+    My Products » reste seul en bas, comportement et icône inchangés.
+
+### 5.5 Ce qui ne change pas
+
+Aucun changement aux routes API, aux permissions (`requireAdmin`/
+`requireApprovedSupplier` déjà en place, inchangées), à la logique de
+prix/stock/variants/packs, à la détermination de « déjà dans My
+Products », ni aux workflows d'ajout/édition. Seule la présentation de
+la galerie d'images et la portée de l'invalidation de cache changent.
+
+### 5.6 Tests réellement exécutés
+
+- `npx tsc --noEmit` — **succès** (code de sortie 0).
+- `npm run build` — **succès** (code de sortie 0).
+- **Vérification navigateur réelle (Playwright), compte Fournisseur
+  existant** : la base contenait déjà un compte Fournisseur **approuvé**,
+  préexistant, non créé ni modifié par cette tâche
+  (`supplier@coffee.com`, id 9, mot de passe déjà `password` en base —
+  jamais altéré) — utilisé tel quel pour une vérification en conditions
+  réelles, contrairement aux tâches précédentes où aucun compte de test
+  n'était disponible :
+  - **Synchronisation temps réel (section 5.1)** : session Playwright
+    connectée sur `/supplier/products`, onglet Admin Products actif ;
+    écoute réseau posée puis déclenchement d'une action Fournisseur qui
+    diffuse déjà `product_updated` côté serveur
+    (`PATCH /api/supplier/listings/127` avec
+    `isIndividuallyVisible: false` puis `true` — même session, aucune
+    donnée réelle laissée modifiée, restauré et **revérifié en base**
+    après coup : `is_individually_visible: true`). Résultat observé : une
+    requête `GET /api/marketplace/products/.../admin-products`
+    (`/api/supplier/admin-products`) s'est bien redéclenchée
+    automatiquement après le PATCH, sans rechargement de page — confirme
+    que le correctif de `invalidateProductQueries` fonctionne réellement
+    de bout en bout via le WebSocket existant.
+  - **Galerie interactive — modale de détail Fournisseur
+    (`ProductDetailModal`)** : ouverture du produit « Illy Classico
+    Arabica Beans 500g » (3 images en base) → 3 vignettes affichées,
+    clic sur la 2ème vignette → l'URL de l'image principale change bien
+    (vérifié par comparaison d'attribut `src` avant/après) et l'anneau de
+    sélection se déplace sur la bonne vignette (capture d'écran
+    contrôlée visuellement). Bouton de fermeture confirmé positionné en
+    haut à droite de l'image (boîte englobante mesurée :
+    `x:815, y:115-147, 36×36px`, cercle sombre semi-transparent lisible
+    sur l'image) ; aucun bouton « Close » redondant en bas, seul « Add to
+    My Products » y reste visible.
+  - **Galerie interactive — Variant Builder (« Add to My Products »,
+    même composant `ListingLivePreview` que « Edit Pricing & Stock »)** :
+    même produit, 3 vignettes affichées, clic sur la 2ème → aperçu
+    principal change bien d'image (capture d'écran avant/après
+    comparée). Jamais cliqué sur « Add » — aucune ligne de listing créée,
+    aucune donnée réelle touchée.
+- **Non vérifié en conditions réelles** : la galerie interactive côté
+  **Admin** (`ProductFormModal`, Edit Product) n'a pas pu être testée en
+  navigateur réel — aucun compte Admin de test disponible dans cette
+  base (seul compte SUPER_ADMIN existant = celui de l'utilisateur
+  réel, mot de passe inconnu, jamais tenté). Le code de cette galerie
+  réutilise cependant exactement le même hook partagé
+  (`useImageGallery`) et le même motif de rendu que les 2 galeries
+  Fournisseur confirmées fonctionnelles ci-dessus — revu attentivement
+  par lecture de code, mais non observé pixel par pixel dans un
+  navigateur réel.
+
+### 5.7 Limites restantes
+
+- Galerie Admin (`ProductFormModal`) non vérifiée en navigateur réel
+  (voir 5.6) — même limite de compte de test que les tâches précédentes,
+  cette fois partielle puisque le côté Fournisseur, lui, a pu être
+  entièrement vérifié en conditions réelles.
+- La synchronisation temps réel a été vérifiée avec une action
+  **Fournisseur** qui diffuse `product_updated` (le même événement
+  qu'une sauvegarde Admin), pas avec une sauvegarde Admin elle-même
+  (même contrainte de compte de test) — la vérification couvre donc le
+  mécanisme exact qui a été corrigé (la liste d'invalidation côté
+  client sur l'événement `product_updated`), mais pas la diffusion
+  initiale depuis une vraie session Admin.

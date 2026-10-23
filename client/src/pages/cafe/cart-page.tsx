@@ -10,6 +10,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { usePromotionEvaluation } from "@/hooks/use-promotion-evaluation";
 import { useValidateDiscountCode } from "@/hooks/use-discount-codes";
 import { usePackAvailability, isPackFrozen, PACK_AVAILABILITY_KEY } from "@/hooks/use-pack-availability";
+import { useProductImageData } from "@/hooks/use-product-image-data";
+import { computeCoverZoomScale, getAdjustmentFor } from "@/lib/image-adjustment";
 import { useServiceStates } from "@/hooks/use-service-states";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -130,6 +132,30 @@ export default function CartPage() {
   const liveDetailOf = (packId: number) => {
     const result = packAvailability[packId];
     return result && result.status !== "unknown" ? result.detail : null;
+  };
+
+  // Live image + crop re-resolution for SHOP cart lines (task: "Synchronize
+  // Updated Product and Pack Images in Coffee Owner Cart") — CartItem.
+  // productImageUrl is a one-time snapshot that never updates after an Admin
+  // edits the product's image/crop, so this batched lookup supplies the
+  // current value; falling back to the snapshot below if it isn't loaded yet.
+  const { data: productImageData = {} } = useProductImageData(items.map((i) => i.productId));
+  const resolveProductImage = (productId: number, fallbackUrl: string | null) => {
+    const live = productImageData[productId];
+    const url = live?.imageUrl ?? fallbackUrl;
+    const scale = computeCoverZoomScale(getAdjustmentFor(live?.imageAdjustments, url));
+    return { url, scale };
+  };
+
+  // Same idea for a Pack's included-products breakdown: prefer the already-
+  // fetched live Pack detail's items (usePackAvailability above) over the
+  // cart's own frozen includedProducts snapshot, per product id.
+  const livePackProductImage = (packId: number, productId: number, fallbackUrl: string | null) => {
+    const liveItems = liveDetailOf(packId)?.items;
+    const liveItem = liveItems?.find((i) => i.productId === productId);
+    const url = liveItem?.productImageUrl ?? fallbackUrl;
+    const scale = computeCoverZoomScale(getAdjustmentFor(liveItem?.productImageAdjustments, url));
+    return { url, scale };
   };
 
   const savedAccountAddress = userToAccountAddress(user as any);
@@ -576,12 +602,16 @@ export default function CartPage() {
                         <span className={`text-sm font-medium shrink-0 ${textPrimary}`}>{fmt(supplierTotal)}</span>
                       </div>
                       <div className={`divide-y ${divideClr}`}>
-                         {groupCartProducts(group.items).map(({ product, variants }) => (
+                         {groupCartProducts(group.items).map(({ product, variants }) => {
+                           const { url: liveImageUrl, scale: liveImageScale } = resolveProductImage(product.productId, product.productImageUrl);
+                           return (
                            <div key={`product-${product.productId}`} className="p-3 sm:p-4" data-testid={`cart-product-${product.productId}`}>
                              <div className="flex gap-3">
                                <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden shrink-0 ${imgBg}`}>
-                                 {product.productImageUrl ? (
-                                   <img src={product.productImageUrl} className="w-full h-full object-cover" alt="" />
+                                 {liveImageUrl ? (
+                                   <div style={{ width: "100%", height: "100%", transform: `scale(${liveImageScale})`, transformOrigin: "center" }}>
+                                     <img src={liveImageUrl} className="w-full h-full object-cover" alt="" />
+                                   </div>
                                  ) : (
                                    <div className={`w-full h-full flex items-center justify-center text-xs ${textMuted}`}>—</div>
                                  )}
@@ -637,7 +667,8 @@ export default function CartPage() {
                                  })}
                                </div>
                            </div>
-                         ))}
+                           );
+                         })}
                       </div>
                     </div>
                   );
@@ -714,12 +745,18 @@ export default function CartPage() {
                       <div className="min-w-0">
                         {pack.includedProducts.length > 0 && (
                            <div className={`mt-3 space-y-2.5 border-t pt-2 ${dk ? "border-amber-500/20" : "border-amber-100"}`}>
-                              {groupPackIncludedProducts(pack.includedProducts).map((group) => (
+                              {groupPackIncludedProducts(pack.includedProducts).map((group) => {
+                               const { url: liveGroupImageUrl, scale: liveGroupImageScale } = livePackProductImage(pack.packId, group.productId, group.productImageUrl);
+                               return (
                                <div key={group.productId}>
                                  <div className="flex items-start gap-2">
                                    <div className={`w-9 h-9 rounded-lg overflow-hidden shrink-0 ${imgBg}`}>
-                                     {group.productImageUrl
-                                       ? <img src={group.productImageUrl} alt="" className="w-full h-full object-cover" />
+                                     {liveGroupImageUrl
+                                       ? (
+                                         <div style={{ width: "100%", height: "100%", transform: `scale(${liveGroupImageScale})`, transformOrigin: "center" }}>
+                                           <img src={liveGroupImageUrl} alt="" className="w-full h-full object-cover" />
+                                         </div>
+                                       )
                                        : <Package className={`w-4 h-4 m-2 ${textMuted}`} />}
                                    </div>
                                    <div className="min-w-0 flex-1">
@@ -739,7 +776,8 @@ export default function CartPage() {
                                    ))}
                                  </div>
                                </div>
-                             ))}
+                               );
+                             })}
                            </div>
                         )}
                         {!notEditable && (

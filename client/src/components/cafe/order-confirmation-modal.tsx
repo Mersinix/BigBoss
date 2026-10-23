@@ -10,6 +10,9 @@ import {
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useThemeStore } from "@/store/theme-store";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
+import { usePackAvailability } from "@/hooks/use-pack-availability";
+import { useProductImageData } from "@/hooks/use-product-image-data";
+import { computeCoverZoomScale, getAdjustmentFor } from "@/lib/image-adjustment";
 import type { CartItem, PackCartItem } from "@/hooks/use-cart";
 import type { CartPromotionEvaluation, GeoLocation, OrderPriority } from "@shared/schema";
 import { groupPackIncludedProducts } from "@/lib/pack-grouping";
@@ -114,6 +117,30 @@ export default function OrderConfirmationModal({
   const [scheduledTime, setScheduledTime] = useState("09:00");
   const [deliveryMethod, setDeliveryMethod] = useState<"SELF_PICKUP" | "DELIVERY_SERVICE">("DELIVERY_SERVICE");
   const [paymentMethod, setPaymentMethod] = useState<"CASH_ON_DELIVERY" | "CREDIT_CARD" | "MOBILE_PAYMENT" | "BANK_TRANSFER">("CASH_ON_DELIVERY");
+
+  // Live image + crop re-resolution (task: "Synchronize Updated Product and
+  // Pack Images in Coffee Owner Cart") — same hooks/query keys the Cart page
+  // itself already warms, so this costs no extra request when opened from
+  // there; CartItem/PackCartItem snapshots are never overwritten, only the
+  // rendered image is re-resolved against the live data.
+  const { data: productImageData = {} } = useProductImageData(localItems.map((i) => i.productId));
+  const { data: packAvailability = {} } = usePackAvailability(localPackItems.map((p) => p.packId));
+  const liveDetailOf = (packId: number) => {
+    const result = packAvailability[packId];
+    return result && result.status !== "unknown" ? result.detail : null;
+  };
+  const resolveProductImage = (productId: number, fallbackUrl: string | null) => {
+    const live = productImageData[productId];
+    const url = live?.imageUrl ?? fallbackUrl;
+    const scale = computeCoverZoomScale(getAdjustmentFor(live?.imageAdjustments, url));
+    return { url, scale };
+  };
+  const livePackProductImage = (packId: number, productId: number, fallbackUrl: string | null) => {
+    const liveItem = liveDetailOf(packId)?.items?.find((i) => i.productId === productId);
+    const url = liveItem?.productImageUrl ?? fallbackUrl;
+    const scale = computeCoverZoomScale(getAdjustmentFor(liveItem?.productImageAdjustments, url));
+    return { url, scale };
+  };
 
   // Seed an independent order draft from the Cart when this modal opens.
   // This must be a true deep clone, not a shallow spread: PackCartItem has a
@@ -301,12 +328,18 @@ export default function OrderConfirmationModal({
                     every selected variant listed underneath (same grouping the Cart
                     page uses, via the shared groupCartProducts helper). */}
                 <div className={`divide-y ${t.rowDivide}`}>
-                  {groupCartProducts(group.items).map(({ product, variants }) => (
+                  {groupCartProducts(group.items).map(({ product, variants }) => {
+                    const { url: liveImageUrl, scale: liveImageScale } = resolveProductImage(product.productId, product.productImageUrl);
+                    return (
                     <div key={`product-${product.productId}`} className="px-4 py-3">
                       <div className="flex gap-3">
                         <div className="w-11 h-11 rounded-xl overflow-hidden shrink-0 bg-gray-700/60">
-                          {product.productImageUrl
-                            ? <img src={product.productImageUrl} alt="" className="w-full h-full object-cover" />
+                          {liveImageUrl
+                            ? (
+                              <div style={{ width: "100%", height: "100%", transform: `scale(${liveImageScale})`, transformOrigin: "center" }}>
+                                <img src={liveImageUrl} alt="" className="w-full h-full object-cover" />
+                              </div>
+                            )
                             : <Package className="w-4 h-4 m-3 text-gray-500" />}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -365,13 +398,19 @@ export default function OrderConfirmationModal({
                           })}
                         </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}
 
             {/* ── Packs ── */}
-            {localPackItems.map(pack => (
+            {localPackItems.map(pack => {
+              // Pack's own uploaded image has no admin crop concept (confirmed:
+              // no imageAdjustments column on packs) — only its URL needs
+              // re-resolving against the live Pack detail, same as the Cart page.
+              const livePackImageUrl = liveDetailOf(pack.packId)?.imageUrl ?? pack.packImageUrl;
+              return (
               <div key={pack.packId} className={`border rounded-2xl overflow-hidden ${t.packCard}`}>
                 {/* Pack header */}
                 <div className={`px-4 py-3 flex items-center gap-2.5 border-b ${t.packHeader}`}>
@@ -383,8 +422,8 @@ export default function OrderConfirmationModal({
 
                   <div className="flex items-start gap-3 px-4 py-3">
                     <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-amber-500/10">
-                      {pack.packImageUrl
-                        ? <img src={pack.packImageUrl} alt="" className="w-full h-full object-cover" />
+                      {livePackImageUrl
+                        ? <img src={livePackImageUrl} alt="" className="w-full h-full object-cover" />
                         : <Layers className="w-5 h-5 m-3 text-amber-500" />}
                     </div>
                   <div className="flex-1 min-w-0">
@@ -409,12 +448,18 @@ export default function OrderConfirmationModal({
                 <div className="px-4 pb-3 min-w-0">
                   {pack.includedProducts.length > 0 && (
                       <div className={`space-y-2 border-t pt-2 ${t.dk ? "border-amber-800/40" : "border-amber-200"}`}>
-                         {groupPackIncludedProducts(pack.includedProducts).map((group) => (
+                         {groupPackIncludedProducts(pack.includedProducts).map((group) => {
+                          const { url: liveGroupImageUrl, scale: liveGroupImageScale } = livePackProductImage(pack.packId, group.productId, group.productImageUrl);
+                          return (
                           <div key={group.productId}>
                             <div className="flex items-start gap-2">
                               <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 bg-gray-700/60">
-                                {group.productImageUrl
-                                  ? <img src={group.productImageUrl} alt="" className="w-full h-full object-cover" />
+                                {liveGroupImageUrl
+                                  ? (
+                                    <div style={{ width: "100%", height: "100%", transform: `scale(${liveGroupImageScale})`, transformOrigin: "center" }}>
+                                      <img src={liveGroupImageUrl} alt="" className="w-full h-full object-cover" />
+                                    </div>
+                                  )
                                   : <Package className="w-3 h-3 m-2 text-gray-500" />}
                               </div>
                               <div className="min-w-0 flex-1">
@@ -434,7 +479,8 @@ export default function OrderConfirmationModal({
                               ))}
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                   )}
                   <p className={`text-xs mt-2 ${t.textSubtle}`}>{fmt(pack.unitPrice)} / pack</p>
@@ -451,7 +497,8 @@ export default function OrderConfirmationModal({
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
 
             {/* ── Empty cart warning ── */}
             {isEmpty && (

@@ -25,7 +25,7 @@ import type { ProductWithTaxonomy, FlavorWithCount, SizeWithCount, BrandWithCoun
 import { useSupplierCategoryStore } from "@/store/supplier-category-store";
 import { PackTab } from "./manage-packs";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
-import { useCoverZoomStyle, computeCoverZoomScale, getAdjustmentFor } from "@/lib/image-adjustment";
+import { useCoverZoomStyle, computeCoverZoomScale, getAdjustmentFor, useImageGallery } from "@/lib/image-adjustment";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -117,39 +117,78 @@ function ProductDetailModal({
   onClose: () => void;
   onAdd: () => void;
 }) {
-  const { wrapperStyle: detailCropStyle } = useCoverZoomStyle(getAdjustmentFor(product.imageAdjustments, product.imageUrl));
+  // Click-to-select gallery, same shared hook as the Admin/Supplier Live
+  // Previews (task: "Redesign the Supplier Admin Product detail modal").
+  const gallery = useImageGallery(product.imageUrl, (product as any).imageUrls);
+  const { wrapperStyle: detailCropStyle } = useCoverZoomStyle(getAdjustmentFor(product.imageAdjustments, gallery.activeUrl));
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent hideClose className="sm:max-w-md">
-        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-product-detail">
-          <X className="w-4 h-4" />
-        </button>
-        <DialogHeader><DialogTitle>{product.name}</DialogTitle></DialogHeader>
-        <div className="space-y-3 mt-2">
-          {product.imageUrl ? (
-            <div className="w-full h-44 rounded-lg border overflow-hidden">
+      <DialogContent hideClose className="sm:max-w-md p-0 rounded-2xl overflow-hidden">
+        <div className="flex flex-col">
+          {/* Image header — full width, first section of the modal; close
+              button lives on the image's top-right corner (task: "Redesign
+              the Supplier Admin Product detail modal"), reusing the same
+              onClose handler/modal state as before — no second close path. */}
+          <div className="w-full h-56 sm:h-64 relative shrink-0 bg-secondary overflow-hidden">
+            {gallery.activeUrl ? (
               <div style={detailCropStyle}>
-                <img src={product.imageUrl} alt="" className="w-full h-full object-cover" />
+                <img src={gallery.activeUrl} alt="" className="w-full h-full object-cover" />
               </div>
-            </div>
-          ) : (
-            <div className="w-full h-44 bg-secondary rounded-lg flex items-center justify-center">
-              <Package className="w-12 h-12 text-muted-foreground opacity-40" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Package className="w-12 h-12 text-muted-foreground opacity-40" />
+              </div>
+            )}
+            <button
+              type="button"
+              className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:bg-black/55 transition-colors"
+              onClick={onClose}
+              aria-label="Close"
+              data-testid="button-close-product-detail"
+            >
+              <X className="w-4 h-4 text-white" />
+            </button>
+          </div>
+          {gallery.allImages.length > 1 && (
+            <div className="flex gap-1.5 p-2 border-b bg-secondary/20 flex-wrap">
+              {gallery.allImages.map((url, idx) => (
+                <button
+                  type="button"
+                  key={idx}
+                  onClick={() => gallery.setActiveIdx(idx)}
+                  className={`w-12 h-12 shrink-0 rounded-lg overflow-hidden border-2 transition-colors ${
+                    idx === gallery.activeIdx ? "border-primary" : "border-border hover:border-primary/50"
+                  }`}
+                  data-testid={`button-detail-gallery-thumb-${idx}`}
+                >
+                  <div style={{ width: "100%", height: "100%", transform: `scale(${computeCoverZoomScale(getAdjustmentFor(product.imageAdjustments, url))})`, transformOrigin: "center" }}>
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                  </div>
+                </button>
+              ))}
             </div>
           )}
-          {product.description && <p className="text-sm text-muted-foreground">{product.description}</p>}
-          <TaxBadges product={product} />
-          <div className="flex gap-2 justify-end pt-2">
-            <Button variant="outline" onClick={onClose}>Close</Button>
-            {product.myListing ? (
-              <span className="inline-flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400 font-medium px-2">
-                <CheckCircle2 className="w-4 h-4" />Already in My Products
-              </span>
-            ) : (
-              <Button onClick={onAdd} data-testid="button-add-from-detail">
-                <Plus className="w-4 h-4 mr-1.5" />Add to My Products
-              </Button>
-            )}
+          {/* Name below the image, description below the name (task's explicit order) */}
+          <div className="p-4 space-y-3">
+            <div>
+              <DialogTitle className="font-bold text-lg leading-tight">{product.name}</DialogTitle>
+              {product.description && <p className="text-sm text-muted-foreground mt-1">{product.description}</p>}
+            </div>
+            <TaxBadges product={product} />
+            {/* Single bottom element — "Already in My Products"/"Add to My
+                Products" only; the redundant bottom Close button is gone,
+                the only close control is now on the image above. */}
+            <div className="flex justify-end pt-1">
+              {product.myListing ? (
+                <span className="inline-flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400 font-medium px-2">
+                  <CheckCircle2 className="w-4 h-4" />Already in My Products
+                </span>
+              ) : (
+                <Button onClick={onAdd} data-testid="button-add-from-detail">
+                  <Plus className="w-4 h-4 mr-1.5" />Add to My Products
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </DialogContent>
@@ -452,25 +491,36 @@ function ListingLivePreview({
   // Cropping Across Supplier Views") — never a second interpretation of
   // the saved percentage.
   const imageAdjustments = (product as any).imageAdjustments as Record<string, number> | undefined;
-  const { wrapperStyle: mainCropStyle } = useCoverZoomStyle(getAdjustmentFor(imageAdjustments, product.imageUrl));
+  // Click-to-select gallery (task: "Make the Supplier variant-builder image
+  // gallery interactive") — same shared hook as Admin's Edit Product preview.
+  const gallery = useImageGallery(product.imageUrl, additionalImages);
+  const { wrapperStyle: mainCropStyle } = useCoverZoomStyle(getAdjustmentFor(imageAdjustments, gallery.activeUrl));
 
   return (
     <div className="lg:sticky lg:top-0">
       <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Live Preview</Label>
       <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
         <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
-          {product.imageUrl ? (
+          {gallery.activeUrl ? (
             <div style={mainCropStyle}>
-              <img src={product.imageUrl} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              <img src={gallery.activeUrl} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
             </div>
           ) : (
             <Package className="w-16 h-16 text-muted-foreground opacity-40" />
           )}
         </div>
-        {additionalImages.length > 0 && (
+        {gallery.allImages.length > 1 && (
           <div className="flex gap-1.5 p-2 border-t bg-secondary/20 flex-wrap">
-            {additionalImages.map((url, idx) => (
-              <div key={idx} className="w-16 h-16 shrink-0 rounded-lg overflow-hidden border bg-secondary">
+            {gallery.allImages.map((url, idx) => (
+              <button
+                type="button"
+                key={idx}
+                onClick={() => gallery.setActiveIdx(idx)}
+                className={`w-16 h-16 shrink-0 rounded-lg overflow-hidden border-2 transition-colors bg-secondary ${
+                  idx === gallery.activeIdx ? "border-primary" : "border-border hover:border-primary/50"
+                }`}
+                data-testid={`button-listing-gallery-thumb-${idx}`}
+              >
                 <div style={{ width: "100%", height: "100%", transform: `scale(${computeCoverZoomScale(getAdjustmentFor(imageAdjustments, url))})`, transformOrigin: "center" }}>
                   <img
                     src={url}
@@ -479,7 +529,7 @@ function ListingLivePreview({
                     onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
                   />
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         )}

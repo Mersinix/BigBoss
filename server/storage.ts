@@ -184,6 +184,10 @@ export interface IStorage {
   // Marketplace (cafe browsing)
   getMarketplaceProducts(filters?: { categoryId?: number; subCategoryId?: number; search?: string; supplierId?: number }): Promise<MarketplaceProduct[]>;
   getMarketplaceProduct(productId: number, supplierId?: number): Promise<MarketplaceProduct | undefined>;
+  // Lightweight, batched image+crop lookup (task: "Synchronize Updated
+  // Product and Pack Images in Coffee Owner Cart") — never price/stock,
+  // just enough for a cart/display row to re-resolve a fresh image.
+  getProductImageData(ids: number[]): Promise<Array<{ id: number; imageUrl: string | null; imageUrls: string[] | null; imageAdjustments: Record<string, number> }>>;
 
   // Supplier product variants
   getVariantsByListingId(listingId: number): Promise<SupplierVariantWithLabels[]>;
@@ -5855,6 +5859,18 @@ export class DatabaseStorage implements IStorage {
   async getMarketplaceProduct(productId: number, supplierId?: number): Promise<MarketplaceProduct | undefined> {
     const all = await this.getMarketplaceProducts(supplierId == null ? undefined : { supplierId });
     return all.find((p) => p.id === productId);
+  }
+
+  async getProductImageData(ids: number[]): Promise<Array<{ id: number; imageUrl: string | null; imageUrls: string[] | null; imageAdjustments: Record<string, number> }>> {
+    const uniqueIds = Array.from(new Set(ids)).filter((id) => Number.isInteger(id) && id > 0);
+    if (!uniqueIds.length) return [];
+    const rows = await db.select({
+      id: products.id,
+      imageUrl: products.imageUrl,
+      imageUrls: products.imageUrls,
+      imageAdjustments: products.imageAdjustments,
+    }).from(products).where(inArray(products.id, uniqueIds));
+    return rows.map((r) => ({ ...r, imageAdjustments: r.imageAdjustments ?? {} }));
   }
 
   // ── Favorites ───────────────────────────────────────────────────────────────
@@ -11939,6 +11955,7 @@ export class DatabaseStorage implements IStorage {
           productId: product?.id ?? 0,
           productName: product?.name ?? "Unknown product",
           productImageUrl: product?.imageUrl ?? null,
+          productImageAdjustments: product?.imageAdjustments ?? {},
           categoryId: product?.categoryId ?? null,
           subCategoryId: product?.subCategoryId ?? null,
           brandId: product?.brandId ?? null,

@@ -18,7 +18,7 @@ import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
-import { useImageAdjustStyle, clampAdjustmentPct, getAdjustmentFor, type ImageAdjustmentMap } from "@/lib/image-adjustment";
+import { useImageAdjustStyle, clampAdjustmentPct, getAdjustmentFor, useImageGallery, type ImageAdjustmentMap } from "@/lib/image-adjustment";
 import type { ProductWithTaxonomy, CategoryWithCount, SubCategoryWithDetails, FlavorWithCount, SizeWithCount, BrandWithCount } from "@shared/schema";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -287,6 +287,11 @@ function ProductFormModal({
     return EMPTY_FORM;
   });
 
+  // Click-to-select Live Preview gallery (task: "Make the Supplier/Admin
+  // variant-builder image gallery interactive") — selection only, never
+  // touches saved image order or crop values (those live in `form`/`imgAdj`).
+  const gallery = useImageGallery(form.imageUrl, form.additionalImageUrls);
+
   const setField = (key: keyof ProductForm, value: any) => {
     setForm(prev => {
       const next = { ...prev, [key]: value };
@@ -534,23 +539,31 @@ function ProductFormModal({
           <div className="lg:sticky lg:top-0">
             <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Live Preview</Label>
             {(form.imageUrl || form.additionalImageUrls.some(u => u.trim())) && (
-              <p className="text-xs text-muted-foreground mb-1.5">Use the slider beneath each image URL to adjust its crop.</p>
+              <p className="text-xs text-muted-foreground mb-1.5">Use the slider beneath each image URL to adjust its crop. Click a thumbnail to preview it.</p>
             )}
             <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
               <ImageAdjustPreview
-                url={form.imageUrl}
-                pct={getAdjustmentFor(imgAdj, form.imageUrl)}
+                url={gallery.activeUrl ?? ""}
+                pct={getAdjustmentFor(imgAdj, gallery.activeUrl)}
               />
-              {form.additionalImageUrls.filter(u => u.trim()).length > 0 && (
+              {gallery.allImages.length > 1 && (
                 <div className="flex gap-1.5 p-2 border-t bg-secondary/20 flex-wrap">
-                  {form.additionalImageUrls.filter(u => u.trim()).map((url, idx) => (
-                    <div key={idx} className="w-20 h-20 shrink-0 rounded-lg overflow-hidden border">
+                  {gallery.allImages.map((url, idx) => (
+                    <button
+                      type="button"
+                      key={idx}
+                      onClick={() => gallery.setActiveIdx(idx)}
+                      className={`w-20 h-20 shrink-0 rounded-lg overflow-hidden border-2 transition-colors ${
+                        idx === gallery.activeIdx ? "border-primary" : "border-border hover:border-primary/50"
+                      }`}
+                      data-testid={`button-gallery-thumb-${idx}`}
+                    >
                       <ImageAdjustPreview
                         url={url}
                         pct={getAdjustmentFor(imgAdj, url)}
                         compact
                       />
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}

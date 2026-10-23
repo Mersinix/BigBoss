@@ -3751,6 +3751,12 @@ export type PackItemDetail = {
   productId: number;
   productName: string;
   productImageUrl: string | null;
+  // Admin-saved progressive crop percentages for productImageUrl, keyed by
+  // image URL (task: "Synchronize Updated Product and Pack Images in
+  // Coffee Owner Cart") — lets any consumer of PackDetail (cart, pack
+  // quick view, ...) render the exact same crop as Admin/Coffee Owner/
+  // Supplier instead of always showing the full image.
+  productImageAdjustments?: Record<string, number> | null;
   categoryId: number | null;   // product's category — used for correct category→brand mapping on cards
   subCategoryId?: number | null;
   brandId: number | null;       // product's brand — used for correct category→brand mapping on cards

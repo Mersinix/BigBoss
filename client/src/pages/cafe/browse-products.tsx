@@ -235,7 +235,7 @@ function ProductCard({
   return (
     <div
       data-testid={`card-product-${product.id}`}
-      className={`group border rounded-2xl overflow-hidden flex flex-col cursor-pointer transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.cardBg}`}
+      className={`group border rounded-2xl overflow-hidden flex flex-col cursor-pointer transition-all shadow-xl hover:-translate-y-0.5 ${t.cardBg}`}
       onClick={() => openQuickView(product.id)}
     >
       {/* Image */}
@@ -374,7 +374,7 @@ function StoreCardTile({
   return (
     <div
       data-testid={`card-store-${store.id}`}
-      className={`group cursor-pointer border rounded-2xl overflow-hidden flex flex-col transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.cardBg}`}
+      className={`group cursor-pointer border rounded-2xl overflow-hidden flex flex-col transition-all shadow-xl hover:-translate-y-0.5 ${t.cardBg}`}
       onClick={onClick}
     >
       {/* Cover image */}
@@ -607,7 +607,7 @@ export function PackCardTile({
   return (
     <div
       data-testid={`card-pack-${pack.id}`}
-      className={`group border rounded-2xl overflow-hidden flex flex-col cursor-pointer transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.dk ? "bg-gray-800 border-amber-900/40" : "bg-white border-amber-100"}`}
+      className={`group border rounded-2xl overflow-hidden flex flex-col cursor-pointer transition-all shadow-xl hover:-translate-y-0.5 ${t.dk ? "bg-gray-800 border-amber-900/40" : "bg-white border-amber-100"}`}
       onClick={() => openPackQuickView(pack.id)}
     >
       {/* Image — aspect-[4/3], identical across all cards */}

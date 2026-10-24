@@ -5,6 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -219,6 +223,10 @@ function MyCategoriesSection({ modalOpen, setModalOpen }: { modalOpen: boolean; 
   const qc = useQueryClient();
   const [orderedMappings, setOrderedMappings] = useState<SupplierCategoryMapping[]>([]);
   const [draggedCategoryId, setDraggedCategoryId] = useState<number | null>(null);
+  // Custom removal confirmation (task: "Supplier Module — Custom Removal
+  // Confirmation Modals and Discount Code Removal") — previously `onRemove`
+  // called removeCategory.mutate directly with no confirmation at all.
+  const [removeTarget, setRemoveTarget] = useState<SupplierCategoryMapping | null>(null);
 
   const { selectedCategoryId, selectedSubCategoryId, setSelectedCategory, setSelectedSubCategory } = useSupplierCategoryStore();
 
@@ -356,7 +364,7 @@ function MyCategoriesSection({ modalOpen, setModalOpen }: { modalOpen: boolean; 
               selectedSubCategoryId={selectedCategoryId === mapping.category.id ? selectedSubCategoryId : null}
               onSelectSubCategory={(subId) => handleSelectSubCategory(mapping.category.id, subId)}
               onFreeze={() => freezeCategory.mutate({ categoryId: mapping.category.id, isFrozen: !mapping.isFrozen })}
-              onRemove={() => removeCategory.mutate(mapping.category.id)}
+              onRemove={() => setRemoveTarget(mapping)}
               isActionPending={freezeCategory.isPending || removeCategory.isPending}
               onDragStart={() => setDraggedCategoryId(mapping.category.id)}
               onDragOver={(event) => event.preventDefault()}
@@ -392,6 +400,28 @@ function MyCategoriesSection({ modalOpen, setModalOpen }: { modalOpen: boolean; 
       )}
 
       <CategorySelectModal open={modalOpen} onClose={() => setModalOpen(false)} allCategories={allCats} mappedIds={selectedCatIds} onConfirm={ids => saveCategories.mutate(ids)} isPending={saveCategories.isPending} />
+
+      <AlertDialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Category?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove <strong>{removeTarget?.category.name}</strong> from your selected categories. It only affects your own selection — the category itself and other suppliers are not affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (removeTarget) removeCategory.mutate(removeTarget.category.id); setRemoveTarget(null); }}
+              disabled={removeCategory.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-remove-category"
+            >
+              {removeCategory.isPending ? "Removing…" : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

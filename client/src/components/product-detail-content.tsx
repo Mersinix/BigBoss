@@ -139,10 +139,10 @@ function VariantRow({
       return;
     }
     addItem(newItem, qty);
-    toast({ title: "Added to cart", description: `${product.name}${variant.flavorName ? ` – ${variant.flavorName}` : ""}${variant.sizeName ? ` (${variant.sizeName})` : ""} × ${qty}` });
+    toast({ title: "Ajouté au panier", description: `${product.name}${variant.flavorName ? ` – ${variant.flavorName}` : ""}${variant.sizeName ? ` (${variant.sizeName})` : ""} × ${qty}` });
   };
 
-  const baseLabel = [variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "Default";
+  const baseLabel = [variant.flavorName, variant.sizeName].filter(Boolean).join(" · ") || "Par défaut";
   const label = outOfStock ? baseLabel : `${baseLabel} · ${variant.quantity} en stock`;
 
   const borderCls   = isDark ? "border-gray-700/40"  : "border-border/40";
@@ -189,7 +189,7 @@ function VariantRow({
       <div className="hidden sm:flex items-center justify-between gap-4">
         <div className="flex-1 min-w-0">
           <span className={`text-sm font-medium ${labelCls}`}>{label}</span>
-          {outOfStock && <span className="ml-2 text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-md">Out of stock</span>}
+          {outOfStock && <span className="ml-2 text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-md">Rupture de stock</span>}
           {promoBadge && <div>{promoBadge}</div>}
           {replacementBadge && <div>{replacementBadge}</div>}
         </div>
@@ -207,7 +207,7 @@ function VariantRow({
               className={`gap-1.5 ${inCart > 0 ? "bg-emerald-500 hover:bg-emerald-600" : ""}`}
               data-testid={`button-add-variant-${listing.id}-${variant.flavorId ?? 0}-${variant.sizeId ?? 0}`}
             >
-              {inCart > 0 ? <><CheckCircle2 className="w-3.5 h-3.5" />{inCart} in cart</> : <><ShoppingCart className="w-3.5 h-3.5" />Add</>}
+              {inCart > 0 ? <><CheckCircle2 className="w-3.5 h-3.5" />{inCart} dans le panier</> : <><ShoppingCart className="w-3.5 h-3.5" />Ajouter</>}
             </Button>
           </div>
         )}
@@ -219,7 +219,7 @@ function VariantRow({
         <div className="flex flex-col gap-0.5 min-w-0">
           <div className="flex items-center gap-2">
             <span className={`text-sm font-medium ${labelCls}`}>{label}</span>
-            {outOfStock && <span className="text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-md shrink-0">Out of stock</span>}
+            {outOfStock && <span className="text-xs text-destructive bg-destructive/10 px-1.5 py-0.5 rounded-md shrink-0">Rupture de stock</span>}
           </div>
           {promoBadge}
           {replacementBadge}
@@ -240,7 +240,7 @@ function VariantRow({
                 className={`gap-1.5 ${inCart > 0 ? "bg-emerald-500 hover:bg-emerald-600" : ""}`}
                 data-testid={`button-add-variant-${listing.id}-${variant.flavorId ?? 0}-${variant.sizeId ?? 0}`}
               >
-                {inCart > 0 ? <><CheckCircle2 className="w-3.5 h-3.5" />{inCart} in cart</> : <><ShoppingCart className="w-3.5 h-3.5" />Add</>}
+                {inCart > 0 ? <><CheckCircle2 className="w-3.5 h-3.5" />{inCart} dans le panier</> : <><ShoppingCart className="w-3.5 h-3.5" />Ajouter</>}
               </Button>
             </div>
           </div>
@@ -301,7 +301,7 @@ function SupplierSection({
             ))}
           </div>
           <div className="flex items-center gap-2 flex-wrap mt-0.5">
-            <p className={`text-xs ${subCls}`}>{visibleVariants.length} variant{visibleVariants.length !== 1 ? "s" : ""}</p>
+            <p className={`text-xs ${subCls}`}>{visibleVariants.length} variante{visibleVariants.length !== 1 ? "s" : ""}</p>
             {distanceKm !== undefined && (
               <span className={`text-xs ${subCls} flex items-center gap-0.5`}>
                 <MapPin className="w-3 h-3 shrink-0" />{distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m` : `${distanceKm.toFixed(1)} km`}
@@ -341,20 +341,20 @@ function CommercialGate({ isPending }: { isPending: boolean }) {
         <Lock className="w-7 h-7 text-amber-600 dark:text-amber-950" />
       </div>
       <div>
-        <h3 className="font-bold text-gray-900 dark:text-white text-lg">Commercial Access Required</h3>
+        <h3 className="font-bold text-gray-900 dark:text-white text-lg">Accès commercial requis</h3>
         {isPending ? (
           <div className="mt-2 space-y-2">
             <div className="flex items-center justify-center gap-2 text-yellow-700 dark:text-yellow-400">
               <AlertTriangle className="w-4 h-4" />
-              <span className="font-medium text-sm">Your account is awaiting approval</span>
+              <span className="font-medium text-sm">Votre compte est en attente d'approbation</span>
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
-              You'll have full access to prices, suppliers, and ordering once an admin approves your account.
+              Vous aurez accès aux prix, aux fournisseurs et à la commande dès qu'un administrateur approuvera votre compte.
             </p>
           </div>
         ) : (
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
-            Sign in as an approved coffee shop owner to view prices, suppliers and place orders.
+            Connectez-vous en tant que propriétaire de café approuvé pour voir les prix, les fournisseurs et passer des commandes.
           </p>
         )}
       </div>
@@ -404,7 +404,7 @@ function FilterBadges<T extends { id: number; name: string }>({
           onClick={() => onSelect(null)}
           className={`shrink-0 px-3 py-1.5 text-[11px] font-semibold rounded-xl transition-all ${selected === null ? activeCls : inactiveCls}`}
         >
-          All
+          Tous
         </button>
         {items.map((item) => (
           <button
@@ -429,7 +429,7 @@ function FilterBadges<T extends { id: number; name: string }>({
           selected === null ? "bg-primary text-primary-foreground border-primary" : "border-border hover:border-primary/50 text-muted-foreground hover:text-foreground"
         }`}
       >
-        All
+        Tous
       </button>
       {items.map((item) => (
         <button
@@ -452,7 +452,7 @@ export function ProductDetailContent({
   productId,
   supplierId,
   onBack,
-  backLabel = "Back to Browse",
+  backLabel = "Retour au catalogue",
   isModal = false,
 }: {
   productId: string;
@@ -729,7 +729,7 @@ export function ProductDetailContent({
       <div className="flex items-center justify-between mb-4">
         <button
           onClick={toggleTheme}
-          aria-label="Toggle theme"
+          aria-label="Changer de thème"
           className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-100 hover:bg-gray-200"}`}
         >
           {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
@@ -753,7 +753,7 @@ export function ProductDetailContent({
         </div>
         <button
           onClick={onBack}
-          aria-label="Close"
+          aria-label="Fermer"
           className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
         >
           <X className="w-4 h-4" />
@@ -795,8 +795,8 @@ export function ProductDetailContent({
     const errContent = (
       <div className={isModal ? "p-6 text-center py-24" : "p-6 text-center py-32"}>
         <Package className="w-14 h-14 mx-auto text-muted-foreground opacity-30 mb-4" />
-        <p className={`font-semibold text-lg ${isModal ? textPrimary : ""}`}>Product not found</p>
-        <Button variant="outline" className="mt-4" onClick={onBack}>{isModal ? "Close" : backLabel}</Button>
+        <p className={`font-semibold text-lg ${isModal ? textPrimary : ""}`}>Produit introuvable</p>
+        <Button variant="outline" className="mt-4" onClick={onBack}>{isModal ? "Fermer" : backLabel}</Button>
       </div>
     );
     if (!isModal) return errContent;
@@ -889,7 +889,7 @@ export function ProductDetailContent({
           <Stars rating={reviewData.product.avgRating} />
           <span className={`text-sm font-medium ${isModal ? textPrimary : ""}`}>{reviewData.product.avgRating.toFixed(1)}</span>
           <span className={`text-xs ${isModal ? textMuted : "text-muted-foreground"}`}>
-            ({reviewData.product.total} product review{reviewData.product.total !== 1 ? "s" : ""})
+            ({reviewData.product.total} avis sur le produit)
           </span>
         </div>
       )}
@@ -913,7 +913,7 @@ export function ProductDetailContent({
             /* Marketplace context: "Starting from" + supplier count */
             <>
               <div>
-                <p className={`text-xs ${isModal ? textMuted : "text-muted-foreground"}`}>Starting from</p>
+                <p className={`text-xs ${isModal ? textMuted : "text-muted-foreground"}`}>À partir de</p>
                 <p className={`text-2xl font-bold ${isModal ? (dk ? "text-blue-400" : "text-blue-600") : "text-primary"}`}>
                   {product.bestPrice != null ? fmt(product.bestPrice) : "—"}
                 </p>
@@ -921,11 +921,11 @@ export function ProductDetailContent({
               <>
                 <div className={`h-8 border-l ${isModal ? (dk ? "border-gray-700" : "border-gray-200") : "border-border"}`} />
                 <div>
-                  <p className={`text-xs ${isModal ? textMuted : "text-muted-foreground"}`}>Suppliers</p>
+                  <p className={`text-xs ${isModal ? textMuted : "text-muted-foreground"}`}>Fournisseurs</p>
                   <p className={`font-bold text-lg ${isModal ? textPrimary : ""}`}>
                     {filteredListings.length}
                     <span className={`text-xs font-normal ml-1 ${isModal ? textMuted : "text-muted-foreground"}`}>
-                      /{product.supplierCount} visible
+                      /{product.supplierCount} visibles
                     </span>
                   </p>
                 </div>
@@ -936,7 +936,7 @@ export function ProductDetailContent({
       ) : (
         <div className="flex items-center gap-2 pt-2 text-sm text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 border border-amber-100 dark:border-amber-500/30 rounded-xl px-4 py-3">
           <Lock className="w-4 h-4 shrink-0 text-amber-500 dark:text-amber-400" />
-          <span>Price available for approved coffee shop owners</span>
+          <span>Prix disponible pour les propriétaires de café approuvés</span>
         </div>
       )}
 
@@ -966,7 +966,7 @@ export function ProductDetailContent({
   const supplierToolbar = (
     <div className="flex items-center justify-between flex-wrap gap-2">
       <h2 className={isModal ? `font-semibold text-base ${textPrimary}` : "font-semibold text-lg"}>
-        {supplierId != null ? "From this store" : "Available from Suppliers"}
+        {supplierId != null ? "Depuis cette boutique" : "Disponible chez les fournisseurs"}
       </h2>
       <div className="flex items-center gap-2 flex-wrap">
         {/* Location filter */}
@@ -981,7 +981,7 @@ export function ProductDetailContent({
           </div>
         ) : supplierId == null ? (
           <Button variant="outline" size="sm" className={`gap-1.5 text-xs ${tbOutline}`} onClick={() => setLocationModalOpen(true)}>
-            <MapPin className="w-3.5 h-3.5" /> Filter by location
+            <MapPin className="w-3.5 h-3.5" /> Filtrer par localisation
           </Button>
         ) : null}
         {/* Nearest */}
@@ -991,7 +991,7 @@ export function ProductDetailContent({
             onClick={() => setSupplierSort(supplierSort === "nearest" ? null : "nearest")}
             className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${supplierSort === "nearest" ? tbActive : tbInactive}`}
           >
-            <Navigation className="w-3 h-3" /> Nearest
+            <Navigation className="w-3 h-3" /> Plus proche
           </button>
         )}
         {/* Cheapest */}
@@ -1000,12 +1000,12 @@ export function ProductDetailContent({
           onClick={() => setSupplierSort(supplierSort === "cheapest" ? null : "cheapest")}
           className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${supplierSort === "cheapest" ? tbActive : tbInactive}`}
         >
-          <Tag className="w-3 h-3" /> Cheapest
+          <Tag className="w-3 h-3" /> Moins cher
         </button>}
         {/* Write review */}
         {isCafeOwner && storeListings.length > 0 && (
           <Button variant="outline" size="sm" className={`gap-1.5 text-xs ${tbOutline}`} onClick={() => setReviewModalOpen(true)}>
-            <MessageSquarePlus className="w-3.5 h-3.5" /> Write a Review
+            <MessageSquarePlus className="w-3.5 h-3.5" /> Écrire un avis
           </Button>
         )}
       </div>
@@ -1023,8 +1023,8 @@ export function ProductDetailContent({
             : "rounded-2xl border border-border/50 p-12 text-center text-muted-foreground"
         }>
           {storeListings.length === 0
-            ? "No supplier listings available for this product."
-            : "No suppliers match the current filters. Try adjusting your flavor, size, or location filters."}
+            ? "Aucune offre fournisseur disponible pour ce produit."
+            : "Aucun fournisseur ne correspond aux filtres actuels. Essayez d'ajuster vos filtres de parfum, taille ou localisation."}
         </div>
       ) : (
         filteredListings.map(({ listing, variants }) => {
@@ -1124,8 +1124,8 @@ export function ProductDetailContent({
                 {filteredListings.length === 0 ? (
                   <div className={`rounded-2xl border p-12 text-center ${dk ? "border-gray-700/60 text-gray-400" : "border-gray-100 text-gray-500"}`}>
                     {storeListings.length === 0
-                      ? "No supplier listings available for this product."
-                      : "No suppliers match the current filters. Try adjusting your flavor, size, or location filters."}
+                      ? "Aucune offre fournisseur disponible pour ce produit."
+                      : "Aucun fournisseur ne correspond aux filtres actuels. Essayez d'ajuster vos filtres de parfum, taille ou localisation."}
                   </div>
                 ) : (
                   filteredListings.map(({ listing, variants }) => {
@@ -1172,7 +1172,7 @@ export function ProductDetailContent({
         </button>
         {hasCommercial && cartCount > 0 && (
           <Button variant="outline" size="sm" className="gap-2" onClick={() => navigate("/cart")} data-testid="button-view-cart">
-            <ShoppingCart className="w-4 h-4" /> {cartCount} item{cartCount !== 1 ? "s" : ""} in cart
+            <ShoppingCart className="w-4 h-4" /> {cartCount} article{cartCount !== 1 ? "s" : ""} dans le panier
           </Button>
         )}
       </div>

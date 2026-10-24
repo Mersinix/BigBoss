@@ -3,6 +3,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -18,6 +22,25 @@ import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components
 import { useIsMobile } from "@/hooks/use-mobile";
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
+
+// apiRequest throws `Error("<status>: <raw response text>")` rather than parsing
+// the JSON body — this recovers the server's actual { message } (e.g. the
+// existing "used in one or more packs" rejection) so it can be shown verbatim
+// in a toast instead of failing silently or showing raw JSON (task: "Supplier
+// Module — Custom Removal Confirmation Modals and Discount Code Removal").
+function extractApiErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error) {
+    const raw = error.message.replace(/^\d+:\s*/, "");
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.message === "string") return parsed.message;
+    } catch {
+      // not JSON — fall through to the raw text
+    }
+    return raw || fallback;
+  }
+  return fallback;
+}
 
 function buildQueryString(filters: InventoryFilterState, extra?: Record<string, string | number>) {
   const params = new URLSearchParams();
@@ -45,6 +68,11 @@ export default function InventoryPage() {
   const [adjustVariant, setAdjustVariant] = useState<{ item: InventoryItem; variant: InventoryVariantItem } | null>(null);
   const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
+  // Custom removal confirmation (task: "Supplier Module — Custom Removal
+  // Confirmation Modals and Discount Code Removal") — replaces the native
+  // `confirm()` previously used for both single and bulk inventory removal.
+  const [removeTarget, setRemoveTarget] = useState<InventoryItem | null>(null);
+  const [bulkRemoveConfirmOpen, setBulkRemoveConfirmOpen] = useState(false);
 
   const hasActiveFilters = !!(filters.search || filters.categoryId || filters.brandId || filters.status || filters.stockStatus);
 
@@ -92,7 +120,7 @@ export default function InventoryPage() {
       toast({ title: `Updated ${selectedIds.size} product${selectedIds.size === 1 ? "" : "s"}` });
       setSelectedIds(new Set());
     },
-    onError: (err: any) => toast({ title: "Bulk action failed", description: err?.message, variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Bulk action failed", description: extractApiErrorMessage(err, "Error"), variant: "destructive" }),
   });
 
   const visibilityMutation = useMutation({
@@ -110,6 +138,7 @@ export default function InventoryPage() {
       qc.invalidateQueries({ queryKey: ["/api/supplier/inventory"] });
       toast({ title: "Product removed from inventory" });
     },
+    onError: (err: any) => toast({ title: "Cannot remove", description: extractApiErrorMessage(err, "Error removing product"), variant: "destructive" }),
   });
 
   const handleChangeFilters = (f: InventoryFilterState) => { setFilters(f); setPage(1); };
@@ -179,7 +208,7 @@ export default function InventoryPage() {
               </Button>
               <Button
                 size="sm" variant="outline" className="text-destructive hover:text-destructive"
-                onClick={() => { if (confirm(`Remove ${selectedIds.size} product(s) from your inventory?`)) bulkMutation.mutate({ action: "delete", listingIds: Array.from(selectedIds) }); }}
+                onClick={() => setBulkRemoveConfirmOpen(true)}
                 data-testid="button-bulk-delete"
               >
                 <Trash2 className="w-3.5 h-3.5 mr-1.5" />Remove
@@ -201,7 +230,7 @@ export default function InventoryPage() {
             onHistory={setHistoryItem}
             onEdit={setEditItem}
             onToggleVisibility={(item) => visibilityMutation.mutate({ listingId: item.listingId, visibility: item.visibility === "VISIBLE" ? "HIDDEN" : "VISIBLE" })}
-            onDelete={(item) => { if (confirm(`Remove "${item.productName}" from your inventory?`)) deleteMutation.mutate(item.listingId); }}
+            onDelete={(item) => setRemoveTarget(item)}
           />
 
           <div className="flex items-center justify-between flex-wrap gap-3 border-t pt-3">
@@ -231,6 +260,50 @@ export default function InventoryPage() {
       {adjustVariant && <AdjustStockDialog item={adjustVariant.item} variant={adjustVariant.variant} onClose={() => setAdjustVariant(null)} />}
       {historyItem && <StockHistoryDialog item={historyItem} onClose={() => setHistoryItem(null)} />}
       {editItem && <EditListingDialog item={editItem} onClose={() => setEditItem(null)} />}
+
+      <AlertDialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove from Inventory?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove <strong>{removeTarget?.productName}</strong> from your inventory. It will no longer be visible to Coffee Owners in the marketplace.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (removeTarget) deleteMutation.mutate(removeTarget.listingId); setRemoveTarget(null); }}
+              disabled={deleteMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-remove-inventory-item"
+            >
+              {deleteMutation.isPending ? "Removing…" : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={bulkRemoveConfirmOpen} onOpenChange={setBulkRemoveConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Selected Products?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove <strong>{selectedIds.size} product{selectedIds.size === 1 ? "" : "s"}</strong> from your inventory. They will no longer be visible to Coffee Owners in the marketplace.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { bulkMutation.mutate({ action: "delete", listingIds: Array.from(selectedIds) }); setBulkRemoveConfirmOpen(false); }}
+              disabled={bulkMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-bulk-remove-inventory"
+            >
+              {bulkMutation.isPending ? "Removing…" : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

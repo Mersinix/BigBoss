@@ -10284,6 +10284,18 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     } catch { res.status(500).json({ message: 'Error' }); }
   });
 
+  // DELETE /api/discount-codes/:id — remove (soft-delete, see isRemoved
+  // column comment in shared/schema.ts — never a hard DELETE, so existing
+  // discount_code_usage/order history is never orphaned or lost).
+  app.delete('/api/discount-codes/:id', requireSupplier, async (req: any, res) => {
+    try {
+      const updated = await storage.removeDiscountCode(parseInt(req.params.id), req.supplier.id);
+      if (!updated) return res.status(404).json({ message: 'Not found' });
+      broadcast('discount_code_updated', { supplierId: req.supplier.id, discountCodeId: updated.id });
+      res.json({ message: 'Removed' });
+    } catch { res.status(500).json({ message: 'Error removing discount code' }); }
+  });
+
   // ── Discount Codes (Cafe / Checkout) ────────────────────────────────────────
 
   // POST /api/discount-codes/validate — preview validation for the cart page. The Coffee

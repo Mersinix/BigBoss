@@ -612,25 +612,27 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
   const add = useMutation({
     mutationFn: async () => {
       const entries = groupsToEntries(groups, availableFlavors, availableSizes);
-      const listingRes = await apiRequest("POST", "/api/supplier/listings", {
-        productId: product.id,
-        price: 0,
-        stock: 0,
-        availableFlavorIds: availableFlavors.map(f => f.id),
-        availableSizeIds: availableSizes.map(s => s.id),
-        availableBrandIds: product.brandId ? [product.brandId] : [],
-        onlyForPack: false,
-        onlyForMyProducts: !onlyForPack,
-      });
-      const listing = await listingRes.json();
-      const listingId = listing.id;
       const variants = entries.map(e => ({
         flavorId: e.flavorId,
         sizeId: e.sizeId,
         price: parseFloat(e.price) || 0,
         quantity: parseInt(e.qty) || 0,
       }));
-      await apiRequest("POST", `/api/supplier/listings/${listingId}/variants`, { variants });
+      // The listing and its variants are created atomically in one call —
+      // POST /api/supplier/listings now requires a non-empty `variants` array
+      // and creates both inside a single transaction (see
+      // createSupplierListingWithVariants, task: "Fix Invalid Supplier
+      // Product Mappings and Empty Products"). Sending the variants here
+      // instead of via a separate follow-up POST matches that contract; the
+      // old two-step flow left `variants` missing from this request, which
+      // the server now always rejects with 400 "Required" before a listing
+      // is ever created.
+      await apiRequest("POST", "/api/supplier/listings", {
+        productId: product.id,
+        onlyForPack: false,
+        onlyForMyProducts: !onlyForPack,
+        variants,
+      });
     },
     onSuccess: () => {
       toast({ title: "Added to your products!" });
@@ -1189,15 +1191,16 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
     onError: () => toast({ title: "Error deleting product", variant: "destructive" }),
   });
 
+  // Always routes through the same AlertDialog now (task: "Standardize
+  // Supplier Removal Confirmation Modals") — previously fell back to the
+  // native `confirm()` whenever the product wasn't used in any Pack; the
+  // dialog below branches its title/description/action label on
+  // `deleteTarget.packs.length`, exactly like the pack-usage case already did.
   const requestDelete = async (product: ProductWithTaxonomy) => {
     try {
       const res = await fetch(`/api/supplier/created-products/${product.id}/pack-usage`, { credentials: "include" });
       const usage = res.ok ? await res.json() as { packs: PackUsage[] } : { packs: [] };
-      if (usage.packs.length > 0) {
-        setDeleteTarget({ id: product.id, name: product.name, packs: usage.packs });
-        return;
-      }
-      if (confirm(`Delete "${product.name}"?`)) deleteMut.mutate(product.id);
+      setDeleteTarget({ id: product.id, name: product.name, packs: usage.packs });
     } catch {
       toast({ title: "Unable to check Pack usage", variant: "destructive" });
     }
@@ -1469,7 +1472,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
                       </Button>
                     )}
                     {(p as any).status === 'PENDING' && (
-                      <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => requestDelete(p)} data-testid={`button-delete-sprod-${p.id}`}>
+                      <Button size="icon" variant="outline" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => requestDelete(p)} disabled={deleteMut.isPending} data-testid={`button-delete-sprod-${p.id}`}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     )}
@@ -1506,23 +1509,31 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Product used in Pack(s)</AlertDialogTitle>
+            <AlertDialogTitle>{deleteTarget?.packs.length ? "Product used in Pack(s)" : "Delete Product?"}</AlertDialogTitle>
             <AlertDialogDescription>
-              <strong>{deleteTarget?.name}</strong> is currently used by one or more Packs.
-              Confirming removal will delete the product and move every affected Pack from New Packs to Old Packs.
-              Existing Pack history and orders will be preserved.
-              <span className="block mt-2 font-medium">
-                Affected Packs: {deleteTarget?.packs.map(pack => pack.name).join(", ")}
-              </span>
+              {deleteTarget?.packs.length ? (
+                <>
+                  <strong>{deleteTarget?.name}</strong> is currently used by one or more Packs.
+                  Confirming removal will delete the product and move every affected Pack from New Packs to Old Packs.
+                  Existing Pack history and orders will be preserved.
+                  <span className="block mt-2 font-medium">
+                    Affected Packs: {deleteTarget?.packs.map(pack => pack.name).join(", ")}
+                  </span>
+                </>
+              ) : (
+                <>This will permanently delete <strong>{deleteTarget?.name}</strong> and cannot be undone.</>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => { if (deleteTarget) deleteMut.mutate(deleteTarget.id); setDeleteTarget(null); }}
+              disabled={deleteMut.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete-sprod"
             >
-              Delete product and archive Packs
+              {deleteMut.isPending ? "Deleting…" : deleteTarget?.packs.length ? "Delete product and archive Packs" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1931,6 +1942,11 @@ function MyProductsTab({
   const [editingListing, setEditingListing] = useState<SupplierListingWithProduct | null>(null);
   const [myProdSearchOpen, setMyProdSearchOpen] = useState(false);
   const myProdSearchInputRef = useRef<HTMLInputElement>(null);
+  // Custom removal confirmation (task: "Standardize Supplier Removal
+  // Confirmation Modals") — replaces the native `confirm()` previously used
+  // here with the same AlertDialog pattern already used for "Delete Pack?"
+  // in manage-packs.tsx.
+  const [removeTarget, setRemoveTarget] = useState<SupplierListingWithProduct | null>(null);
 
   const { selectedCategoryId, selectedSubCategoryId, setSelectedCategory, setSelectedSubCategory } = useSupplierCategoryStore();
 
@@ -2057,7 +2073,7 @@ function MyProductsTab({
       toast({ title: "Cannot remove", description: "This product is used in one or more packs.", variant: "destructive" });
       return;
     }
-    if (confirm(`Remove "${listing.product.name}" from your products?`)) removeMutation.mutate(listing.id);
+    setRemoveTarget(listing);
   };
 
   return (
@@ -2273,7 +2289,7 @@ function MyProductsTab({
                           variant="outline"
                           className="h-8 w-8 text-destructive hover:text-destructive disabled:text-muted-foreground disabled:hover:text-muted-foreground"
                           onClick={() => requestRemove(l)}
-                          disabled={(l.packUsageCount ?? 0) > 0}
+                          disabled={(l.packUsageCount ?? 0) > 0 || removeMutation.isPending}
                           title={(l.packUsageCount ?? 0) > 0 ? `Used in ${l.packUsageCount} pack${l.packUsageCount === 1 ? "" : "s"} — cannot be removed` : undefined}
                           data-testid={`button-remove-listing-${l.id}`}
                         >
@@ -2310,6 +2326,28 @@ function MyProductsTab({
           onDelete={() => { const l = editingListing; setEditingListing(null); requestRemove(l); }}
         />
       )}
+
+      <AlertDialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove from My Products?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove <strong>{removeTarget?.product.name}</strong> from your products. It will no longer be visible to Coffee Owners in the marketplace.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (removeTarget) removeMutation.mutate(removeTarget.id); setRemoveTarget(null); }}
+              disabled={removeMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-remove-listing"
+            >
+              {removeMutation.isPending ? "Removing…" : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

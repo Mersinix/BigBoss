@@ -95,6 +95,20 @@ export function useSetDiscountCodeActive() {
   });
 }
 
+// Soft-delete (see isRemoved column comment, shared/schema.ts) — the code
+// and its full redemption history are preserved server-side; this just
+// removes it from the supplier's active list and makes it unredeemable.
+export function useDeleteDiscountCode() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiRequest("DELETE", `${BASE}/${id}`).then(r => r.json()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [BASE] });
+      qc.invalidateQueries({ queryKey: [`${BASE}/stats`] });
+    },
+  });
+}
+
 // ── Cafe / Checkout: validate ────────────────────────────────────────────────
 
 type ValidateItem = { supplierId: number; quantity: number; unitPrice: number };

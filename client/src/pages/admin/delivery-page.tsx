@@ -15,6 +15,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Truck, Clock, CheckCircle, XCircle, Search, Building2, Store,
@@ -112,7 +116,7 @@ function DeliveriesTab({ deliveries, isLoading, onViewDetails, onCancel, cancell
   deliveries: DeliveryWithDetails[];
   isLoading: boolean;
   onViewDetails: (d: DeliveryWithDetails) => void;
-  onCancel: (id: number) => void;
+  onCancel: (d: DeliveryWithDetails) => void;
   cancelling: boolean;
 }) {
   const [search, setSearch] = useState("");
@@ -234,7 +238,7 @@ function DeliveriesTab({ deliveries, isLoading, onViewDetails, onCancel, cancell
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {pageDeliveries.map((d) => (
-            <DeliveryCard key={d.id} delivery={d} onViewDetails={() => onViewDetails(d)} onCancel={() => onCancel(d.id)} cancelling={cancelling} />
+            <DeliveryCard key={d.id} delivery={d} onViewDetails={() => onViewDetails(d)} onCancel={() => onCancel(d)} cancelling={cancelling} />
           ))}
         </div>
       )}
@@ -806,6 +810,14 @@ export default function DeliveryPage() {
   const [tab, setTab] = useState("deliveries");
   const isMobile = useIsMobile();
   const [kpiModalOpen, setKpiModalOpen] = useState(false);
+  // Custom cancellation confirmation (task: "Admin Module — Store Removal and
+  // Delivery Cancellation Confirmation Modals") — Annuler previously called
+  // handleCancel directly with no confirmation. Same id-only-tracking pattern
+  // as viewTargetId above, for the same reason: a background refetch (e.g.
+  // the delivery changing status concurrently) reaches this open modal too,
+  // instead of it being stuck on a stale snapshot.
+  const [cancelTargetId, setCancelTargetId] = useState<number | null>(null);
+  const cancelTarget = cancelTargetId != null ? (deliveries.find((d) => d.id === cancelTargetId) ?? null) : null;
 
   const inTransit = deliveries.filter((d) => ["PICKED_UP", "IN_TRANSIT"].includes(d.status)).length;
   const delivered = deliveries.filter((d) => d.status === "DELIVERED").length;
@@ -813,7 +825,7 @@ export default function DeliveryPage() {
 
   const handleCancel = (id: number) => {
     updateStatus.mutate({ deliveryId: id, status: "CANCELLED" }, {
-      onSuccess: () => toast({ title: "Livraison annulée" }),
+      onSuccess: () => { toast({ title: "Livraison annulée" }); setCancelTargetId(null); },
       onError: (err: any) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
     });
   };
@@ -890,7 +902,7 @@ export default function DeliveryPage() {
               deliveries={deliveries}
               isLoading={isLoading}
               onViewDetails={(d) => setViewTargetId(d.id)}
-              onCancel={handleCancel}
+              onCancel={(d) => setCancelTargetId(d.id)}
               cancelling={updateStatus.isPending}
             />
           </div>
@@ -911,6 +923,33 @@ export default function DeliveryPage() {
           {viewTarget && <DeliveryDetails delivery={viewTarget} viewerRole="ADMIN" />}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!cancelTarget} onOpenChange={(open) => !open && setCancelTargetId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmer l'annulation</AlertDialogTitle>
+            <AlertDialogDescription>
+              Vous êtes sur le point d'annuler la livraison <strong>#{cancelTarget?.orderId}</strong>.
+              {cancelTarget && (
+                <span className="block mt-2 text-sm">
+                  {cancelTarget.cafe.name} · {cancelTarget.supplier.name} · {(STATUS_META[cancelTarget.status]?.label ?? cancelTarget.status)}
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-cancel-delivery">Retour</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { if (cancelTarget) handleCancel(cancelTarget.id); }}
+              disabled={updateStatus.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-cancel-delivery"
+            >
+              {updateStatus.isPending ? "Annulation…" : "Confirmer l'annulation"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

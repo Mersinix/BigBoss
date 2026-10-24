@@ -7,12 +7,16 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Ticket, Copy, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFormatCurrency, useCurrency } from "@/hooks/use-currency";
 import {
-  useDiscountCodes, useDiscountCodeStats, useCreateDiscountCode, useUpdateDiscountCode,
+  useDiscountCodes, useDiscountCodeStats, useCreateDiscountCode, useUpdateDiscountCode, useDeleteDiscountCode,
   type DiscountCodeFormInput,
 } from "@/hooks/use-discount-codes";
 import type { DiscountCode } from "@shared/schema";
@@ -74,6 +78,10 @@ export default function DiscountCodesPage() {
   const { data: stats } = useDiscountCodeStats();
   const createMut = useCreateDiscountCode();
   const updateMut = useUpdateDiscountCode();
+  const deleteMut = useDeleteDiscountCode();
+  // Custom removal confirmation (task: "Supplier Module — Custom Removal
+  // Confirmation Modals and Discount Code Removal").
+  const [removeTarget, setRemoveTarget] = useState<DiscountCode | null>(null);
   const isMobile = useIsMobile();
   const [kpiModalOpen, setKpiModalOpen] = useState(false);
 
@@ -330,6 +338,16 @@ export default function DiscountCodesPage() {
             </div>
           </div>
           <DialogFooter className="mt-2">
+            {editingCode && (
+              <Button
+                variant="outline"
+                className="text-destructive hover:text-destructive mr-auto"
+                onClick={() => { setFormOpen(false); setRemoveTarget(editingCode); }}
+                data-testid="button-remove-code"
+              >
+                Remove
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
             <Button onClick={handleSave} disabled={isSaving} data-testid="button-save-code">
               {isSaving ? "Saving…" : editingCode ? "Save Changes" : "Create Code"}
@@ -337,6 +355,34 @@ export default function DiscountCodesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Discount Code?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the code <strong>{removeTarget?.code}</strong>. Café customers will no longer be able to redeem it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!removeTarget) return;
+                deleteMut.mutate(removeTarget.id, {
+                  onSuccess: () => { toast({ title: "Code removed" }); setRemoveTarget(null); },
+                  onError: (e: Error) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
+                });
+              }}
+              disabled={deleteMut.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-remove-code"
+            >
+              {deleteMut.isPending ? "Removing…" : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

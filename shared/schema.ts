@@ -3107,6 +3107,14 @@ export const discountCodes = pgTable("discount_codes", {
   minimumOrderAmount: integer("minimum_order_amount"), // millimes; null = no minimum
   expiresAt: timestamp("expires_at"),         // null = never expires
   isActive: boolean("is_active").notNull().default(true), // supplier's own on/off switch
+  // Soft-delete flag (task: "Supplier Module — Custom Removal Confirmation
+  // Modals and Discount Code Removal") — discount_code_usage.discountCodeId
+  // has no DB-level FK, so a hard DELETE here would silently orphan
+  // historical redemption rows; removal instead sets this flag (mirrors the
+  // same established pattern as packs.isArchived), excluding the code from
+  // the supplier's list and from new redemptions while keeping the row and
+  // all its usage history fully intact and queryable.
+  isRemoved: boolean("is_removed").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -3402,7 +3410,7 @@ export const insertDeliveryOpportunitySchema = createInsertSchema(deliveryOpport
 export const insertPromotionSchema = createInsertSchema(promotions).omit({ id: true, createdAt: true, updatedAt: true, usageCount: true });
 export const insertPromotionUsageSchema = createInsertSchema(promotionUsage).omit({ id: true, createdAt: true });
 
-export const insertDiscountCodeSchema = createInsertSchema(discountCodes).omit({ id: true, createdAt: true, updatedAt: true, usageCount: true });
+export const insertDiscountCodeSchema = createInsertSchema(discountCodes).omit({ id: true, createdAt: true, updatedAt: true, usageCount: true, isRemoved: true });
 export const insertDiscountCodeUsageSchema = createInsertSchema(discountCodeUsage).omit({ id: true, createdAt: true });
 
 export const insertConversationSchema = createInsertSchema(conversations).omit({ id: true, createdAt: true, lastMessageAt: true });

@@ -7,6 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Store, Package, Check, X, Pause, Trash2, Eye, EyeOff, Search,
   GripVertical, Star, RefreshCw, Zap,
 } from "lucide-react";
@@ -37,6 +41,11 @@ function StoreDetailDialog({
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  // Custom removal confirmation (task: "Admin Module — Store Removal and
+  // Delivery Cancellation Confirmation Modals") — the Delete button
+  // previously called actionMutation.mutate({action:"delete"}) directly,
+  // with no confirmation at all.
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const { data: detail, isLoading } = useQuery<StoreDetail>({
     queryKey: ["/api/admin/stores", store?.id],
@@ -57,7 +66,7 @@ function StoreDetailDialog({
       qc.invalidateQueries({ queryKey: ["/api/admin/stores"] });
       qc.invalidateQueries({ queryKey: ["/api/stores"] });
       toast({ title: action === "delete" ? "Store deleted" : "Store updated" });
-      if (action === "delete") onClose();
+      if (action === "delete") { setConfirmDeleteOpen(false); onClose(); }
     },
     onError: () => toast({ title: "Action failed", variant: "destructive" }),
   });
@@ -203,7 +212,7 @@ function StoreDetailDialog({
                 size="sm"
                 variant="outline"
                 className="text-destructive hover:text-destructive ml-auto"
-                onClick={() => actionMutation.mutate({ action: "delete" })}
+                onClick={() => setConfirmDeleteOpen(true)}
                 disabled={actionMutation.isPending}
                 data-testid={`button-delete-store-${store.id}`}
               >
@@ -213,6 +222,28 @@ function StoreDetailDialog({
           </div>
         )}
       </DialogContent>
+
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Store?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the store mapping for <strong>{store?.name}</strong> (#{store?.id}) from the marketplace. The underlying supplier account, its products, and its orders are not affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => actionMutation.mutate({ action: "delete" })}
+              disabled={actionMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete-store"
+            >
+              {actionMutation.isPending ? "Removing…" : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

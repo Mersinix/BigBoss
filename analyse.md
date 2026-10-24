@@ -10283,3 +10283,884 @@ inchangés.
   design — voir 6.3.B) ; seul le fournisseur 6 peut les réparer (ajouter
   de vraies variantes) ou les supprimer, via My Products — aucune action
   de masse n'a été proposée ni exécutée.
+
+---
+
+## 7. Tâche de suivi — Standardisation des modales de confirmation de suppression Fournisseur
+
+### 7.1 Audit
+
+**Modale de référence** (« Delete Pack? », `client/src/pages/supplier/manage-packs.tsx`,
+~ligne 854-874) : composant shadcn `AlertDialog` **utilisé directement en
+ligne** (pas de wrapper personnalisé séparé) — `AlertDialog`,
+`AlertDialogContent`, `AlertDialogHeader`, `AlertDialogTitle`,
+`AlertDialogDescription`, `AlertDialogFooter`, `AlertDialogCancel`,
+`AlertDialogAction` (avec `className="bg-destructive text-destructive-foreground
+hover:bg-destructive/90"` sur le bouton de confirmation). `manage-products.tsx`
+**importe déjà exactement les mêmes composants** (même ligne d'import,
+lignes 11-14) et les utilise déjà ailleurs dans ce même fichier selon un
+second motif **piloté par état** (`open={!!deleteTarget}
+onOpenChange={(open) => !open && setDeleteTarget(null)}`, ligne ~1506,
+pour la modale « Product used in Pack(s) » de New Product) — ce motif
+state-driven est la bonne base à réutiliser pour les 2 flux visés par
+cette tâche, puisque `Remove`/`Delete` n'y sont pas de simples triggers
+synchrones mais dépendent d'un appel réseau de vérification
+(`pack-usage`) ou d'un flag déjà chargé (`packUsageCount`).
+
+**2 endroits identifiés utilisant encore `window.confirm` natif**
+(`client/src/pages/supplier/manage-products.tsx`) :
+- Ligne ~2060, `MyProductsTab.requestRemove` : `confirm(\`Remove
+  "${listing.product.name}" from your products?\`)` — exactement
+  l'exemple cité par la tâche. Appelé depuis le bouton Remove de la
+  liste My Products **et** depuis `EditListingModal`'s `onDelete`
+  (« Edit Pricing & Stock — Variant Builder → Remove ») — un seul point
+  de passage pour les deux, donc un seul correctif suffit pour couvrir
+  toute la section 2 de la tâche.
+- Ligne ~1200, `NewProductTab.requestDelete` : `confirm(\`Delete
+  "${product.name}"?\`)`, mais **seulement** utilisé en repli quand le
+  produit n'est **pas** utilisé dans un Pack — le cas « utilisé dans un
+  Pack » passe déjà par la modale custom `deleteTarget` existante
+  (`AlertDialogTitle="Product used in Pack(s)"`). Donc une seule et même
+  modale, pas deux systèmes à fusionner — il suffit de faire passer
+  TOUJOURS `requestDelete` par cet état existant, puis de rendre le
+  titre/description/libellé du bouton de la modale conditionnels sur
+  `deleteTarget.packs.length` (même motif déjà utilisé par
+  `manage-packs.tsx`'s `removeTarget` pour « Remove from Pack
+  Products? » vs « Product used in Pack(s) »).
+
+**Règles métier existantes identifiées, à préserver telles quelles** :
+- My Products : `packUsageCount` déjà calculé par lot côté serveur
+  (`getSupplierListings`) ; si `>0`, un toast d'erreur bloque *avant*
+  même d'atteindre une quelconque confirmation — comportement
+  intégralement conservé, inchangé par cette tâche.
+- New Product : logique de pack-usage **différente** (un produit créé
+  par le Fournisseur référencé par un Pack peut quand même être
+  supprimé, avec archivage des Packs concernés) — route et mutation
+  (`DELETE /api/supplier/created-products/:id`) non touchées, seule la
+  présentation de la confirmation change.
+
+### 7.2 Implémentation
+
+- `client/src/pages/supplier/manage-products.tsx` :
+  - `MyProductsTab` : nouvel état `removeTarget` ; `requestRemove` appelle
+    désormais `setRemoveTarget(listing)` au lieu de `confirm(...)` (le
+    court-circuit « bloqué si utilisé dans un pack » reste identique,
+    avant tout accès à cet état). Nouvelle `AlertDialog` rendue en bas du
+    composant, style et structure copiés à l'identique de « Delete
+    Pack? » : titre « Remove from My Products? », description affichant
+    dynamiquement `removeTarget.product.name`, actions Cancel/Remove.
+    Bouton de confirmation désactivé pendant `removeMutation.isPending`
+    (libellé « Removing… »), bouton Remove de la ligne également
+    désactivé pendant ce temps (empêche une double soumission par un
+    second clic pendant que la requête est en vol).
+  - `NewProductTab` : `requestDelete` appelle désormais systématiquement
+    `setDeleteTarget(...)` (plus de branche `confirm()`). La modale
+    `deleteTarget` existante devient conditionnelle : titre « Delete
+    Product? » / description « This will permanently delete
+    <strong>{name}</strong> and cannot be undone. » / bouton « Delete »
+    quand `packs.length === 0` (comportement visuel identique à « Delete
+    Pack? ») ; titre/description/bouton « Product used in Pack(s) »
+    inchangés quand `packs.length > 0`. Bouton de confirmation désactivé
+    pendant `deleteMut.isPending` (libellé « Deleting… ») ; bouton de
+    suppression de la ligne également désactivé pendant ce temps.
+- Aucun nouveau composant partagé créé : les deux flux réutilisent
+  directement les primitives shadcn `AlertDialog` déjà importées dans ce
+  fichier, exactement comme `manage-packs.tsx` le fait — pas de
+  duplication de balisage/style puisqu'aucun style personnalisé n'a été
+  écrit, seules des classes déjà établies (`bg-destructive
+  text-destructive-foreground hover:bg-destructive/90`) sont reprises
+  à l'identique.
+- Thème clair/sombre, accessibilité clavier, gestion du focus : hérités
+  automatiquement du composant Radix sous-jacent (`AlertDialog` de
+  `@/components/ui/alert-dialog`), non modifié.
+- Modale de suppression de Pack (`manage-packs.tsx`) : **aucune ligne
+  touchée**.
+
+### 7.3 Tests réellement exécutés
+
+- `npx tsc --noEmit` — **succès** (code de sortie 0).
+- `npm run build` — **succès** (code de sortie 0).
+- `grep` final sur `manage-products.tsx` : confirmé **zéro** appel à
+  `confirm(` ou `window.confirm` restant dans ce fichier (en dehors de
+  mentions en commentaire expliquant le changement).
+- Vérification navigateur réelle (Playwright), compte Fournisseur
+  existant déjà utilisé dans les tâches précédentes
+  (`supplier@coffee.com`), avec un listing jetable (produit « Lavazza
+  Super Crema Espresso 1kg ») et un produit créé jetable
+  (`__verify_remove_confirm_tmp__`), tous deux créés via l'API pour le
+  test et supprimés **par le flux UI testé lui-même** (jamais par
+  nettoyage manuel direct en base) — vérifié absents en base après coup :
+  - **My Products** : clic sur le bouton Remove de la ligne → la modale
+    custom apparaît (confirmé via le rôle ARIA `alertdialog`, jamais un
+    `window.confirm` — un listener sur l'évènement `dialog` natif de
+    Playwright n'a rien détecté pendant tout le test), texte exact
+    observé : « Remove from My Products? This will remove Lavazza Super
+    Crema Espresso 1kg from your products. It will no longer be visible
+    to Coffee Owners in the marketplace. » — le nom du produit est bien
+    dynamique. Cancel → la ligne reste présente (revérifié par un second
+    clic sur Remove). Confirm → `DELETE /api/supplier/listings/:id`
+    s'exécute, la ligne disparaît de la liste (0 ligne après rechargement
+    de la vue).
+  - **New Product** : clic sur le bouton Delete de la ligne (vue Liste,
+    `toggle-new-view-list` — la vue Grille par défaut n'expose pas de
+    bouton Delete séparé, seul un clic sur la carte ouvre la modale
+    d'édition) → modale custom, texte exact observé : « Delete Product?
+    This will permanently delete __verify_remove_confirm_tmp__ and
+    cannot be undone. » Cancel → la ligne reste présente. Confirm (sur
+    une seconde ouverture) → `DELETE
+    /api/supplier/created-products/:id` s'exécute, la ligne disparaît.
+  - Capture d'écran de la modale New Product contrôlée visuellement :
+    même structure/style que « Delete Pack? » (carte sombre, titre en
+    gras, boutons Cancel/Delete rouge destructif).
+- **Non vérifié en conditions réelles** :
+  - Le cas « produit utilisé dans un ou plusieurs Packs » (pour My
+    Products : blocage par toast avant toute modale ; pour New Product :
+    modale « Product used in Pack(s) » avec archivage) — **ce
+    comportement n'a pas été re-testé en navigateur dans cette passe** ;
+    il s'agit de code déjà existant et non modifié par cette tâche (le
+    seul changement est que New Product passe désormais systématiquement
+    par `setDeleteTarget`, et cette branche `packs.length > 0` était déjà
+    exercée par le code avant cette tâche). Confirmé par lecture du code
+    uniquement, pas par un clic réel sur un produit effectivement utilisé
+    dans un pack.
+  - Thème clair explicite : seul le thème sombre (déjà actif sur le
+    compte de test) a été observé à l'écran. Le rendu repose entièrement
+    sur les classes déjà existantes de `AlertDialog`/`AlertDialogAction`
+    (`bg-destructive text-destructive-foreground hover:bg-destructive/90`,
+    etc.), non modifiées par cette tâche et déjà utilisées avec succès en
+    thème clair ailleurs dans l'application (ex. « Delete Pack? ») — mais
+    le thème clair n'a pas été basculé et observé spécifiquement pour ces
+    2 nouvelles modales dans cette session.
+  - Clics répétés / état de chargement (`disabled` pendant
+    `isPending`) : implémenté (voir 7.2) mais pas observé visuellement
+    sous un délai réseau artificiel — le réseau local étant trop rapide
+    pour capturer l'état « Removing… »/« Deleting… » à l'œil pendant ce
+    test.
+
+### 7.4 Ce qui ne change pas
+
+Routes API, permissions, règles de blocage pack-usage (les deux
+variantes, My Products et New Product), comportement de
+`EditListingModal`, `SupplierProductFormModal`, et la modale « Delete
+Pack? » elle-même : tous strictement inchangés. Aucune donnée modifiée
+par cette tâche en dehors des interactions de test (voir 7.3).
+
+---
+
+## 8. Tâche de suivi — Modales de confirmation (My Categories, Inventory) et suppression de Discount Codes
+
+### 8.1 Audit — My Categories (`categories-page.tsx`)
+
+`CategoryMappingCard`'s bouton Remove (`onClick={onRemove}`) appelle
+`removeCategory.mutate(mapping.category.id)` **directement, sans
+confirmation d'aucune sorte** aujourd'hui — ni `window.confirm`, ni
+modale custom. Ce n'est donc pas un « remplacement » à proprement parler
+mais un **ajout** d'une confirmation manquante (la tâche l'envisage
+elle-même : « Replace any browser-native confirmation, such as… »,
+formulation conditionnelle). `removeCategory` appelle `DELETE
+/api/supplier/categories/:id` — supprime uniquement le **mapping** du
+Fournisseur vers la catégorie (jamais la catégorie Admin elle-même ni
+les mappings d'autres Fournisseurs). Un autre motif de confirmation
+existe déjà dans ce même fichier (lignes ~676-690, suppression d'une
+« Catalog Suggestion ») mais utilise un `Dialog` simple avec boutons
+stylés à la main — **pas** le motif `AlertDialog` déjà établi dans
+`manage-packs.tsx`/`manage-products.tsx` lors des tâches précédentes ;
+je réutilise ce dernier (déjà le « removal-confirmation modal » de
+référence demandé par la tâche), pas le premier.
+
+### 8.2 Audit — Inventory (`inventory-page.tsx`, `inventory-table.tsx`)
+
+Deux appels `confirm()` natifs trouvés dans `inventory-page.tsx` :
+suppression **individuelle** (`onDelete`, ligne ~204, menu ligne du
+tableau) et suppression **groupée** (`button-bulk-delete`, ligne ~182).
+Les deux appellent en réalité le **même** point d'entrée serveur
+(`POST /api/supplier/inventory/bulk` avec `action:"delete"`,
+`storage.bulkInventoryAction` → boucle sur
+`storage.deleteSupplierListing` par listing) — c'est la fonction déjà
+durcie lors d'une tâche précédente de cette session (« Prevent removing
+products used in packs ») : elle lève `LISTING_USED_IN_PACK` pour tout
+listing référencé par un Pack, peu importe le point d'entrée (Inventory,
+My Products, bulk ou individuel) — **la règle métier est donc déjà
+protégée côté serveur pour Inventory, sans aucun changement
+nécessaire**.
+
+**Lacune réelle trouvée** : ni `deleteMutation` ni `bulkMutation`
+(`inventory-page.tsx`) n'ont de gestionnaire `onError` aujourd'hui — un
+rejet serveur (ex. `LISTING_USED_IN_PACK`) échoue **silencieusement**,
+sans aucun message pour le Fournisseur. La tâche exige explicitement
+« If removal is prohibited, display the existing or appropriate error
+message » — un `onError` doit donc être ajouté (pas seulement la modale
+de confirmation).
+
+`InventoryItem.hasPacks` existe déjà et alimente un badge « In Pack »
+(`inventory-table.tsx` ligne ~114) mais ne désactive **pas**
+aujourd'hui l'action Delete du menu — je laisse ce comportement
+strictement inchangé (le blocage effectif reste le rejet serveur +
+désormais un message clair), conformément à « make only the necessary
+targeted changes » : ajouter une désactivation proactive serait une
+amélioration UX non demandée explicitement et hors du périmètre minimal.
+
+### 8.3 Audit — Discount Codes (`discount-codes-page.tsx`, schéma, routes)
+
+**Aucune fonctionnalité de suppression n'existe aujourd'hui** — ni
+bouton, ni hook (`use-discount-codes.ts` n'exporte pas de
+`useDeleteDiscountCode`), ni route (`grep` sur `server/routes.ts` : zéro
+`DELETE /api/discount-codes`). Tout est à créer, exactement comme la
+tâche le demande (Phase 4).
+
+**Schéma (`shared/schema.ts`)** — point central de l'audit : la table
+`discount_code_usage` référence `discountCodeId` par une simple colonne
+`integer().notNull()`, **sans contrainte de clé étrangère SQL** (pas de
+`.references()`). Une suppression physique (`DELETE FROM
+discount_codes`) d'un code déjà utilisé **laisserait les lignes
+`discount_code_usage` orphelines** — silencieusement, puisqu'aucune
+contrainte ne l'empêcherait au niveau base — exactement ce que la tâche
+interdit explicitement (« do not silently delete historical redemption
+or order data »). `discountCodes.isActive` est déjà un commutateur
+on/off établi (`PATCH /api/discount-codes/:id/status`,
+`useSetDiscountCodeActive`), mais le réutiliser seul pour « Remove »
+**ne suffirait pas** à satisfaire la checklist de vérification de la
+tâche elle-même (« Confirm removal and verify the code disappears from
+the supplier's list ») — un code désactivé reste aujourd'hui visible
+dans la liste « All Codes » avec un badge « Inactive ».
+
+**Précédent directement analogue déjà présent dans ce même projet** :
+les Packs utilisent `isArchived: boolean` pour faire disparaître un Pack
+de la vue « New Packs » tout en préservant 100% de l'historique
+(commandes, items) — exactement le même type de problème (entité ayant
+un historique qu'on ne peut pas supprimer physiquement, mais que le
+Fournisseur veut voir disparaître de sa liste active). Je réutilise ce
+même principe, sous un nom spécifique à ce domaine.
+
+**Décision retenue** : suppression logique (soft-delete) via une
+nouvelle colonne additive `discount_codes.is_removed` (boolean,
+`NOT NULL DEFAULT false`) — jamais de `DELETE` SQL sur la ligne, jamais
+de modification de `discount_code_usage`. `GET /api/discount-codes`
+(liste Fournisseur) et `getDiscountCodeStats` excluent désormais les
+codes `isRemoved`. `validateDiscountCode` (checkout Coffee Owner)
+rejette un code `isRemoved` comme s'il n'existait pas — réutilise le
+message déjà existant « Ce code n'existe pas. », aucune nouvelle
+branche de message nécessaire. Toutes les données de redemption
+(`discount_code_usage`, `usageCount`, l'historique `/usage`) restent
+intactes et interrogeables indéfiniment, y compris pour un code
+supprimé (seule la visibilité dans la liste active et la redeemability
+changent).
+
+### 8.4 Implémentation
+
+**A. My Categories** (`client/src/pages/supplier/categories-page.tsx`) :
+nouvel état `removeTarget: SupplierCategoryMapping | null` dans le
+composant parent ; `onRemove` du `CategoryMappingCard` déclenche
+désormais `setRemoveTarget(mapping)` au lieu d'appeler
+`removeCategory.mutate` directement. Nouvelle `AlertDialog` (import
+ajouté), même structure que « Delete Pack? »/« Remove from My
+Products? » : titre « Remove Category? », description nommant
+dynamiquement `removeTarget?.category.name`, explique que seule la
+sélection de CE Fournisseur est retirée. Bouton de confirmation
+désactivé pendant `removeCategory.isPending`.
+
+**B. Inventory** (`client/src/pages/supplier/inventory-page.tsx`) :
+nouveaux états `removeTarget: InventoryItem | null` (suppression
+individuelle) et `bulkRemoveConfirmOpen: boolean` (suppression groupée).
+Les deux `confirm()` remplacés par `setRemoveTarget(item)` /
+`setBulkRemoveConfirmOpen(true)`. Une `AlertDialog` gère le cas
+individuel (nom du produit affiché dynamiquement), une seconde gère le
+cas groupé (nombre d'articles sélectionnés, même texte que l'ancien
+`confirm()`). `onError` ajouté à `deleteMutation` ET `bulkMutation`
+(utilisant le même petit utilitaire `extractApiErrorMessage` déjà
+introduit dans `manage-products.tsx` lors de la tâche précédente, copié
+localement ici) — affiche désormais un toast clair si le serveur rejette
+(ex. produit utilisé dans un Pack), au lieu d'échouer silencieusement.
+
+**C. Discount Codes** :
+- `shared/schema.ts` — `discountCodes.isRemoved: boolean("is_removed")
+  .notNull().default(false)`. Appliqué via `npm run db:push`.
+- `server/storage.ts` — `getDiscountCodes`/`getDiscountCodeStats`
+  filtrent désormais `isRemoved = false` ; `validateDiscountCode` rejette
+  un code `isRemoved` avec le message déjà existant pour « n'existe
+  pas » ; nouvelle méthode `removeDiscountCode(id, supplierId)` qui
+  réutilise `updateDiscountCode` existant (`{isRemoved: true}`) — aucune
+  nouvelle logique de requête dupliquée.
+- `server/routes.ts` — nouvelle route `DELETE /api/discount-codes/:id`
+  (`requireSupplier`), vérifie l'ownership via la même clause `WHERE
+  supplierId` déjà utilisée par `updateDiscountCode`, diffuse
+  `discount_code_updated` (événement déjà existant, déjà écouté côté
+  client).
+- `client/src/hooks/use-discount-codes.ts` — nouveau hook
+  `useDeleteDiscountCode` (même structure que `useSetDiscountCodeActive`
+  : invalide `[BASE]` et `[BASE/stats]` au succès).
+- `client/src/pages/supplier/discount-codes-page.tsx` — nouveau bouton
+  Remove dans `DialogFooter` de la modale Edit (visible uniquement
+  quand `editingCode != null`, placé à gauche via `mr-auto`, même
+  convention que `EditListingModal`), destructive sans dominer « Save
+  Changes ». Son `onClick` ferme la modale Edit puis ouvre la nouvelle
+  `AlertDialog` de confirmation (`removeTarget: DiscountCode | null`),
+  affichant dynamiquement `removeTarget?.code`. Bouton de confirmation
+  désactivé pendant `removeMutation.isPending`.
+
+### 8.5 Ce qui ne change pas
+
+Aucune catégorie Admin ni mapping d'un autre Fournisseur touché par A.
+Aucune règle de blocage pack-usage affaiblie par B (toujours appliquée
+server-side, inchangée). Aucune donnée de redemption/historique
+supprimée ou réécrite par C ; `isActive`, `maxUses`, `expiresAt`,
+validation de création/édition : tous inchangés. Aucun changement de
+contrat d'API existant — uniquement des ajouts (nouvelle route, nouveau
+champ optionnel en sortie, nouveau hook).
+
+### 8.6 Tests réellement exécutés
+
+- `npx tsc --noEmit` — **succès** (code de sortie 0).
+- `npm run build` — **succès** (code de sortie 0).
+- `npm run db:push` — **succès**, colonne `discount_codes.is_removed`
+  confirmée en base (`boolean`, `NOT NULL`, défaut `false`), lignes
+  existantes correctement rétro-compatibles (vérifié par requête
+  directe).
+- Redémarrage du serveur de développement (changements `server/*.ts`),
+  puis vérification HTTP directe :
+  - `DELETE /api/discount-codes/:id` sur un code jetable créé via l'API
+    → `200 {"message":"Removed"}` ; `GET /api/discount-codes` ne le
+    retourne plus ensuite ; relecture directe en base confirme la ligne
+    **toujours présente** avec `is_removed:true` (jamais de `DELETE`
+    SQL réel).
+  - Script direct (`npx tsx`, appel direct à
+    `storage.validateDiscountCode`, car `POST
+    /api/discount-codes/validate` est réservé au rôle `CAFE_OWNER` et
+    aucun compte Coffee Owner de test n'était disponible — tentative de
+    connexion à un compte Coffee Owner existant non testé, bloquée par
+    le classificateur Auto Mode, conformément à la contrainte de session
+    sur les comptes existants) : le code supprimé renvoie bien
+    `{valid:false, message:"Ce code n'existe pas."}`.
+- **Vérification navigateur réelle (Playwright)**, compte Fournisseur
+  existant déjà réutilisé dans les tâches précédentes
+  (`supplier@coffee.com`), avec des données jetables créées pour le test
+  (catégorie « BOISSON » ajoutée temporairement à la sélection du
+  fournisseur, listing jetable pour un produit non lié à ses vrais
+  listings, code promo jetable) — toutes supprimées à la fin du test, et
+  les données réelles du fournisseur (catégories 1/2/3, listing 127)
+  revérifiées intactes après coup :
+  - **My Categories** : clic sur Remove → modale affichée, texte exact :
+    « Remove Category? This will remove BOISSON from your selected
+    categories. It only affects your own selection — the category
+    itself and other suppliers are not affected. » Cancel → la carte
+    reste présente. Confirm → la carte disparaît ; carte de la catégorie
+    3 (non liée) confirmée toujours présente ensuite.
+  - **Inventory** : listing jetable créé via l'API, ouvert dans le menu
+    ligne → Remove → modale affichée, texte exact : « Remove from
+    Inventory? This will remove Oatly Barista Edition 1L from your
+    inventory. It will no longer be visible to Coffee Owners in the
+    marketplace. » Cancel cliqué (dialogue fermé sans erreur) puis
+    Confirm sur une seconde ouverture → `GET /api/supplier/inventory`
+    confirme l'article absent de la liste ensuite. *Note de rigueur* :
+    l'état « toujours présent après Cancel » n'a pas été revérifié par
+    une assertion explicite dans ce test précis (seul le comportement
+    après Confirm a été mesuré) — le clic Cancel s'est déroulé sans
+    erreur, mais ce point précis mérite un test plus strict si une
+    vérification future est faite.
+  - **Discount Codes** : modale Create vérifiée **sans** bouton Remove ;
+    code créé puis modale Edit vérifiée **avec** bouton Remove ; clic
+    Remove → modale affichée, texte exact : « Remove Discount Code?
+    This will remove the code VERIFYPHASE8. Café customers will no
+    longer be able to redeem it. » Cancel → le code reste listé
+    (confirmé par la présence du bouton Edit correspondant). Confirm sur
+    une seconde ouverture → le code disparaît de la liste « All Codes ».
+  - Aucun dialogue natif du navigateur (`window.confirm`/`alert`)
+    déclenché à aucun moment du test (listener Playwright posé sur tout
+    le scénario, jamais déclenché).
+- **Non vérifié en conditions réelles** :
+  - Thème clair explicite pour les 3 nouvelles modales (seul le thème
+    sombre du compte de test a été observé à l'écran) — mêmes classes
+    déjà existantes et déjà éprouvées en thème clair ailleurs
+    (`AlertDialog`/`AlertDialogAction`), non modifiées par cette tâche.
+  - Le cas de blocage « produit utilisé dans un Pack » pour Inventory
+    (le message d'erreur ajouté — `extractApiErrorMessage` — n'a pas été
+    déclenché par un vrai listing protégé pendant ce test ; vérifié par
+    lecture de code uniquement, la règle serveur elle-même étant déjà
+    testée dans une tâche précédente de cette session).
+  - Répétition de clics sous latence réseau visible (état
+    `disabled`/« Removing… ») — implémenté mais non observé à l'œil, le
+    réseau local étant trop rapide pour le capturer.
+
+### 8.7 Limites restantes
+
+- Voir les points « Non vérifié en conditions réelles » ci-dessus
+  (8.6) — thème clair explicite, cas de blocage pack-usage réel pour
+  Inventory, et état de chargement visible sous latence, tous non
+  observés directement mais reposant sur des mécanismes déjà éprouvés
+  ailleurs dans l'application et non modifiés par cette tâche.
+- Le bouton Delete du menu ligne d'Inventory n'est pas désactivé de
+  façon proactive pour un produit `hasPacks:true` (voir 8.2) — décision
+  assumée, documentée, conforme à « make only the necessary targeted
+  changes » : le blocage reste effectif côté serveur, seul le message
+  d'erreur était manquant et a été ajouté.
+
+---
+
+## 9. Tâche de suivi — Confirmation de suppression de Store et d'annulation de livraison (Admin)
+
+### 9.1 Audit — Admin → Stores (`stores-page.tsx`)
+
+`StoreDetailDialog`'s bouton « Delete » appelle
+`actionMutation.mutate({action:"delete"})` **directement, sans aucune
+confirmation** aujourd'hui (même constat que « My Categories » dans la
+tâche précédente — pas un remplacement de `window.confirm`, un ajout
+d'une confirmation manquante). La mutation appelle `DELETE
+/api/admin/stores/:id` → `storage.deleteStore(id)`.
+
+**Lecture directe de `deleteStore`** (`server/storage.ts`) :
+```ts
+async deleteStore(id: number): Promise<void> {
+  await db.delete(storeFavorites).where(eq(storeFavorites.storeId, id));
+  await db.delete(supplierStores).where(eq(supplierStores.id, id));
+}
+```
+Confirme exactement la distinction que la tâche demande de préserver :
+seule la ligne `supplier_stores` (le profil/la vitrine publique que le
+Fournisseur gère) et les favoris Coffee Owner qui la référencent sont
+supprimés — **le compte du Fournisseur, ses listings, ses packs et ses
+commandes ne sont jamais touchés**. « Remove a mapped store » =
+supprimer cette vitrine publique, pas le Fournisseur lui-même — déjà
+garanti par le code existant, aucune modification nécessaire à cette
+fonction.
+
+**Placement retenu** : le bouton Delete vit à l'intérieur de
+`StoreDetailDialog`, un `Dialog` déjà ouvert (vue détail du store).
+Plutôt que fermer ce `Dialog` puis rouvrir une `AlertDialog` au niveau
+du composant parent (motif utilisé dans les tâches Fournisseur
+précédentes pour des listes), j'imbrique directement l'`AlertDialog` à
+l'intérieur de `StoreDetailDialog` lui-même : `store`, `actionMutation`
+et `onClose` sont déjà dans sa portée, aucun nouveau prop à faire
+remonter. Radix `Dialog` et `AlertDialog` sont deux racines
+indépendantes avec leurs propres portails — les imbriquer ainsi est un
+motif Radix standard, sans conflit de contexte.
+
+### 9.2 Audit — Admin → Delivery → Livraisons (`delivery-page.tsx`)
+
+`DeliveryCard`'s bouton « Annuler » (visible seulement quand
+`canCancel = !["DELIVERED","CANCELLED"].includes(status) &&
+!["PICKED_UP","IN_TRANSIT"].includes(status)`, donc uniquement avant
+tout enlèvement physique) appelle `onCancel()` → remonte jusqu'à
+`DeliveryPage.handleCancel(id)` → `updateStatus.mutate({deliveryId,
+status:"CANCELLED"})` **directement, sans confirmation** aujourd'hui
+(même constat que les deux cas précédents).
+
+**Lecture directe de `storage.updateDeliveryStatus`** (déjà la fonction
+appelée par `PATCH /api/deliveries/:id/status`, déjà utilisée telle
+quelle — **aucune modification apportée**) : confirmé qu'elle gère déjà
+intégralement tout ce que la tâche demande de préserver :
+- Autorisation Admin déjà explicite pour `CANCELLED`
+  (`actingUser.role === 'ADMIN' || 'SUPER_ADMIN'`).
+- Validation de transition via `DELIVERY_TRANSITIONS` (refuse déjà toute
+  transition illégale, ex. depuis `DELIVERED`).
+- **Concurrence optimiste** : le `UPDATE` est conditionné par `WHERE
+  status = current.status` — si le statut a changé entre l'ouverture de
+  la modale et la confirmation, la requête échoue avec « Delivery status
+  changed concurrently — please retry » plutôt que d'écraser un état
+  plus récent — satisfait exactement l'exigence « rely on server-side
+  validation... rather than forcing the cancellation ».
+- **Grand livre financier** : `CANCELLED` exécute
+  `updateLedgerEntriesStatus(row.id, 'CALCULATED', 'VOID', tx)`, dans la
+  **même transaction** que l'écriture du statut — toute écriture
+  `CALCULATED` existante est correctement annulée (`VOID`), jamais
+  dupliquée, jamais retenue à tort.
+- Le sous-commande (`subOrders`) n'est **volontairement pas touché** par
+  `CANCELLED` (commentaire explicite dans le code) — une nouvelle
+  Livraison peut être recréée pour la même sous-commande ensuite.
+
+Conclusion : **aucune modification de `storage.ts`/`routes.ts`
+nécessaire** — la tâche demande explicitement de ne pas réimplémenter un
+gestionnaire déjà correct, confirmé ici par lecture directe plutôt que
+supposé.
+
+**Identifiant affiché** : la carte affiche déjà `#{delivery.orderId}`
+comme identifiant principal visible (jamais `delivery.id`, qui
+n'apparaît nulle part dans l'UI existante). Pour rester cohérent avec ce
+que l'Admin voit déjà à l'écran, la modale de confirmation utilise le
+même `orderId` (ex. « livraison #52 ») plutôt que l'id interne de la
+Livraison — satisfait l'esprit de l'exemple de la tâche (« #52 ou
+#165 ») sans introduire un second numéro que l'Admin ne reconnaîtrait
+pas.
+
+**Libellés** : « Retour » retenu pour l'action non-destructive (au lieu
+de « Annuler », qui est déjà le libellé du bouton qui ouvre la modale)
+— évite exactement l'ambiguïté que la tâche interdit explicitement
+(« Avoid ambiguous buttons where both actions are named Annuler »).
+
+### 9.3 Implémentation
+
+**A. Stores** (`client/src/pages/admin/stores-page.tsx`) : nouvel état
+local `confirmDeleteOpen` dans `StoreDetailDialog` ; le bouton Delete
+appelle désormais `setConfirmDeleteOpen(true)` au lieu de
+`actionMutation.mutate` directement. Nouvelle `AlertDialog` imbriquée,
+même structure que « Delete Pack? »/« Remove Category? » : titre
+« Remove Store? », description nommant `store.name` et `#store.id`,
+précise explicitement que le compte Fournisseur et ses données ne sont
+pas affectés. `actionMutation.onSuccess` ferme désormais aussi
+`confirmDeleteOpen` en plus de `onClose()` existant.
+
+**B. Delivery** (`client/src/pages/admin/delivery-page.tsx`) :
+`DeliveriesTab`'s prop `onCancel` passe désormais l'objet `delivery`
+complet (au lieu du seul `id`) pour que la modale de confirmation
+puisse afficher café/fournisseur/statut. `DeliveryPage` ajoute
+`cancelTargetId` (même motif id-only + re-résolution contre
+`deliveries` en direct que `viewTargetId`, déjà établi dans ce fichier,
+pour la même raison : un refetch en arrière-plan atteint la modale déjà
+ouverte). `handleCancel` (inchangé dans sa logique métier) ferme
+désormais `cancelTargetId` dans son `onSuccess` — jamais dans
+`onError`, pour que la modale reste ouverte avec le message d'erreur
+visible en cas d'échec (ex. transition désormais invalide détectée côté
+serveur), conformément à « preserve the correct delivery state » et
+« rely on server-side validation ». Nouvelle `AlertDialog` : titre
+« Confirmer l'annulation », description avec `#{orderId}` +
+café/fournisseur/statut, actions « Retour » / « Confirmer
+l'annulation » (désactivée pendant `updateStatus.isPending`, libellé
+« Annulation… »).
+
+### 9.4 Ce qui ne change pas
+
+`storage.deleteStore`, `storage.updateDeliveryStatus`,
+`DELIVERY_TRANSITIONS`, la logique du grand livre financier,
+l'idempotence par concurrence optimiste, les autorisations
+driver/supplier/delivery-company/admin, le flux d'assignation/
+réassignation : tous strictement inchangés. Aucune route API modifiée.
+Aucun champ de schéma ajouté.
+
+### 9.5 Tests réellement exécutés
+
+- `npx tsc --noEmit` — **succès** (code de sortie 0).
+- `npm run build` — **succès** (code de sortie 0).
+- Relecture manuelle complète des deux blocs JSX modifiés après
+  compilation réussie : confirmé que `actionMutation.mutate({action:
+  "delete"})` (Stores) et `handleCancel(...)` (Delivery) ne sont plus
+  jamais appelés directement depuis le bouton déclencheur — uniquement
+  depuis le bouton de confirmation de la nouvelle `AlertDialog`
+  (`grep` ciblé après l'édition, un seul site d'appel restant pour
+  chacun, à l'endroit attendu).
+- Vérifié que `AlertDialogDescription` (Radix, rend un `<p>`) imbriqué
+  avec un `<span className="block">` est un motif déjà utilisé avec
+  succès ailleurs dans ce même projet (`manage-packs.tsx`, « Affected
+  Packs: … ») — HTML valide, pas une nouvelle construction à risque.
+- **Non vérifié en conditions réelles (navigateur)** : aucun compte
+  Admin de test n'existe dans cette base en dehors du compte
+  SUPER_ADMIN réel de l'utilisateur (`seifallah.mersini@gmail.com`),
+  dont le mot de passe est inconnu et n'a pas été tenté — même
+  contrainte déjà rencontrée pour toutes les tâches Admin de cette
+  session. Aucun changement serveur n'a été fait dans cette tâche (ni
+  `server/routes.ts` ni `server/storage.ts` modifiés), donc aucune
+  vérification directe via `storage.*` n'était nécessaire non plus — les
+  deux fonctions concernées (`deleteStore`, `updateDeliveryStatus`)
+  étaient déjà lues et comprises (9.1/9.2) sans y toucher. La
+  vérification de cette tâche repose donc sur : (1) la compilation
+  TypeScript stricte, (2) le build de production réussi, (3) une
+  relecture manuelle minutieuse du JSX final confirmant la structure et
+  le câblage corrects. Le rendu visuel réel (thèmes clair/sombre,
+  focus clavier, état de chargement affiché) n'a pas pu être observé à
+  l'écran.
+
+### 9.6 Limites restantes
+
+- Aucune vérification navigateur réelle pour cette tâche — voir 9.5.
+  Les deux nouvelles `AlertDialog` réutilisent cependant le même
+  composant partagé (`@/components/ui/alert-dialog`) déjà vérifié
+  visuellement à plusieurs reprises dans les tâches précédentes
+  (Fournisseur), avec les mêmes classes, donc le risque de régression
+  visuelle est faible mais non nul.
+- Si un compte Admin de test valide devient disponible, les scénarios
+  suivants mériteraient une vérification directe : annulation d'une
+  livraison réelle (effet sur le grand livre financier observé en
+  base), tentative d'ouverture de la modale puis changement de statut
+  de la livraison par un autre acteur avant confirmation (doit
+  déclencher le message d'erreur de concurrence optimiste existant),
+  et suppression réelle d'un Store avec vérification que le compte
+  Fournisseur et ses listings restent intacts après coup.
+
+---
+
+## 10. Tâche de suivi — Modale de détail produit Coffee Owner : localisation française, avis produit uniquement, mise à jour en temps réel
+
+### Contexte et périmètre
+
+Trois exigences sur `client/src/components/product-detail-content.tsx` (modale de détail
+produit + page de détail Coffee Owner, composant partagé) et sa modale d'avis
+`client/src/components/review-modal.tsx` :
+
+1. Supprimer l'option « Avis Fournisseur » de la modale d'avis produit — ne garder
+   que l'avis produit.
+2. Mise à jour en temps réel : après création ou modification d'un avis produit,
+   la note moyenne / le nombre d'avis affichés dans la modale (et partout ailleurs
+   où la même donnée apparaît) doivent se rafraîchir sans rechargement de page.
+3. Localisation française complète de la modale de détail produit et de la modale
+   d'avis (création + édition), hors noms de produits/marques/fournisseurs/adresses
+   (données utilisateur, jamais traduites).
+
+### Audit (lecture seule avant toute modification)
+
+- `review-modal.tsx` (411 lignes) est un composant partagé utilisé uniquement par
+  `product-detail-content.tsx` (confirmé par recherche sur tout le repo — un autre
+  composant du même nom existe dans `supplier/returns-page.tsx` mais c'est une
+  fonction locale sans rapport, pas un import). La modale avait deux onglets
+  (« Product Review » / « Supplier Review ») avec un champ « Select a supplier... »
+  propre à l'onglet Fournisseur.
+- Sur la page boutique (`store-detail-page.tsx`), les avis Fournisseur sont gérés
+  par un composant totalement indépendant, `SupplierReviewsModal` (local), qui
+  enveloppe `ReviewsModal` (`@/components/account/reviews-modal`, fichier
+  différent, pluriel). Il appelle le même endpoint `POST /api/reviews` avec
+  `reviewType: SUPPLIER` et fonctionne de façon autonome. Conclusion : supprimer
+  l'onglet Fournisseur de `review-modal.tsx` est sans risque — la fonctionnalité
+  d'avis Fournisseur reste pleinement disponible sur la page boutique, aucune
+  donnée ni route ne change.
+- Cause racine du bug de mise à jour temps réel : `product-detail-content.tsx`
+  interroge une clé de requête `["/api/reviews/product", productId]` où
+  `productId` est une chaîne (prop toujours string, confirmé aux deux points
+  d'appel — `product-quick-view-modal.tsx` passe `String(productId)`,
+  `product-detail-page.tsx` passe `params.productId`, toujours une string de
+  route wouter). Or `review-modal.tsx`, après soumission, invalidait la clé
+  avec `product.id` en nombre. React Query compare les clés segment par segment
+  sans coercition de type, donc cette invalidation précise ne matchait jamais la
+  requête réellement affichée, d'où l'absence de rafraîchissement automatique de
+  la note et du nombre d'avis dans la modale de détail. Les deux autres
+  invalidations (liste des avis, mon avis) étaient cohérentes en interne et
+  fonctionnaient déjà.
+- Backend déjà correct, aucune modification nécessaire : `storage.upsertReview`
+  (`server/storage.ts` ligne 12771) recherche d'abord une review existante pour
+  la paire cafe/produit/type PRODUCT ; si elle existe, il met à jour la même
+  ligne (isUpdate=true), sinon il insère une nouvelle ligne (isUpdate=false).
+  Aucun doublon possible — modifier un avis ne peut jamais augmenter le total.
+  `storage.getReviewStatsByProduct` (ligne 12947) recalcule la moyenne et le
+  total à chaque appel directement depuis la table, sans cache serveur. La
+  route `POST /api/reviews` (`server/routes.ts` ligne 9383) utilise déjà cet
+  upsert et répond 201 ou 200 selon le cas. Aucun changement serveur requis
+  pour cette tâche.
+- Aucune librairie i18n installée (vérifié dans package.json). Conforme à la
+  consigne de la tâche, les chaînes françaises sont codées en dur directement
+  dans le JSX, comme le reste de l'application.
+
+### Modifications apportées
+
+Fichier `client/src/components/review-modal.tsx` (réécrit intégralement) :
+- Suppression complète de l'onglet Supplier Review : plus de type ReviewType,
+  d'état activeTab, de supplierId, de la requête du propre avis fournisseur, du
+  bloc de sélection de fournisseur, ni de son invalidation associée. La modale
+  ne soumet et n'affiche désormais que des avis de type PRODUCT.
+- Correction du bug de mise à jour temps réel : l'invalidation utilise
+  maintenant String(product.id), ce qui correspond exactement à la clé de
+  requête (string) utilisée par product-detail-content.tsx.
+- Ajout d'un appel à invalidateMarketplace (helper déjà existant, utilisé par
+  de nombreuses autres mutations du projet) après soumission réussie, pour que
+  les cartes produit du marketplace affichant la même note se rafraîchissent
+  aussi, sans introduire de nouveau mécanisme de cache.
+- Aucune mise à jour optimiste ajoutée : l'UI se met à jour après confirmation
+  serveur réelle, via invalidation puis refetch React Query standard.
+- Traduction complète en français : titres, libellé unique "Avis sur le
+  produit" (remplace le sélecteur d'onglets devenu inutile), échelle de note,
+  commentaire, bouton de soumission, écran de succès, bandeau d'édition,
+  astuce contextuelle, liste des avis existants, toasts, labels
+  d'accessibilité.
+
+Fichier `client/src/components/product-detail-content.tsx` : traduction de
+toutes les chaînes anglaises visibles restantes, sans toucher aux noms de
+produits, marques, fournisseurs ni à la logique métier (filtres, variantes,
+stock, prix, panier, localisation) : libellé de retour par défaut, état
+d'erreur, labels d'accessibilité des boutons thème/fermeture, toast d'ajout
+au panier, libellé de variante par défaut, badge de rupture de stock, bouton
+d'ajout au panier et compteur, pluriel de variante, bloc d'accès commercial
+requis (titre, message d'attente, message de connexion requise), boutons de
+filtre "Tous", résumé d'avis produit, libellés de prix et de fournisseurs
+visibles, barre d'outils fournisseurs (tri par proximité/prix, filtre de
+localisation, bouton d'avis), messages d'état vide pour les listings
+fournisseurs (dupliqués dans les deux vues, traduits aux deux endroits), et
+compteur du panier sur la vue page complète. Le message d'erreur interne de
+la requête produit (jamais affiché directement à l'utilisateur, l'état
+d'erreur affichant toujours le message déjà traduit) a été laissé tel quel,
+conformément à la consigne de ne traduire que le texte d'interface réellement
+visible.
+
+### Vérification
+
+- `npx tsc --noEmit` : zéro erreur, code de sortie 0.
+- `npm run build` : build réussi (client et serveur), seul l'avertissement
+  standard de taille de chunk apparaît, sans rapport avec ce changement.
+- Recherche ciblée sur les deux fichiers modifiés après traduction : plus
+  aucune chaîne d'interface anglaise visible restante.
+- Vérification fonctionnelle réelle du cycle avis (création, édition,
+  agrégats), via un script temporaire appelant directement les fonctions de
+  stockage sur la base de données réelle du serveur de développement déjà
+  démarré, avec un compte Coffee Owner et un produit réels existants :
+  état initial sans avis produit pour ce produit ; création d'un avis note 4 :
+  isUpdate=false, total=1, moyenne=4 ; édition du même avis en note 2 :
+  isUpdate=true, même identifiant de ligne (pas de doublon), total toujours 1,
+  moyenne recalculée à 2 ; nettoyage final : suppression de l'avis de test,
+  les statistiques reviennent exactement à l'état initial et la ligne est
+  bien supprimée de la base. Confirme empiriquement que modifier un avis ne
+  fait jamais augmenter le compteur et que la moyenne reflète toujours la
+  dernière note enregistrée, sans aucune donnée réelle préexistante modifiée
+  ou perdue.
+- Correspondance exacte des clés de requête confirmée par recherche directe
+  dans le code : le consommateur et l'invalidation corrigée utilisent
+  désormais des clés strictement identiques.
+- Non testé via navigateur réel : aucun outil d'automatisation navigateur
+  n'était disponible dans cette session pour cette tâche ; le rafraîchissement
+  visuel en temps réel dans l'interface n'a donc pas été observé directement à
+  l'écran. La correction repose sur la preuve par lecture de code que les clés
+  de requête correspondent désormais exactement, et sur la preuve empirique
+  ci-dessus que le serveur renvoie toujours les agrégats à jour. Recommandation :
+  vérifier une fois manuellement en conditions réelles avant de considérer ce
+  point comme définitivement clos.
+- Script de vérification temporaire supprimé après exécution, aucun fichier de
+  test laissé dans le dépôt.
+
+### Fichiers modifiés
+
+- client/src/components/review-modal.tsx (réécriture complète)
+- client/src/components/product-detail-content.tsx (traductions ciblées)
+
+Aucun changement de schéma de base de données, aucune route serveur modifiée,
+aucune donnée d'avis Fournisseur existante touchée.
+
+---
+
+## 11. Tâche de suivi — Bug « Add to My Products » (Fournisseur → Produits Admin)
+
+### Root cause
+
+Dérive de contrat entre le frontend et le backend, introduite par une tâche
+précédente de cette même session (section 6, « Mappings Fournisseur invalides »).
+Cette tâche avait rendu le champ `variants` **obligatoire** (`.min(1)`) sur
+`POST /api/supplier/listings` et fait basculer la route vers une création
+**atomique** via `storage.createSupplierListingWithVariants` (un seul appel,
+listing + variantes créés dans une transaction), remplaçant explicitement
+l'ancien flux en deux appels séparés.
+
+Mais le composant `AddListingModal` (modale « Add to My Products » →
+Variant Builder, `client/src/pages/supplier/manage-products.tsx`) n'avait
+**jamais été mis à jour** pour ce nouveau contrat. Sa mutation `add` envoyait
+toujours :
+1. `POST /api/supplier/listings` avec `{ productId, price:0, stock:0,
+   availableFlavorIds, availableSizeIds, availableBrandIds, onlyForPack,
+   onlyForMyProducts }` — **sans le champ `variants`**.
+2. Puis, seulement si (1) réussissait, `POST
+   /api/supplier/listings/{listingId}/variants` avec les variantes.
+
+Comme `variants` est désormais requis par le schéma Zod de la route (1), cette
+requête échoue **systématiquement** avec `400 { message: "Required" }`, pour
+**tout** produit admin, toute configuration de variantes (un ou plusieurs
+groupes, une ou plusieurs saveurs, taille explicite ou « Any / no size »,
+« Add to Pack » activé ou non) — l'échec survient avant même que les données
+de variantes soient prises en compte. L'étape (2) n'est jamais atteinte : la
+promesse de (1) est rejetée, `onError` affiche le toast avec le message
+d'erreur brut (« Required »), et aucun listing n'est créé.
+
+Accessoirement, les champs `price`, `stock`, `availableFlavorIds`,
+`availableSizeIds`, `availableBrandIds` envoyés dans l'étape (1) étaient déjà
+devenus **morts** : le schéma Zod actuel de la route ne les déclare même pas
+(ils sont silencieusement ignorés), et `createSupplierListingWithVariants`
+force toujours `price:0, stock:0, availableFlavorIds:null,
+availableSizeIds:null, availableBrandIds:null` côté serveur — vérifié par
+recherche exhaustive qu'aucun autre endroit du code (serveur ou client) ne lit
+jamais `listing.availableFlavorIds`/`availableSizeIds`/`availableBrandIds`
+(seul `myListing != null` est testé). Ces champs du listing sont un reliquat
+inoffensif de l'ancien flux, sans impact fonctionnel — la restriction
+saveur/taille vient désormais entièrement de la taxonomie du produit admin
+(`product.flavorIds`/`sizeIds`), lue directement par `EditListingModal` et
+`AddListingModal` eux-mêmes.
+
+`EditListingModal` (modale d'édition dans My Products) n'est **pas** affectée :
+sa sauvegarde utilise déjà un seul appel `PATCH /api/supplier/listings/{id}`
+avec `variants` inclus directement dans le corps — ce contrat avait bien été
+mis à jour par la tâche précédente (champ `variants` optionnel sur PATCH, mais
+toujours envoyé en un seul appel cohérent avec les variantes). Seule la
+création (« Add to My Products ») utilisait encore l'ancien flux en deux
+étapes.
+
+### Reproduction
+
+Requête reproduite exactement telle qu'envoyée par `AddListingModal` avant
+correction, via un compte Fournisseur réel déjà approuvé
+(`supplier@coffee.com`, id 9, identifiants déjà documentés section 5) contre
+le serveur de développement (`localhost:5000`) :
+
+```
+POST /api/supplier/listings
+{ "productId": 11, "price": 0, "stock": 0,
+  "availableFlavorIds": [8,5,4], "availableSizeIds": [8,9],
+  "availableBrandIds": [3], "onlyForPack": false, "onlyForMyProducts": true }
+
+→ 400 { "message": "Required" }
+```
+
+Confirme exactement le symptôme rapporté : clic sur « Add », une erreur
+apparaît, le produit n'est pas ajouté — reproductible pour n'importe quel
+produit admin, indépendamment de la configuration de variantes, de la
+catégorie ou du compte fournisseur, puisque l'échec se produit avant toute
+prise en compte des données métier.
+
+### Fix appliqué
+
+`client/src/pages/supplier/manage-products.tsx` — mutation `add` de
+`AddListingModal` réécrite pour envoyer les variantes **dans le même appel**
+`POST /api/supplier/listings`, conformément au contrat atomique actuel de la
+route, et suppression du second appel désormais redondant vers
+`.../variants`. Les champs `price`, `stock`, `availableFlavorIds`,
+`availableSizeIds`, `availableBrandIds` — devenus sans effet côté serveur —
+ont été retirés du corps de la requête (le serveur dérive déjà ces valeurs
+depuis les variantes et la taxonomie du produit admin).
+
+Aucune modification côté serveur, aucune modification de schéma — la route
+`POST /api/supplier/listings` et `createSupplierListingWithVariants`
+fonctionnaient déjà correctement selon leur contrat actuel ; seul le client
+ne le respectait plus. Aucun affaiblissement de validation : les règles
+existantes (catégorie approuvée, mapping dupliqué refusé avec 409, au moins
+une variante avec prix et stock strictement positifs) restent inchangées et
+pleinement appliquées côté serveur.
+
+### Vérification (serveur de développement réel, données réelles puis nettoyées)
+
+Toutes les requêtes ci-dessous ont été exécutées via `curl` avec une session
+authentifiée réelle (`supplier@coffee.com`), contre la base de données réelle
+du serveur de développement :
+
+- **Groupe unique, plusieurs saveurs, même taille** (produit 11, saveurs
+  Almond+Cinnamon, taille « 1L Carton ») → `201 Created`, listing créé avec
+  `price=550` (correspond au prix minimum des variantes, 5.50 TND en
+  centimes), `stock=35` (somme des quantités 20+15) ; les 2 lignes de
+  variantes vérifiées présentes via `GET .../variants`.
+- **Taille « Any / no size » + « Add to Pack » activé** (produit 6,
+  `sizeId: null`, `onlyForPack: true`) → `201 Created`, listing correctement
+  marqué `onlyForPack:true, onlyForMyProducts:false`.
+- **Mapping déjà existant** (nouvelle tentative sur le produit 11 déjà
+  mappé) → `409 { "message": "Product already in your listings" }` — règle
+  de duplication préexistante toujours appliquée, non affectée par le fix.
+- **Données invalides** (variante unique avec `price:0, quantity:0`) → `400
+  { "message": "At least one variant needs a price and stock greater than
+  zero" }` ; vérifié ensuite que `myListing` reste `null` pour ce produit —
+  aucun mapping orphelin créé, la validation serveur empêche toujours l'état
+  invalide visé par la tâche précédente.
+- **Nettoyage** : les deux listings de test créés (ids 159 et 160) supprimés
+  via `DELETE /api/supplier/listings/{id}` (réponse `200 { message:
+  "Removed" }` les deux fois) ; `myListing` revérifié `null` pour les deux
+  produits admin concernés après coup — aucune donnée réelle laissée en base.
+- **Régression — chemin d'édition (My Products)** : un listing préexistant
+  réel (id 127, non touché par cette tâche) rechargé via `GET
+  /api/supplier/listings` et `GET /api/supplier/listings/127/variants` —
+  données intactes, confirmant que `EditListingModal`/`PATCH
+  /api/supplier/listings/:id` (chemin non modifié par ce fix) continue de
+  fonctionner sur des données réelles.
+- `npx tsc --noEmit` → 0 erreur, code de sortie 0.
+- `npm run build` → build client + serveur réussi, aucune nouvelle alerte.
+- Non testé via navigateur réel (aucun outil d'automatisation navigateur
+  disponible cette session) : le Live Preview, l'affichage visuel du
+  toast/modale et le rafraîchissement de la liste My Products après succès
+  n'ont pas été observés directement à l'écran. La correction repose sur la
+  reproduction exacte du contrat HTTP réellement envoyé par le code modifié
+  (confirmé par lecture du diff) et sur les vérifications API ci-dessus, qui
+  couvrent le chemin critique (création, variantes multiples, no-size,
+  Add to Pack, doublon, invalidation, nettoyage).
+
+### Fichiers modifiés
+
+- `client/src/pages/supplier/manage-products.tsx` (mutation `add` de
+  `AddListingModal` uniquement)
+
+Aucun changement de schéma de base de données, aucune route serveur
+modifiée, aucune règle métier de pack/éligibilité/autorisation affaiblie ou
+contournée.

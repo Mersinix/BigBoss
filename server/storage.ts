@@ -13330,8 +13330,16 @@ export class DatabaseStorage implements IStorage {
 
   async getDiscountCodes(supplierId: number): Promise<import("@shared/schema").DiscountCode[]> {
     return db.select().from(discountCodes)
-      .where(eq(discountCodes.supplierId, supplierId))
+      .where(and(eq(discountCodes.supplierId, supplierId), eq(discountCodes.isRemoved, false)))
       .orderBy(desc(discountCodes.createdAt));
+  }
+
+  // Soft-delete only (task: "Supplier Module — Custom Removal Confirmation
+  // Modals and Discount Code Removal") — see the isRemoved column comment in
+  // shared/schema.ts for why a hard DELETE is never used here. Reuses
+  // updateDiscountCode's existing ownership-scoped WHERE clause.
+  async removeDiscountCode(id: number, supplierId: number): Promise<import("@shared/schema").DiscountCode | undefined> {
+    return this.updateDiscountCode(id, supplierId, { isRemoved: true } as any);
   }
 
   async getDiscountCode(id: number, supplierId?: number): Promise<import("@shared/schema").DiscountCode | undefined> {
@@ -13362,11 +13370,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDiscountCodeStats(supplierId: number): Promise<{ active: number; inactive: number; expired: number; usageLimitReached: number; totalRedemptions: number; totalDiscount: number }> {
+    // Historical totals (redemptions/discount) count every code the supplier
+    // ever had, removed or not — that revenue/discount activity genuinely
+    // happened and a later removal shouldn't erase it from reporting. The
+    // status buckets (active/inactive/expired/limit) only make sense for
+    // codes still in the supplier's list, so those exclude removed codes.
     const all = await db.select().from(discountCodes).where(eq(discountCodes.supplierId, supplierId));
     const now = new Date();
     let active = 0, inactive = 0, expired = 0, usageLimitReached = 0, totalRedemptions = 0;
     for (const c of all) {
       totalRedemptions += c.usageCount;
+      if (c.isRemoved) continue;
       if (!c.isActive) { inactive++; continue; }
       if (c.expiresAt && new Date(c.expiresAt) < now) { expired++; continue; }
       if (c.maxUses != null && c.usageCount >= c.maxUses) { usageLimitReached++; continue; }
@@ -13391,7 +13405,9 @@ export class DatabaseStorage implements IStorage {
     const trimmed = code.trim();
     if (!trimmed) return { valid: false, message: "Veuillez entrer un code." };
     const found = await this.getDiscountCodeByCode(trimmed);
-    if (!found) return { valid: false, message: "Ce code n'existe pas." };
+    // A removed code is treated exactly like a nonexistent one — never
+    // redeemable, and never reveals to the Coffee Owner that it once existed.
+    if (!found || found.isRemoved) return { valid: false, message: "Ce code n'existe pas." };
     if (found.supplierId !== supplierId) {
       return { valid: false, message: "Ce code n'est pas applicable aux articles de ce fournisseur dans votre panier." };
     }

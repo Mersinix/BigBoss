@@ -4,11 +4,11 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Star, Loader2, CheckCircle, Package, Store, AlertCircle, X, Sun, Moon, Pencil } from "lucide-react";
+import { Star, Loader2, CheckCircle, Package, X, Sun, Moon, Pencil } from "lucide-react";
 import { useThemeStore } from "@/store/theme-store";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 import type { MarketplaceListing, MarketplaceProduct } from "@shared/schema";
 
 interface Props {
@@ -57,16 +57,12 @@ function StarDisplay({ rating }: { rating: number }) {
   );
 }
 
-type ReviewType = "PRODUCT" | "SUPPLIER";
-
 export function ReviewModal({ open, onClose, product, listings }: Props) {
   const { toast } = useToast();
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<ReviewType>("PRODUCT");
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
-  const [supplierId, setSupplierId] = useState<string>("");
   const [submitted, setSubmitted] = useState(false);
   const { isDark, toggle } = useThemeStore();
 
@@ -75,10 +71,6 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
   const bg          = dk ? "bg-gray-900"                        : "bg-white";
   const textPrimary = dk ? "text-white"                         : "text-gray-900";
   const textMuted   = dk ? "text-gray-400"                      : "text-gray-500";
-  const cardBg      = dk ? "bg-gray-800 border-gray-700/60"     : "bg-gray-50 border-gray-100";
-  const switcherBg  = dk ? "bg-gray-800"                        : "bg-gray-100";
-  const switcherActive   = dk ? "bg-gray-700 text-white shadow-sm"    : "bg-white text-amber-600 shadow-sm";
-  const switcherInactive = dk ? "text-gray-400 hover:text-gray-200"   : "text-gray-500 hover:text-gray-700";
   const divider     = dk ? "bg-gray-800"                        : "bg-gray-100";
   const iconBtn     = dk
     ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white"
@@ -88,8 +80,6 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
     : "border-gray-200 text-gray-900 rounded-xl text-sm focus-visible:border-amber-500 focus-visible:ring-amber-500/20";
   const labelCls    = dk ? "text-xs font-semibold text-gray-300" : "text-xs font-semibold text-gray-700";
   const reviewCardBg = dk ? "bg-gray-800/60 border-gray-700/40" : "bg-gray-50 border-gray-100";
-  const selectContent = dk ? "bg-gray-800 border-gray-700/60 shadow-2xl" : "";
-  const selectItem    = dk ? "text-gray-200 focus:bg-gray-700 focus:text-white data-[highlighted]:bg-gray-700" : "";
 
   // Fetch existing product reviews for display
   const { data: existingReviews = [] } = useQuery<any[]>({
@@ -113,73 +103,28 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
     enabled: open && !!user,
   });
 
-  // Fetch user's own supplier review for selected supplier
-  const { data: mySupplierReview } = useQuery<any>({
-    queryKey: ["/api/reviews/my/supplier", supplierId],
-    queryFn: async () => {
-      if (!supplierId) return null;
-      const res = await fetch(`/api/reviews/my/supplier/${supplierId}`);
-      if (!res.ok) return null;
-      return res.json();
-    },
-    enabled: open && !!supplierId && activeTab === "SUPPLIER",
-  });
-
-  // Pre-populate form when existing review is found
+  // Pre-populate form when an existing review is found
   useEffect(() => {
-    if (activeTab === "PRODUCT" && myProductReview) {
+    if (myProductReview) {
       setRating(myProductReview.rating ?? 0);
       setComment(myProductReview.comment ?? "");
-    }
-  }, [myProductReview, activeTab]);
-
-  useEffect(() => {
-    if (activeTab === "SUPPLIER" && mySupplierReview) {
-      setRating(mySupplierReview.rating ?? 0);
-      setComment(mySupplierReview.comment ?? "");
-    } else if (activeTab === "SUPPLIER" && !mySupplierReview) {
+    } else {
       setRating(0);
       setComment("");
     }
-  }, [mySupplierReview, activeTab, supplierId]);
+  }, [myProductReview]);
 
-  // Reset rating/comment when switching tabs (unless pre-populating)
-  useEffect(() => {
-    if (activeTab === "PRODUCT") {
-      if (myProductReview) {
-        setRating(myProductReview.rating ?? 0);
-        setComment(myProductReview.comment ?? "");
-      } else {
-        setRating(0);
-        setComment("");
-      }
-    } else {
-      // Supplier tab — will be populated when supplierId is set
-      if (!supplierId) {
-        setRating(0);
-        setComment("");
-      }
-    }
-  }, [activeTab]);
-
-  const isEditingProduct = activeTab === "PRODUCT" && !!myProductReview;
-  const isEditingSupplier = activeTab === "SUPPLIER" && !!mySupplierReview;
-  const isEditing = isEditingProduct || isEditingSupplier;
+  const isEditing = !!myProductReview;
 
   const mutation = useMutation({
-    mutationFn: async (type: ReviewType) => {
+    mutationFn: async () => {
       const body: Record<string, unknown> = {
         productId: product.id,
         rating,
         comment: comment.trim() || null,
         productName: product.name,
-        reviewType: type,
+        reviewType: "PRODUCT",
       };
-      if (type === "SUPPLIER") {
-        const listing = listings.find((l) => String(l.supplierId) === supplierId);
-        body.supplierId = Number(supplierId);
-        body.listingId = listing?.id ?? null;
-      }
       const res = await fetch("/api/reviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -190,38 +135,35 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
     },
     onSuccess: () => {
       setSubmitted(true);
-      queryClient.invalidateQueries({ queryKey: ["/api/reviews/product", product.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/reviews/product", String(product.id)] });
       queryClient.invalidateQueries({ queryKey: ["/api/reviews/product", product.id, "list"] });
       queryClient.invalidateQueries({ queryKey: ["/api/reviews/my/product", product.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/reviews/my/supplier", supplierId] });
-      toast({ title: isEditing ? "Review updated" : "Review submitted", description: "Your review has been saved." });
+      invalidateMarketplace(queryClient, product.id);
+      toast({ title: isEditing ? "Avis mis à jour" : "Avis publié", description: "Votre avis a été enregistré." });
       setTimeout(() => {
         handleClose();
       }, 1500);
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      toast({ title: "Erreur", description: err.message, variant: "destructive" });
     },
   });
 
   const handleClose = () => {
     setRating(0);
     setComment("");
-    setSupplierId("");
     setSubmitted(false);
-    setActiveTab("PRODUCT");
     onClose();
   };
 
-  const canSubmit =
-    rating > 0 && (activeTab === "PRODUCT" || (activeTab === "SUPPLIER" && !!supplierId));
+  const canSubmit = rating > 0;
 
-  const ratingLabel = ["", "Poor", "Fair", "Good", "Very good", "Excellent"][rating] ?? "";
+  const ratingLabel = ["", "Médiocre", "Correct", "Bien", "Très bien", "Excellent"][rating] ?? "";
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
       <DialogContent className="sm:max-w-[480px] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
-        <VisuallyHidden><DialogTitle>Write a Review</DialogTitle></VisuallyHidden>
+        <VisuallyHidden><DialogTitle>Écrire un avis</DialogTitle></VisuallyHidden>
 
         <div className={`flex flex-col max-h-[90vh] overflow-hidden transition-colors duration-200 ${bg}`}>
 
@@ -231,7 +173,7 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
               {/* Close */}
               <button
                 onClick={handleClose}
-                aria-label="Close"
+                aria-label="Fermer"
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
               >
                 <X className="w-4 h-4" />
@@ -240,7 +182,7 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
               {/* Centered title */}
               <div className="flex flex-col items-center gap-0.5">
                 <span className={`text-[13px] font-semibold tracking-tight ${textPrimary}`}>
-                  {isEditing ? "Edit Your Review" : "Write a Review"}
+                  {isEditing ? "Modifier votre avis" : "Écrire un avis"}
                 </span>
                 <span className={`text-[11px] font-medium ${textMuted}`}>{product.name}</span>
               </div>
@@ -248,30 +190,16 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
               {/* Dark / light toggle */}
               <button
                 onClick={toggle}
-                aria-label="Toggle theme"
+                aria-label="Changer de thème"
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
               >
                 {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
               </button>
             </div>
 
-            {/* Tab switcher — pill style */}
-            <div className={`flex gap-1 rounded-2xl p-1 ${switcherBg}`}>
-              <button
-                type="button"
-                onClick={() => setActiveTab("PRODUCT")}
-                className={`flex-1 py-2 text-[11px] font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 ${activeTab === "PRODUCT" ? switcherActive : switcherInactive}`}
-              >
-                <Package className="w-3.5 h-3.5" /> Product Review
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("SUPPLIER")}
-                disabled={listings.length === 0}
-                className={`flex-1 py-2 text-[11px] font-semibold rounded-xl transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed ${activeTab === "SUPPLIER" ? switcherActive : switcherInactive}`}
-              >
-                <Store className="w-3.5 h-3.5" /> Supplier Review
-              </button>
+            {/* Review type label */}
+            <div className={`flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold rounded-xl ${dk ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-700"}`}>
+              <Package className="w-3.5 h-3.5" /> Avis sur le produit
             </div>
 
             {/* Divider */}
@@ -293,8 +221,8 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
                 <div className={`w-16 h-16 rounded-full flex items-center justify-center ${dk ? "bg-emerald-500/15" : "bg-emerald-50"}`}>
                   <CheckCircle className="w-8 h-8 text-emerald-500" />
                 </div>
-                <p className={`font-semibold ${textPrimary}`}>{isEditing ? "Review updated!" : "Review submitted!"}</p>
-                <p className={`text-sm ${textMuted}`}>Thank you for your feedback.</p>
+                <p className={`font-semibold ${textPrimary}`}>{isEditing ? "Avis mis à jour !" : "Avis publié !"}</p>
+                <p className={`text-sm ${textMuted}`}>Merci pour votre retour.</p>
               </div>
             ) : (
               <div className="flex flex-col gap-5 py-1">
@@ -302,39 +230,20 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
                 {isEditing && (
                   <div className={`flex items-center gap-2 border rounded-2xl px-4 py-3 text-sm ${dk ? "bg-blue-500/10 border-blue-500/30 text-blue-300" : "bg-blue-50 border-blue-200 text-blue-800"}`}>
                     <Pencil className="w-4 h-4 shrink-0 text-blue-500" />
-                    <span className="text-[13px]">You already have a review — editing it below.</span>
+                    <span className="text-[13px]">Vous avez déjà publié un avis. Vous pouvez le modifier ci-dessous.</span>
                   </div>
                 )}
 
                 {/* Context hint for product review */}
-                {activeTab === "PRODUCT" && !isEditingProduct && (
+                {!isEditing && (
                   <p className={`text-xs rounded-2xl px-4 py-3 border ${dk ? "text-gray-400 bg-gray-800/60 border-gray-700/40" : "text-gray-500 bg-gray-50 border-gray-100"}`}>
-                    Your review is about the product itself — quality, description accuracy, etc.
+                    Votre avis porte sur le produit lui-même — qualité, fidélité de la description, etc.
                   </p>
-                )}
-
-                {/* Supplier select — only on Supplier tab */}
-                {activeTab === "SUPPLIER" && (
-                  <div className="space-y-1.5">
-                    <label className={labelCls}>Supplier *</label>
-                    <Select value={supplierId} onValueChange={setSupplierId}>
-                      <SelectTrigger className={`rounded-2xl ${dk ? "border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700" : "border-gray-200"} text-sm`}>
-                        <SelectValue placeholder="Select a supplier…" />
-                      </SelectTrigger>
-                      <SelectContent className={selectContent}>
-                        {listings.map((l) => (
-                          <SelectItem key={l.supplierId} value={String(l.supplierId)} className={selectItem}>
-                            {l.supplierName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
                 )}
 
                 {/* Star rating */}
                 <div className="space-y-2">
-                  <label className={labelCls}>Rating *</label>
+                  <label className={labelCls}>Note *</label>
                   <StarPicker value={rating} onChange={setRating} />
                   {rating > 0 && (
                     <p className={`text-xs ${textMuted}`}>{ratingLabel}</p>
@@ -342,15 +251,11 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className={labelCls}>Comment (optional)</label>
+                  <label className={labelCls}>Commentaire (facultatif)</label>
                   <Textarea
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
-                    placeholder={
-                      activeTab === "PRODUCT"
-                        ? "Share your experience with this product…"
-                        : "Share your experience with this supplier…"
-                    }
+                    placeholder="Partagez votre expérience avec ce produit…"
                     className={`${inputCls} resize-none`}
                     rows={3}
                   />
@@ -358,21 +263,21 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
 
                 <button
                   type="button"
-                  onClick={() => mutation.mutate(activeTab)}
+                  onClick={() => mutation.mutate()}
                   disabled={!canSubmit || mutation.isPending}
                   className="w-full rounded-2xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3.5 text-sm font-semibold transition-all shadow-lg shadow-amber-500/20 active:scale-[0.98]"
                 >
                   {mutation.isPending ? (
-                    <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Saving…</span>
-                  ) : isEditing ? "Update Review" : "Submit Review"}
+                    <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Enregistrement…</span>
+                  ) : isEditing ? "Mettre à jour l'avis" : "Publier l'avis"}
                 </button>
 
-                {/* Existing product reviews — shown on Product tab */}
-                {activeTab === "PRODUCT" && existingReviews.length > 0 && (
+                {/* Existing product reviews */}
+                {existingReviews.length > 0 && (
                   <div className="mt-2">
                     <div className={`h-px w-full ${divider} mb-4`} />
                     <p className={`text-xs font-semibold mb-3 ${textMuted}`}>
-                      {existingReviews.length} Product Review{existingReviews.length !== 1 ? "s" : ""}
+                      {existingReviews.length} avis sur ce produit
                     </p>
                     <div className="flex flex-col gap-3">
                       {existingReviews.map((r: any) => (
@@ -380,9 +285,9 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               <p className={`text-sm font-semibold ${textPrimary}`}>
-                                {r.cafeName || r.cafeOwnerName || "Coffee Owner"}
+                                {r.cafeName || r.cafeOwnerName || "Propriétaire de café"}
                                 {user && r.cafeId === user.id && (
-                                  <span className={`ml-1.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${dk ? "bg-amber-500/20 text-amber-400" : "bg-amber-50 text-amber-600"}`}>You</span>
+                                  <span className={`ml-1.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${dk ? "bg-amber-500/20 text-amber-400" : "bg-amber-50 text-amber-600"}`}>Vous</span>
                                 )}
                               </p>
                               <StarDisplay rating={r.rating} />

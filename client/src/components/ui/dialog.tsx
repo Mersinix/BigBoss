@@ -31,14 +31,19 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
 interface DialogContentProps extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> {
   hideClose?: boolean;
+  // Optional inline style for the backdrop, additive and undefined by default
+  // (zero effect on any existing caller) — lets a specific Dialog instance
+  // drive its own custom exit transition (e.g. fading the backdrop in sync
+  // with a non-default close animation) without touching every other modal.
+  overlayStyle?: React.CSSProperties;
 }
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   DialogContentProps
->(({ className, children, hideClose, ...props }, ref) => (
+>(({ className, children, hideClose, overlayStyle, ...props }, ref) => (
   <DialogPortal>
-    <DialogOverlay />
+    <DialogOverlay style={overlayStyle} />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(

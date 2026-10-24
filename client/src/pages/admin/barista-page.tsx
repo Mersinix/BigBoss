@@ -847,7 +847,7 @@ export default function AdminBaristaPage() {
         <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
           <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
             <TabsTrigger value="baristas" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Baristas</TabsTrigger>
-            <TabsTrigger value="jobposts" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Offres &amp; Missions (emploi)</TabsTrigger>
+            <TabsTrigger value="jobposts" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Offres &amp; Missions</TabsTrigger>
             <TabsTrigger value="analytics" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Analytics</TabsTrigger>
             <TabsTrigger value="skills" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground">Compétences</TabsTrigger>
           </TabsList>

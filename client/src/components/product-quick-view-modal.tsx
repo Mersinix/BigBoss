@@ -9,6 +9,20 @@ export function ProductQuickViewModal() {
   const supplierId = useQuickView((s) => s.supplierId);
   const close = useQuickView((s) => s.close);
 
+  // Previous/Next Product navigation — browses the Shop's own currently
+  // filtered product list (navIds), kept live-synced by browse-products.tsx
+  // (task: "Navigate Between Mapped Products and Packs Without Closing the
+  // Detail Modal"). navigateTo switches only the displayed product, never
+  // replaying the modal's open/close animation or touching supplierId. If
+  // the current product isn't found in navIds (e.g. opened from a page that
+  // provides no navigation context), both are null and the buttons hide.
+  const navIds = useQuickView((s) => s.navIds);
+  const navigateTo = useQuickView((s) => s.navigateTo);
+  const navCurrentIndex = navIds ? navIds.indexOf(productId as number) : -1;
+  const prevProductId = navCurrentIndex > 0 ? navIds![navCurrentIndex - 1] : null;
+  const nextProductId = navCurrentIndex !== -1 && navIds && navCurrentIndex < navIds.length - 1 ? navIds[navCurrentIndex + 1] : null;
+  const hasProductNav = navCurrentIndex !== -1 && !!navIds && navIds.length > 1;
+
   // Scroll-direction dismissal (scroll down, back up, then up again past the
   // top closes the modal with a slide-down + fade) — same behavior as the
   // Pack Detail Modal, via the shared hook (client/src/hooks/use-scroll-
@@ -56,6 +70,11 @@ export function ProductQuickViewModal() {
             onBodyTouchStart={onBodyTouchStart}
             onBodyTouchMove={onBodyTouchMove}
             onBodyTouchEnd={onBodyTouchEnd}
+            hasProductNav={hasProductNav}
+            canNavPrev={prevProductId != null}
+            canNavNext={nextProductId != null}
+            onNavPrev={() => prevProductId != null && navigateTo(prevProductId)}
+            onNavNext={() => nextProductId != null && navigateTo(nextProductId)}
           />
         )}
       </DialogContent>

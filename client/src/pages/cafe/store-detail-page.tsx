@@ -386,35 +386,21 @@ export function InfoModal({ open, onClose, openingHours, storeName }: {
   );
 }
 
-function StorePacksSection({ packs, filters, search, hasCommercialAccess, isDark }: {
-  packs: PackDetail[];
-  filters: { subCategoryId: string; brandId: string };
-  // Add Product and Pack Search to Individual Store Pages — same query as the
-  // products match above, matched against this pack's own name/description/
-  // included-product names (packs here are already scoped to this store via
-  // GET /api/stores/:storeId/packs, so no extra store scoping is needed).
-  search: string;
+function StorePacksSection({ filteredPacks: filtered, hasCommercialAccess, isDark }: {
+  // Already filtered by the caller (StoreDetailPage) — sub-category, brand,
+  // and search, exactly as this component computed internally before
+  // (logic moved verbatim, not duplicated) — lifted up so StoreDetailPage
+  // can also feed the same list into usePackQuickView's navIds (task: "Fix
+  // Product Navigation Flicker and Add Filter-Aware Navigation to Store
+  // Detail Modals").
+  filteredPacks: PackDetail[];
   hasCommercialAccess: boolean;
   isDark: boolean;
 }) {
   const t = useTheme(isDark);
   const [expanded, setExpanded] = useState(false);
   const INITIAL_LIMIT = 5;
-
-  const filtered = useMemo(() => {
-    let list = packs;
-    if (filters.subCategoryId) list = list.filter((p) => p.subCategoryIds.includes(Number(filters.subCategoryId)));
-    if (filters.brandId) list = list.filter((p) => p.brandIds.includes(Number(filters.brandId)));
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      list = list.filter((p) =>
-        p.name.toLowerCase().includes(q) ||
-        (p.description ?? "").toLowerCase().includes(q) ||
-        p.items.some((item) => item.productName.toLowerCase().includes(q))
-      );
-    }
-    return list;
-  }, [packs, filters.subCategoryId, filters.brandId, search]);
+  const navIds = useMemo(() => filtered.map((p) => p.id), [filtered]);
 
   if (!filtered.length) return null;
   const showToggle = filtered.length > INITIAL_LIMIT;
@@ -444,14 +430,14 @@ function StorePacksSection({ packs, filters, search, hasCommercialAccess, isDark
       {expanded ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
           {filtered.map((pack) => (
-            <PackCardTile key={pack.id} pack={pack} hasCommercialAccess={hasCommercialAccess} isDark={isDark} />
+            <PackCardTile key={pack.id} pack={pack} hasCommercialAccess={hasCommercialAccess} isDark={isDark} navIds={navIds} />
           ))}
         </div>
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "none", msOverflowStyle: "none" } as React.CSSProperties}>
           {filtered.map((pack) => (
             <div key={pack.id} className="shrink-0 w-52 sm:w-60">
-              <PackCardTile pack={pack} hasCommercialAccess={hasCommercialAccess} isDark={isDark} />
+              <PackCardTile pack={pack} hasCommercialAccess={hasCommercialAccess} isDark={isDark} navIds={navIds} />
             </div>
           ))}
         </div>
@@ -522,6 +508,7 @@ function StoreProductCard({
   supplierId,
   distanceKm,
   isDark,
+  navIds,
 }: {
   product: StoreProduct;
   hasCommercialAccess: boolean;
@@ -530,6 +517,12 @@ function StoreProductCard({
   supplierId: number;
   distanceKm: number | null;
   isDark: boolean;
+  // The store page's own current filtered product-ID list (task: "Fix
+  // Product Navigation Flicker and Add Filter-Aware Navigation to Store
+  // Detail Modals") — passed straight through to the quick-view store on
+  // open so Previous/Next stays within this store, respecting active
+  // filters, exactly like the Shop page.
+  navIds: number[];
 }) {
   const t = useTheme(isDark);
   const fmt = useFormatCurrency();
@@ -547,7 +540,7 @@ function StoreProductCard({
     <div
       data-testid={`card-product-${product.id}`}
       className={`group border rounded-2xl overflow-hidden flex flex-col cursor-pointer transition-all hover:shadow-xl hover:-translate-y-0.5 ${t.cardBg}`}
-      onClick={() => openQuickView(product.id, supplierId)}
+      onClick={() => openQuickView(product.id, supplierId, navIds)}
     >
       {/* Image */}
       <div className={`relative aspect-[4/3] overflow-hidden shrink-0 ${t.imageOverlay}`}>
@@ -600,7 +593,7 @@ function StoreProductCard({
           className="absolute bottom-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
           onClick={(e) => {
             e.stopPropagation();
-            openQuickView(product.id, supplierId);
+            openQuickView(product.id, supplierId, navIds);
           }}
           data-testid={`button-quick-view-${product.id}`}
         >
@@ -891,6 +884,49 @@ export default function StoreDetailPage() {
     if (filters.sortBy === "price_desc") list = [...list].sort((a, b) => ((b as any).bestPrice ?? 0) - ((a as any).bestPrice ?? 0));
     return list;
   }, [categoryFiltered, filters]);
+
+  // ── Filtered packs — same filter logic StorePacksSection used to compute
+  // internally, lifted up verbatim (not duplicated) so this page can also
+  // feed the same ordered ID list into usePackQuickView's navIds (task:
+  // "Fix Product Navigation Flicker and Add Filter-Aware Navigation to
+  // Store Detail Modals"). Packs have no sortBy dimension on this page —
+  // unchanged, they never did.
+  const filteredPacks = useMemo(() => {
+    let list = storePacks;
+    // Packs carry a plural categoryIds array (a pack can bundle products
+    // from more than one category), unlike a product's singular
+    // categoryId used by categoryFiltered above — this check was missing
+    // entirely here, so selecting a category never affected the displayed
+    // packs (task: "Fix Store-Page Pack Category Filtering"). Same
+    // convention already used by the Shop's own pack filter
+    // (browse-products.tsx).
+    if (categoryId) list = list.filter((p) => p.categoryIds.includes(Number(categoryId)));
+    if (filters.subCategoryId) list = list.filter((p) => p.subCategoryIds.includes(Number(filters.subCategoryId)));
+    if (filters.brandId) list = list.filter((p) => p.brandIds.includes(Number(filters.brandId)));
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.description ?? "").toLowerCase().includes(q) ||
+        p.items.some((item) => item.productName.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [storePacks, categoryId, filters.subCategoryId, filters.brandId, search]);
+
+  // ── Previous/Next Product navigation — keep both quick-view stores'
+  // navIds in sync with this store page's own live-filtered lists, so
+  // changing a filter while a detail modal is open updates the navigation
+  // dataset instead of leaving it stale, exactly like the Shop page (task:
+  // "Fix Product Navigation Flicker and Add Filter-Aware Navigation to
+  // Store Detail Modals"). Products/packs here are already scoped to this
+  // store server-side, so navigation never crosses into another store.
+  const productNavIds = useMemo(() => filtered.map((p) => p.id), [filtered]);
+  const packNavIds = useMemo(() => filteredPacks.map((p) => p.id), [filteredPacks]);
+  const setProductNavIds = useQuickView((s) => s.setNavIds);
+  const setPackNavIds = usePackQuickView((s) => s.setNavIds);
+  useEffect(() => { setProductNavIds(productNavIds); }, [productNavIds, setProductNavIds]);
+  useEffect(() => { setPackNavIds(packNavIds); }, [packNavIds, setPackNavIds]);
 
   const updateFilter = (key: keyof FilterState, val: string) => setFilters((p) => ({ ...p, [key]: val }));
   // No category-switch handler on this page preserves search across a
@@ -1242,9 +1278,7 @@ export default function StoreDetailPage() {
       {storePacks.length > 0 && (
         <div className="max-w-7xl mx-auto px-4 pt-6">
           <StorePacksSection
-            packs={storePacks}
-            filters={filters}
-            search={search}
+            filteredPacks={filteredPacks}
             hasCommercialAccess={hasCommercialAccess}
             isDark={isDark}
           />
@@ -1292,6 +1326,7 @@ export default function StoreDetailPage() {
                 supplierId={store.supplierId}
                 distanceKm={distance}
                 isDark={isDark}
+                navIds={productNavIds}
               />
             ))}
           </div>

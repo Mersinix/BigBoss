@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Layers, Minus, Plus, Package, Heart, Star, MapPin, AlertCircle, X, Lock, Sun, Moon,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
@@ -475,6 +476,22 @@ export function PackQuickViewModal({ previewPack, previewOpen, onPreviewClose }:
   const close = isPreview ? (onPreviewClose ?? (() => {})) : storeClose;
   const isEditing = !isPreview && editCartItem != null;
 
+  // Previous/Next Product navigation — browses the Shop's own currently
+  // filtered pack list (navIds), kept live-synced by browse-products.tsx;
+  // never available in preview mode (a locally-built draft has no real
+  // Shop context). Navigates in place via navigateTo (not open/close), so
+  // the modal's own opening animation never replays and the gesture/
+  // dismissal state isn't disturbed. If the current pack isn't found in
+  // navIds (e.g. opened from a different page's context), both buttons are
+  // simply hidden rather than guessing — task: "Navigate Between Mapped
+  // Products and Packs Without Closing the Detail Modal".
+  const navIds = usePackQuickView((s) => s.navIds);
+  const navigateToPack = usePackQuickView((s) => s.navigateTo);
+  const navCurrentIndex = !isPreview && navIds ? navIds.indexOf(packId as number) : -1;
+  const prevPackId = navCurrentIndex > 0 ? navIds![navCurrentIndex - 1] : null;
+  const nextPackId = navCurrentIndex !== -1 && navIds && navCurrentIndex < navIds.length - 1 ? navIds[navCurrentIndex + 1] : null;
+  const hasPackNav = !isPreview && navCurrentIndex !== -1 && !!navIds && navIds.length > 1;
+
   const [qty, setQty]           = useState(1);
   const [previewProductId, setPreviewProductId] = useState<number | null>(null);
   const [packReviewsOpen, setPackReviewsOpen] = useState(false);
@@ -818,23 +835,51 @@ export function PackQuickViewModal({ previewPack, previewOpen, onPreviewClose }:
 
               {/* ── Pack info section ──────────────────────────────────── */}
               <div className="px-3 sm:px-5 pt-5 pb-4 space-y-3">
-                {/* Pack name + rating — header, directly below the images
-                    and above the mapped badges (task: "Improve Pack Details
-                    Modal Layout" — this used to be duplicated further down
-                    in a separate scroll-triggered sticky block; that block
-                    is now removed rather than kept as a second rendering of
-                    the same name/brands/category). Rating styled the same
-                    way as SupplierNameWithRating's own inline rating below,
-                    not the denser card-style rating, per spec. */}
-                <div className="flex items-start justify-between gap-x-3 gap-y-1 flex-wrap">
-                  <h2 className={`text-xl font-extrabold leading-tight ${t.textPrimary}`} data-testid="text-pack-name">
-                    {pack.name}
-                  </h2>
-                  {pack.packReviewCount > 0 && (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                      <span className={`text-sm font-semibold ${t.textPrimary}`}>{pack.packAvgRating.toFixed(1)}</span>
-                      <span className={`text-xs ${t.textMuted}`}>({pack.packReviewCount})</span>
+                {/* Pack name + rating (inline, next to the name) on the left;
+                    Previous/Next Product navigation buttons top-right — the
+                    rating used to sit in that top-right slot (pushed there by
+                    justify-between) and has been moved inline with the name to
+                    make room, per task: "Navigate Between Mapped Products and
+                    Packs Without Closing the Detail Modal". The Avis trigger
+                    itself (image overlay, bottom-right) and its behavior are
+                    unchanged — only this read-only rating display moved. */}
+                <div className="flex items-start justify-between gap-x-3 gap-y-1">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <h2 className={`text-xl font-extrabold leading-tight min-w-0 ${t.textPrimary}`} data-testid="text-pack-name">
+                      {pack.name}
+                    </h2>
+                    {pack.packReviewCount > 0 && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                        <span className={`text-sm font-semibold ${t.textPrimary}`}>{pack.packAvgRating.toFixed(1)}</span>
+                        <span className={`text-xs ${t.textMuted}`}>({pack.packReviewCount})</span>
+                      </div>
+                    )}
+                  </div>
+                  {hasPackNav && (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => prevPackId != null && navigateToPack(prevPackId)}
+                        disabled={prevPackId == null}
+                        aria-label="Pack précédent"
+                        title="Pack précédent"
+                        className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}
+                        data-testid="button-pack-nav-prev"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => nextPackId != null && navigateToPack(nextPackId)}
+                        disabled={nextPackId == null}
+                        aria-label="Pack suivant"
+                        title="Pack suivant"
+                        className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}
+                        data-testid="button-pack-nav-next"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
                     </div>
                   )}
                 </div>

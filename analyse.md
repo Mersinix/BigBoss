@@ -11979,3 +11979,611 @@ traités).
   l'envoi (`isPending`), ainsi que la non-régression du Product Detail
   Modal de référence — à vérifier manuellement avant de considérer ce
   point comme définitivement clos.
+
+---
+
+## 18. Tâche de suivi — Navigation Précédent/Suivant entre produits et packs mappés (Shop)
+
+### Audit
+
+- **Page Shop** : `client/src/pages/cafe/browse-products.tsx` (`BrowseProducts`),
+  seule page concernée (« Coffee Owner → Shop »). Les deux modales de détail
+  (`ProductQuickViewModal`/`PackQuickViewModal`) sont montées **une seule
+  fois, globalement**, dans `client/src/components/cafe/marketplace-layout.tsx`
+  (`<ProductQuickViewModal /><PackQuickViewModal />`) — jamais par
+  `BrowseProducts` lui-même. Les deux composants ne peuvent donc communiquer
+  qu'au travers des stores Zustand déjà existants
+  (`client/src/hooks/use-quick-view.ts`, `client/src/hooks/use-pack-quick-view.ts`),
+  jamais par props directes — contrainte d'architecture déterminante pour
+  cette tâche.
+- **Filtres Produits** (déjà entièrement dans `BrowseProducts`) :
+  `categoryFiltered` (recherche + catégorie) puis `filtered` (sous-catégorie,
+  marque, saveur, taille, tri prix/fournisseurs/proximité) — un seul `useMemo`
+  chaîné, déjà la liste exacte affichée dans la grille de produits
+  (`filtered.map(...)`). C'est la collection de navigation à réutiliser
+  telle quelle pour les produits.
+- **Filtres Packs** : calculés aujourd'hui **à l'intérieur du sous-composant
+  `PacksSection`** (catégorie, sous-catégorie, marque, recherche — pas de
+  tri, les packs n'en ont jamais eu), pas dans `BrowseProducts`. Pour que
+  `BrowseProducts` puisse alimenter le store de navigation des packs de la
+  même façon, ce calcul (`filteredPacks`) est **remonté tel quel** dans
+  `BrowseProducts` et passé en prop à `PacksSection` (qui ne le recalcule
+  plus) — aucune logique de filtrage dupliquée ni modifiée, seulement
+  déplacée d'un niveau, avec tous ses arguments (`categoryId`, `filters.sub-
+  CategoryId`, `filters.brandId`, `search`) strictement identiques.
+- **Détection de filtres actifs** : réutilise directement `filtered`/
+  `filteredPacks` eux-mêmes (déjà le résultat final des filtres actifs ou
+  non) plutôt que d'inférer quoi que ce soit du nombre de résultats — si
+  aucun filtre n'est actif, `filtered`/`filteredPacks` contiennent déjà
+  l'ensemble complet éligible, dans l'ordre d'affichage existant ; aucun
+  système de détection séparé n'est introduit.
+- **Ouverture des modales** : `ProductCard`/`PackCardTile` appellent
+  respectivement `openQuickView(product.id)` et `openPackQuickView(pack.id)`
+  — aucun des deux stores ne transporte aujourd'hui de notion de « liste de
+  navigation ». Les carrousels d'images (`activeImageIdx` côté Produit,
+  état interne de `PackImageGallery` côté Pack) sont des états totalement
+  séparés de l'identité du produit/pack affiché — confirmé par lecture de
+  code, aucun risque de collision avec le nouvel index de navigation
+  produit/pack.
+- **Réinitialisation du carrousel d'images au changement d'article** : déjà
+  garantie gratuitement dans les deux modales, sans code supplémentaire —
+  `PackImageGallery` (réutilisé par les deux modales depuis la tâche
+  précédente « Match the Pack Detail Image Section ») réinitialise déjà son
+  `selectedIndex` interne via `useEffect(() => setSelectedIndex(0), [images
+  .join("|")])` — dès que le produit/pack change, la liste `images` change
+  de contenu, donc l'index revient à 0 automatiquement.
+- **Position du bouton Avis du Pack** : actuellement un overlay sur l'image
+  (bas-droite, `PackImageGallery`'s overlay), **pas** à côté du nom comme le
+  texte de la tâche le décrit — en revanche, un **affichage** de la note
+  moyenne (étoile + note + nombre d'avis, lecture seule, sans action de
+  clic) existe déjà dans la rangée du nom du pack
+  (`flex items-start justify-between ...`), poussé à l'extrême droite par
+  `justify-between`. C'est cet affichage de note — pas le bouton Avis — qui
+  occupe exactement l'emplacement « coin supérieur droit de la zone sous
+  l'image » visé par la Phase 2. Décision : déplacer cet affichage de note
+  pour qu'il soit inline juste après le nom (au lieu d'être poussé à droite),
+  et placer les deux nouveaux boutons Précédent/Suivant Pack dans
+  l'emplacement ainsi libéré (droite de la même rangée) — exactement ce que
+  demande la Phase 3, sans toucher au bouton Avis lui-même (overlay image,
+  inchangé) ni dupliquer le système d'avis.
+- Le Product Detail Modal n'a pas d'équivalent « nom + note sur la même
+  ligne poussée à droite » à réaménager — sa note moyenne est un bloc séparé
+  plus bas. Les boutons Précédent/Suivant Produit sont donc simplement
+  ajoutés dans une nouvelle rangée, alignée à droite, juste au-dessus du nom
+  — même position conceptuelle (coin supérieur droit de la zone sous
+  l'image) sans qu'aucun réaménagement ne soit nécessaire côté Produit.
+
+### Décision d'architecture
+
+Étendre les deux stores Zustand existants (jamais en créer un troisième, ni
+introduire de nouvel appel API) :
+- Nouveau champ `navIds: number[] | null` — liste ordonnée des identifiants
+  actuellement navigables (null = pas de contexte de navigation, ex. modale
+  ouverte depuis une page qui ne fournit pas cette liste).
+- Nouvelle action `setNavIds(ids)` — appelée par `BrowseProducts` à chaque
+  recalcul de `filtered`/`filteredPacks` (effet réactif), pour que la liste
+  reste toujours synchronisée avec les filtres actifs même si l'utilisateur
+  les change pendant que la modale est ouverte.
+- Nouvelle action `navigateTo(id)` — change uniquement l'identifiant affiché,
+  sans toucher à `supplierId`/`replaceTarget`/`editCartItem`/`onSave` ni
+  rejouer l'animation d'ouverture/fermeture — utilisée exclusivement par les
+  nouveaux boutons Précédent/Suivant.
+- `open(id, ..., navIds?)` — paramètre additif, optionnel, par défaut
+  `null` : tous les appelants existants (Store Detail Page, Cart Page,
+  Flash Mode, etc.) qui ne le passent pas conservent un `navIds` nul, donc
+  aucun bouton de navigation ne s'affiche pour eux — comportement
+  strictement inchangé hors Shop, conformément à « Do not refactor unrelated
+  components ».
+
+### Implémentation
+
+**`client/src/hooks/use-quick-view.ts`** et
+**`client/src/hooks/use-pack-quick-view.ts`** : ajout de `navIds`,
+`setNavIds`, `navigateTo` et du paramètre optionnel `navIds` sur `open(...)`,
+exactement comme décrit ci-dessus. Aucun champ existant renommé ni retiré.
+
+**`client/src/pages/cafe/browse-products.tsx`** :
+- `PacksSection` ne calcule plus `filteredPacks` lui-même — il le reçoit en
+  prop ; `BrowseProducts` calcule désormais ce memo (logique identique,
+  déplacée) et le passe à la fois à `PacksSection` et au nouveau
+  `packNavIds`.
+- Nouveaux memos `productNavIds` (`filtered.map(p => p.id)`) et
+  `packNavIds` (`filteredPacks.map(p => p.id)`), plus deux `useEffect`
+  appelant `setNavIds`/`setPackNavIds` du store chaque fois que ces listes
+  changent — synchronisation réactive avec les filtres actifs.
+- `ProductCard`/`PackCardTile` reçoivent `navIds`/`navIds?` en prop et les
+  transmettent à `openQuickView(product.id, undefined, navIds)` /
+  `openPackQuickView(pack.id, navIds)`. `PackCardTile` est aussi utilisé
+  par `store-detail-page.tsx` (hors périmètre) — le prop y reste omis,
+  comportement inchangé là-bas (vérifié par lecture de code, aucune autre
+  tâche nécessaire).
+
+**`client/src/components/pack-quick-view-modal.tsx`** :
+- Lecture de `navIds`/`navigateTo`, calcul de `prevPackId`/`nextPackId`/
+  `hasPackNav` (masqué en mode aperçu Fournisseur, ou si le pack courant
+  n'est pas trouvé dans `navIds`, ou s'il n'y a qu'un seul élément).
+  Navigation **non circulaire** (Précédent désactivé sur le premier,
+  Suivant désactivé sur le dernier), conformément à la Phase 5 (aucun
+  précédent de navigation circulaire trouvé ailleurs dans l'app pour une
+  navigation équivalente).
+- Déplacement de l'affichage de note (étoile + note + nombre d'avis) pour
+  qu'il soit inline juste après le nom du pack, au lieu d'être poussé à
+  l'extrême droite par `justify-between` ; les deux nouveaux boutons
+  Précédent/Suivant Pack occupent désormais cet emplacement libéré
+  (même rangée, à droite). Le bouton Avis (overlay sur l'image,
+  bas-droite) et son comportement restent totalement inchangés.
+- **Aucune réinitialisation d'état supplémentaire nécessaire** : la
+  synchronisation complète (quantité, répartition des saveurs, état
+  favori, fermeture de la sous-modale Avis) était déjà pilotée par des
+  `useEffect` existants keyés sur `[packId]`/`pack?.id`, qui se
+  redéclenchent automatiquement dès que `navigateTo` change `packId` dans
+  le store — confirmé par lecture de code, aucune duplication de logique.
+
+**`client/src/components/product-quick-view-modal.tsx`** :
+- Même lecture `navIds`/`navigateTo`, calcul de `prevProductId`/
+  `nextProductId`/`hasProductNav`, transmis à `ProductDetailContent` via de
+  nouveaux props (`hasProductNav`, `canNavPrev`, `canNavNext`, `onNavPrev`,
+  `onNavNext`).
+
+**`client/src/components/product-detail-content.tsx`** :
+- Nouveaux props optionnels (ignorés par `product-detail-page.tsx`, qui ne
+  les passe jamais — page complète inchangée). Les deux boutons sont
+  rendus dans une nouvelle rangée alignée à droite, juste au-dessus du nom
+  du produit, dans la zone sous l'image — même position conceptuelle que
+  Pack, sans réaménagement nécessaire côté Produit (il n'existait pas de
+  rangée nom+note poussée à droite à réaménager).
+- **Nouvel effet de réinitialisation** (`useEffect` keyé sur `[productId]`)
+  : remet `selectedFlavorId`, `selectedSizeId` et `reviewModalOpen` à leur
+  valeur initiale à chaque changement de produit — nécessaire ici (à la
+  différence du Pack) car `ProductDetailContent` ne se démonte/remonte
+  plus entre deux produits différents depuis que la navigation passe par
+  `navigateTo` plutôt que par fermeture/réouverture ; ces filtres
+  spécifiques au produit affiché resteraient sinon incorrectement
+  persistants. `locationFilter` et `supplierSort` sont volontairement
+  **non** réinitialisés (plus proches d'une préférence transversale que
+  d'un état propre à un produit précis) — conformément à « without
+  unnecessarily resetting global Shop filters ».
+- Les requêtes produit/avis (`useQuery` keyées sur `productId`) et l'état
+  favori (keyé sur `product.id`) se re-synchronisent déjà automatiquement
+  via React Query et le store Zustand — aucune protection supplémentaire
+  nécessaire contre une réponse asynchrone obsolète (chaque `productId`
+  a sa propre entrée de cache).
+- Réinitialisation du carrousel d'images : déjà gratuite via
+  `PackImageGallery`'s existant `useEffect` keyé sur `images.join("|")`.
+
+**`client/src/components/pack-image-gallery.tsx`** : **non modifié** — le
+composant réutilisé pour l'image n'a besoin d'aucun changement pour cette
+tâche.
+
+### Fichiers modifiés
+
+- `client/src/hooks/use-quick-view.ts`
+- `client/src/hooks/use-pack-quick-view.ts`
+- `client/src/pages/cafe/browse-products.tsx`
+- `client/src/components/pack-quick-view-modal.tsx`
+- `client/src/components/product-quick-view-modal.tsx`
+- `client/src/components/product-detail-content.tsx`
+
+Aucun changement de schéma de base de données, aucun nouvel endpoint API,
+aucune route serveur modifiée — navigation entièrement côté client à
+partir des collections déjà chargées/filtrées.
+
+### Vérification
+
+- `npx tsc --noEmit` : 0 erreur, code de sortie 0.
+- `npm run build` : build client + serveur réussi, aucune nouvelle alerte
+  (seul l'avertissement standard de taille de chunk).
+- `git status --short` confirme exactement les 6 fichiers listés
+  ci-dessus modifiés par cette tâche (plus `analyse.md`) — aucun autre
+  fichier touché.
+- Requêtes réelles contre le serveur de développement
+  (`GET /api/marketplace` → 38 produits, `GET /api/marketplace/packs` →
+  11 packs) confirmant qu'il existe bien assez de données réelles pour
+  qu'une navigation Précédent/Suivant soit significative.
+- **Non vérifié dans un navigateur réel** (aucun outil d'automatisation
+  disponible cette session) : le rendu visuel des boutons, leur
+  positionnement exact par rapport à l'image/au nom, le respect effectif
+  des filtres actifs lors du clic, la mise à jour en direct du jeu de
+  navigation quand un filtre change pendant que la modale est ouverte, le
+  comportement aux limites (premier/dernier élément), la non-interférence
+  avec le carrousel d'images et le geste de fermeture, ni la
+  non-régression du favori/avis/variantes/panier lors d'une navigation
+  réelle — à vérifier manuellement avant de considérer cette fonctionnalité
+  comme définitivement terminée.
+
+### Limites connues
+
+- La synchronisation réactive (`useEffect` dans `BrowseProducts`) suppose
+  que la page Shop reste montée tant que la modale affiche un produit/pack
+  qui en provient. Si l'utilisateur navigue vers une autre page de l'app
+  **sans fermer la modale** (les deux modales sont des singletons globaux,
+  montés dans `marketplace-layout.tsx`, donc cela reste possible), la
+  liste de navigation se fige à sa dernière valeur connue au lieu de
+  continuer à se synchroniser — comportement jugé acceptable (pas de
+  crash, pas de sélection incohérente) mais non explicitement testé.
+- Si l'élément actuellement affiché n'est plus présent dans `navIds` (ex.
+  contexte de navigation d'une autre page, ou élément disparu de la liste
+  filtrée), les deux boutons sont simplement masqués plutôt que de tenter
+  une sélection — comportement sûr, conforme à la consigne, mais pas de
+  message explicite à l'utilisateur expliquant pourquoi la navigation a
+  disparu.
+
+---
+
+## 19. Tâche de suivi — Correction de la mise en page de l'en-tête (titre + navigation)
+
+### Audit — cause racine
+
+**Pack Detail Modal** (`pack-quick-view-modal.tsx`) : la rangée contenant
+le nom du pack et les boutons Précédent/Suivant Pack est actuellement
+```
+<div className="flex items-start justify-between gap-x-3 gap-y-1 flex-wrap">
+```
+— **`flex-wrap` sur le conteneur EXTÉRIEUR** est la cause exacte du bug :
+quand le titre est long, les DEUX éléments flex de premier niveau (le bloc
+titre, le bloc boutons) sont traités comme un groupe qui peut passer à la
+ligne EN BLOC dès qu'ils ne tiennent plus ensemble sur une seule ligne —
+c'est exactement ce qui fait tomber les boutons sur une seconde ligne. Le
+bloc titre a déjà `min-w-0`, mais tant que le parent autorise le
+retour à la ligne du groupe, le navigateur préfère faire passer le bloc
+boutons entier à la ligne suivante plutôt que de forcer le bloc titre à
+rétrécir.
+
+**Product Detail Modal** (`product-detail-content.tsx`) : les boutons
+Précédent/Suivant Produit ont été ajoutés (tâche précédente) comme une
+**rangée autonome, séparée**, placée AVANT `productInfo` (qui commence
+lui-même par les badges de catégorie, puis le `<h1>` du nom) — donc
+l'ordre actuel est : (1) rangée de navigation seule, (2) badges de
+catégorie, (3) titre. Ni la structure ni l'ordre ne correspondent à ce que
+demande la tâche (titre + navigation sur la même rangée, badges en
+dessous) — `productInfo` est un bloc JSX unique partagé avec la page
+complète (`isModal=false`), qui n'a pas de boutons de navigation et doit
+garder son ordre actuel (badges puis titre) inchangé.
+
+### Décision
+
+- **Pack** : retirer `flex-wrap` du conteneur extérieur uniquement (le
+  bloc titre interne garde son propre `flex-wrap` pour que la note puisse
+  passer sous le nom si besoin — comportement déjà existant, inchangé).
+  Avec `min-w-0` déjà présent sur le bloc titre et `shrink-0` déjà présent
+  sur le bloc boutons, le titre absorbe maintenant tout l'espace restant et
+  s'enroule sur plusieurs lignes dans sa propre zone, tandis que les
+  boutons restent fixes à droite sur la même rangée — exactement la
+  recommandation technique de la tâche. `min-w-0` ajouté aussi directement
+  sur le `<h2>` par prudence (lui-même élément flex du bloc interne).
+- **Produit** : suppression de la rangée de navigation autonome ; les
+  boutons sont déplacés à l'intérieur de `productInfo`, sur la même rangée
+  que le titre, uniquement en mode modale (`isModal`). L'ordre des deux
+  premiers blocs de `productInfo` devient conditionnel : modale → titre
+  (+ navigation) d'abord, puis badges ; page complète → badges d'abord,
+  puis titre (strictement inchangé, aucune régression sur la page). Même
+  schéma flex que Pack (`min-w-0` sur le titre, `shrink-0` sur le groupe
+  de boutons, pas de `flex-wrap` sur la rangée titre+boutons).
+
+### Implémentation
+
+- `client/src/components/pack-quick-view-modal.tsx` : retrait de
+  `flex-wrap` sur la rangée nom+note+navigation ; ajout de `min-w-0` sur le
+  `<h2>`. Aucun changement de logique, de style de bouton, ni de
+  comportement désactivé/activé.
+- `client/src/components/product-detail-content.tsx` : extraction des deux
+  boutons dans une variable JSX réutilisée (`productNavButtons`), retirée
+  de sa rangée autonome et injectée dans `productInfo` sur la rangée du
+  titre, avec les deux premiers blocs (`badges`/`titre`) réordonnés selon
+  `isModal`. Aucun changement à la logique de navigation, aux gestionnaires,
+  aux états désactivés, ni au contenu des badges.
+
+### Vérification
+
+- `npx tsc --noEmit` : 0 erreur, code de sortie 0.
+- `npm run build` : build client + serveur réussi, aucune nouvelle alerte
+  (seul l'avertissement standard de taille de chunk).
+- `git diff --stat` sur les deux fichiers réellement modifiés par cette
+  tâche : `pack-quick-view-modal.tsx` et `product-detail-content.tsx`
+  (79 et 135 lignes respectivement, incluant la tâche précédente non
+  commitée) — aucun autre fichier touché ce tour-ci (`use-quick-view.ts`,
+  `use-pack-quick-view.ts`, `browse-products.tsx`,
+  `product-quick-view-modal.tsx` restent inchangés depuis la tâche
+  précédente).
+- Relecture confirmant que `product-detail-page.tsx` (mode page complète,
+  `isModal=false`) continue de recevoir l'ordre badges-puis-titre
+  d'origine via la branche `else` de `productInfo`, strictement inchangé.
+- **Non vérifié visuellement** (aucun outil de navigateur automatisé
+  disponible cette session) : enroulement effectif du titre sur plusieurs
+  lignes sans déplacer les boutons, comportement sur mobile étroit, thème
+  clair/sombre, et non-régression de la page produit complète — à
+  vérifier manuellement avant de considérer ce point comme définitivement
+  clos.
+
+---
+
+## 20. Tâche de suivi — Flicker « double modale » à la navigation + navigation sur les pages Boutique
+
+### Audit — cause racine du flicker (Product Detail Modal, Shop)
+
+Confirmée par lecture de code, **pas supposée** : `product-detail-content.tsx`
+a DEUX chemins de rendu structurellement différents pour le mode modale :
+- **État de chargement/erreur** (`if (isLoading) {...}` / `if (error ||
+  !product) {...}`) : rendent encore l'ANCIENNE structure — une barre
+  d'en-tête séparée (`<ModalHeader />`, thème à gauche / nom au centre /
+  fermer à droite, avec sa propre ligne de séparation) **au-dessus** du
+  contenu.
+- **État de succès** (une fois les données chargées) : utilise depuis la
+  tâche « Match the Pack Detail Image Section » la NOUVELLE structure —
+  aucune barre d'en-tête séparée, l'image est pleine largeur en haut avec
+  Fermer/Favori/Thème/Avis en overlay directement sur l'image.
+
+Avant cette tâche, `navigateTo()` change seulement `productId` dans le
+store sans démonter `ProductDetailContent`. Cliquer sur « Suivant » vers
+un produit **jamais encore chargé** (le cas courant juste après
+l'ouverture) fait repasser `isLoading` à `true` pour la nouvelle clé de
+requête React Query — le MÊME composant monté re-rend alors brièvement
+l'ANCIENNE structure (barre d'en-tête) avant de revenir à la NOUVELLE
+structure (image + overlay) une fois les données arrivées. Ce changement
+de structure complet, dans la même instance de modale déjà ouverte,
+produit exactement l'effet « une seconde modale apparaît brièvement »
+décrit par la tâche — ce n'est jamais un second `<Dialog>` réel, mais un
+remplacement complet du contenu visible à l'intérieur de la même
+instance, aussi perturbant visuellement.
+- Ce changement de clé React Query (donc ce passage par `isLoading`) se
+  produit pour **toute** navigation vers un produit pas encore mis en
+  cache — pas seulement « immédiatement après l'ouverture » (c'est juste
+  le cas le plus facile à reproduire, puisque c'est la première
+  navigation et qu'aucun autre produit n'a encore été préchargé).
+- **Pack Detail Modal** : vérifié **non affecté** par le même problème —
+  son état de chargement (`isLoading || !pack`) utilise déjà exactement
+  le même overlay Fermer/Favori/Thème que son contenu réel, sur une boîte
+  de squelette de même position/dimensions — aucune structure différente
+  à basculer. Confirmé par lecture de code, pas de changement nécessaire
+  côté Pack pour cette partie de la tâche.
+- Aucune autre cause identifiée parmi les hypothèses de la tâche
+  (changement de `key` React forçant un remontage, instances multiples de
+  modale, gestionnaires de clic dupliqués) — aucun `key={productId}`
+  n'existe sur le Dialog/DialogContent/ProductDetailContent, et `open`
+  (booléen `productId != null`) ne change jamais pendant une navigation
+  Suivant/Précédent (seul `productId` lui-même change), donc Radix ne
+  rejoue jamais son animation d'ouverture/fermeture pendant la navigation
+  — confirmé par lecture de `useScrollDismiss` (son effet de
+  réinitialisation est keyé sur le booléen `isOpen`, qui reste `true`
+  tout du long).
+
+### Audit — Store Pages (navigation absente)
+
+`client/src/pages/cafe/store-detail-page.tsx` :
+- **Produits** : `filtered` (ligne ~881, dans `StoreDetailPage` lui-même)
+  est déjà la liste finale (sous-catégorie, marque, saveur, taille, tri
+  prix — pas de tri « plus proche »/« fournisseurs », absent sur une page
+  mono-fournisseur) — c'est le jeu de données à réutiliser pour
+  `productNavIds`. `StoreProductCard` (son propre composant de carte,
+  distinct de celui du Shop) appelle déjà `openQuickView(product.id,
+  supplierId)` à deux endroits (carte entière + bouton « ajout rapide »),
+  avec `supplierId = store.supplierId` — **ce `supplierId` ne doit jamais
+  être perturbé par la navigation** (il garantit que la page reste
+  scopée à ce fournisseur/cette boutique) ; `navigateTo` du store ne
+  touche déjà QUE `productId`, jamais `supplierId` — confirmé
+  automatiquement compatible, aucun changement nécessaire sur le store
+  lui-même.
+- **Packs** : `StorePacksSection` calcule aujourd'hui son propre `filtered`
+  interne (sous-catégorie, marque, recherche — même limitation que
+  `PacksSection` du Shop avant la tâche précédente : pas de tri). Il
+  utilise déjà `PackCardTile` — **le même composant que le Shop**, déjà
+  étendu d'un prop optionnel `navIds?` à la tâche précédente — il suffit
+  de le lui passer, aucune modification de `PackCardTile` lui-même.
+- Les packs de cette page viennent de `GET /api/stores/:storeId/packs`
+  (déjà scopés serveur-side à cette boutique) et les produits de
+  `store.products` (même scoping côté `GET /api/stores/:storeId`) — la
+  navigation reste donc automatiquement confinée à la boutique courante
+  simplement en réutilisant ces collections déjà scopées, sans aucun
+  filtrage supplémentaire à écrire.
+
+### Décision
+
+- **Flicker** : remplacer la structure des branches chargement/erreur
+  (mode modale uniquement) par un squelette utilisant la MÊME structure
+  que le contenu réel (image pleine largeur avec overlay Fermer/Thème,
+  sans barre d'en-tête séparée) — mécaniquement identique au principe déjà
+  appliqué à Pack. Aucun changement à la stratégie de requête React Query
+  (pas de `keepPreviousData`/`placeholderData` — changement de
+  comportement de fetch non nécessaire pour corriger un problème qui est
+  structurel/visuel, pas un problème de données).
+- **Navigation Store Pages** : réutiliser à l'identique le schéma déjà
+  validé dans `browse-products.tsx` — lever `StorePacksSection`'s
+  `filtered` dans `StoreDetailPage`, calculer `productNavIds`/
+  `packNavIds`, synchroniser réactivement via `setNavIds`/`setPackNavIds`
+  à chaque changement desdits memos, et transmettre les listes aux cartes
+  existantes (`StoreProductCard`, `PackCardTile`). Aucune nouvelle logique
+  de filtrage, aucun nouvel endpoint.
+
+### Implémentation
+
+**`client/src/components/product-detail-content.tsx`** (correction du
+flicker) :
+- Nouveau composant interne `ModalImageAreaOverlay` (Thème + Fermer
+  seulement — pas de Favori/Avis, aucun produit encore chargé) réutilisant
+  exactement les mêmes classes que l'overlay réel.
+- Les branches `isLoading`/`error` (mode modale) rendent désormais une
+  boîte de squelette aux mêmes dimensions/arrondi que l'image réelle
+  (`h-80 sm:h-[420px] rounded-t-[2rem]`) avec cet overlay, au lieu de
+  l'ancienne barre `<ModalHeader />` séparée.
+- Suppression du composant `ModalHeader` et de l'état `scrolled`/
+  `setScrolled` — devenus totalement morts (plus aucun appelant) une fois
+  ce remplacement effectué ; `dividerColor` retiré pour la même raison
+  (uniquement utilisé par `ModalHeader`).
+- Branche page complète (`isModal=false`) : totalement inchangée, le
+  squelette générique d'origine reste utilisé tel quel.
+
+**`client/src/pages/cafe/store-detail-page.tsx`** (navigation Store
+Pages) :
+- `StorePacksSection` ne calcule plus `filtered` lui-même — il le reçoit
+  en prop (`filteredPacks`) ; `StoreDetailPage` calcule désormais ce memo
+  (logique identique, déplacée) et l'utilise aussi pour `packNavIds`.
+- Nouveaux memos `productNavIds` (`filtered.map(p => p.id)`) et
+  `packNavIds` (`filteredPacks.map(p => p.id)`), plus deux `useEffect`
+  appelant `setNavIds`/`setPackNavIds` du store chaque fois que ces listes
+  changent.
+- `StoreProductCard` reçoit un nouveau prop `navIds: number[]`, transmis
+  aux deux appels existants de `openQuickView(product.id, supplierId,
+  navIds)` (carte entière + bouton d'ajout rapide) — `supplierId` (déjà
+  `store.supplierId`) n'est jamais touché par `navigateTo`, donc la
+  navigation reste automatiquement confinée à cette boutique.
+- `PackCardTile` (déjà doté d'un prop optionnel `navIds?` depuis la tâche
+  précédente, partagé avec le Shop) reçoit désormais `navIds={navIds}`
+  dans les deux rendus de `StorePacksSection`.
+- **Aucun changement nécessaire dans les modales elles-mêmes** : comme
+  `ProductQuickViewModal`/`PackQuickViewModal` sont des singletons globaux
+  déjà montés dans `marketplace-layout.tsx` (confirmé dans l'audit),
+  câbler `navIds` depuis la page Boutique suffit à faire apparaître les
+  mêmes boutons Précédent/Suivant, avec exactement le même code/design,
+  automatiquement — aucune duplication d'interface n'était nécessaire ni
+  n'a été faite.
+
+### Fichiers modifiés
+
+- `client/src/components/product-detail-content.tsx`
+- `client/src/pages/cafe/store-detail-page.tsx`
+
+Aucun changement de schéma de base de données, aucun nouvel endpoint API,
+aucune route serveur modifiée — correction purement structurelle côté
+client, et navigation entièrement à partir des collections déjà
+chargées/filtrées côté Store Pages (mêmes données déjà scopées
+serveur-side à la boutique via `GET /api/stores/:storeId` et `GET
+/api/stores/:storeId/packs`).
+
+### Vérification
+
+- `npx tsc --noEmit` : 0 erreur, code de sortie 0.
+- `npm run build` : build client + serveur réussi, aucune nouvelle
+  alerte (seul l'avertissement standard de taille de chunk).
+- `git diff --stat` confirme que seuls `product-detail-content.tsx` et
+  `store-detail-page.tsx` ont été modifiés par cette tâche (les autres
+  fichiers listés par `git status` proviennent de tâches précédentes non
+  commitées) ; `pack-quick-view-modal.tsx`, `product-quick-view-modal.tsx`
+  et les deux stores Zustand n'ont subi aucun changement supplémentaire
+  ce tour-ci.
+- Requêtes réelles contre le serveur de développement confirmant des
+  données réelles suffisantes pour un test significatif : boutique id 3
+  (« BONDIN Story ») → 36 produits, 8 packs ; boutique id 2 → 12 produits,
+  2 packs.
+- **Non vérifié dans un navigateur réel** (aucun outil d'automatisation
+  disponible cette session) : disparition effective du flicker lors
+  d'une navigation Suivant/Précédent immédiatement après l'ouverture
+  (y compris plusieurs navigations consécutives), rendu/position des
+  boutons sur les pages Boutique, confinement réel à la boutique
+  courante, synchronisation en direct des filtres de la page Boutique, et
+  non-régression du geste de fermeture/carrousel d'images — à vérifier
+  manuellement avant de considérer cette tâche comme définitivement
+  terminée.
+
+### Limites connues
+
+- Même limite déjà documentée à la tâche précédente (section 18) : si
+  l'utilisateur quitte la page Boutique ou la page Shop sans fermer la
+  modale, la liste de navigation se fige à sa dernière valeur connue —
+  comportement jugé acceptable, non explicitement testé ici non plus.
+
+---
+
+## 21. Tâche de suivi — Flicker de scrollbar (Product Detail Modal) et filtre catégorie des packs (Store Pages)
+
+### Audit A — scrollbar flicker (cause confirmée, introduite par la tâche précédente)
+
+`client/src/components/product-detail-content.tsx` — recherche de tous
+les conteneurs `overflow-y-auto` en mode modale :
+- Ligne ~827 (squelette de chargement) et ~853 (squelette d'erreur) :
+  `className="flex-1 min-h-0 overflow-y-auto pb-8"` — **sans** les classes
+  de scrollbar fine (`[&::-webkit-scrollbar]:w-1
+  [&::-webkit-scrollbar-track]:bg-transparent
+  [&::-webkit-scrollbar-thumb]:bg-gray-700
+  [&::-webkit-scrollbar-thumb]:rounded-full`).
+- Ligne ~1202 (contenu réel une fois les données chargées) : même
+  position/rôle, MAIS avec ces classes de scrollbar fine présentes.
+
+Ces deux squelettes ont été réécrits à la tâche précédente (section 20)
+pour corriger le flicker « double modale » — en leur donnant la même
+structure que le contenu réel, mais **sans copier les classes de
+scrollbar fine** sur leur propre conteneur défilant. Résultat : pendant
+la brève phase de chargement (systématique pour tout produit pas encore
+mis en cache, notamment juste après une navigation Suivant/Précédent),
+le navigateur affiche sa scrollbar native (plus large), puis bascule
+sur la scrollbar fine dès que le contenu réel (avec ses classes)
+prend le relais — exactement le symptôme décrit par la tâche. Confirmé
+par comparaison directe des trois conteneurs, pas supposé.
+
+**Pack Detail Modal vérifié non affecté** : un seul conteneur défilant
+unique (`overflow-y-auto` avec les classes de scrollbar fine) enveloppe
+à la fois l'état de chargement ET le contenu réel via un simple ternaire
+interne — aucun second conteneur à désynchroniser. Confirmé par lecture
+de code, aucune correction nécessaire côté Pack.
+
+### Audit B — filtre catégorie des packs (Store Pages) — bug préexistant, indépendant des tâches précédentes
+
+`client/src/pages/cafe/store-detail-page.tsx` :
+- Les **produits** filtrent déjà correctement par catégorie :
+  `categoryFiltered` applique `String(p.categoryId) === categoryId`
+  (champ singulier `categoryId` sur un produit).
+- Les **packs** (`filteredPacks`, memo levé de `StorePacksSection` à la
+  tâche précédente, logique copiée **verbatim** à ce moment-là) n'ont
+  **jamais** appliqué `categoryId` — ni avant la tâche précédente
+  (confirmé : l'ancien appel à `StorePacksSection` ne recevait même pas ce
+  prop), ni après (la fonction ne le lit toujours pas). C'est un bug
+  préexistant, non introduit par les tâches récentes, simplement jamais
+  corrigé lors du déplacement de la logique (qui devait rester à
+  l'identique, conformément à la consigne de l'époque).
+- Le sélecteur de catégorie existe bel et bien et fonctionne correctement
+  (`categoryId`/`setCategoryId`, bande de catégories lignes ~1130-1142) —
+  le problème est uniquement que `filteredPacks` ne le lit jamais.
+- **Confirmation du bon champ à utiliser** : les packs utilisent
+  `categoryIds: number[]` (**pluriel**, vérifié dans `shared/schema.ts`,
+  car un pack regroupe plusieurs produits pouvant appartenir à plusieurs
+  catégories), à la différence du `categoryId` singulier des produits —
+  exactement la mise en garde de la tâche (« Packs and products using
+  different category relationships »). Le filtre Shop
+  (`browse-products.tsx`) applique déjà correctement
+  `p.categoryIds.includes(Number(categoryId))` pour les packs — même
+  convention à reprendre ici, pas une nouvelle logique.
+
+### Décision
+
+- **A** : ajouter les mêmes classes de scrollbar fine aux deux squelettes
+  (chargement, erreur), copiées exactement depuis le conteneur du
+  contenu réel — aucune autre modale touchée (non affectées).
+- **B** : ajouter `if (categoryId) list = list.filter((p) =>
+  p.categoryIds.includes(Number(categoryId)));` dans `filteredPacks`
+  (avant les filtres sous-catégorie/marque, même ordre que le filtre Shop
+  équivalent), et ajouter `categoryId` aux dépendances du `useMemo`. Le
+  memo est déjà utilisé à la fois par `StorePacksSection` (affichage) et
+  par `packNavIds` (navigation Précédent/Suivant Pack) — un seul endroit
+  à corriger couvre automatiquement les deux.
+
+### Implémentation
+
+- `client/src/components/product-detail-content.tsx` : ajout des classes
+  `[&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent
+  [&::-webkit-scrollbar-thumb]:bg-gray-700
+  [&::-webkit-scrollbar-thumb]:rounded-full` aux deux conteneurs défilants
+  des squelettes de chargement et d'erreur (mode modale), copiées
+  exactement depuis le conteneur du contenu réel. Aucune autre classe ni
+  structure modifiée.
+- `client/src/pages/cafe/store-detail-page.tsx` : ajout du filtre
+  `categoryId` (champ pluriel `categoryIds` des packs) dans
+  `filteredPacks`, avec `categoryId` ajouté aux dépendances du `useMemo`.
+
+### Vérification
+
+- `npx tsc --noEmit` : 0 erreur, code de sortie 0.
+- `npm run build` : build client + serveur réussi, aucune nouvelle
+  alerte (seul l'avertissement standard de taille de chunk).
+- Vérification fonctionnelle réelle du Fix B contre le serveur de
+  développement : boutique id 3, 8 packs réels avec des `categoryIds`
+  variés (ex. catégorie 14 → 6 packs correspondants, catégorie 2 → 2
+  packs, catégorie 7 → 2 packs, catégorie 5 → 1 pack) — confirme que la
+  sélection d'une catégorie a maintenant un effet réel et différencié sur
+  l'ensemble filtré (avant le correctif, la sélection d'une catégorie
+  n'avait strictement aucun effet sur les packs affichés, quel que soit
+  son contenu).
+- **Non vérifié visuellement** (aucun outil de navigateur automatisé
+  disponible cette session) : disparition effective du flicker de
+  scrollbar à l'ouverture/navigation, mise à jour réelle de l'affichage
+  des packs au clic sur une catégorie côté Store Page, et non-régression
+  du geste de fermeture/carrousel — à vérifier manuellement avant de
+  considérer cette tâche comme définitivement terminée.

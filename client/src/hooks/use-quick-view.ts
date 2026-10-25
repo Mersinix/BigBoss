@@ -19,7 +19,17 @@ interface QuickViewStore {
   productId: number | null;
   supplierId: number | null;
   replaceTarget: ProductReplaceTarget | null;
-  open: (productId: number, supplierId?: number) => void;
+  // Ordered list of product IDs the Previous/Next Product buttons navigate
+  // through — the Shop page's own currently-filtered product list (task:
+  // "Navigate Between Mapped Products and Packs Without Closing the Detail
+  // Modal"). Null means no navigation context (every caller other than the
+  // Shop page omits it on open(), so this stays null and the nav buttons
+  // simply don't render there — unchanged behavior for Store Detail Page,
+  // Cart Page, Flash Mode, etc.). The Shop page also keeps this in sync via
+  // setNavIds() whenever its own filtered list changes while the modal is
+  // open, so navigation never uses a stale list.
+  navIds: number[] | null;
+  open: (productId: number, supplierId?: number, navIds?: number[] | null) => void;
   /** Opens the product for browsing (no fixed supplier, so every supplier's listing is
    * visible) and arms replace mode for the given cancelled cart line. */
   openForReplace: (productId: number, target: ProductReplaceTarget) => void;
@@ -27,14 +37,24 @@ interface QuickViewStore {
    * replacement has been applied. */
   clearReplaceTarget: () => void;
   close: () => void;
+  /** Switches the displayed product without touching supplierId/replaceTarget/navIds
+   * or replaying the open/close animation — used only by the Previous/Next Product
+   * buttons, which must keep browsing the same navIds list. */
+  navigateTo: (productId: number) => void;
+  /** Keeps navIds in sync with the Shop's own filtered list reactively (e.g. the
+   * Coffee Owner changes a filter while the modal is still open). */
+  setNavIds: (navIds: number[] | null) => void;
 }
 
 export const useQuickView = create<QuickViewStore>((set) => ({
   productId: null,
   supplierId: null,
   replaceTarget: null,
-  open: (productId, supplierId) => set({ productId, supplierId: supplierId ?? null, replaceTarget: null }),
-  openForReplace: (productId, target) => set({ productId, supplierId: null, replaceTarget: target }),
+  navIds: null,
+  open: (productId, supplierId, navIds) => set({ productId, supplierId: supplierId ?? null, replaceTarget: null, navIds: navIds ?? null }),
+  openForReplace: (productId, target) => set({ productId, supplierId: null, replaceTarget: target, navIds: null }),
   clearReplaceTarget: () => set({ replaceTarget: null }),
-  close: () => set({ productId: null, supplierId: null, replaceTarget: null }),
+  close: () => set({ productId: null, supplierId: null, replaceTarget: null, navIds: null }),
+  navigateTo: (productId) => set({ productId }),
+  setNavIds: (navIds) => set({ navIds }),
 }));

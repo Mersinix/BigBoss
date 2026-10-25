@@ -22,11 +22,25 @@ interface PackQuickViewStore {
    * Coffee Owner can look at a few candidates before picking one; only cleared once
    * consumed (a Pack is actually added) or explicitly cancelled. */
   replaceTargetPackId: number | null;
-  open: (packId: number) => void;
+  // Ordered list of pack IDs the Previous/Next Product buttons navigate
+  // through — the Shop page's own currently-filtered pack list (task:
+  // "Navigate Between Mapped Products and Packs Without Closing the Detail
+  // Modal"). Null means no navigation context — every caller other than the
+  // Shop page omits it, so this stays null there and the nav buttons simply
+  // don't render. The Shop page keeps this in sync via setNavIds() whenever
+  // its own filtered pack list changes while the modal is open.
+  navIds: number[] | null;
+  open: (packId: number, navIds?: number[] | null) => void;
   openForEdit: (cartItem: PackCartItem, onSave?: (updated: PackCartItem) => void) => void;
   armReplace: (oldPackId: number) => void;
   clearReplaceTarget: () => void;
   close: () => void;
+  /** Switches the displayed pack without touching editCartItem/onSave/
+   * replaceTargetPackId/navIds or replaying the open/close animation — used
+   * only by the Previous/Next Product buttons. */
+  navigateTo: (packId: number) => void;
+  /** Keeps navIds in sync with the Shop's own filtered pack list reactively. */
+  setNavIds: (navIds: number[] | null) => void;
 }
 
 export const usePackQuickView = create<PackQuickViewStore>((set) => ({
@@ -34,9 +48,12 @@ export const usePackQuickView = create<PackQuickViewStore>((set) => ({
   editCartItem: null,
   onSave: null,
   replaceTargetPackId: null,
-  open: (packId) => set({ packId, editCartItem: null, onSave: null }),
+  navIds: null,
+  open: (packId, navIds) => set({ packId, editCartItem: null, onSave: null, navIds: navIds ?? null }),
   openForEdit: (cartItem, onSave) => set({ packId: cartItem.packId, editCartItem: cartItem, onSave: onSave ?? null }),
   armReplace: (oldPackId) => set({ packId: null, editCartItem: null, onSave: null, replaceTargetPackId: oldPackId }),
   clearReplaceTarget: () => set({ replaceTargetPackId: null }),
-  close: () => set({ packId: null, editCartItem: null, onSave: null }),
+  close: () => set({ packId: null, editCartItem: null, onSave: null, navIds: null }),
+  navigateTo: (packId) => set({ packId }),
+  setNavIds: (navIds) => set({ navIds }),
 }));

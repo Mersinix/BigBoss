@@ -187,12 +187,17 @@ function useListingPromotions(listingIds: number[]) {
 // ── Product Card ──────────────────────────────────────────────────────────────
 
 function ProductCard({
-  product, hasCommercialAccess, promotions, isDark,
+  product, hasCommercialAccess, promotions, isDark, navIds,
 }: {
   product: MarketplaceProduct;
   hasCommercialAccess: boolean;
   promotions: ListingPromotion[];
   isDark: boolean;
+  // The Shop's current filtered product-ID list (task: "Navigate Between
+  // Mapped Products and Packs Without Closing the Detail Modal") — passed
+  // straight through to the quick-view store on open so Previous/Next can
+  // browse the same set the Coffee Owner currently sees.
+  navIds: number[];
 }) {
   const t = useTheme(isDark);
   const faved = useFavorites((s) => !!s.shop[product.id]);
@@ -235,7 +240,7 @@ function ProductCard({
     <div
       data-testid={`card-product-${product.id}`}
       className={`group border rounded-2xl overflow-hidden flex flex-col cursor-pointer transition-all shadow-xl hover:-translate-y-0.5 ${t.cardBg}`}
-      onClick={() => openQuickView(product.id)}
+      onClick={() => openQuickView(product.id, undefined, navIds)}
     >
       {/* Image */}
       <div className={`relative aspect-[4/3] overflow-hidden shrink-0 ${t.imageOverlay}`}>
@@ -285,7 +290,7 @@ function ProductCard({
         {/* Quick view button — bottom-right */}
         <button
           className="absolute bottom-2 right-2 w-7 h-7 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-transform"
-          onClick={(e) => { e.stopPropagation(); openQuickView(product.id); }}
+          onClick={(e) => { e.stopPropagation(); openQuickView(product.id, undefined, navIds); }}
           data-testid={`button-quick-view-${product.id}`}
         >
           <Plus className="w-3.5 h-3.5 text-white/80" />
@@ -549,11 +554,17 @@ export function StarRating({ rating, count, isDark }: { rating: number; count: n
 }
 
 export function PackCardTile({
-  pack, hasCommercialAccess, isDark,
+  pack, hasCommercialAccess, isDark, navIds,
 }: {
   pack: PackDetail;
   hasCommercialAccess: boolean;
   isDark: boolean;
+  // The Shop's current filtered pack-ID list (task: "Navigate Between
+  // Mapped Products and Packs Without Closing the Detail Modal") — optional,
+  // since this component is also reused by store-detail-page.tsx, which
+  // doesn't provide a Shop-filtered navigation context; omitted there, the
+  // pack opens with no Previous/Next Product navigation, unchanged.
+  navIds?: number[];
 }) {
   const t = useTheme(isDark);
   const symbol = useCurrency(); // use global currency symbol
@@ -606,7 +617,7 @@ export function PackCardTile({
     <div
       data-testid={`card-pack-${pack.id}`}
       className={`group border rounded-2xl overflow-hidden flex flex-col cursor-pointer transition-all shadow-xl hover:-translate-y-0.5 ${t.dk ? "bg-gray-800 border-amber-900/40" : "bg-white border-amber-100"}`}
-      onClick={() => openPackQuickView(pack.id)}
+      onClick={() => openPackQuickView(pack.id, navIds)}
     >
       {/* Image — aspect-[4/3], identical across all cards */}
       <div className={`relative aspect-[4/3] overflow-hidden shrink-0 ${t.dk ? "bg-amber-900/20" : "bg-amber-50"}`}>
@@ -723,38 +734,21 @@ export function PackCardTile({
 }
 
 function PacksSection({
-  packs, categoryId, filters, search, isDark,
+  filteredPacks, isDark,
 }: {
-  packs: PackDetail[];
-  categoryId: string;
-  filters: FilterState;
-  // Extend SHOP Search to Products, Stores, and Packs — same query/normalization
-  // as Products/Stores, matched against this pack's own name/description/
-  // supplier name, plus the name of any product included in it.
-  search: string;
+  // Already filtered by the caller (BrowseProducts) — category, sub-category,
+  // brand, and search, exactly as this component computed internally before
+  // (logic moved verbatim, not duplicated) — lifted up so BrowseProducts can
+  // also feed the same list into usePackQuickView's navIds (task: "Navigate
+  // Between Mapped Products and Packs Without Closing the Detail Modal").
+  filteredPacks: PackDetail[];
   isDark: boolean;
 }) {
   const t = useTheme(isDark);
   const [expanded, setExpanded] = useState(false);
   const hasCommercialAccess = useCommercialAccess();
   const INITIAL_LIMIT = 5;
-
-  const filteredPacks = useMemo(() => {
-    let list = packs;
-    if (categoryId) list = list.filter((p) => p.categoryIds.includes(Number(categoryId)));
-    if (filters.subCategoryId) list = list.filter((p) => p.subCategoryIds.includes(Number(filters.subCategoryId)));
-    if (filters.brandId) list = list.filter((p) => p.brandIds.includes(Number(filters.brandId)));
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      list = list.filter((p) =>
-        p.name.toLowerCase().includes(q) ||
-        (p.description ?? "").toLowerCase().includes(q) ||
-        p.supplierName.toLowerCase().includes(q) ||
-        p.items.some((item) => item.productName.toLowerCase().includes(q))
-      );
-    }
-    return list;
-  }, [packs, categoryId, filters.subCategoryId, filters.brandId, search]);
+  const navIds = useMemo(() => filteredPacks.map((p) => p.id), [filteredPacks]);
 
   if (!filteredPacks.length) return null;
   const showToggle = filteredPacks.length > INITIAL_LIMIT;
@@ -785,7 +779,7 @@ function PacksSection({
       {expanded ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-4 gap-3">
           {filteredPacks.map((pack) => (
-            <PackCardTile key={pack.id} pack={pack} hasCommercialAccess={hasCommercialAccess} isDark={isDark} />
+            <PackCardTile key={pack.id} pack={pack} hasCommercialAccess={hasCommercialAccess} isDark={isDark} navIds={navIds} />
           ))}
         </div>
       ) : (
@@ -795,7 +789,7 @@ function PacksSection({
         >
           {filteredPacks.map((pack) => (
             <div key={pack.id} className="shrink-0 w-52 sm:w-60">
-              <PackCardTile pack={pack} hasCommercialAccess={hasCommercialAccess} isDark={isDark} />
+              <PackCardTile pack={pack} hasCommercialAccess={hasCommercialAccess} isDark={isDark} navIds={navIds} />
             </div>
           ))}
         </div>
@@ -1169,6 +1163,42 @@ export default function BrowseProducts() {
     return list;
   }, [categoryFiltered, filters, hasSearchLocation, searchLat, searchLng]);
 
+  // ── Filtered packs — same filter logic PacksSection used to compute
+  // internally, lifted up verbatim (not duplicated) so this page can also
+  // feed the same ordered ID list into usePackQuickView's navIds (task:
+  // "Navigate Between Mapped Products and Packs Without Closing the Detail
+  // Modal"). Packs have no sortBy dimension — unchanged, they never did.
+  const filteredPacks = useMemo(() => {
+    let list = packs;
+    if (categoryId) list = list.filter((p) => p.categoryIds.includes(Number(categoryId)));
+    if (filters.subCategoryId) list = list.filter((p) => p.subCategoryIds.includes(Number(filters.subCategoryId)));
+    if (filters.brandId) list = list.filter((p) => p.brandIds.includes(Number(filters.brandId)));
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.description ?? "").toLowerCase().includes(q) ||
+        p.supplierName.toLowerCase().includes(q) ||
+        p.items.some((item) => item.productName.toLowerCase().includes(q))
+      );
+    }
+    return list;
+  }, [packs, categoryId, filters.subCategoryId, filters.brandId, search]);
+
+  // ── Previous/Next Product navigation — keep both quick-view stores' navIds
+  // in sync with the Shop's own live-filtered lists, so the Coffee Owner
+  // changing a filter while a detail modal is open updates the navigation
+  // dataset instead of leaving it stale (task: "Navigate Between Mapped
+  // Products and Packs Without Closing the Detail Modal"). Reusing the
+  // existing filtered/filteredPacks collections directly — no separate
+  // filter system.
+  const productNavIds = useMemo(() => filtered.map((p) => p.id), [filtered]);
+  const packNavIds = useMemo(() => filteredPacks.map((p) => p.id), [filteredPacks]);
+  const setProductNavIds = useQuickView((s) => s.setNavIds);
+  const setPackNavIds = usePackQuickView((s) => s.setNavIds);
+  useEffect(() => { setProductNavIds(productNavIds); }, [productNavIds, setProductNavIds]);
+  useEffect(() => { setPackNavIds(packNavIds); }, [packNavIds, setPackNavIds]);
+
   // ── Flash products — all marketplace products with hasPromo derived from promotions ──
   const flashProducts = useMemo(() => {
     const promoListingIds = new Set(listingPromotions.map((lp) => lp.listingId));
@@ -1387,7 +1417,7 @@ export default function BrowseProducts() {
         />
 
         {/* Packs — same change as Stores above. */}
-        <PacksSection packs={packs} categoryId={categoryId} filters={filters} search={search} isDark={isDark} />
+        <PacksSection filteredPacks={filteredPacks} isDark={isDark} />
 
         {/* Products header */}
         <div className="flex items-center justify-between mb-4">
@@ -1445,6 +1475,7 @@ export default function BrowseProducts() {
                 hasCommercialAccess={hasCommercialAccess}
                 promotions={listingPromotions}
                 isDark={isDark}
+                navIds={productNavIds}
               />
             ))}
           </div>

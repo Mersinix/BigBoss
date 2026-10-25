@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useCallback } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, Package, Store, Minus, Plus, ShoppingCart, CheckCircle2,
   Lock, AlertTriangle, LogIn, MapPin, Star, MessageSquarePlus, X, Navigation, Tag, Sun, Moon, Zap, Heart,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme-store";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -466,6 +467,17 @@ export function ProductDetailContent({
   onBodyTouchStart,
   onBodyTouchMove,
   onBodyTouchEnd,
+  // Optional — Previous/Next Product navigation (task: "Navigate Between
+  // Mapped Products and Packs Without Closing the Detail Modal"). The
+  // parent Dialog wrapper owns the Shop's navIds list and the navigateTo
+  // store action; this component only renders the buttons and calls the
+  // provided callbacks. Unused in full-page mode, where no caller passes
+  // these — product-detail-page.tsx never does.
+  hasProductNav = false,
+  canNavPrev = false,
+  canNavNext = false,
+  onNavPrev,
+  onNavNext,
 }: {
   productId: string;
   supplierId?: number;
@@ -476,6 +488,11 @@ export function ProductDetailContent({
   onBodyTouchStart?: (e: React.TouchEvent<HTMLDivElement>) => void;
   onBodyTouchMove?: (e: React.TouchEvent<HTMLDivElement>) => void;
   onBodyTouchEnd?: (e: React.TouchEvent<HTMLDivElement>) => void;
+  hasProductNav?: boolean;
+  canNavPrev?: boolean;
+  canNavNext?: boolean;
+  onNavPrev?: () => void;
+  onNavNext?: () => void;
 }) {
   const [, navigate] = useLocation();
   const { user } = useAuth();
@@ -494,9 +511,8 @@ export function ProductDetailContent({
   const [activeImageIdx,    setActiveImageIdx]    = useState(0);
   const [supplierSort,      setSupplierSort]      = useState<"nearest" | "cheapest" | null>(null);
 
-  // ── Modal-only: dark theme + scroll detection ─────────────────────────────
+  // ── Modal-only: dark theme ────────────────────────────────────────────────
   const { isDark, toggle: toggleTheme } = useThemeStore();
-  const [scrolled, setScrolled] = useState(false);
 
   // ── Zoom via ref ──────────────────────────────────────────────────────────
   const mainImgRef = useRef<HTMLImageElement>(null);
@@ -524,6 +540,22 @@ export function ProductDetailContent({
   // introducing a second favorite system for this modal's image overlay.
   const favedProduct = useFavorites((s) => (product ? !!s.shop[product.id] : false));
   const toggleShopFav = useFavorites((s) => s.toggleShop);
+
+  // Clear item-specific selection state when switching to a different
+  // product via Previous/Next (task: "Navigate Between Mapped Products and
+  // Packs Without Closing the Detail Modal") — the modal no longer
+  // unmounts/remounts on navigation, so this state would otherwise carry
+  // over from the previous product. Only the flavor/size filters and an
+  // open review form are cleared; location filter and supplier sort are
+  // closer to a standing Shop-wide preference, left untouched. This only
+  // ever fires when the product actually changes (including the very first
+  // load), never on every re-render.
+  useEffect(() => {
+    setSelectedFlavorId(null);
+    setSelectedSizeId(null);
+    setReviewModalOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productId]);
 
   // ── Review stats ──────────────────────────────────────────────────────────
   const { data: reviewData } = useQuery<{
@@ -722,7 +754,6 @@ export function ProductDetailContent({
   const bg           = isModal ? (dk ? "bg-gray-900" : "bg-white") : "";
   const textPrimary  = dk ? "text-white"   : "text-gray-900";
   const textMuted    = dk ? "text-gray-400" : "text-gray-500";
-  const dividerColor = dk ? "bg-gray-800"  : "bg-gray-100";
 
   // toolbar buttons (nearest / cheapest / write review)
   const tbActive   = dk
@@ -742,46 +773,35 @@ export function ProductDetailContent({
 
   const isCafeOwner = !!product && user?.role === "CAFE_OWNER" && user?.status === "approved";
 
-  // ── Shared modal header (loading + error states reuse this) ───────────────
-  const ModalHeader = () => (
-    <div className={`shrink-0 ${bg} px-3 sm:px-5 pt-5 pb-0`}>
-      {/* Theme toggle / name / close (task: "Modal Close Button Consistency" —
-          close moved to the rightmost position to match the Pack Details
-          modal's reference order; same two buttons/handlers, position only) */}
-      <div className="flex items-center justify-between mb-4">
-        <button
-          onClick={toggleTheme}
-          aria-label="Changer de thème"
-          className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700" : "bg-gray-100 hover:bg-gray-200"}`}
-        >
-          {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
-        </button>
-        {/* Product name + categories fade in when scrolled */}
-        <div className={`flex-1 px-2 transition-opacity duration-200 ${scrolled ? "opacity-100" : "opacity-0"}`}>
-          <p className={`text-[13px] font-semibold truncate text-center ${textPrimary}`}>{product?.name ?? ""}</p>
-          {product && (product.category || product.subCategoryLabel || product.brandLabel) && (
-            <div className="flex items-center justify-center gap-1 flex-wrap mt-0.5">
-              {product.category && (
-                <span className={`text-[10px] ${textMuted}`}>{product.category}</span>
-              )}
-              {product.subCategoryLabel && (
-                <><span className={`text-[10px] opacity-40 ${textMuted}`}>·</span><span className={`text-[10px] ${textMuted}`}>{product.subCategoryLabel.name}</span></>
-              )}
-              {product.brandLabel && (
-                <><span className={`text-[10px] opacity-40 ${textMuted}`}>·</span><span className={`text-[10px] ${textMuted}`}>{product.brandLabel.name}</span></>
-              )}
-            </div>
-          )}
-        </div>
-        <button
-          onClick={onBack}
-          aria-label="Fermer"
-          className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500"}`}
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-      <div className={`h-px ${dividerColor}`} />
+  // Shared modal-mode overlay (Theme + Close only — no Fav/Avis, since
+  // there's no product yet to act on) for the loading/error skeletons below.
+  // Reuses the exact same image-area shell as the real success-state
+  // content (full-width box, same rounded-t-[2rem], same overlay button
+  // classes/position) instead of the old separate ModalHeader bar, so that
+  // switching between loading/error/success for different products — e.g.
+  // navigating via Previous/Next Product to an item not yet fetched — never
+  // swaps to a structurally different layout. That exact mismatch was the
+  // confirmed root cause of the brief "second modal" flicker during
+  // navigation (task: "Fix Product Navigation Flicker and Add Filter-Aware
+  // Navigation to Store Detail Modals") — the component stays mounted
+  // throughout navigation, so a jarring shell swap was fully visible with
+  // no opening animation to mask it.
+  const ModalImageAreaOverlay = () => (
+    <div className="absolute top-3 right-3 z-20 flex gap-2">
+      <button
+        onClick={toggleTheme}
+        aria-label="Changer de thème"
+        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors bg-black/40 backdrop-blur-sm"
+      >
+        {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-white" />}
+      </button>
+      <button
+        onClick={onBack}
+        aria-label="Fermer"
+        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors bg-black/40 backdrop-blur-sm"
+      >
+        <X className="w-4 h-4 text-white" />
+      </button>
     </div>
   );
 
@@ -804,9 +824,15 @@ export function ProductDetailContent({
     if (!isModal) return skeleton;
     return (
       <div className={`flex-1 min-h-0 flex flex-col ${bg}`}>
-        <ModalHeader />
-        <div className="flex-1 min-h-0 overflow-y-auto" style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
-          {skeleton}
+        <div className="flex-1 min-h-0 overflow-y-auto pb-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full" style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}>
+          <div className={`relative w-full h-80 sm:h-[420px] shrink-0 rounded-t-[2rem] animate-pulse ${dk ? "bg-gray-800" : "bg-gray-50"}`}>
+            <ModalImageAreaOverlay />
+          </div>
+          <div className="px-3 sm:px-5 pt-5 pb-4 space-y-3">
+            <Skeleton className={`h-7 w-2/3 rounded-lg ${dk ? "bg-gray-800" : ""}`} />
+            <Skeleton className={`h-4 w-full rounded-lg ${dk ? "bg-gray-800" : ""}`} />
+            <Skeleton className={`h-4 w-1/2 rounded-lg ${dk ? "bg-gray-800" : ""}`} />
+          </div>
         </div>
       </div>
     );
@@ -824,8 +850,12 @@ export function ProductDetailContent({
     if (!isModal) return errContent;
     return (
       <div className={`flex-1 min-h-0 flex flex-col ${bg}`}>
-        <ModalHeader />
-        <div className="flex-1 min-h-0 overflow-y-auto">{errContent}</div>
+        <div className="flex-1 min-h-0 overflow-y-auto pb-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full">
+          <div className={`relative w-full h-80 sm:h-[420px] shrink-0 rounded-t-[2rem] ${dk ? "bg-gray-800" : "bg-gray-50"}`}>
+            <ModalImageAreaOverlay />
+          </div>
+          {errContent}
+        </div>
       </div>
     );
   }
@@ -878,28 +908,88 @@ export function ProductDetailContent({
   );
 
   // ── Product text info ─────────────────────────────────────────────────────
+  // Category badges and title are split into their own blocks so the modal
+  // can reorder them (title + nav row first, badges second) while the
+  // full-page layout keeps its original order (badges, then title) — task:
+  // "Fix Pack and Product Detail Modal Header Layout".
+  const categoryBadges = (
+    <div className="flex flex-wrap gap-2">
+      {product.category && (
+        <Badge variant="secondary" className={isModal && dk ? "bg-gray-700 text-gray-200 border-gray-600" : ""}>
+          {product.category}
+        </Badge>
+      )}
+      {product.subCategoryLabel && (
+        <Badge variant="outline" className={isModal && dk ? "border-gray-600 text-gray-300" : ""}>
+          {product.subCategoryLabel.name}
+        </Badge>
+      )}
+      {product.brandLabel && (
+        <Badge className={`text-xs ${isModal && dk ? "bg-amber-500/15 border-amber-500/30 text-amber-400" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+          {product.brandLabel.name}
+        </Badge>
+      )}
+    </div>
+  );
+
+  // Previous/Next Product navigation — same conceptual position as the Pack
+  // Detail Modal's own pair (same row as the title, fixed to the right,
+  // never displaced by a long title). Image Previous/Next (inside the
+  // carousel above) is a fully separate control with its own handler — this
+  // never touches the image index, and image navigation never touches these.
+  const productNavButtons = hasProductNav && (
+    <div className="flex items-center gap-2 shrink-0">
+      <button
+        type="button"
+        onClick={onNavPrev}
+        disabled={!canNavPrev}
+        aria-label="Produit précédent"
+        title="Produit précédent"
+        className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}
+        data-testid="button-product-nav-prev"
+      >
+        <ChevronLeft className="w-4 h-4" />
+      </button>
+      <button
+        type="button"
+        onClick={onNavNext}
+        disabled={!canNavNext}
+        aria-label="Produit suivant"
+        title="Produit suivant"
+        className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-300" : "bg-gray-100 hover:bg-gray-200 text-gray-600"}`}
+        data-testid="button-product-nav-next"
+      >
+        <ChevronRight className="w-4 h-4" />
+      </button>
+    </div>
+  );
+
+  // Title row: in modal mode, shares its row with the nav buttons (fixed
+  // right, never wrapped onto a second line by a long title — min-w-0 on
+  // the title lets it shrink and wrap within its own space instead).
+  // Outside modal mode (full page), it's just the plain title, unchanged.
+  const titleRow = isModal ? (
+    <div className="flex items-start justify-between gap-x-3">
+      <h1 className={`text-2xl font-bold min-w-0 ${textPrimary}`}>{product.name}</h1>
+      {productNavButtons}
+    </div>
+  ) : (
+    <h1 className="text-2xl font-bold">{product.name}</h1>
+  );
+
   const productInfo = (
     <div className="flex-1 space-y-3">
-      {/* Category badges */}
-      <div className="flex flex-wrap gap-2">
-        {product.category && (
-          <Badge variant="secondary" className={isModal && dk ? "bg-gray-700 text-gray-200 border-gray-600" : ""}>
-            {product.category}
-          </Badge>
-        )}
-        {product.subCategoryLabel && (
-          <Badge variant="outline" className={isModal && dk ? "border-gray-600 text-gray-300" : ""}>
-            {product.subCategoryLabel.name}
-          </Badge>
-        )}
-        {product.brandLabel && (
-          <Badge className={`text-xs ${isModal && dk ? "bg-amber-500/15 border-amber-500/30 text-amber-400" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
-            {product.brandLabel.name}
-          </Badge>
-        )}
-      </div>
-
-      <h1 className={`text-2xl font-bold ${isModal ? textPrimary : ""}`}>{product.name}</h1>
+      {isModal ? (
+        <>
+          {titleRow}
+          {categoryBadges}
+        </>
+      ) : (
+        <>
+          {categoryBadges}
+          {titleRow}
+        </>
+      )}
 
       {product.description && (
         <p className={`leading-relaxed ${isModal ? textMuted : "text-muted-foreground"}`}>{product.description}</p>

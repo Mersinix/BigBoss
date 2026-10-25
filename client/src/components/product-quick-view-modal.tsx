@@ -29,7 +29,7 @@ export function ProductQuickViewModal() {
   const {
     requestDismiss, onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
     dismissContentStyle, dismissOverlayStyle,
-  } = useScrollDismiss(productId != null, close, 380);
+  } = useScrollDismiss(productId != null, close, 520);
 
   return (
     <Dialog open={productId != null} onOpenChange={(open) => { if (!open) requestDismiss(); }}>

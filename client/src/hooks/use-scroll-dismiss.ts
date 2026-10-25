@@ -21,7 +21,7 @@ const PULL_RESET_MS = 500;
 // dismissOverlayStyle transitions use this same value, so onDismiss (clearing
 // the owning store's open state / unmounting) only fires once the modal has
 // visually left the screen.
-export const SCROLL_DISMISS_ANIM_MS = 720;
+export const SCROLL_DISMISS_ANIM_MS = 520;
 
 export function useScrollDismiss(
   isOpen: boolean,

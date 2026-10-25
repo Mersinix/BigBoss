@@ -26,6 +26,9 @@ import {
 import type { PrintCatalogCard, PrintOrderWithParties } from "@shared/schema";
 import { PrintMappedServiceCard } from "@/components/print/print-mapped-service-card";
 import { formatDistance } from "@/lib/distance";
+import { usePrintStoreNav } from "@/hooks/use-print-store-nav";
+import { useItemNav } from "@/hooks/use-item-nav";
+import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 
 // "Livraisons" — same fixed production-time buckets as /print's own main
 // page (print-page.tsx), reproduced here rather than imported since they're
@@ -89,6 +92,18 @@ export default function PrintStoreDetailPage() {
   const printerId = params?.printerId ? Number(params.printerId) : null;
   const { user } = useAuth();
   const { toast } = useToast();
+
+  // Previous/Next Store navigation — browses /print's own currently
+  // filtered Imprimeries list (navIds), kept live-synced by print-page.tsx
+  // (task: "Extend Store Navigation to Marketing, Academy, and Print").
+  // Null when this page was opened directly, not from /print — both
+  // buttons simply stay hidden rather than guessing, same convention as
+  // the Coffee Owner Store Page's own Previous/Next Store buttons.
+  const printStoreNavIds = usePrintStoreNav((s) => s.navIds);
+  const { prevId: prevPrinterId, nextId: nextPrinterId, hasNav: hasPrinterNav } = useItemNav(
+    printerId,
+    printStoreNavIds ?? [],
+  );
 
   const isDark = useThemeStore((s) => s.isDark);
   const t = useTheme(isDark);
@@ -222,6 +237,15 @@ export default function PrintStoreDetailPage() {
     return list;
   }, [categoryFiltered, subCategoryId, brandId, material, deliveryTime, search, sortBy, card?.userId]);
   const hasActiveFilters = !!categoryId || !!subCategoryId || !!brandId || !!material || !!deliveryTime || !!search.trim() || !!sortBy;
+
+  // Previous/Next Service navigation (task: "Extend Detail Modal
+  // Navigation to Marketing, Academy, and Print") — browses `filtered`,
+  // this store's own currently-filtered mapped services, so navigation
+  // never crosses into another printer's services and always respects
+  // the active filters/search/sort, exactly like the main /print listing
+  // page's own navigation.
+  const storeServiceNavIds = useMemo(() => filtered.map((s) => s.id), [filtered]);
+  const { prevId: prevStoreServiceId, nextId: nextStoreServiceId, hasNav: hasStoreServiceNav } = useItemNav(previewServiceId, storeServiceNavIds);
   const resetFilters = () => { setCategoryId(""); setSubCategoryId(""); setBrandId(""); setMaterial(""); setDeliveryTime(""); setSearch(""); setSortBy(""); };
 
   // A Coffee Owner must not be able to reach a Store that the marketplace
@@ -336,8 +360,23 @@ export default function PrintStoreDetailPage() {
               <Printer className={`w-7 h-7 ${t.textMuted}`} />
             )}
           </div>
-          <div className="relative top-4 min-w-0 flex-1">
-            <h1 className={`font-extrabold text-xl leading-tight truncate ${t.textPrimary}`} data-testid="text-print-store-name">{card.name}</h1>
+          <div className="relative top-4 min-w-0 flex-1 mt-2">
+            <div className="flex items-start justify-between gap-x-3 gap-y-1 mt-4">
+              <h1 className={`font-extrabold text-xl leading-tight break-words min-w-0 ${t.textPrimary}`} data-testid="text-print-store-name">{card.name}</h1>
+              {hasPrinterNav && (
+                <ItemNavButtons
+                  isDark={isDark}
+                  canPrev={prevPrinterId != null}
+                  canNext={nextPrinterId != null}
+                  onPrev={() => prevPrinterId != null && navigate(`/print/stores/${prevPrinterId}`)}
+                  onNext={() => nextPrinterId != null && navigate(`/print/stores/${nextPrinterId}`)}
+                  prevLabel="Imprimerie précédente"
+                  nextLabel="Imprimerie suivante"
+                  prevTestId="button-print-store-nav-prev"
+                  nextTestId="button-print-store-nav-next"
+                />
+              )}
+            </div>
             <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mt-1 ${isDark ? "text-amber-400" : "text-amber-600"}`}>
               <span className="flex items-center gap-1"><Package className="w-3 h-3" />{services.length} service{services.length !== 1 ? "s" : ""}</span>
               {card.distanceKm != null ? (
@@ -627,6 +666,11 @@ export default function PrintStoreDetailPage() {
         serviceId={previewServiceId}
         open={previewServiceId != null}
         onClose={() => setPreviewServiceId(null)}
+        hasItemNav={hasStoreServiceNav}
+        canNavPrev={prevStoreServiceId != null}
+        canNavNext={nextStoreServiceId != null}
+        onNavPrev={() => prevStoreServiceId != null && setPreviewServiceId(prevStoreServiceId)}
+        onNavNext={() => nextStoreServiceId != null && setPreviewServiceId(nextStoreServiceId)}
       />
     </div>
   );

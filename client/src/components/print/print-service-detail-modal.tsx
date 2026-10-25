@@ -224,12 +224,22 @@ export function PrintServiceDetailModal({
 
             <div className="p-5 sm:p-6 space-y-5">
               <div>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {service.category && <Badge className={`text-[10px] border-0 px-1.5 ${isDark ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>{service.category}</Badge>}
-                  {service.subCategory && <Badge variant="outline" className={`text-[10px] ${isDark ? "border-gray-700 text-gray-300" : ""}`}>{service.subCategory}</Badge>}
-                </div>
+                {/* Title + mapped badges share one row, title first with the
+                    category/sous-catégorie badges inline right after it —
+                    same structure as MarketingServiceDetailModal's own
+                    title row (title + category/type badges inline,
+                    min-w-0 wrapper so the title can shrink/wrap without
+                    displacing the badges or the nav buttons), not a
+                    separate badges-above-title row as this modal used to
+                    have. Nav buttons stay on the outer row's right edge. */}
                 <div className="flex items-start justify-between gap-x-3 gap-y-1">
-                  <h2 className={`font-bold text-xl leading-tight min-w-0 ${t.textPrimary}`}>{service.name}</h2>
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <h2 className={`font-bold text-xl leading-tight min-w-0 ${t.textPrimary}`}>{service.name}</h2>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {service.category && <Badge className={`text-[10px] border-0 px-1.5 ${isDark ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>{service.category}</Badge>}
+                      {service.subCategory && <Badge variant="outline" className={`text-[10px] ${isDark ? "border-gray-700 text-gray-300" : ""}`}>{service.subCategory}</Badge>}
+                    </div>
+                  </div>
                   {hasItemNav && (
                     <ItemNavButtons
                       isDark={isDark}

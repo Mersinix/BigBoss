@@ -13030,3 +13030,427 @@ modale singleton).
   `filteredStores` (dataset de navigation) n'a jamais été tronqué, ni
   avant ni après cette tâche — seul son affichage (« Voir Plus ») l'est,
   sans rapport avec `storeNavIds`.
+
+---
+
+## 24. Extension de la navigation Store à Marketing, Academy, Print
+
+### Audit — comparaison des 3 sections avec la référence Coffee Owner
+
+Les trois pages Store dédiées existent déjà et sont de vraies routes,
+exactement parallèles à `/stores/:storeId` (confirmé dans `App.tsx`) :
+`/marketing/stores/:agencyId` → `marketing-store-detail-page.tsx`,
+`/academy/stores/:academyUserId` → `academy-store-detail-page.tsx`,
+`/print/stores/:printerId` → `print-store-detail-page.tsx`. Les trois
+ont une structure d'en-tête **structurellement identique** à la
+référence Coffee Owner (`-mt-8`, logo `w-16 h-16`, conteneur
+`relative top-4 min-w-0 flex-1`, `<h1 className="... truncate">`),
+confirmé par lecture directe des trois fichiers — aucune divergence de
+layout à gérer.
+
+**Important : les 3 sections n'ont PAS le même mécanisme de filtrage
+des stores, confirmé par lecture (pas supposé) :**
+
+- **Marketing** (`marketing-page.tsx`) : `MarketingStoresSection`
+  (définie localement dans la page) calcule elle-même un `filtered`
+  interne = `companies` (depuis `useMarketingCompanies()`) filtré par
+  `eligibleAgencyIds` (Set dérivé des **services** facet-filtrés —
+  catégorie/sous-catégorie/type/note/ville, PAS la recherche) **si**
+  `hasFacetFilters`, puis par `search` (nom/description de l'agence).
+  Même refactor nécessaire que `StoresSection` du Shop : remonter ce
+  calcul vers le composant parent pour alimenter un state de
+  navigation, car `eligibleAgencyIds`/`hasFacetFilters`/`search`/
+  `marketingCompanies` existent déjà tous dans le parent (lignes
+  447, 582-583).
+- **Academy** (`barista-academy-page.tsx`) : `AcademyStoresSection`
+  (fichier séparé, `components/academy/academy-stores-section.tsx`,
+  réutilisé aussi par Espace Barista Marketplace → Académie) ne fait
+  **aucun filtrage interne** — elle reçoit `companies` déjà filtré. Le
+  parent calcule déjà `filteredAcademyCompanies` (ligne 234-238,
+  filtré uniquement par `trainingSearch`, délibérément PAS par
+  `trainingLevel`/`trainingCert` — commentaire explicite confirmant
+  que ces filtres sont spécifiques aux formations, pas pertinents pour
+  la fiche d'une académie) et le passe directement en `companies` au
+  composant (ligne 523). **Aucun lift nécessaire ici** — le dataset
+  filtré existe déjà au bon endroit, juste besoin d'en dériver
+  `navIds`.
+- **Print** (`print-page.tsx`) : `PrintStoresSection` (définie
+  localement) est la copie structurelle exacte du cas Marketing —
+  `filtered` interne = `companies` (`printCompanies`, ligne 585)
+  filtré par `eligiblePrinterIds` (dérivé des services facet-filtrés,
+  ligne 649) si `hasFacetFilters` (ligne 650), puis par `search`
+  (`printSearch`). Même refactor que Marketing : remonter le calcul
+  vers le parent.
+- **Aucune des trois** n'a de notion de tri (`sortBy`) pour les stores
+  eux-mêmes — confirmé par lecture, aucun des trois composants Section
+  n'a de paramètre de tri. Seul l'ordre de la liste source
+  (`marketingCompanies`/`academyCompanies`/`printCompanies`, déjà
+  triée côté serveur) s'applique, exactement comme pour le Shop.
+- **Aucun des trois** n'a de pagination serveur pour les stores : les
+  trois listes (`marketingCompanies`, `academyCompanies`,
+  `printCompanies`) sont chacune récupérées en un seul
+  `useQuery`/hook dédié sans page/offset — tout l'ensemble éligible
+  est déjà chargé en mémoire. Le dataset de navigation n'a donc jamais
+  besoin d'aller chercher une page supplémentaire ; il suffit de ne
+  jamais utiliser la liste tronquée par « Voir plus »
+  (`visible`/`slice(0, INITIAL_LIMIT)`), exactement comme pour le Shop.
+- **Aucun contrôle de navigation Store n'existe actuellement** dans les
+  trois pages Store Detail — confirmé par absence de tout bouton/
+  composant de navigation près du `<h1>` dans les trois fichiers.
+- Composant réutilisable déjà disponible et vérifié : `useItemNav`
+  (`client/src/hooks/use-item-nav.ts`) et `ItemNavButtons`
+  (`client/src/components/shared/item-nav-buttons.tsx`) — tous deux
+  déjà utilisés par Marketing/Print pour leur propre navigation
+  Service (tâche précédente) et par Coffee Owner pour sa navigation
+  Store (tâche précédente). Réutilisés tels quels, sans modification,
+  dans les trois nouvelles sections.
+- Espaces d'ID distincts et potentiellement superposables (agencyId,
+  academyUserId, printerId, storeId du Shop sont tous des `users.id` de
+  comptes professionnels de rôles différents — rien ne garantit qu'ils
+  ne se chevauchent pas numériquement entre sections) → chaque section a
+  besoin de son **propre** state de navigation isolé, jamais partagé
+  avec `useStoreNav` (Shop) ni entre elles. Conformément à la consigne
+  « Ensure each section maintains its own independent store collection
+  and filter context » et à la convention déjà établie dans ce codebase
+  de fichiers de store Zustand séparés même quasi identiques
+  (`use-quick-view.ts` / `use-pack-quick-view.ts`) plutôt qu'une
+  fabrique générique non précédentée ici.
+
+### Plan d'implémentation
+
+1. Créer 3 nouveaux fichiers Zustand minimalistes, copie exacte de la
+   forme de `use-store-nav.ts` (`navIds`/`setNavIds`, pas de
+   `navigateTo`/`open`/`close` — chaque page est une vraie route) :
+   `use-marketing-store-nav.ts`, `use-academy-store-nav.ts`,
+   `use-print-store-nav.ts`.
+2. **Marketing** : remonter la logique de filtrage de
+   `MarketingStoresSection` vers `MarketingPage` (même refactor que
+   `StoresSection`/`filteredStores` du Shop) ; `MarketingStoresSection`
+   reçoit `filteredAgencies` déjà calculé au lieu de
+   `companies`/`eligibleAgencyIds`/`hasFacetFilters`/`search` bruts.
+   Ajouter `marketingStoreNavIds = filteredAgencies.map(c => c.userId)`
+   + `useEffect` de synchronisation vers `useMarketingStoreNav`.
+3. **Academy** : ajouter directement
+   `academyStoreNavIds = filteredAcademyCompanies.map(c => c.userId)`
+   + synchronisation — aucun changement à `AcademyStoresSection`
+   (déjà alimentée par le bon dataset filtré).
+4. **Print** : même refactor qu'au point 2, vers `PrintPage`/
+   `PrintStoresSection` → `filteredPrintCompanies`, `printStoreNavIds`.
+5. Dans chacune des 3 pages Store Detail : importer le hook Zustand
+   correspondant + `useItemNav` + `ItemNavButtons` ; calculer
+   `useItemNav(id, navIds ?? [])` ; restructurer la rangée du `<h1>`
+   exactement comme pour `store-detail-page.tsx` (Coffee Owner) —
+   `truncate` → `break-words min-w-0`, rangée parente en
+   `flex items-start justify-between gap-x-3 gap-y-1`, boutons
+   `ItemNavButtons` à droite, masqués si `hasNav` est faux (ouverture
+   directe sans venir de la liste, ou store courant disparu des
+   résultats filtrés — Scenario C/D gérés automatiquement par
+   `useItemNav`, sans code supplémentaire).
+6. Aucun nouvel endpoint, aucune nouvelle migration, aucun changement
+   aux filtres/tri/recherche existants, aucune modification du
+   comportement propre à chaque section (formations/enrollment,
+   services marketing, offres d'impression) — changements strictement
+   additifs, cantonnés à la navigation Store.
+
+### Implémentation réalisée
+
+**3 nouveaux fichiers Zustand** (`client/src/hooks/use-marketing-store-nav.ts`,
+`use-academy-store-nav.ts`, `use-print-store-nav.ts`) : copie exacte de
+la forme de `use-store-nav.ts` (`{ navIds: number[] | null; setNavIds }`),
+chacun totalement isolé des trois autres et de celui du Shop — aucun
+espace d'ID partagé.
+
+**Marketing** (`marketing-page.tsx`) : `filtered` interne de
+`MarketingStoresSection` remonté vers le parent sous le nom
+`filteredAgencies` (logique verbatim : `eligibleAgencyIds` si
+`hasFacetFilters`, puis `search` sur nom/description) ; ajout de
+`marketingStoreNavIds = filteredAgencies.map(c => c.userId)` +
+`useEffect` de synchronisation vers `useMarketingStoreNav`, juste après
+le `marketingServiceNavIds` déjà existant. Signature de
+`MarketingStoresSection` simplifiée à `{ filteredAgencies, onSelect,
+isDark }` (vérifié par `awk`/`grep` : aucune référence résiduelle aux
+anciens props `companies`/`eligibleAgencyIds`/`hasFacetFilters`/
+`search` à l'intérieur du composant). Site d'appel mis à jour.
+
+**Academy** (`barista-academy-page.tsx`) : aucun remontage nécessaire
+(confirmé à l'audit) — simple ajout de `academyStoreNavIds =
+filteredAcademyCompanies.map(c => c.userId)` + `useEffect` de
+synchronisation vers `useAcademyStoreNav`, juste après
+`filteredAcademyCompanies` déjà existant. `AcademyStoresSection`
+(fichier séparé, partagé avec Espace Barista Marketplace → Académie)
+**non touché**.
+
+**Print** (`print-page.tsx`) : même refactor que Marketing — `filtered`
+interne de `PrintStoresSection` remonté vers le parent sous le nom
+`filteredPrintCompanies` (logique verbatim : `eligiblePrinterIds` si
+`hasFacetFilters`, puis `printSearch`) ; ajout de `printStoreNavIds =
+filteredPrintCompanies.map(c => c.userId)` + synchronisation vers
+`usePrintStoreNav`, juste après `printServiceNavIds` déjà existant.
+Signature de `PrintStoresSection` simplifiée à `{ filteredCompanies,
+onSelect, isDark }` (vérifié : aucune référence résiduelle aux anciens
+props à l'intérieur du composant). Site d'appel mis à jour.
+
+**Les 3 pages Store Detail** (`marketing-store-detail-page.tsx`,
+`academy-store-detail-page.tsx`, `print-store-detail-page.tsx`) :
+import du hook Zustand correspondant + `useItemNav` + `ItemNavButtons`
+(les deux derniers réutilisés tels quels, sans modification, créés aux
+tâches précédentes). `useItemNav(id, navIds ?? [])` calculé juste après
+la dérivation de l'id de route. Rangée du `<h1>` restructurée à
+l'identique dans les trois fichiers : `truncate` → `break-words
+min-w-0`, conteneur parent passé en `flex items-start justify-between
+gap-x-3 gap-y-1`, `ItemNavButtons` affiché seulement si `hasNav` est
+vrai (masqué automatiquement dans les Scenarios C/D — store courant
+absent de `navIds`, ou page ouverte directement sans venir de la
+liste, sans code supplémentaire, grâce au comportement déjà existant
+de `useItemNav`). Labels et test-ids distincts par section (« Agence
+précédente/suivante », « Académie précédente/suivante », « Imprimerie
+précédente/suivante ») pour ne jamais être confondus avec la
+navigation Produit/Pack/Image/Service déjà en place.
+
+### Différences avec la référence Coffee Owner
+
+- Le Shop a un unique `useStoreNav` global ; les 3 sections ont chacune
+  leur propre store Zustand isolé (nécessaire : espaces d'ID
+  potentiellement superposés entre agencyId/academyUserId/printerId/
+  storeId).
+- Academy n'a nécessité aucun remontage de logique de filtrage (déjà
+  fait pour une autre raison, dans une tâche antérieure) ; Marketing et
+  Print ont nécessité le même remontage que le Shop. Academy n'a pas de
+  notion d'éligibilité par facette de service (contrairement à
+  Marketing/Print) — différence confirmée et préservée intentionnellement,
+  pas harmonisée artificiellement.
+- Structure de la rangée de titre, comportement de masquage, composant
+  de boutons : strictement identiques aux 4 endroits (aucune divergence
+  volontaire au-delà des labels/test-ids et des couleurs d'accent déjà
+  propres à chaque section).
+
+### Tests exécutés et résultats réels
+
+- `npx tsc --noEmit` : **0 erreur** (exit code 0, aucune sortie).
+- `npm run build` : **succès** — `vite build` (2830 modules
+  transformés, ✓ built in 18.21s) + `esbuild` serveur (`dist/index.cjs`
+  2.1 Mo, Done in 337ms). Seul avertissement : le warning Rollup
+  pré-existant sur la taille du chunk JS principal, sans rapport avec
+  cette tâche.
+- `git status --short` : confirmé exactement 9 fichiers touchés (3
+  nouveaux hooks + 6 fichiers modifiés) — aucun fichier des tâches
+  précédentes (Shop, barista/maintenance/marketing-service/academy-
+  formation/print-service detail modals) n'apparaît, confirmant
+  qu'aucune régression de scope n'a eu lieu.
+- **Aucun test navigateur/runtime n'a été possible** dans cet
+  environnement (pas d'outil d'automatisation navigateur disponible
+  cette session, comme pour toutes les tâches précédentes). En
+  particulier, n'ont été vérifiés QUE par lecture de code — jamais
+  observés en exécution : le clic réel sur Previous/Next Store dans
+  chacune des 3 sections, la désactivation/masquage réel aux limites,
+  le comportement réel avec filtres actifs/combinés/changeants pendant
+  qu'une page Store est ouverte, l'ouverture directe d'une page Store
+  sans venir de la liste, le rendu visuel du nom de store en wrap sur
+  mobile/desktop/clair/sombre dans les 3 sections, et l'absence de
+  clics multiples causant une navigation incorrecte (aucun mécanisme
+  anti rebond n'a été ajouté — la référence Coffee Owner n'en a pas non
+  plus, donc aucun n'a été inventé ici, par cohérence avec l'existant).
+
+### Limitations et exceptions intentionnelles
+
+- Aucun comportement anti-double-clic/anti-course n'a été ajouté : la
+  référence Coffee Owner (`store-detail-page.tsx`) n'en a pas non plus
+  — un `navigate()` wouter synchrone n'a pas de condition de course
+  identifiable à corriger içi sans en inventer une pour la référence
+  elle-même, ce que la tâche interdit explicitement (« Keep changes
+  minimal... consistent with the existing architecture »).
+- Aucune pagination serveur n'existe pour les 3 listes de stores
+  (marketing/academy/print), donc aucune Scenario B n'a nécessité de
+  logique de récupération incrémentale — confirmé par lecture des hooks
+  de données respectifs, qui chargent l'ensemble éligible en un seul
+  appel.
+
+---
+
+## 25. Navigation Précédent/Suivant dans les modales d'item mappé, depuis les Store Pages (Marketing/Academy/Print) + correction de l'en-tête PrintServiceDetailModal
+
+### Audit — état réel vérifié par lecture directe
+
+**Confirmation du problème** : les modales `MarketingServiceDetailModal`,
+`AcademyDetailModal`, `PrintServiceDetailModal` ont déjà la navigation
+Précédent/Suivant (props `hasItemNav`/`canNavPrev`/`canNavNext`/
+`onNavPrev`/`onNavNext`, tâche antérieure), et sont câblées depuis les
+pages de LISTING (`marketing-page.tsx`, `barista-academy-page.tsx`,
+`print-page.tsx`). Mais chacune des 3 Store Pages dédiées
+(`marketing-store-detail-page.tsx`, `academy-store-detail-page.tsx`,
+`print-store-detail-page.tsx`) ouvre la MÊME modale, pour ses propres
+items mappés (scoped à ce store), via son propre état local
+(`previewServiceId`/`previewCourseId`) — confirmé par lecture : aucun
+des 3 sites d'appel de modale dans ces 3 fichiers Store Page ne passe
+les props de navigation. C'est exactement le trou à combler.
+
+**Dataset de navigation — déjà disponible dans chaque Store Page,
+aucun calcul supplémentaire à inventer :**
+
+- **Marketing** (`marketing-store-detail-page.tsx`) : `filtered`
+  (ligne 218, dérivé de `card.services` + filtres locaux
+  catégorie/sous-catégorie/type/note/ville/recherche/tri) est déjà
+  exactement la liste de services mappés affichée dans la grille —
+  même le dataset qu'il faut pour la navigation. `previewServiceId`/
+  `setPreviewServiceId` déjà déclarés (ligne 152). `useItemNav`/
+  `ItemNavButtons` déjà importés dans ce fichier (réutilisés pour la
+  navigation Store de la tâche précédente) — aucun nouvel import de
+  hook partagé nécessaire, juste un second appel indépendant de
+  `useItemNav` (pur, sans état partagé, sûr d'appeler plusieurs fois).
+- **Academy** (`academy-store-detail-page.tsx`) : `filtered` (ligne
+  150, dérivé de `card.courses` + niveau/certification/recherche/tri)
+  déjà exactement la liste de formations mappées affichée.
+  `previewCourseId`/`setPreviewCourseId` déjà déclarés (ligne 117).
+  `useItemNav`/`ItemNavButtons` déjà importés (même raison qu'au-dessus).
+- **Print** (`print-store-detail-page.tsx`) : `filtered` (ligne 225,
+  dérivé de `card.services` + sous-catégorie/société/matière/
+  livraison/recherche/tri) déjà exactement la liste de services mappés
+  affichée. `previewServiceId`/`setPreviewServiceId` déjà déclarés
+  (ligne 137). `useItemNav`/`ItemNavButtons` déjà importés.
+- Les 3 sites d'appel de modale actuels (`<MarketingServiceDetailModal
+  serviceId={previewServiceId} .../>` etc.) n'omettent QUE les 5 props
+  de navigation — tout le reste (onClose, onRequestQuote/onEnroll,
+  onOpenCompany pour Print) reste inchangé. Confirmé : la Store Page de
+  Print et celle de Marketing n'exposent déjà PAS `onOpenCompany`/
+  `onOpenAgency` dans leur propre site d'appel (contrairement à la page
+  `/print` principale) — cohérent, puisqu'une Store Page est déjà
+  scopée à une seule société/agence, il n'y a pas d'« autre société »
+  vers laquelle naviguer depuis là ; comportement existant, non touché.
+- Noms de props confirmés identiques partout (vérifié dans les sites
+  d'appel déjà câblés des pages de listing) : `hasItemNav`/
+  `canNavPrev`/`canNavNext`/`onNavPrev`/`onNavNext`. Aucune divergence
+  de nommage à gérer.
+
+**Correction de l'en-tête `PrintServiceDetailModal` (section 5.1 de la
+tâche) — layout réellement observé dans les modales de référence,
+PAS supposé :**
+
+- État actuel de Print (avant correction) : rangée de badges
+  (catégorie + sous-catégorie) sur SA PROPRE rangée, `mb-2`, strictement
+  AU-DESSUS du `<h2>{service.name}</h2>` qui est sur une rangée séparée
+  avec les boutons de navigation.
+- Référence réellement observée dans `marketing-service-detail-modal.tsx`
+  (lignes 244-251) ET `academy-detail-modal.tsx` (lignes 391-394) :
+  le titre et ses badges mappés (catégorie + type pour Marketing,
+  niveau pour Academy) sont sur LA MÊME rangée, EN LIGNE — `<h2>`
+  d'abord, puis le(s) badge(s) juste après lui dans un sous-conteneur
+  `flex items-center gap-X flex-wrap min-w-0` — PAS « badges au-dessus
+  du titre ». Vérifié par lecture directe des deux fichiers, aucune
+  autre modale de référence n'a de badge positionné visuellement
+  au-dessus du titre (pas de badge sur l'image elle-même non plus dans
+  ces deux modales).
+- La formulation de la tâche (« mapped badges appear above the title »)
+  ne correspond donc pas littéralement à l'implémentation réelle des
+  modales de référence — mais la tâche elle-même demande explicitement
+  de « Match the actual established reference layout after inspecting
+  the code. Do not guess the intended badge order » : cette instruction
+  prime sur la description prose de la tâche. L'implémentation a donc
+  suivi le layout RÉEL (titre + badges en ligne, même rangée), qui est
+  aussi, par construction, le fix demandé : avant la correction, Print
+  avait les badges sur une rangée séparée AU-DESSUS du titre (exactement
+  le défaut que la tâche demande de corriger) ; après correction, Print
+  suit la même structure en ligne que Marketing/Academy.
+- Les boutons Précédent/Suivant restent sur la rangée extérieure
+  (`justify-between`), à droite, sans jamais chevaucher le titre ou les
+  badges — même mécanisme (`min-w-0` sur le bloc titre+badges, `shrink-0`
+  sur le groupe de boutons) déjà utilisé par Marketing/Academy pour
+  garantir ça.
+- Couleurs/variantes des badges Print (catégorie en bleu plein,
+  sous-catégorie en outline) et leurs données sous-jacentes **non
+  modifiées** — seule leur position dans l'arborescence a changé,
+  conformément à « Use the existing badge components, styles, and
+  data. Do not invent new badges, change their meanings ».
+
+### Plan d'implémentation
+
+1. `print-service-detail-modal.tsx` : fusionner la rangée badges +
+   rangée titre/nav en une seule rangée `flex items-start
+   justify-between gap-x-3 gap-y-1`, avec un sous-bloc `flex items-center
+   gap-2 flex-wrap min-w-0` contenant `<h2>` puis les 2 badges existants
+   dans leur propre `div shrink-0`. Boutons de nav inchangés, toujours
+   `hasItemNav &&` sur l'extérieur de la rangée.
+2. Dans chacune des 3 Store Pages, ajouter — juste après le `filtered`
+   déjà existant — un `useMemo` dérivant les IDs (`filtered.map(x =>
+   x.id)`) et un appel `useItemNav(previewXId, xNavIds)`, puis étendre
+   le site d'appel de la modale avec les 5 props de navigation
+   standard, en réutilisant `setPreviewXId` comme handler (exactement
+   le même motif que les pages de listing, juste avec le dataset scopé
+   au store plutôt qu'à toute la section).
+3. Aucun nouvel import de hook partagé n'est nécessaire (`useItemNav`/
+   `ItemNavButtons` déjà présents dans les 3 fichiers) — seul le calcul
+   local change.
+
+### Implémentation réalisée
+
+**`client/src/components/print/print-service-detail-modal.tsx`** :
+rangée badges (catégorie + sous-catégorie) et rangée titre/nav
+fusionnées en une seule rangée `flex items-start justify-between
+gap-x-3 gap-y-1`, avec un sous-bloc `flex items-center gap-2 flex-wrap
+min-w-0` contenant `<h2>{service.name}</h2>` puis les 2 badges existants
+(mêmes couleurs/variantes, mêmes données, aucune logique de mapping
+touchée) dans leur propre `div shrink-0`. `ItemNavButtons` inchangé,
+toujours sur l'extérieur de la rangée (`hasItemNav &&`).
+
+**`marketing-store-detail-page.tsx`** : ajout de `storeServiceNavIds =
+filtered.map(s => s.id)` + `useItemNav(previewServiceId,
+storeServiceNavIds)` juste après `hasActiveFilters` ; site d'appel de
+`<MarketingServiceDetailModal>` étendu avec les 5 props de navigation
+standard (handlers → `setPreviewServiceId(prevStoreServiceId/
+nextStoreServiceId)`).
+
+**`academy-store-detail-page.tsx`** : ajout de `storeCourseNavIds =
+filtered.map(c => c.id)` + `useItemNav(previewCourseId,
+storeCourseNavIds)` juste après `hasActiveFilters` ; site d'appel de
+`<AcademyDetailModal>` étendu de la même façon (handlers →
+`setPreviewCourseId(...)`).
+
+**`print-store-detail-page.tsx`** : ajout de `storeServiceNavIds =
+filtered.map(s => s.id)` + `useItemNav(previewServiceId,
+storeServiceNavIds)` juste après `hasActiveFilters` ; site d'appel de
+`<PrintServiceDetailModal>` étendu de la même façon.
+
+Dans les 3 cas, aucun nouvel import n'a été nécessaire (`useItemNav`/
+`ItemNavButtons` déjà présents depuis la navigation Store de la tâche
+précédente) ; `onClose`/`onRequestQuote`/`onEnroll` et l'absence
+d'`onOpenCompany`/`onOpenAgency` dans ces 3 sites d'appel sont restés
+inchangés.
+
+### Tests exécutés et résultats réels
+
+- `npx tsc --noEmit` : **0 erreur** (exit code 0, aucune sortie).
+- `npm run build` : **succès** — `vite build` (2830 modules
+  transformés, ✓ built in 37.76s) + `esbuild` serveur (`dist/index.cjs`
+  2.1 Mo, Done in 666ms). Seul avertissement : le warning Rollup
+  pré-existant sur la taille du chunk JS principal, sans rapport avec
+  cette tâche.
+- `git status --short` / `git diff --stat` : confirmé que seuls les 4
+  fichiers de cette tâche (`print-service-detail-modal.tsx`, et les 3
+  Store Pages) portent de nouvelles modifications dans ce tour — les
+  fichiers des tâches précédentes (Shop, barista/maintenance/
+  marketing-service/academy-formation/print-service, navigation Store
+  Marketing/Academy/Print) restent dans leur état déjà établi, aucune
+  régression de scope.
+- **Aucun test navigateur/runtime n'a été possible** dans cet
+  environnement (pas d'outil d'automatisation navigateur disponible
+  cette session, comme pour toutes les tâches précédentes). N'ont été
+  vérifiés QUE par lecture de code — jamais observés en exécution : le
+  clic réel sur Précédent/Suivant dans les 3 modales depuis leur Store
+  Page respective, la désactivation réelle aux limites, la mise à jour
+  réelle du contenu (titre/images/description/badges/prix) lors de la
+  navigation, l'absence de flicker/remount dupliqué, et le rendu visuel
+  réel de l'en-tête corrigé de `PrintServiceDetailModal` (titre + badges
+  en ligne, boutons de nav sans chevauchement) en clair/sombre et sur
+  mobile.
+
+### Limitations et exceptions intentionnelles
+
+- La formulation « mapped badges appear above the title » de la tâche
+  ne correspond pas littéralement à l'implémentation réelle des modales
+  de référence (titre + badges EN LIGNE, pas badges au-dessus) — traité
+  explicitement plus haut dans l'audit : l'instruction de la tâche
+  elle-même (« match the actual... layout after inspecting the code »)
+  prime sur sa propre description prose, donc le layout réellement
+  observé dans le code a été reproduit, pas la formulation littérale.
+- Aucun autre changement de layout, de badge, ou de logique de mapping
+  n'a été introduit dans `PrintServiceDetailModal` au-delà de ce
+  repositionnement.

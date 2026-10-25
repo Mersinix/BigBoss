@@ -40,6 +40,7 @@ import {
 } from "@/hooks/use-barista-academy";
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
 import { useItemNav } from "@/hooks/use-item-nav";
+import { useAcademyStoreNav } from "@/hooks/use-academy-store-nav";
 import { AcademyFastSearch } from "@/components/academy/academy-fast-search";
 import { AcademyBlacklistModal } from "@/components/academy/academy-blacklist-modal";
 import { AcademyMappedCourseCard } from "@/components/academy/academy-mapped-course-card";
@@ -236,6 +237,16 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
     const q = trainingSearch.trim().toLowerCase();
     return academyCompanies.filter((c) => c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q));
   }, [academyCompanies, trainingSearch]);
+
+  // Previous/Next Store navigation — keep useAcademyStoreNav's navIds in
+  // sync with this page's own live-filtered Académies list, so the Coffee
+  // Owner changing the search while a Store Page is open updates the
+  // navigation dataset instead of leaving it stale (task: "Extend Store
+  // Navigation to Marketing, Academy, and Print"). Reusing
+  // filteredAcademyCompanies directly — no separate filter system.
+  const academyStoreNavIds = useMemo(() => filteredAcademyCompanies.map((c) => c.userId), [filteredAcademyCompanies]);
+  const setAcademyStoreNavIds = useAcademyStoreNav((s) => s.setNavIds);
+  useEffect(() => { setAcademyStoreNavIds(academyStoreNavIds); }, [academyStoreNavIds, setAcademyStoreNavIds]);
 
   // Same search haystack as the server's own getPublishedAcademyCourses
   // (title/description/academyName/category) so client-side filtering stays

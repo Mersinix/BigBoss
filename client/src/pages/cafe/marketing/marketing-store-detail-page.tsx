@@ -14,6 +14,9 @@ import { MarketingAvailabilityModal } from "@/components/marketing/marketing-det
 import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
 import { ReviewsModal } from "@/components/account/reviews-modal";
 import { QuoteRequestDialog } from "@/pages/cafe/marketing/marketing-page";
+import { useMarketingStoreNav } from "@/hooks/use-marketing-store-nav";
+import { useItemNav } from "@/hooks/use-item-nav";
+import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -86,6 +89,18 @@ export default function MarketingStoreDetailPage() {
   const agencyId = params?.agencyId ? Number(params.agencyId) : null;
   const { user } = useAuth();
   const { toast } = useToast();
+
+  // Previous/Next Store navigation — browses /marketing's own currently
+  // filtered Agences list (navIds), kept live-synced by marketing-page.tsx
+  // (task: "Extend Store Navigation to Marketing, Academy, and Print").
+  // Null when this page was opened directly, not from /marketing — both
+  // buttons simply stay hidden rather than guessing, same convention as
+  // the Coffee Owner Store Page's own Previous/Next Store buttons.
+  const marketingStoreNavIds = useMarketingStoreNav((s) => s.navIds);
+  const { prevId: prevAgencyId, nextId: nextAgencyId, hasNav: hasAgencyNav } = useItemNav(
+    agencyId,
+    marketingStoreNavIds ?? [],
+  );
 
   const isDark = useThemeStore((s) => s.isDark);
   const t = useTheme(isDark);
@@ -215,6 +230,15 @@ export default function MarketingStoreDetailPage() {
     return list;
   }, [categoryFiltered, filterSubCategories, filterType, filterRating, filterLocation, card, search, sortBy]);
   const hasActiveFilters = !!categoryId || filterSubCategories.length > 0 || !!filterType || !!filterRating || !!filterLocation || !!search.trim() || !!sortBy;
+
+  // Previous/Next Service navigation (task: "Extend Detail Modal Navigation
+  // to Marketing, Academy, and Print") — browses `filtered`, this store's
+  // own currently-filtered mapped services, so navigation never crosses
+  // into another agency's services and always respects the active
+  // filters/search/sort, exactly like the main /marketing listing page's
+  // own navigation.
+  const storeServiceNavIds = useMemo(() => filtered.map((s) => s.id), [filtered]);
+  const { prevId: prevStoreServiceId, nextId: nextStoreServiceId, hasNav: hasStoreServiceNav } = useItemNav(previewServiceId, storeServiceNavIds);
   const resetFilters = () => { setCategoryId(""); setFilterSubCategories([]); setFilterType(""); setFilterRating(""); setFilterLocation(""); setSearch(""); setSortBy(""); };
 
   // A Coffee Owner must not be able to reach a Store the marketplace itself
@@ -330,8 +354,23 @@ export default function MarketingStoreDetailPage() {
               <Megaphone className={`w-7 h-7 ${t.textMuted}`} />
             )}
           </div>
-          <div className="relative top-4 min-w-0 flex-1">
-            <h1 className={`font-extrabold text-xl leading-tight truncate ${t.textPrimary}`} data-testid="text-marketing-store-name">{card.name}</h1>
+          <div className="relative top-4 min-w-0 flex-1 mt-2">
+            <div className="flex items-start justify-between gap-x-3 gap-y-1 mt-4">
+              <h1 className={`font-extrabold text-xl leading-tight break-words min-w-0 ${t.textPrimary}`} data-testid="text-marketing-store-name">{card.name}</h1>
+              {hasAgencyNav && (
+                <ItemNavButtons
+                  isDark={isDark}
+                  canPrev={prevAgencyId != null}
+                  canNext={nextAgencyId != null}
+                  onPrev={() => prevAgencyId != null && navigate(`/marketing/stores/${prevAgencyId}`)}
+                  onNext={() => nextAgencyId != null && navigate(`/marketing/stores/${nextAgencyId}`)}
+                  prevLabel="Agence précédente"
+                  nextLabel="Agence suivante"
+                  prevTestId="button-marketing-store-nav-prev"
+                  nextTestId="button-marketing-store-nav-next"
+                />
+              )}
+            </div>
             <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mt-1 ${isDark ? "text-purple-400" : "text-purple-600"}`}>
               <span className="flex items-center gap-1"><Users className="w-3 h-3" />{services.length} service{services.length !== 1 ? "s" : ""}</span>
               {card.distanceKm != null && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{formatDistance(card.distanceKm)}</span>}
@@ -625,6 +664,11 @@ export default function MarketingStoreDetailPage() {
         open={previewServiceId != null}
         onClose={() => setPreviewServiceId(null)}
         onRequestQuote={(p) => { setPreviewServiceId(null); setQuoteProvider(p); }}
+        hasItemNav={hasStoreServiceNav}
+        canNavPrev={prevStoreServiceId != null}
+        canNavNext={nextStoreServiceId != null}
+        onNavPrev={() => prevStoreServiceId != null && setPreviewServiceId(prevStoreServiceId)}
+        onNavNext={() => nextStoreServiceId != null && setPreviewServiceId(nextStoreServiceId)}
       />
 
       <QuoteRequestDialog provider={quoteProvider} onClose={() => setQuoteProvider(null)} isDark={isDark} />

@@ -11,6 +11,9 @@ import { AcademyProfileAvailabilityModal } from "@/components/academy/academy-pr
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
 import { ReviewsModal } from "@/components/account/reviews-modal";
 import { EnrollDialog } from "@/pages/cafe/barista/barista-academy-page";
+import { useAcademyStoreNav } from "@/hooks/use-academy-store-nav";
+import { useItemNav } from "@/hooks/use-item-nav";
+import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -70,6 +73,19 @@ export default function AcademyStoreDetailPage() {
   const [, params] = useRoute("/academy/stores/:academyUserId");
   const [, navigate] = useLocation();
   const academyUserId = params?.academyUserId ? Number(params.academyUserId) : null;
+
+  // Previous/Next Store navigation — browses /academy's own currently
+  // filtered Académies list (navIds), kept live-synced by
+  // barista-academy-page.tsx (task: "Extend Store Navigation to
+  // Marketing, Academy, and Print"). Null when this page was opened
+  // directly, not from /academy — both buttons simply stay hidden rather
+  // than guessing, same convention as the Coffee Owner Store Page's own
+  // Previous/Next Store buttons.
+  const academyStoreNavIds = useAcademyStoreNav((s) => s.navIds);
+  const { prevId: prevAcademyUserId, nextId: nextAcademyUserId, hasNav: hasAcademyNav } = useItemNav(
+    academyUserId,
+    academyStoreNavIds ?? [],
+  );
 
   const isDark = useThemeStore((s) => s.isDark);
   const t = useTheme(isDark);
@@ -143,6 +159,15 @@ export default function AcademyStoreDetailPage() {
     return list;
   }, [courses, levelId, certFilter, search, sortBy]);
   const hasActiveFilters = !!levelId || !!certFilter || !!search.trim() || !!sortBy;
+
+  // Previous/Next Formation navigation (task: "Extend Detail Modal
+  // Navigation to Marketing, Academy, and Print") — browses `filtered`,
+  // this store's own currently-filtered mapped formations, so navigation
+  // never crosses into another academy's formations and always respects
+  // the active filters/search/sort, exactly like the main /academy
+  // listing page's own navigation.
+  const storeCourseNavIds = useMemo(() => filtered.map((c) => c.id), [filtered]);
+  const { prevId: prevStoreCourseId, nextId: nextStoreCourseId, hasNav: hasStoreCourseNav } = useItemNav(previewCourseId, storeCourseNavIds);
   const resetFilters = () => { setLevelId(""); setCertFilter(""); setSearch(""); setSortBy(""); };
 
   // A Coffee Owner must not be able to reach a Store the marketplace itself
@@ -258,8 +283,23 @@ export default function AcademyStoreDetailPage() {
               <GraduationCap className={`w-7 h-7 ${t.textMuted}`} />
             )}
           </div>
-          <div className="relative top-4 min-w-0 flex-1">
-            <h1 className={`font-extrabold text-xl leading-tight truncate ${t.textPrimary}`} data-testid="text-academy-store-name">{card.name}</h1>
+          <div className="relative top-4 min-w-0 flex-1 mt-2">
+            <div className="flex items-start justify-between gap-x-3 gap-y-1 mt-4">
+              <h1 className={`font-extrabold text-xl leading-tight break-words min-w-0 ${t.textPrimary}`} data-testid="text-academy-store-name">{card.name}</h1>
+              {hasAcademyNav && (
+                <ItemNavButtons
+                  isDark={isDark}
+                  canPrev={prevAcademyUserId != null}
+                  canNext={nextAcademyUserId != null}
+                  onPrev={() => prevAcademyUserId != null && navigate(`/academy/stores/${prevAcademyUserId}`)}
+                  onNext={() => nextAcademyUserId != null && navigate(`/academy/stores/${nextAcademyUserId}`)}
+                  prevLabel="Académie précédente"
+                  nextLabel="Académie suivante"
+                  prevTestId="button-academy-store-nav-prev"
+                  nextTestId="button-academy-store-nav-next"
+                />
+              )}
+            </div>
             <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mt-1 ${isDark ? "text-indigo-400" : "text-indigo-600"}`}>
               <span className="flex items-center gap-1"><GraduationCap className="w-3 h-3" />{courses.length} formation{courses.length !== 1 ? "s" : ""}</span>
               {card.distanceKm != null && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{formatDistance(card.distanceKm)}</span>}
@@ -466,6 +506,11 @@ export default function AcademyStoreDetailPage() {
         open={previewCourseId != null}
         onClose={() => setPreviewCourseId(null)}
         onEnroll={(c) => { setPreviewCourseId(null); setEnrollTarget(c); }}
+        hasItemNav={hasStoreCourseNav}
+        canNavPrev={prevStoreCourseId != null}
+        canNavNext={nextStoreCourseId != null}
+        onNavPrev={() => prevStoreCourseId != null && setPreviewCourseId(prevStoreCourseId)}
+        onNavNext={() => nextStoreCourseId != null && setPreviewCourseId(nextStoreCourseId)}
       />
 
       <EnrollDialog course={enrollTarget} open={!!enrollTarget} onClose={() => setEnrollTarget(null)} isDark={isDark} />

@@ -53,6 +53,7 @@ import type { MarketingCompanyListCard } from "@shared/schema";
 import { MarketingDetailModal } from "@/components/marketing/marketing-detail-modal";
 import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
 import { useItemNav } from "@/hooks/use-item-nav";
+import { useMarketingStoreNav } from "@/hooks/use-marketing-store-nav";
 import { MarketingMappedServiceCard } from "@/components/marketing/marketing-mapped-service-card";
 import { MarketingFastSearch } from "@/components/marketing/marketing-fast-search";
 import { MarketingBlacklistModal } from "@/components/marketing/marketing-blacklist-modal";
@@ -208,36 +209,21 @@ function MarketingStoreCardTile({ company, onClick, isDark }: {
   );
 }
 
-function MarketingStoresSection({ companies, eligibleAgencyIds, hasFacetFilters, search, onSelect, isDark }: {
-  companies: MarketingCompanyListCard[];
-  // Real marketingUserId mapping from the eligible, facet-filtered SERVICE
-  // cards (task: "Fix Company/Agency Filtering...") — an agency stays
-  // visible only when it has at least one mapped service matching the
-  // active category/sous-catégorie/type/note/ville filters, never via its
-  // own self-declared `categories` field.
-  eligibleAgencyIds: Set<number>;
-  hasFacetFilters: boolean;
-  // Unify Service and Store Search + Remove Navbar Search Inputs — same query
-  // as the services search below, matched against this agency's own name/
-  // description, so an agency is discoverable even when none of its own
-  // service names match.
-  search: string;
+function MarketingStoresSection({ filteredAgencies: filtered, onSelect, isDark }: {
+  // Already filtered by the caller (MarketingPage) — facet eligibility
+  // (when active) and search, exactly as this component computed
+  // internally before (logic moved verbatim, not duplicated) — lifted up
+  // so MarketingPage can also feed the same list into
+  // useMarketingStoreNav's navIds (task: "Extend Store Navigation to
+  // Marketing, Academy, and Print"). Same refactor already applied to the
+  // Shop's own StoresSection/filteredStores.
+  filteredAgencies: MarketingCompanyListCard[];
   onSelect: (agencyId: number) => void;
   isDark: boolean;
 }) {
   const t = useTheme(isDark);
   const [expanded, setExpanded] = useState(false);
   const INITIAL_LIMIT = 5;
-
-  const filtered = useMemo(() => {
-    let list = companies;
-    if (hasFacetFilters) list = list.filter((c) => eligibleAgencyIds.has(c.userId));
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      list = list.filter((c) => c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q));
-    }
-    return list;
-  }, [companies, eligibleAgencyIds, hasFacetFilters, search]);
 
   if (!filtered.length) return null;
   const showToggle = filtered.length > INITIAL_LIMIT;
@@ -600,6 +586,25 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   const marketingServiceNavIds = useMemo(() => filteredServices.map((s) => s.id), [filteredServices]);
   const { prevId: prevMarketingServiceId, nextId: nextMarketingServiceId, hasNav: hasMarketingServiceNav } = useItemNav(detailServiceId, marketingServiceNavIds);
 
+  // ── Filtered agencies — same filter logic MarketingStoresSection used to
+  // compute internally, lifted up verbatim (not duplicated) so this page can
+  // also feed the same ordered agency-ID list into useMarketingStoreNav's
+  // navIds (task: "Extend Store Navigation to Marketing, Academy, and
+  // Print"). Agencies have no sortBy dimension — unchanged, they never did.
+  const filteredAgencies = useMemo(() => {
+    let list = marketingCompanies;
+    if (hasFacetFilters) list = list.filter((c) => eligibleAgencyIds.has(c.userId));
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((c) => c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q));
+    }
+    return list;
+  }, [marketingCompanies, eligibleAgencyIds, hasFacetFilters, search]);
+
+  const marketingStoreNavIds = useMemo(() => filteredAgencies.map((c) => c.userId), [filteredAgencies]);
+  const setMarketingStoreNavIds = useMarketingStoreNav((s) => s.setNavIds);
+  useEffect(() => { setMarketingStoreNavIds(marketingStoreNavIds); }, [marketingStoreNavIds, setMarketingStoreNavIds]);
+
   // Reconcile existing selections that a sibling filter change just made
   // invalid — clears only the one no longer compatible, never resets
   // unrelated filters; each effect only ever clears (never sets a new
@@ -882,10 +887,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         <MarketingStoresSection
-          companies={marketingCompanies}
-          eligibleAgencyIds={eligibleAgencyIds}
-          hasFacetFilters={hasFacetFilters}
-          search={search}
+          filteredAgencies={filteredAgencies}
           onSelect={(agencyId) => navigate(`/marketing/stores/${agencyId}`)}
           isDark={isDark}
         />

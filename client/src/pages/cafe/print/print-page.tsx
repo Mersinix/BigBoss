@@ -23,6 +23,7 @@ import type { PrintCatalogCard, PrintCompanyListCard } from "@shared/schema";
 import { printCategoryIcon } from "@/lib/print-category-icons";
 import { useFallbackImage } from "@/hooks/use-fallback-image";
 import { useItemNav } from "@/hooks/use-item-nav";
+import { usePrintStoreNav } from "@/hooks/use-print-store-nav";
 import { PrintFastSearch } from "@/components/print/print-fast-search";
 import { PrintBlacklistModal } from "@/components/print/print-blacklist-modal";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
@@ -236,36 +237,21 @@ function PrintStoreCardTile({ company, onClick, isDark }: {
   );
 }
 
-function PrintStoresSection({ companies, eligiblePrinterIds, hasFacetFilters, search, onSelect, isDark }: {
-  companies: PrintCompanyListCard[];
-  // Real printerId mapping from the eligible, facet-filtered SERVICE cards
-  // (task: "Fix Company/Agency Filtering...") — a company stays visible only
-  // when it has at least one mapped service matching the active category/
-  // sous-catégorie/société/matière/livraison filters, never via its own
-  // self-declared `categories` field.
-  eligiblePrinterIds: Set<number>;
-  hasFacetFilters: boolean;
-  // Unify Service and Store Search + Remove Navbar Search Inputs — same query
-  // as the catalog search below, matched against this printer's own name/
-  // description, so a company is discoverable even when none of its own
-  // service names match.
-  search: string;
+function PrintStoresSection({ filteredCompanies: filtered, onSelect, isDark }: {
+  // Already filtered by the caller (PrintPage) — facet eligibility (when
+  // active) and search, exactly as this component computed internally
+  // before (logic moved verbatim, not duplicated) — lifted up so PrintPage
+  // can also feed the same list into usePrintStoreNav's navIds (task:
+  // "Extend Store Navigation to Marketing, Academy, and Print"). Same
+  // refactor already applied to the Shop's own StoresSection/filteredStores
+  // and to Marketing's own MarketingStoresSection/filteredAgencies.
+  filteredCompanies: PrintCompanyListCard[];
   onSelect: (printerId: number) => void;
   isDark: boolean;
 }) {
   const t = useTheme(isDark);
   const [expanded, setExpanded] = useState(false);
   const INITIAL_LIMIT = 5;
-
-  const filtered = useMemo(() => {
-    let list = companies;
-    if (hasFacetFilters) list = list.filter((c) => eligiblePrinterIds.has(c.userId));
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      list = list.filter((c) => c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q));
-    }
-    return list;
-  }, [companies, eligiblePrinterIds, hasFacetFilters, search]);
 
   if (!filtered.length) return null;
   const showToggle = filtered.length > INITIAL_LIMIT;
@@ -670,6 +656,26 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
   const printServiceNavIds = useMemo(() => filtered.map((c) => c.id), [filtered]);
   const { prevId: prevPrintServiceId, nextId: nextPrintServiceId, hasNav: hasPrintServiceNav } = useItemNav(previewServiceId, printServiceNavIds);
 
+  // ── Filtered printing companies — same filter logic PrintStoresSection
+  // used to compute internally, lifted up verbatim (not duplicated) so this
+  // page can also feed the same ordered printerId list into
+  // usePrintStoreNav's navIds (task: "Extend Store Navigation to
+  // Marketing, Academy, and Print"). Companies have no sortBy dimension —
+  // unchanged, they never did.
+  const filteredPrintCompanies = useMemo(() => {
+    let list = printCompanies;
+    if (hasFacetFilters) list = list.filter((c) => eligiblePrinterIds.has(c.userId));
+    if (printSearch.trim()) {
+      const q = printSearch.trim().toLowerCase();
+      list = list.filter((c) => c.name.toLowerCase().includes(q) || (c.description ?? "").toLowerCase().includes(q));
+    }
+    return list;
+  }, [printCompanies, eligiblePrinterIds, hasFacetFilters, printSearch]);
+
+  const printStoreNavIds = useMemo(() => filteredPrintCompanies.map((c) => c.userId), [filteredPrintCompanies]);
+  const setPrintStoreNavIds = usePrintStoreNav((s) => s.setNavIds);
+  useEffect(() => { setPrintStoreNavIds(printStoreNavIds); }, [printStoreNavIds, setPrintStoreNavIds]);
+
   // Filter synchronization (task: "Synchronize All Filters and Display Only
   // Options With Matching Results") — mirrors the /products fix exactly:
   // selecting a Sous-catégorie/Société/Matière/Livraison directly used to
@@ -890,10 +896,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
        <div className="max-w-7xl mx-auto px-4 py-8">
         {!printCompaniesLoading && (
           <PrintStoresSection
-            companies={printCompanies}
-            eligiblePrinterIds={eligiblePrinterIds}
-            hasFacetFilters={hasFacetFilters}
-            search={printSearch}
+            filteredCompanies={filteredPrintCompanies}
             onSelect={(printerId) => navigate(`/print/stores/${printerId}`)}
             isDark={isDark}
           />

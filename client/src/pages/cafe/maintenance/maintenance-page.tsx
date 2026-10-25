@@ -16,6 +16,7 @@ import { ReviewsModal } from "@/components/account/reviews-modal";
 import type { MaintenanceMarketplaceCard, OpeningHoursMap } from "@shared/schema";
 import { encodeMaintenanceSubSkillKey, decodeMaintenanceSubSkillKey } from "@shared/maintenance-sub-skill-key";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
+import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -498,6 +499,19 @@ export function AgentDetailModal({
     onSuccess: () => { toast({ title: "Signalement envoyé", description: "L'équipe Admin va l'examiner." }); setReportModalOpen(false); setReportReason(""); },
     onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
   });
+
+  // Scroll-direction dismissal (scroll down, back up, then up again past the
+  // top closes the modal with a slide-down + fade) — same behavior and
+  // timing as the Pack Detail Modal, via the shared hook; see
+  // client/src/hooks/use-scroll-dismiss.ts. This modal's DialogContent is
+  // itself the scroll container (no separate inner scroll div), so the
+  // gesture handlers and dismiss styles attach directly to it below. Called
+  // before the `!agent` early return so it always runs (rules of hooks).
+  const {
+    onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
+    dismissContentStyle, dismissOverlayStyle,
+  } = useScrollDismiss(open, onClose);
+
   if (!agent) return null;
 
   return (
@@ -509,7 +523,15 @@ export function AgentDetailModal({
       {/* Dimensions/scrolling now match the Barista Details Modal exactly:
           same sm:max-w-2xl, same themed background on DialogContent itself
           (not just an inner wrapper), same scrollbar treatment. */}
-      <DialogContent className={`sm:max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0 rounded-2xl border-0 shadow-2xl [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${isDark ? "bg-gray-900" : "bg-white"}`}>
+      <DialogContent
+        className={`sm:max-w-2xl max-h-[90vh] overflow-y-auto p-0 gap-0 rounded-2xl border-0 shadow-2xl [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${isDark ? "bg-gray-900" : "bg-white"}`}
+        style={dismissContentStyle}
+        overlayStyle={dismissOverlayStyle}
+        onWheel={onBodyWheel}
+        onTouchStart={onBodyTouchStart}
+        onTouchMove={onBodyTouchMove}
+        onTouchEnd={onBodyTouchEnd}
+      >
         <VisuallyHidden><DialogTitle>Profil Technicien Maintenance</DialogTitle></VisuallyHidden>
         <div className="flex flex-col">
           {/* Large real profile picture (Part 7) — same treatment as the

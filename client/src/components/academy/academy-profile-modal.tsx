@@ -12,6 +12,7 @@ import {
   type AcademyCourseLevel,
 } from "@/hooks/use-barista-academy";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
@@ -187,6 +188,17 @@ export function AcademyProfileModal({
     onClose();
   };
 
+  // Scroll-direction dismissal (scroll down, back up, then up again past the
+  // top closes the modal with a slide-down + fade) — same behavior and
+  // timing as the Pack Detail Modal, via the shared hook; see
+  // client/src/hooks/use-scroll-dismiss.ts. This modal's DialogContent is
+  // itself the scroll container (no separate inner scroll div), so the
+  // gesture handlers and dismiss styles attach directly to it below.
+  const {
+    onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
+    dismissContentStyle, dismissOverlayStyle,
+  } = useScrollDismiss(open, handleClose);
+
   const handleMessage = async () => {
     if (!card || readOnly) return;
     setMessaging(true);
@@ -215,7 +227,15 @@ export function AcademyProfileModal({
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); }}>
-      <DialogContent className={`sm:max-w-2xl rounded-2xl border-0 shadow-2xl max-h-[90vh] overflow-y-auto p-0 [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}>
+      <DialogContent
+        className={`sm:max-w-2xl rounded-2xl border-0 shadow-2xl max-h-[90vh] overflow-y-auto p-0 [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}
+        style={dismissContentStyle}
+        overlayStyle={dismissOverlayStyle}
+        onWheel={onBodyWheel}
+        onTouchStart={onBodyTouchStart}
+        onTouchMove={onBodyTouchMove}
+        onTouchEnd={onBodyTouchEnd}
+      >
         <VisuallyHidden><DialogTitle>{card?.name ?? "Académie"}</DialogTitle></VisuallyHidden>
         {isLoading || !card ? (
           <div className="p-6 space-y-4">

@@ -454,12 +454,26 @@ export function ProductDetailContent({
   onBack,
   backLabel = "Retour au catalogue",
   isModal = false,
+  // Optional — forwarded as-is onto the modal's own scrollable body div so a
+  // parent Dialog wrapper (product-quick-view-modal.tsx) can drive the same
+  // scroll-direction dismissal gesture as the Pack Detail Modal (see
+  // client/src/hooks/use-scroll-dismiss.ts) without this shared component
+  // needing to know anything about dismissal itself. Unused/ignored in
+  // full-page mode (isModal=false), where there is no such scroll container.
+  onBodyWheel,
+  onBodyTouchStart,
+  onBodyTouchMove,
+  onBodyTouchEnd,
 }: {
   productId: string;
   supplierId?: number;
   onBack: () => void;
   backLabel?: string;
   isModal?: boolean;
+  onBodyWheel?: (e: React.WheelEvent<HTMLDivElement>) => void;
+  onBodyTouchStart?: (e: React.TouchEvent<HTMLDivElement>) => void;
+  onBodyTouchMove?: (e: React.TouchEvent<HTMLDivElement>) => void;
+  onBodyTouchEnd?: (e: React.TouchEvent<HTMLDivElement>) => void;
 }) {
   const [, navigate] = useLocation();
   const { user } = useAuth();
@@ -1086,6 +1100,10 @@ export function ProductDetailContent({
         <div
           className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 pb-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full"
           onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 80)}
+          onWheel={onBodyWheel}
+          onTouchStart={onBodyTouchStart}
+          onTouchMove={onBodyTouchMove}
+          onTouchEnd={onBodyTouchEnd}
           style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >
           {/* ── Product header: images + info (always scrolls) ── */}

@@ -510,7 +510,7 @@ export function AgentDetailModal({
   const {
     onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
     dismissContentStyle, dismissOverlayStyle,
-  } = useScrollDismiss(open, onClose);
+  } = useScrollDismiss(open, onClose, undefined, true);
 
   if (!agent) return null;
 

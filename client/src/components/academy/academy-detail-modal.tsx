@@ -268,7 +268,7 @@ export function AcademyDetailModal({
   const {
     onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
     dismissContentStyle, dismissOverlayStyle,
-  } = useScrollDismiss(open, handleClose);
+  } = useScrollDismiss(open, handleClose, undefined, true);
 
   const handleMessage = async () => {
     if (!course || readOnly) return;

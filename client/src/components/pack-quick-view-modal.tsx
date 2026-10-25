@@ -722,7 +722,7 @@ export function PackQuickViewModal({ previewPack, previewOpen, onPreviewClose }:
     onBodyTouchEnd: handleBodyTouchEnd,
     dismissContentStyle,
     dismissOverlayStyle,
-  } = useScrollDismiss(dialogOpen, close);
+  } = useScrollDismiss(dialogOpen, close, undefined, true);
 
   return (
     <Dialog open={isPreview ? !!previewOpen : packId != null} onOpenChange={(open) => { if (!open) close(); }}>

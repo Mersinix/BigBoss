@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ShieldAlert, MapPin, Calendar, Ban, Flag, X } from "lucide-react";
 import type { MaintenanceMarketplaceCard } from "@shared/schema";
 import { AgentDetailModal } from "@/pages/cafe/maintenance/maintenance-page";
+import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 
 const STATUS_LABELS: Record<string, string> = { PENDING: "En attente", RESOLVED: "Résolu", DISMISSED: "Ignoré" };
 function statusColors(isDark: boolean): Record<string, string> {
@@ -81,6 +82,15 @@ export function MaintenanceBlacklistModal({ open, onClose, isDark }: { open: boo
     if (provider) setDetailAgent(provider);
   };
 
+  // Scroll/swipe-to-dismiss (second upward swipe follows the finger live,
+  // same mechanism/threshold as the Product Detail Modal reference) — see
+  // client/src/hooks/use-scroll-dismiss.ts. This modal's DialogContent is
+  // itself the scroll container, so the handlers/styles attach directly to it.
+  const {
+    onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
+    dismissContentStyle, dismissOverlayStyle,
+  } = useScrollDismiss(open, onClose, undefined, true);
+
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -88,7 +98,15 @@ export function MaintenanceBlacklistModal({ open, onClose, isDark }: { open: boo
             close button on the right, thin scrollbar
             (docs/coffee_owner_favorites_reporting_nested_modal_audit.md
             Section 3-8). Card content below unchanged. */}
-        <DialogContent className={`sm:max-w-xl rounded-2xl border-0 shadow-2xl max-h-[85vh] overflow-y-auto [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}>
+        <DialogContent
+          className={`sm:max-w-xl rounded-2xl border-0 shadow-2xl max-h-[85vh] overflow-y-auto [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}
+          style={dismissContentStyle}
+          overlayStyle={dismissOverlayStyle}
+          onWheel={onBodyWheel}
+          onTouchStart={onBodyTouchStart}
+          onTouchMove={onBodyTouchMove}
+          onTouchEnd={onBodyTouchEnd}
+        >
           <VisuallyHidden><DialogTitle>Professionnels Maintenance signalés</DialogTitle></VisuallyHidden>
           <div className="flex items-center justify-between gap-2 mb-1">
             <div className="flex items-center gap-2 min-w-0">

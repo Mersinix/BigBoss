@@ -15,6 +15,7 @@ import {
   type BaristaJobRecordType,
 } from "@/hooks/use-barista-marketplace";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -171,6 +172,18 @@ export function JobPostFormModal({
   const isEditing = !!editingJob;
   const isPending = createJob.isPending || updateJob.isPending;
 
+  // Scroll/swipe-to-dismiss (second upward swipe follows the finger live,
+  // same mechanism/threshold as the Product Detail Modal reference) — see
+  // client/src/hooks/use-scroll-dismiss.ts. The onDismiss callback mirrors
+  // this modal's existing onOpenChange guard exactly: dismissal (by any
+  // method) stays blocked while a submit is in flight. This modal's
+  // DialogContent is itself the scroll container, so the handlers/styles
+  // attach directly to it.
+  const {
+    onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
+    dismissContentStyle, dismissOverlayStyle,
+  } = useScrollDismiss(open, () => { if (!isPending) onClose(); }, undefined, true);
+
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((p) => ({ ...p, [key]: value }));
   const toggleIn = (key: "employmentTypes" | "educationLevels" | "languages", value: string) =>
     setForm((p) => ({ ...p, [key]: p[key].includes(value) ? p[key].filter((v) => v !== value) : [...p[key], value] }));
@@ -296,6 +309,12 @@ export function JobPostFormModal({
       <DialogContent
         hideClose
         className={`sm:max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full ${t.modalBg}`}
+        style={dismissContentStyle}
+        overlayStyle={dismissOverlayStyle}
+        onWheel={onBodyWheel}
+        onTouchStart={onBodyTouchStart}
+        onTouchMove={onBodyTouchMove}
+        onTouchEnd={onBodyTouchEnd}
       >
         {/* Custom close button (task: "Modal Close Button Consistency") replacing
             the unstyled default Radix close, matching the Pack Details modal's

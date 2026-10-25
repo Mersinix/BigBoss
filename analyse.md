@@ -11850,3 +11850,132 @@ exact d'avant.
   de directions, non-interférence avec le défilement normal et le
   balayage horizontal du carrousel d'images — à vérifier manuellement
   avant de considérer ce point comme définitivement clos.
+
+---
+
+## 17. Tâche de suivi — Standardiser le geste « suivi du doigt » sur toutes les modales à défilement
+
+### Audit — référence et portée
+
+Référence confirmée : `useScrollDismiss` (`client/src/hooks/use-scroll-
+dismiss.ts`), avec son paramètre optionnel `liveDrag` (4ᵉ argument,
+ajouté à la tâche précédente) — déjà activé uniquement pour le Product
+Detail Modal (`product-quick-view-modal.tsx`, `liveDrag=true`). Le
+mécanisme lui-même (suivi en direct sans transition pendant le tirage,
+inversion naturelle si le doigt redescend, décision de fermeture/retour
+prise uniquement au relâchement selon le même seuil `DISMISS_THRESHOLD`
+existant) est repris tel quel — rien n'a été réécrit, uniquement
+réutilisé.
+
+**Recherche exhaustive de toutes les modales à Dialog sous les cinq
+zones demandées** (`grep` de `DialogContent` dans
+`client/src/components/{academy,barista,maintenance,marketing,print}`
+et les pages Coffee Owner correspondantes), puis vérification une par
+une de la présence d'un véritable conteneur de défilement vertical sur
+le contenu principal (`max-h-[85vh]`/`max-h-[90vh]` + `overflow-y-auto`
+sur le `DialogContent` lui-même, pas un simple sous-élément) :
+
+**Déjà câblées sur `useScrollDismiss` (liveDrag passait implicitement à
+`false`) — seul le 4ᵉ argument est ajouté, aucune autre logique
+touchée :**
+1. `pack-quick-view-modal.tsx` (Pack Detail Modal)
+2. `barista/barista-detail-modal.tsx` (Barista Detail Modal)
+3. `pages/cafe/maintenance/maintenance-page.tsx` (`AgentDetailModal`)
+4. `marketing/marketing-detail-modal.tsx` (Agence)
+5. `marketing/marketing-service-detail-modal.tsx` (Service)
+6. `academy/academy-detail-modal.tsx` (Formation)
+7. `academy/academy-profile-modal.tsx` (Académie)
+8. `print/print-service-detail-modal.tsx` (Service)
+9. `print/print-company-detail-modal.tsx` (Imprimerie)
+
+**Nouvelles modales identifiées, jamais câblées sur ce hook, mais
+possédant un vrai défilement vertical + un cycle de fermeture
+`onOpenChange` existant — ajout complet de `useScrollDismiss(...,
+liveDrag=true)` :**
+10. `academy/academy-blacklist-modal.tsx`
+11. `barista/barista-blacklist-modal.tsx`
+12. `maintenance/maintenance-blacklist-modal.tsx`
+13. `marketing/marketing-blacklist-modal.tsx`
+14. `print/print-blacklist-modal.tsx`
+15. `barista/job-management-modal.tsx`
+16. `maintenance/maintenance-job-management-modal.tsx`
+17. `barista/job-post-form-modal.tsx`
+18. `maintenance/maintenance-job-post-form-modal.tsx`
+
+Pour les deux derniers (formulaires), la fermeture est déjà bloquée
+pendant l'envoi (`onOpenChange={(v) => { if (!v && !isPending)
+onClose(); }}`) — le `onDismiss` passé à `useScrollDismiss` reproduit
+exactement cette même garde (`() => { if (!isPending) onClose(); }`)
+pour que le geste tactile n'offre pas un second chemin de fermeture non
+protégé pendant une soumission en cours.
+
+### Exceptions intentionnelles identifiées (non modifiées)
+
+Recherche exhaustive confirmant qu'aucune de ces modales n'a de
+conteneur de défilement vertical sur son contenu principal — exclues
+conformément à « Apply the behavior only to modal components that
+support vertical scrolling and dismissal gestures » :
+
+- **5× « Fast Search »** (`barista-fast-search.tsx`,
+  `maintenance-fast-search.tsx`, `marketing-fast-search.tsx`,
+  `print-fast-search.tsx`, `academy-fast-search.tsx`) — interface de
+  recherche plein écran (`bg-black`, `overflow-hidden`), seule une
+  petite liste de puces de filtre (`max-h-24`) défile, sans rapport avec
+  le contenu principal ni avec un geste de fermeture par défilement.
+- **`marketing-portfolio-album-modal.tsx`** — visionneuse d'images plein
+  écran (lightbox, `overflow-hidden`), pas de défilement vertical de
+  contenu.
+- **Toutes les petites modales de confirmation/signalement/disponibilité/
+  recrutement** à travers les cinq zones (ex. les sous-dialogues Report/
+  Availability déjà présents dans Pack/Barista/Maintenance/Marketing/
+  Academy/Print, `academy-enroll-dialog.tsx`, le dialogue « Recruter » de
+  `barista-page.tsx`, les dialogues « Signaler » de
+  `academy-store-detail-page.tsx`/`print-store-detail-page.tsx`, le petit
+  dialogue fournisseur de `marketing-page.tsx`, le dialogue d'avis de
+  `print-orders-page.tsx`) — toutes `sm:max-w-md`/`sm:max-w-sm` sans
+  `overflow-y-auto`, contenu court qui ne défile jamais dans la pratique.
+
+### Implémentation
+
+`client/src/hooks/use-scroll-dismiss.ts` : **aucune modification** — le
+mécanisme `liveDrag` existant est réutilisé tel quel pour toutes les
+modales listées ci-dessus, conformément à « reuse the same underlying
+gesture logic... do not create a second, slightly different gesture
+system ».
+
+Pour les 9 modales déjà câblées (liste ci-dessus) : ajout du 4ᵉ argument
+`true` à l'appel existant (`useScrollDismiss(open, handleClose,
+undefined, true)` — `undefined` préserve la durée d'animation par
+défaut exacte déjà utilisée, inchangée).
+
+Pour les 9 nouvelles modales : import de `useScrollDismiss`, appel
+`useScrollDismiss(open, handleClose/onClose, undefined, true)` juste
+après la définition de leur fonction de fermeture existante (même
+emplacement que pour Barista/Maintenance à la tâche « scroll-dismiss
+animation » précédente), puis câblage de `onWheel`/`onTouchStart`/
+`onTouchMove`/`onTouchEnd` + `style={dismissContentStyle}` +
+`overlayStyle={dismissOverlayStyle}` sur leur `DialogContent` (qui est
+déjà, dans chacun des 9 cas, le conteneur de défilement lui-même —
+même architecture que Barista/Maintenance/Marketing/Academy/Print déjà
+traités).
+
+### Vérification
+
+- `npx tsc --noEmit` : 0 erreur, code de sortie 0.
+- `npm run build` : build client + serveur réussi, aucune nouvelle
+  alerte (seul l'avertissement standard de taille de chunk, sans
+  rapport avec ce changement).
+- `git status --short` confirme exactement les 18 fichiers listés
+  ci-dessus modifiés par cette tâche (plus `analyse.md`) — ni
+  `use-scroll-dismiss.ts` ni `product-quick-view-modal.tsx` (la
+  référence Product Detail Modal) n'apparaissent dans la liste,
+  confirmant qu'ils n'ont pas été touchés.
+- **Non vérifié sur appareil réel** (aucun outil de navigateur
+  automatisé disponible cette session) pour les 18 modales listées :
+  suivi du doigt en temps réel, retour en arrière avant relâchement,
+  fermeture normale au-dessus du seuil, retour à la position d'origine
+  en dessous du seuil, non-interférence avec le défilement normal des
+  formulaires (job-post-form-modal ×2) et avec le geste bloqué pendant
+  l'envoi (`isPending`), ainsi que la non-régression du Product Detail
+  Modal de référence — à vérifier manuellement avant de considérer ce
+  point comme définitivement clos.

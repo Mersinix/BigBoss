@@ -222,7 +222,7 @@ export function PrintCompanyDetailModal({
   const {
     onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
     dismissContentStyle, dismissOverlayStyle,
-  } = useScrollDismiss(open, handleClose);
+  } = useScrollDismiss(open, handleClose, undefined, true);
 
   const handleMessage = async () => {
     if (!card || readOnly) return;

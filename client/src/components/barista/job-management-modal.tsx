@@ -17,6 +17,7 @@ import {
 } from "@/hooks/use-barista-marketplace";
 import { JobPostFormModal } from "@/components/barista/job-post-form-modal";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -188,6 +189,15 @@ export function JobManagementModal({ open, onClose, initialJobId = null }: { ope
     onClose();
   };
 
+  // Scroll/swipe-to-dismiss (second upward swipe follows the finger live,
+  // same mechanism/threshold as the Product Detail Modal reference) — see
+  // client/src/hooks/use-scroll-dismiss.ts. This modal's DialogContent is
+  // itself the scroll container, so the handlers/styles attach directly to it.
+  const {
+    onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
+    dismissContentStyle, dismissOverlayStyle,
+  } = useScrollDismiss(open, handleClose, undefined, true);
+
   const openCreate = () => { setEditingJob(null); setFormOpen(true); };
   const openEdit = (job: BaristaJobPostWithStats) => { setEditingJob(job); setFormOpen(true); };
 
@@ -234,6 +244,12 @@ export function JobManagementModal({ open, onClose, initialJobId = null }: { ope
         <DialogContent
           hideClose
           className={`sm:max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}
+          style={dismissContentStyle}
+          overlayStyle={dismissOverlayStyle}
+          onWheel={onBodyWheel}
+          onTouchStart={onBodyTouchStart}
+          onTouchMove={onBodyTouchMove}
+          onTouchEnd={onBodyTouchEnd}
         >
           {selectedJob ? (
             <JobDetailView

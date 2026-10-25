@@ -9,6 +9,7 @@ import { ShieldAlert, MapPin, Calendar, Ban, X } from "lucide-react";
 import { useMyMarketingReports, type MarketingMarketplaceCard } from "@/hooks/use-marketing";
 import { MarketingDetailModal } from "@/components/marketing/marketing-detail-modal";
 import { useThemeStore } from "@/store/theme-store";
+import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 
 const STATUS_LABELS: Record<string, string> = { PENDING: "En attente", RESOLVED: "Résolu", DISMISSED: "Ignoré" };
 // This app's dark mode never adds a `.dark` class to the DOM (see the note in
@@ -41,6 +42,15 @@ export function MarketingBlacklistModal({
     rowHover: isDark ? "hover:bg-gray-800/60" : "hover:bg-gray-50",
   };
 
+  // Scroll/swipe-to-dismiss (second upward swipe follows the finger live,
+  // same mechanism/threshold as the Product Detail Modal reference) — see
+  // client/src/hooks/use-scroll-dismiss.ts. This modal's DialogContent is
+  // itself the scroll container, so the handlers/styles attach directly to it.
+  const {
+    onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
+    dismissContentStyle, dismissOverlayStyle,
+  } = useScrollDismiss(open, onClose, undefined, true);
+
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
@@ -48,7 +58,15 @@ export function MarketingBlacklistModal({
             Signaler modal's visual reference
             (docs/coffee_owner_hero_signaler_modal_design_audit.md) — content/
             data below unchanged. */}
-        <DialogContent className={`sm:max-w-xl rounded-2xl border-0 shadow-2xl max-h-[85vh] overflow-y-auto [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}>
+        <DialogContent
+          className={`sm:max-w-xl rounded-2xl border-0 shadow-2xl max-h-[85vh] overflow-y-auto [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}
+          style={dismissContentStyle}
+          overlayStyle={dismissOverlayStyle}
+          onWheel={onBodyWheel}
+          onTouchStart={onBodyTouchStart}
+          onTouchMove={onBodyTouchMove}
+          onTouchEnd={onBodyTouchEnd}
+        >
           <VisuallyHidden><DialogTitle>Prestataires Marketing signalés</DialogTitle></VisuallyHidden>
           <div className="flex items-center justify-between gap-2 mb-1">
             <div className="flex items-center gap-2 min-w-0">

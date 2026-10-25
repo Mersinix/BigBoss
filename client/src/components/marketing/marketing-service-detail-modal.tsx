@@ -133,7 +133,7 @@ export function MarketingServiceDetailModal({
   const {
     onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
     dismissContentStyle, dismissOverlayStyle,
-  } = useScrollDismiss(open, handleClose);
+  } = useScrollDismiss(open, handleClose, undefined, true);
 
   const handleMessage = async () => {
     if (!service || readOnly) return;

@@ -786,6 +786,7 @@ export function PackQuickViewModal({ previewPack, previewOpen, onPreviewClose }:
                   mainRoundedClassName="rounded-t-3xl"
                   emptyClassName={t.emptyIcon}
                   thumbnailClassName="px-3 sm:px-5 pt-1"
+                  carousel
                   overlay={
                     <>
                       <PackImageTopIcons

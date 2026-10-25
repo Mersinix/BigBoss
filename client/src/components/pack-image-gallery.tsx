@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ImageOff } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ImageOff, ChevronLeft, ChevronRight } from "lucide-react";
 
 type PackImageGalleryProps = {
   imageUrl?: string | null;
@@ -18,7 +18,27 @@ type PackImageGalleryProps = {
   // `position: relative` via mainClassName for callers that use it. Left
   // undefined, nothing changes for any existing caller.
   overlay?: ReactNode;
+  // Additive, defaults to false — when true, replaces the clickable
+  // thumbnail strip with overlaid Previous/Next arrows, a small image
+  // counter, and left/right swipe navigation on the main image, instead of
+  // the thumbnail row underneath it. Every existing caller (the Supplier's
+  // pack-creation live preview and its own "Pack Preview" dialog in
+  // manage-packs.tsx) omits this prop and keeps the original thumbnail-strip
+  // behavior, byte-for-byte unchanged.
+  carousel?: boolean;
 };
+
+// Same visual language as the Pack Detail Modal's existing Close/Favorite/
+// Theme overlay buttons (PackImageTopIcons in pack-quick-view-modal.tsx) —
+// reused verbatim rather than inventing a new button style.
+const NAV_BUTTON_CLASS =
+  "w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all hover:scale-105 bg-black/40 backdrop-blur-sm";
+
+// Minimum net horizontal movement (px) before a swipe counts as intentional
+// navigation, and the deadzone (px) used to decide whether a touch gesture
+// is horizontal (swipe) or vertical (scroll/dismiss) before locking onto one.
+const SWIPE_THRESHOLD = 50;
+const AXIS_LOCK_THRESHOLD = 10;
 
 export function PackImageGallery({
   imageUrl,
@@ -29,6 +49,7 @@ export function PackImageGallery({
   thumbnailClassName = "",
   emptyClassName = "text-muted-foreground",
   overlay,
+  carousel = false,
 }: PackImageGalleryProps) {
   const images = useMemo(() => {
     const all = [...(imageUrls ?? []), imageUrl ?? ""].map(url => url.trim()).filter(Boolean);
@@ -41,18 +62,94 @@ export function PackImageGallery({
   }, [images.join("|")]);
 
   const selectedImage = images[selectedIndex];
+  const hasMultiple = images.length > 1;
+
+  const goNext = () => setSelectedIndex((i) => (i + 1) % images.length);
+  const goPrev = () => setSelectedIndex((i) => (i - 1 + images.length) % images.length);
+
+  // ── Swipe gesture (carousel mode only) ────────────────────────────────────
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const swipeAxisRef = useRef<"horizontal" | "vertical" | null>(null);
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    swipeAxisRef.current = null;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!touchStartRef.current) return;
+    const dx = e.touches[0].clientX - touchStartRef.current.x;
+    const dy = e.touches[0].clientY - touchStartRef.current.y;
+    if (swipeAxisRef.current == null && (Math.abs(dx) > AXIS_LOCK_THRESHOLD || Math.abs(dy) > AXIS_LOCK_THRESHOLD)) {
+      swipeAxisRef.current = Math.abs(dx) > Math.abs(dy) ? "horizontal" : "vertical";
+    }
+    if (swipeAxisRef.current === "horizontal") {
+      // Confirmed horizontal swipe — keep it from also being read as modal
+      // scroll/dismiss (useScrollDismiss, on the enclosing scroll container)
+      // or native vertical page scroll.
+      e.stopPropagation();
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    const start = touchStartRef.current;
+    const axis = swipeAxisRef.current;
+    touchStartRef.current = null;
+    swipeAxisRef.current = null;
+    if (!start || axis !== "horizontal" || !hasMultiple) return;
+    const dx = e.changedTouches[0].clientX - start.x;
+    if (dx <= -SWIPE_THRESHOLD) goNext();
+    else if (dx >= SWIPE_THRESHOLD) goPrev();
+  };
 
   return (
     <div className="space-y-2">
-      <div className={`${mainClassName} ${mainRoundedClassName} overflow-hidden flex items-center justify-center`}>
+      <div
+        className={`${mainClassName} ${mainRoundedClassName} overflow-hidden flex items-center justify-center`}
+        {...(carousel ? {
+          onTouchStart: handleTouchStart,
+          onTouchMove: handleTouchMove,
+          onTouchEnd: handleTouchEnd,
+        } : {})}
+      >
         {selectedImage ? (
-          <img src={selectedImage} className="w-full h-full object-cover" alt={alt} />
+          <img
+            src={selectedImage}
+            className="w-full h-full object-cover"
+            alt={alt}
+            draggable={!carousel}
+          />
         ) : (
           <ImageOff className={`w-8 h-8 ${emptyClassName}`} />
         )}
         {overlay}
+        {carousel && hasMultiple && (
+          <>
+            <button
+              type="button"
+              onClick={(event) => { event.stopPropagation(); goPrev(); }}
+              aria-label="Previous image"
+              className={`absolute left-3 top-1/2 -translate-y-1/2 z-20 ${NAV_BUTTON_CLASS}`}
+              data-testid="button-pack-image-prev"
+            >
+              <ChevronLeft className="w-4 h-4 text-white" />
+            </button>
+            <button
+              type="button"
+              onClick={(event) => { event.stopPropagation(); goNext(); }}
+              aria-label="Next image"
+              className={`absolute right-3 top-1/2 -translate-y-1/2 z-20 ${NAV_BUTTON_CLASS}`}
+              data-testid="button-pack-image-next"
+            >
+              <ChevronRight className="w-4 h-4 text-white" />
+            </button>
+            <div className="absolute bottom-3 left-3 z-20 bg-black/40 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">
+              {selectedIndex + 1} / {images.length}
+            </div>
+          </>
+        )}
       </div>
-      {images.length > 1 && (
+      {!carousel && images.length > 1 && (
         <div className={`flex gap-2 overflow-x-auto ${thumbnailClassName}`} aria-label={`${alt} images`}>
           {images.map((image, index) => (
             <button

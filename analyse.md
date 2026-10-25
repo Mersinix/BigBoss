@@ -11164,3 +11164,251 @@ du serveur de développement :
 Aucun changement de schéma de base de données, aucune route serveur
 modifiée, aucune règle métier de pack/éligibilité/autorisation affaiblie ou
 contournée.
+
+---
+
+## 12. Tâche de suivi — Carrousel d'images principal avec flèches et balayage (Pack Detail Modal)
+
+### Audit
+
+- Le composant responsable de l'image principale + miniatures dans la
+  modale de détail Pack (Coffee Owner → Shop) est
+  `client/src/components/pack-image-gallery.tsx` (`PackImageGallery`),
+  utilisé par `pack-quick-view-modal.tsx` (le seul appelant dans le
+  périmètre de cette tâche). Il calcule déjà `images` (fusion
+  dédupliquée de `imageUrls` + `imageUrl`), gère `selectedIndex`, et
+  réinitialise l'index à 0 à chaque changement de pack via un `useEffect`
+  sur `images.join("|")` — logique déjà correcte pour « réinitialiser
+  l'image active à l'ouverture d'un nouveau pack », réutilisée telle
+  quelle.
+- **Deuxième appelant trouvé, hors périmètre** :
+  `client/src/pages/supplier/manage-packs.tsx` utilise aussi
+  `PackImageGallery`, à deux endroits (aperçu en direct dans le
+  formulaire de création de pack, et une modale « Pack Preview » séparée)
+  — ces usages reposent sur la bande de miniatures cliquables existante
+  et ne doivent pas être affectés (« Do not refactor unrelated modals or
+  product-image galleries »). **Décision** : ajouter un nouveau prop
+  optionnel `carousel?: boolean` (défaut `false`) à `PackImageGallery` —
+  seul `pack-quick-view-modal.tsx` passera `carousel` à `true` ; les deux
+  usages de `manage-packs.tsx` restent strictement inchangés (le prop
+  n'étant jamais passé, ils gardent la bande de miniatures existante,
+  comportement byte-for-byte identique à avant).
+- **Style du bouton Fermer réutilisé** : `PackImageTopIcons`
+  (`pack-quick-view-modal.tsx`) utilise exactement
+  `"w-9 h-9 rounded-full flex items-center justify-center shrink-0
+  transition-all hover:scale-105 bg-black/40 backdrop-blur-sm"` avec une
+  icône `"w-4 h-4 text-white"`, positionné en `absolute top-3 right-3
+  z-20` (Fav/Thème/Fermer) et `absolute bottom-3 right-3 z-20` (Avis).
+  Les nouveaux boutons Précédent/Suivant reprennent exactement les mêmes
+  classes, positionnés en `absolute left-3`/`right-3 top-1/2
+  -translate-y-1/2 z-20` — bande verticale centrale, distincte des
+  bandes haute (Fav/Thème/Fermer) et basse (Avis), donc aucun
+  chevauchement possible sur la hauteur réelle de l'image
+  (`h-80 sm:h-[420px]`).
+- **Pas de nouvelle dépendance nécessaire** : aucune librairie de
+  carrousel/swipe n'est installée (vérifié sur `package.json`), et le
+  geste de balayage horizontal est implémenté avec les événements
+  `onTouchStart`/`onTouchMove`/`onTouchEnd` natifs — même approche déjà
+  utilisée par `useScrollDismiss` (tâches précédentes) pour le geste de
+  fermeture par défilement, donc cohérente avec le reste de
+  l'application plutôt que d'introduire un nouveau mécanisme.
+- Aucun mouvement de souris/zoom au survol n'existe sur cette image
+  (contrairement à `product-detail-content.tsx`), donc aucun conflit à
+  gérer avec un hover-zoom existant.
+
+### Implémentation
+
+`client/src/components/pack-image-gallery.tsx` :
+- Nouveau prop `carousel?: boolean` (défaut `false`, additif —
+  `manage-packs.tsx` ne le passe jamais).
+- Quand `carousel` est vrai : la bande de miniatures n'est plus rendue ;
+  à la place, si `images.length > 1` :
+  - Boutons Précédent/Suivant (icônes `ChevronLeft`/`ChevronRight` de
+    `lucide-react`, bibliothèque déjà utilisée dans tout le projet),
+    avec les classes exactes du bouton Fermer existant, `aria-label`
+    « Image précédente »/« Image suivante », `event.stopPropagation()`
+    sur le clic pour ne jamais atteindre un gestionnaire parent
+    (fermeture modale, favori, thème).
+  - Navigation circulaire : `(index + 1) % length` /
+    `(index - 1 + length) % length`.
+  - Compteur `{n} / {total}` discret (pastille translucide identique au
+    style des boutons), positionné `absolute bottom-3 left-3 z-20` —
+    côté opposé au bouton Avis (`bottom-3 right-3`), jamais affiché
+    quand il n'y a qu'une seule image.
+  - Balayage tactile sur le conteneur de l'image : détection d'axe avec
+    une zone morte de 10 px avant de verrouiller horizontal/vertical ;
+    une fois verrouillé horizontal, `stopPropagation()` empêche le geste
+    d'atteindre le gestionnaire de défilement/fermeture de la modale
+    (`useScrollDismiss`, attaché sur le conteneur défilant parent) ou le
+    défilement vertical natif ; un verrouillage vertical laisse le
+    geste se propager normalement (défilement/fermeture inchangés).
+    Seuil de déclenchement : 50 px de déplacement horizontal net au
+    relâchement — suffisant pour ignorer les taps et micro-mouvements
+    accidentels sans ralentir un balayage volontaire.
+  - `draggable={false}` sur `<img>` en mode carrousel pour empêcher le
+    glisser-déposer natif du navigateur d'interférer avec le geste.
+- Mode par défaut (`carousel` omis ou `false`) : code strictement
+  identique à avant (bande de miniatures cliquables), aucune régression
+  possible pour `manage-packs.tsx`.
+
+`client/src/components/pack-quick-view-modal.tsx` :
+- `<PackImageGallery ... carousel />` — seul changement sur ce fichier ;
+  tout le reste (overlay Fav/Thème/Fermer/Avis, dimensions, arrondis,
+  thème, fallback image) est inchangé.
+
+### Vérification
+
+- `npx tsc --noEmit` : 0 erreur, code de sortie 0.
+- `npm run build` : build client + serveur réussi, aucune nouvelle
+  alerte (seul l'avertissement standard de taille de chunk, sans
+  rapport avec ce changement).
+- `git diff --stat` confirme que `manage-packs.tsx` n'apparaît **pas**
+  parmi les fichiers modifiés — ses deux usages de `PackImageGallery`
+  (aperçu en direct du formulaire + modale « Pack Preview ») restent
+  strictement inchangés, confirmant que le prop `carousel` est bien
+  additif et sans effet de bord.
+- Requête réelle contre le serveur de développement
+  (`GET /api/marketplace/packs/25`, route publique sans authentification
+  requise) sur un pack réel en base (« Matcha Pack », id 25) confirmant
+  la forme exacte des données consommées par `PackImageGallery` :
+  `imageUrl` + `imageUrls` (3 entrées, dont la première duplique
+  `imageUrl`). En appliquant la logique de déduplication du composant
+  (`[...imageUrls, imageUrl]` puis `Set`), ce pack résout bien à
+  **3 images uniques** — confirme que le chemin multi-images du
+  carrousel est réellement atteignable avec de vraies données, pas
+  seulement en théorie. Les 3 autres packs testés avec un `imageUrls`
+  non vide (« Pack Boisson », « Summer Gifts », « GAZOUZ PROMO »)
+  n'avaient en réalité qu'une seule image unique après déduplication
+  (doublon exact de `imageUrl`) — confirme aussi que le chemin
+  « une seule image, pas de contrôles de navigation » reste atteignable
+  avec de vraies données existantes.
+- **Non vérifié** : aucun outil de navigateur automatisé n'était
+  disponible cette session pour observer réellement le rendu visuel des
+  flèches/compteur, le geste de balayage tactile, l'absence de
+  chevauchement avec les boutons Fav/Thème/Fermer/Avis, ni le
+  comportement sur mobile/tablette/desktop. La correction repose sur la
+  relecture précise du code existant (classes exactes du bouton Fermer
+  réutilisées, positionnement par bandes verticales non chevauchantes,
+  logique de verrouillage d'axe pour le balayage) et sur la vérification
+  de données réelles ci-dessus — mais le rendu effectif à l'écran n'a
+  pas été observé. Recommandation : test manuel réel avant de considérer
+  ce point comme définitivement clos.
+
+### Fichiers modifiés
+
+- `client/src/components/pack-image-gallery.tsx`
+- `client/src/components/pack-quick-view-modal.tsx`
+
+Aucun changement de schéma de base de données, aucune image supprimée ou
+modifiée en base, aucune interface Admin/Fournisseur touchée.
+
+---
+
+## 13. Tâche de suivi — Extension du geste de fermeture : balayage vers le haut dès l'ouverture
+
+### Audit
+
+- Implémentation centrale unique : `client/src/hooks/use-scroll-dismiss.ts`
+  (`useScrollDismiss`), déjà extraite et réutilisée par **10 modales**
+  (confirmé par recherche exhaustive, hors une référence en commentaire
+  dans `pack-image-gallery.tsx` qui ne l'utilise pas réellement) :
+  `pack-quick-view-modal.tsx`, `product-quick-view-modal.tsx`,
+  `barista-detail-modal.tsx`, `maintenance-page.tsx`
+  (`AgentDetailModal`), `marketing-service-detail-modal.tsx`,
+  `marketing-detail-modal.tsx`, `academy-detail-modal.tsx`,
+  `academy-profile-modal.tsx`, `print-service-detail-modal.tsx`,
+  `print-company-detail-modal.tsx`.
+- **Comportement actuel exact** : le geste de fermeture n'était
+  déclenchable qu'après une séquence en trois temps — défiler vers le
+  bas (`scrollTop > DOWN_THRESHOLD`, 24 px, arme `hasScrolledDownRef`),
+  revenir en haut (`scrollTop <= 0`), puis continuer à défiler/balayer
+  vers le haut **alors que `hasScrolledDownRef` est vrai**. Cette garde
+  (`hasScrolledDownRef`) empêchait explicitement qu'un balayage vers le
+  haut immédiatement à l'ouverture (avant tout défilement vers le bas)
+  ne déclenche la fermeture — exactement le comportement que cette
+  tâche demande d'ajouter, puisqu'à l'ouverture `scrollTop` est déjà à
+  0 (en haut) par définition.
+- **Protection anti-déclenchement accidentel déjà existante et
+  suffisante**, indépendante de `hasScrolledDownRef` : l'accumulation du
+  tirage (`pullAccumRef`/`DISMISS_THRESHOLD=70`, remise à zéro après
+  500 ms d'inactivité pour la molette ; mesure de la distance réelle de
+  balayage depuis le moment où le haut est atteint pour le tactile) —
+  ces seuils filtrent déjà les petits mouvements involontaires, qu'un
+  défilement vers le bas ait eu lieu avant ou non. Supprimer uniquement
+  la garde `hasScrolledDownRef` n'affaiblit donc aucune protection
+  existante contre les déclenchements accidentels.
+- Le carrousel d'images du Pack Detail Modal (tâche précédente) appelle
+  déjà `event.stopPropagation()` sur tout geste tactile horizontal
+  confirmé, avant même qu'il n'atteigne le gestionnaire de la modale —
+  ce mécanisme est entièrement indépendant de `hasScrolledDownRef` et
+  reste donc intact sans aucune modification.
+- **Décision** : modification minimale et unique dans
+  `use-scroll-dismiss.ts` — suppression de la garde
+  `hasScrolledDownRef`/`DOWN_THRESHOLD` dans `onBodyWheel` et
+  `onBodyTouchStart`/`onBodyTouchMove`, pour que le test devienne
+  simplement « est-on en haut (`scrollTop <= 0`) ? », sans condition
+  supplémentaire sur un défilement préalable. La séquence
+  descendre-puis-remonter-puis-remonter-encore continue de fonctionner
+  à l'identique (elle finit elle aussi par `scrollTop <= 0`, même chemin
+  de code) ; elle s'enrichit simplement d'un second point d'entrée
+  (balayage vers le haut dès l'ouverture) vers le même mécanisme de
+  déclenchement, la même animation de fermeture et le même cycle de vie
+  `onDismiss()`. Aucun nouveau système de geste, aucune dépendance
+  ajoutée, aucune modale non couverte par l'implémentation actuelle
+  n'est affectée (changement centralisé dans le hook partagé,
+  automatiquement propagé aux 10 modales existantes sans dupliquer de
+  logique).
+
+### Implémentation
+
+`client/src/hooks/use-scroll-dismiss.ts` :
+- Retrait de `hasScrolledDownRef` (son unique rôle était cette garde,
+  désormais supprimée) et de la constante `DOWN_THRESHOLD` (devenue
+  inutilisée).
+- `onBodyWheel` : la condition `if (el.scrollTop > 0 ||
+  !hasScrolledDownRef.current)` devient `if (el.scrollTop > 0)`. La
+  branche séparée qui armait `hasScrolledDownRef` est fusionnée dans
+  cette même condition (comportement identique : remise à zéro de
+  l'accumulateur dès qu'on n'est plus épinglé en haut).
+- `onBodyTouchStart` : `pinnedStartYRef.current = el.scrollTop <= 0 &&
+  hasScrolledDownRef.current ? ... : null` devient
+  `pinnedStartYRef.current = el.scrollTop <= 0 ? ... : null`.
+- `onBodyTouchMove` : même fusion que `onBodyWheel`.
+- Aucun changement sur `triggerGestureDismiss`, l'animation de sortie
+  (`dismissContentStyle`/`dismissOverlayStyle`), la synchronisation du
+  fond (`overlayStyle`), le nettoyage du timer, ni la réinitialisation
+  de l'état à l'ouverture (`wasOpenRef`/`useEffect`).
+- Aucun autre fichier modifié — les 10 modales consomment déjà le hook
+  sans connaître son fonctionnement interne, elles reçoivent donc
+  l'amélioration automatiquement.
+
+### Vérification
+
+- `npx tsc --noEmit` : 0 erreur, code de sortie 0.
+- `npm run build` : build client + serveur réussi, aucune nouvelle
+  alerte (seul l'avertissement standard de taille de chunk, sans
+  rapport avec ce changement).
+- `git diff --stat` confirme un seul fichier modifié
+  (`client/src/hooks/use-scroll-dismiss.ts`, +17/-27 lignes — le
+  changement retire plus de code qu'il n'en ajoute, confirmant qu'il
+  s'agit bien d'une simplification ciblée et non d'une réécriture) ;
+  aucune des 10 modales consommatrices n'a été touchée, confirmant la
+  propagation automatique via l'implémentation partagée.
+- Relecture manuelle ligne à ligne du fichier final confirmant que la
+  séquence bas-puis-haut-puis-haut (chemin de code historique)
+  retombe bien sur le même test `scrollTop <= 0` que le nouveau
+  balayage direct vers le haut à l'ouverture — un seul mécanisme, deux
+  façons d'y arriver, comme prévu.
+- **Non vérifié visuellement** (aucun outil de navigateur automatisé
+  disponible cette session) : le balayage vers le haut immédiat à
+  l'ouverture, le retour à l'état normal en cas de geste sous le seuil,
+  la non-régression de la séquence bas-puis-haut-puis-haut existante,
+  ni la non-interférence avec le carrousel d'images — à vérifier
+  manuellement avant de considérer ce point comme définitivement clos.
+
+### Fichiers modifiés
+
+- `client/src/hooks/use-scroll-dismiss.ts` (seul fichier modifié)
+
+Aucun changement de schéma de base de données, aucune autre modale
+affectée, aucune régression intentionnelle du comportement existant.

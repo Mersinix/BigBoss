@@ -30,6 +30,15 @@ export function useScrollDismiss(
   // only. Defaults to SCROLL_DISMISS_ANIM_MS, so every existing caller that
   // omits this keeps the exact same timing as before.
   animMs: number = SCROLL_DISMISS_ANIM_MS,
+  // Optional, defaults to false — when true, the TOUCH path (wheel is
+  // unaffected) switches from "threshold crossed mid-drag = dismiss
+  // immediately" to a real follow-the-finger drag: the modal tracks the
+  // finger live with no transition while the touch is active, reverses
+  // smoothly if the finger moves back down, and only decides to commit
+  // (slide-close) or cancel (spring back) once the finger lifts. Every
+  // existing caller omits this and keeps the original instant-threshold
+  // behavior, byte-for-byte unchanged.
+  liveDrag: boolean = false,
 ) {
   const pullAccumRef = useRef(0);
   const lastPullTimeRef = useRef(0);
@@ -37,6 +46,15 @@ export function useScrollDismiss(
   const isDismissingRef = useRef(false);
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isDismissing, setIsDismissing] = useState(false);
+
+  // ── Live-drag state (liveDrag only) ───────────────────────────────────────
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isDraggingLive, setIsDraggingLive] = useState(false);
+  // Sticky once true for the current open session — keeps the drag transform
+  // (now settled at 0, with a transition) rendered instead of collapsing the
+  // style to {} the instant dragOffset returns to 0, which would drop the
+  // transition and make the spring-back snap instead of ease.
+  const hasDraggedRef = useRef(false);
 
   const wasOpenRef = useRef(false);
   useEffect(() => {
@@ -49,6 +67,9 @@ export function useScrollDismiss(
       pinnedStartYRef.current = null;
       isDismissingRef.current = false;
       setIsDismissing(false);
+      hasDraggedRef.current = false;
+      setDragOffset(0);
+      setIsDraggingLive(false);
     }
     wasOpenRef.current = isOpen;
   }, [isOpen]);
@@ -109,6 +130,12 @@ export function useScrollDismiss(
     const y = e.touches[0].clientY;
     if (el.scrollTop > 0) {
       pinnedStartYRef.current = null;
+      if (liveDrag && isDraggingLive) {
+        // Content scrolled away from the top mid-drag (edge case) — cancel
+        // the drag in place rather than leaving it stuck at a stale offset.
+        setIsDraggingLive(false);
+        setDragOffset(0);
+      }
       return;
     }
     if (pinnedStartYRef.current == null) {
@@ -118,6 +145,16 @@ export function useScrollDismiss(
       return;
     }
     const dy = y - pinnedStartYRef.current;
+    if (liveDrag) {
+      // Follow the finger live — never negative (the modal never moves
+      // "up" past its resting position). The dismiss decision itself is
+      // deferred to release (onBodyTouchEnd), not made mid-drag.
+      const offset = Math.max(0, dy);
+      hasDraggedRef.current = true;
+      setIsDraggingLive(offset > 0);
+      setDragOffset(offset);
+      return;
+    }
     if (dy > DISMISS_THRESHOLD) {
       pinnedStartYRef.current = null;
       requestDismiss();
@@ -126,6 +163,20 @@ export function useScrollDismiss(
 
   const onBodyTouchEnd = () => {
     pinnedStartYRef.current = null;
+    if (!liveDrag || !isDraggingLive) return;
+    setIsDraggingLive(false);
+    if (dragOffset >= DISMISS_THRESHOLD) {
+      // Commit — requestDismiss()'s own isDismissing style takes over from
+      // here, continuing the same downward translateY(...) smoothly from
+      // wherever the drag currently is to fully off-screen.
+      setDragOffset(0);
+      requestDismiss();
+    } else {
+      // Below threshold — spring back. isDraggingLive is now false, so the
+      // style below applies a transition for this change instead of
+      // tracking instantly.
+      setDragOffset(0);
+    }
   };
 
   // Slides the whole card down past the bottom edge and fades it out, with the
@@ -135,13 +186,24 @@ export function useScrollDismiss(
   // gesture, and whatever else the caller wires to it) — a caller that still
   // calls onDismiss directly instead (bypassing requestDismiss) keeps using
   // its own default close animation, unaffected by this.
+  //
+  // While a liveDrag is active/settling (hasDraggedRef once true for this
+  // open session), the drag offset drives the same transform shape with no
+  // transition during the live follow (isDraggingLive), and a transition
+  // only once the finger lifts (spring-back to 0, or the handoff into the
+  // isDismissing branch above continuing the same downward motion).
   const dismissContentStyle: React.CSSProperties = isDismissing
     ? {
         transform: "translate(-50%, -50%) translateY(100vh)",
         opacity: 0,
         transition: `transform ${animMs}ms cubic-bezier(0.32, 0.72, 0, 1), opacity ${animMs - 20}ms ease-out`,
       }
-    : {};
+    : hasDraggedRef.current
+      ? {
+          transform: `translate(-50%, -50%) translateY(${dragOffset}px)`,
+          transition: isDraggingLive ? "none" : "transform 220ms cubic-bezier(0.32, 0.72, 0, 1)",
+        }
+      : {};
   const dismissOverlayStyle: React.CSSProperties | undefined = isDismissing
     ? { opacity: 0, transition: `opacity ${animMs - 20}ms ease-out` }
     : undefined;

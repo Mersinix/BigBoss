@@ -11725,3 +11725,128 @@ nouveau bouton Fermer sur l'image utilise exactement le même prop.
   non-régression de la page produit complète ni du Pack Detail Modal — à
   vérifier manuellement avant de considérer ce point comme définitivement
   clos.
+
+---
+
+## 16. Tâche de suivi — Geste de fermeture tactile « suivi du doigt » (Product Detail Modal)
+
+### Audit — cause racine
+
+Fichier partagé concerné : `client/src/hooks/use-scroll-dismiss.ts`
+(`useScrollDismiss`), utilisé par 10 modales. Note : ce fichier et
+`product-quick-view-modal.tsx` ont été modifiés sur disque entre les
+tâches précédentes et celle-ci (durée d'animation globale passée de
+380 à 520 ms, et l'appel du Product modal passe désormais `520`
+explicitement) — pris comme état actuel, non annulé.
+
+**Comportement tactile actuel (`onBodyTouchMove`)** : une fois le corps
+épinglé en haut (`scrollTop <= 0`), la distance de tirage vertical
+(`dy = y - pinnedStartYRef.current`) est mesurée en continu, mais dès
+que `dy > DISMISS_THRESHOLD` (70 px) est franchi **pendant le
+déplacement du doigt** (`touchmove`), `requestDismiss()` est appelé
+**immédiatement** — avant même que l'utilisateur relâche le doigt. Il
+n'existe aucun suivi visuel en temps réel du déplacement pendant le
+tirage (aucun style n'est appliqué tant que le seuil n'est pas atteint),
+et aucune décision n'est prise au relâchement (`onBodyTouchEnd` ne fait
+que réinitialiser `pinnedStartYRef`, il ne regarde jamais si l'animation
+de fermeture a déjà démarré ou non). C'est exactement le « second
+balayage » décrit par la tâche : le tirage au-delà du haut qui
+déclenche la fermeture n'offre aujourd'hui aucun suivi du doigt, aucune
+possibilité d'annuler en revenant en arrière avant relâchement, et la
+décision de fermer se prend pendant le déplacement plutôt qu'au
+relâchement — contraire aux points 2 à 7 de la spécification.
+
+Le chemin **molette/trackpad** (`onBodyWheel`) n'a pas cet inconvénient
+de la même façon (il n'y a pas de « doigt » à suivre visuellement pour
+une molette) et n'est pas concerné par cette tâche — seul le chemin
+tactile (`onBodyTouchStart`/`onBodyTouchMove`/`onBodyTouchEnd`) est
+modifié.
+
+**Contrainte de périmètre** : le hook étant partagé par 10 modales et la
+tâche n'autorisant que le Product Detail Modal (« Do not... change the
+Pack Detail Modal », périmètre implicite identique pour les 8 autres
+déjà alignées sur Pack), toute modification du comportement par défaut
+de `onBodyTouchMove`/`onBodyTouchEnd` affecterait les 10 modales à la
+fois. **Décision** : ajouter un nouveau paramètre optionnel `liveDrag`
+(4ᵉ argument, défaut `false`) à `useScrollDismiss` — seul le Product
+Detail Modal le passera à `true` ; les 9 autres appels existants
+(aucun ne passe ce 4ᵉ argument) conservent exactement le comportement
+actuel « seuil franchi pendant le déplacement = fermeture immédiate »,
+inchangé.
+
+### Implémentation
+
+`client/src/hooks/use-scroll-dismiss.ts` :
+- Nouveaux états `dragOffset` (décalage vertical en px, suivi en temps
+  réel) et `isDraggingLive` (vrai tant que le doigt est posé et que le
+  tirage est actif), plus un ref `hasDraggedRef` (mémorise qu'un tirage
+  a eu lieu cette session, pour que le style de secours/annulation reste
+  appliqué même une fois revenu à 0, évitant un saut brusque au moment
+  où le style retomberait sinon à `{}`).
+- Quand `liveDrag` est faux (9 modales existantes) : `onBodyTouchMove`
+  et `onBodyTouchEnd` gardent leur logique exacte d'avant (franchissement
+  du seuil pendant le déplacement = fermeture immédiate).
+- Quand `liveDrag` est vrai (Product Detail Modal) :
+  - `onBodyTouchMove` met à jour `dragOffset = Math.max(0, dy)` à chaque
+    déplacement (jamais négatif — le modal ne peut jamais remonter
+    au-delà de sa position de repos), sans déclencher `requestDismiss`
+    pendant le tirage.
+  - `onBodyTouchEnd` décide une seule fois, au relâchement : si
+    `dragOffset >= DISMISS_THRESHOLD` (même seuil existant, inchangé),
+    appelle `requestDismiss()` — la transition de fermeture existante
+    prend alors le relais et continue le mouvement de façon continue
+    depuis la position actuelle du tirage (même transform `translate(
+    -50%,-50%) translateY(...)`, donc l'interpolation CSS se fait sans
+    saut) ; sinon, remet `dragOffset` à `0` avec une transition de
+    ressort (« spring back »), ramenant le modal à sa position d'origine.
+  - Pendant le tirage actif (`isDraggingLive === true`), le style
+    n'applique **aucune transition** (`transition: "none"`) — le modal
+    suit le doigt instantanément, sans décalage ni retard. La transition
+    n'est (ré)activée qu'au relâchement, pour le ressort ou la
+    fermeture.
+  - Si l'utilisateur fait défiler le contenu loin du haut pendant un
+    tirage actif (cas limite), le tirage est annulé et `dragOffset`
+    remis à 0 immédiatement.
+- Les gardes existantes (`isDismissingRef`) restent inchangées et
+  protègent déjà contre les déclenchements multiples pendant l'animation
+  de fermeture — aucune garde supplémentaire nécessaire.
+- Réinitialisation de `dragOffset`/`isDraggingLive`/`hasDraggedRef` dans
+  l'effet existant de réinitialisation à l'ouverture (même emplacement
+  que les autres refs de geste).
+
+`client/src/components/product-quick-view-modal.tsx` :
+- `useScrollDismiss(productId != null, close, 520, true)` — ajout du
+  4ᵉ argument `true` uniquement ; la durée `520` déjà présente sur
+  disque n'est pas modifiée.
+
+Aucun autre fichier modifié — les 9 autres modales (Pack, Barista,
+Maintenance, Marketing ×2, Academy ×2, Print ×2) appellent toutes
+`useScrollDismiss` sans ce 4ᵉ argument et conservent leur comportement
+exact d'avant.
+
+### Vérification
+
+- `npx tsc --noEmit` : 0 erreur, code de sortie 0.
+- `npm run build` : build client + serveur réussi, aucune nouvelle
+  alerte (seul l'avertissement standard de taille de chunk, sans
+  rapport avec ce changement).
+- `git diff --stat` confirme exactement 2 fichiers modifiés par cette
+  tâche (`use-scroll-dismiss.ts` +64/-5, `product-quick-view-modal.tsx`
+  +11/-6 — essentiellement l'ajout du 4ᵉ argument et la mise à jour d'un
+  commentaire devenu obsolète) ; aucune des 9 autres modales
+  consommatrices du hook n'apparaît dans le diff — confirme que
+  `liveDrag` (défaut `false`) n'a aucun effet sur elles.
+- Relecture confirmant que la protection existante du carrousel d'images
+  (`event.stopPropagation()` sur balayage horizontal confirmé, dans
+  `pack-image-gallery.tsx`, non modifié par cette tâche) agit au niveau
+  de la propagation DOM, avant même que `onBodyTouchMove` ne reçoive
+  l'évènement — donc totalement indépendante du changement de logique
+  interne (seuil instantané vs suivi en direct), aucune régression
+  possible sur ce point par construction.
+- **Non vérifié sur appareil tactile réel** (aucun outil de navigateur
+  automatisé disponible cette session) : suivi du doigt en temps réel,
+  retour en arrière avant relâchement, fermeture normale au-dessus du
+  seuil, retour à la position d'origine en dessous du seuil, alternance
+  de directions, non-interférence avec le défilement normal et le
+  balayage horizontal du carrousel d'images — à vérifier manuellement
+  avant de considérer ce point comme définitivement clos.

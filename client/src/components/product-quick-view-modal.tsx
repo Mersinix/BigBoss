@@ -12,9 +12,12 @@ export function ProductQuickViewModal() {
   // Scroll-direction dismissal (scroll down, back up, then up again past the
   // top closes the modal with a slide-down + fade) — same behavior as the
   // Pack Detail Modal, via the shared hook (client/src/hooks/use-scroll-
-  // dismiss.ts), but with a slightly longer duration (380ms vs the shared
-  // default of 320ms) for a smoother feel here specifically — this override
-  // only affects this modal, every other consumer of the hook keeps 320ms.
+  // dismiss.ts). The `true` 4th argument enables liveDrag here only: on
+  // touch, the modal follows the finger in real time once pinned at the
+  // top, reversing smoothly if the finger moves back down, and only
+  // commits to closing or springs back once the finger lifts — every other
+  // consumer of the hook omits this and keeps the original instant-
+  // threshold touch behavior.
   //
   // requestDismiss is also used as the Close button / backdrop-click /
   // Escape handler below instead of calling close() directly: close()
@@ -29,7 +32,7 @@ export function ProductQuickViewModal() {
   const {
     requestDismiss, onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
     dismissContentStyle, dismissOverlayStyle,
-  } = useScrollDismiss(productId != null, close, 520);
+  } = useScrollDismiss(productId != null, close, 520, true);
 
   return (
     <Dialog open={productId != null} onOpenChange={(open) => { if (!open) requestDismiss(); }}>

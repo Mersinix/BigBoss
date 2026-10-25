@@ -4,6 +4,19 @@ import { ImageOff, ChevronLeft, ChevronRight } from "lucide-react";
 type PackImageGalleryProps = {
   imageUrl?: string | null;
   imageUrls?: string[] | null;
+  // Additive — when provided, used directly as the final, already-ordered,
+  // already-deduplicated/filtered image list, instead of deriving it from
+  // imageUrl/imageUrls internally. For packs, imageUrls already contains
+  // imageUrl as one of its own entries (verified against real data), so the
+  // internal `[...imageUrls, imageUrl]` merge + Set-dedup below resolves to
+  // imageUrls' own order either way. Products are different: imageUrl is
+  // never one of imageUrls' entries, and the established order is
+  // `[imageUrl, ...imageUrls]` (main image first) — the opposite of this
+  // component's internal merge order. Passing `images` lets a caller like
+  // that preserve its own established order exactly, without this component
+  // reversing or deduplicating it. Every existing caller (Pack, and
+  // manage-packs.tsx) omits this and keeps using imageUrl/imageUrls as before.
+  images?: string[];
   alt: string;
   mainClassName?: string;
   // Additive — lets a caller override the main image's corner radius
@@ -26,6 +39,13 @@ type PackImageGalleryProps = {
   // manage-packs.tsx) omits this prop and keeps the original thumbnail-strip
   // behavior, byte-for-byte unchanged.
   carousel?: boolean;
+  // Additive — when provided, called with whichever image URL is currently
+  // displayed to get a wrapper style (e.g. a saved per-image crop/zoom
+  // adjustment) applied around the <img> itself, inside an extra wrapper
+  // div. Packs have no such per-image adjustment concept; every existing
+  // caller omits this and the <img> renders with no wrapper, exactly as
+  // before.
+  getImageStyle?: (url: string) => React.CSSProperties;
 };
 
 // Same visual language as the Pack Detail Modal's existing Close/Favorite/
@@ -43,6 +63,7 @@ const AXIS_LOCK_THRESHOLD = 10;
 export function PackImageGallery({
   imageUrl,
   imageUrls,
+  images: providedImages,
   alt,
   mainClassName = "aspect-video bg-secondary",
   mainRoundedClassName = "rounded-lg",
@@ -50,11 +71,13 @@ export function PackImageGallery({
   emptyClassName = "text-muted-foreground",
   overlay,
   carousel = false,
+  getImageStyle,
 }: PackImageGalleryProps) {
   const images = useMemo(() => {
+    if (providedImages) return providedImages.map(url => url.trim()).filter(Boolean);
     const all = [...(imageUrls ?? []), imageUrl ?? ""].map(url => url.trim()).filter(Boolean);
     return Array.from(new Set(all));
-  }, [imageUrl, imageUrls]);
+  }, [providedImages, imageUrl, imageUrls]);
   const [selectedIndex, setSelectedIndex] = useState(0);
 
   useEffect(() => {
@@ -113,12 +136,23 @@ export function PackImageGallery({
         } : {})}
       >
         {selectedImage ? (
-          <img
-            src={selectedImage}
-            className="w-full h-full object-cover"
-            alt={alt}
-            draggable={!carousel}
-          />
+          getImageStyle ? (
+            <div style={getImageStyle(selectedImage)}>
+              <img
+                src={selectedImage}
+                className="w-full h-full object-cover"
+                alt={alt}
+                draggable={!carousel}
+              />
+            </div>
+          ) : (
+            <img
+              src={selectedImage}
+              className="w-full h-full object-cover"
+              alt={alt}
+              draggable={!carousel}
+            />
+          )
         ) : (
           <ImageOff className={`w-8 h-8 ${emptyClassName}`} />
         )}
@@ -128,7 +162,7 @@ export function PackImageGallery({
             <button
               type="button"
               onClick={(event) => { event.stopPropagation(); goPrev(); }}
-              aria-label="Previous image"
+              aria-label="Image précédente"
               className={`absolute left-3 top-1/2 -translate-y-1/2 z-20 ${NAV_BUTTON_CLASS}`}
               data-testid="button-pack-image-prev"
             >
@@ -137,7 +171,7 @@ export function PackImageGallery({
             <button
               type="button"
               onClick={(event) => { event.stopPropagation(); goNext(); }}
-              aria-label="Next image"
+              aria-label="Image suivante"
               className={`absolute right-3 top-1/2 -translate-y-1/2 z-20 ${NAV_BUTTON_CLASS}`}
               data-testid="button-pack-image-next"
             >

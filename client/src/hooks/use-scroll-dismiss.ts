@@ -21,9 +21,16 @@ const PULL_RESET_MS = 500;
 // dismissOverlayStyle transitions use this same value, so onDismiss (clearing
 // the owning store's open state / unmounting) only fires once the modal has
 // visually left the screen.
-export const SCROLL_DISMISS_ANIM_MS = 320;
+export const SCROLL_DISMISS_ANIM_MS = 520;
 
-export function useScrollDismiss(isOpen: boolean, onDismiss: () => void) {
+export function useScrollDismiss(
+  isOpen: boolean,
+  onDismiss: () => void,
+  // Optional — overrides the slide-down animation duration for this caller
+  // only. Defaults to SCROLL_DISMISS_ANIM_MS, so every existing caller that
+  // omits this keeps the exact same timing as before.
+  animMs: number = SCROLL_DISMISS_ANIM_MS,
+) {
   const pullAccumRef = useRef(0);
   const lastPullTimeRef = useRef(0);
   const pinnedStartYRef = useRef<number | null>(null);
@@ -50,13 +57,20 @@ export function useScrollDismiss(isOpen: boolean, onDismiss: () => void) {
     if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current);
   }, []);
 
-  const triggerGestureDismiss = () => {
+  // Shared, animated close path — used internally by the scroll/swipe
+  // gesture below, and returned so any other dismissal trigger (Close
+  // button, backdrop click, Escape) can go through the exact same slide-down
+  // + fade instead of calling onDismiss directly, which would unmount the
+  // modal's content before the exit animation finishes. The isDismissingRef
+  // guard already prevents a second call from resetting or overlapping an
+  // animation already in progress.
+  const requestDismiss = () => {
     if (isDismissingRef.current) return;
     isDismissingRef.current = true;
     setIsDismissing(true);
     dismissTimerRef.current = setTimeout(() => {
       onDismiss();
-    }, SCROLL_DISMISS_ANIM_MS);
+    }, animMs);
   };
 
   const onBodyWheel = (e: React.WheelEvent<HTMLDivElement>) => {
@@ -76,7 +90,7 @@ export function useScrollDismiss(isOpen: boolean, onDismiss: () => void) {
       pullAccumRef.current += Math.abs(e.deltaY);
       if (pullAccumRef.current >= DISMISS_THRESHOLD) {
         pullAccumRef.current = 0;
-        triggerGestureDismiss();
+        requestDismiss();
       }
     } else if (e.deltaY > 0) {
       pullAccumRef.current = 0;
@@ -106,7 +120,7 @@ export function useScrollDismiss(isOpen: boolean, onDismiss: () => void) {
     const dy = y - pinnedStartYRef.current;
     if (dy > DISMISS_THRESHOLD) {
       pinnedStartYRef.current = null;
-      triggerGestureDismiss();
+      requestDismiss();
     }
   };
 
@@ -117,22 +131,24 @@ export function useScrollDismiss(isOpen: boolean, onDismiss: () => void) {
   // Slides the whole card down past the bottom edge and fades it out, with the
   // backdrop fading in sync (via the consumer's `overlayStyle` prop — see
   // client/src/components/ui/dialog.tsx), instead of vanishing instantly.
-  // Only applies to this gesture-triggered path; the X button / backdrop
-  // click / Escape still go straight through the dialog's own close() and
-  // keep its existing default Radix exit animation, unchanged.
+  // Applies to every dismissal path that goes through requestDismiss (the
+  // gesture, and whatever else the caller wires to it) — a caller that still
+  // calls onDismiss directly instead (bypassing requestDismiss) keeps using
+  // its own default close animation, unaffected by this.
   const dismissContentStyle: React.CSSProperties = isDismissing
     ? {
         transform: "translate(-50%, -50%) translateY(100vh)",
         opacity: 0,
-        transition: `transform ${SCROLL_DISMISS_ANIM_MS}ms cubic-bezier(0.32, 0.72, 0, 1), opacity ${SCROLL_DISMISS_ANIM_MS - 20}ms ease-out`,
+        transition: `transform ${animMs}ms cubic-bezier(0.32, 0.72, 0, 1), opacity ${animMs - 20}ms ease-out`,
       }
     : {};
   const dismissOverlayStyle: React.CSSProperties | undefined = isDismissing
-    ? { opacity: 0, transition: `opacity ${SCROLL_DISMISS_ANIM_MS - 20}ms ease-out` }
+    ? { opacity: 0, transition: `opacity ${animMs - 20}ms ease-out` }
     : undefined;
 
   return {
     isDismissing,
+    requestDismiss,
     onBodyWheel,
     onBodyTouchStart,
     onBodyTouchMove,

@@ -7,16 +7,18 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   ArrowLeft, Package, Store, Minus, Plus, ShoppingCart, CheckCircle2,
-  Lock, AlertTriangle, LogIn, MapPin, Star, MessageSquarePlus, X, Navigation, Tag, Sun, Moon, Zap,
+  Lock, AlertTriangle, LogIn, MapPin, Star, MessageSquarePlus, X, Navigation, Tag, Sun, Moon, Zap, Heart,
 } from "lucide-react";
 import { useThemeStore } from "@/store/theme-store";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useCart } from "@/hooks/use-cart";
+import { useFavorites } from "@/hooks/use-favorites";
 import { useToast } from "@/hooks/use-toast";
 import { useQuickView } from "@/hooks/use-quick-view";
 import type { MarketplaceProduct, MarketplaceListing, MarketplaceVariant, ListingPromotion } from "@shared/schema";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import { ReviewModal } from "@/components/review-modal";
+import { PackImageGallery } from "@/components/pack-image-gallery";
 import { useCoverZoomStyle, computeCoverZoomScale, getAdjustmentFor } from "@/lib/image-adjustment";
 
 // ── Promotion helpers ─────────────────────────────────────────────────────────
@@ -516,6 +518,12 @@ export function ProductDetailContent({
     },
     enabled: !!productId,
   });
+
+  // ── Favorite (Shop) — mirrors browse-products.tsx's exact toggleShop
+  // shape/pattern; reuses the one existing product-favorite slot instead of
+  // introducing a second favorite system for this modal's image overlay.
+  const favedProduct = useFavorites((s) => (product ? !!s.shop[product.id] : false));
+  const toggleShopFav = useFavorites((s) => s.toggleShop);
 
   // ── Review stats ──────────────────────────────────────────────────────────
   const { data: reviewData } = useQuery<{
@@ -1093,25 +1101,85 @@ export function ProductDetailContent({
     return (
       <div className={`flex-1 min-h-0 flex flex-col ${bg}`}>
 
-        {/* Fixed header: X | product name + categories (scrolled in) | theme toggle */}
-        <ModalHeader />
-
-        {/* Scrollable body */}
+        {/* Scrollable body — hero image flush with the modal's own top
+            corners, overlay controls on the image itself (Fav/Theme/Close
+            top-right, Avis bottom-right, Previous/Next + counter via
+            PackImageGallery's carousel mode) instead of a separate header
+            bar, matching the Pack Detail Modal's image section exactly
+            (task: "Product Detail Modal: Match the Pack Detail Image
+            Section"). */}
         <div
-          className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 pb-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full"
-          onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 80)}
+          className="flex-1 min-h-0 overflow-y-auto pb-8 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full"
           onWheel={onBodyWheel}
           onTouchStart={onBodyTouchStart}
           onTouchMove={onBodyTouchMove}
           onTouchEnd={onBodyTouchEnd}
           style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
         >
-          {/* ── Product header: images + info (always scrolls) ── */}
+          <div>
+            <PackImageGallery
+              images={allImages}
+              alt={product.name}
+              mainClassName={`relative w-full h-80 sm:h-[420px] shrink-0 ${dk ? "bg-gray-800" : "bg-gray-50"}`}
+              mainRoundedClassName="rounded-t-[2rem]"
+              emptyClassName={dk ? "text-gray-700" : "text-gray-300"}
+              getImageStyle={(url) => {
+                const scale = computeCoverZoomScale(getAdjustmentFor((product as any)?.imageAdjustments, url));
+                return { width: "100%", height: "100%", transform: `scale(${scale})`, transformOrigin: "center", transition: "transform 150ms ease-out" };
+              }}
+              carousel
+              overlay={
+                <>
+                  <div className="absolute top-3 right-3 z-20 flex gap-2">
+                    <button
+                      onClick={() => toggleShopFav({
+                        id: product.id,
+                        name: product.name,
+                        supplier: product.category ?? "",
+                        price: product.bestPrice ?? 0,
+                        image: product.imageUrl ?? "",
+                      })}
+                      className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all hover:scale-105 bg-black/40 backdrop-blur-sm"
+                      data-testid="button-fav-product-modal"
+                    >
+                      <Heart className={`w-4 h-4 transition-colors ${favedProduct ? "fill-rose-500 text-rose-500" : "text-white"}`} />
+                    </button>
+                    <button
+                      onClick={toggleTheme}
+                      aria-label="Changer de thème"
+                      className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors bg-black/40 backdrop-blur-sm"
+                    >
+                      {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-white" />}
+                    </button>
+                    <button
+                      onClick={onBack}
+                      aria-label="Fermer"
+                      className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-colors bg-black/40 backdrop-blur-sm"
+                    >
+                      <X className="w-4 h-4 text-white" />
+                    </button>
+                  </div>
+                  {isCafeOwner && (
+                    <div className="absolute bottom-3 right-3 z-20">
+                      <button
+                        onClick={() => setReviewModalOpen(true)}
+                        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all hover:scale-105 bg-black/40 backdrop-blur-sm"
+                        data-testid="button-open-product-reviews"
+                        title="Avis"
+                      >
+                        <Star className="w-4 h-4 text-white" />
+                      </button>
+                    </div>
+                  )}
+                </>
+              }
+            />
+          </div>
+
+          {/* ── Product info — full width below the image, matching the
+              Pack Detail Modal's stacked layout (not side-by-side) ── */}
           <div className="px-3 sm:px-5 pt-5 pb-4">
-            <div className="flex flex-col sm:flex-row gap-6">
-              {imageGallery}
-              {productInfo}
-            </div>
+            {productInfo}
           </div>
 
           {/* ── Sticky filters block ── */}

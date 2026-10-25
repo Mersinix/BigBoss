@@ -11412,3 +11412,316 @@ modifiée en base, aucune interface Admin/Fournisseur touchée.
 
 Aucun changement de schéma de base de données, aucune autre modale
 affectée, aucune régression intentionnelle du comportement existant.
+
+---
+
+## 14. Tâche de suivi — Flash blanc à la fermeture et animation de fermeture unifiée (Product Detail Modal)
+
+### Audit — cause racine identifiée par lecture du code (non supposée)
+
+Fichier concerné : `client/src/components/product-quick-view-modal.tsx`.
+État avant correction :
+
+```tsx
+<Dialog open={productId != null} onOpenChange={(open) => { if (!open) close(); }}>
+  <DialogContent ... style={{ ...dismissContentStyle }} overlayStyle={dismissOverlayStyle}>
+    {productId != null && (
+      <ProductDetailContent ... onBack={close} ... />
+    )}
+  </DialogContent>
+</Dialog>
+```
+
+- **Les trois méthodes de fermeture (bouton Close via `onBack={close}`, clic sur
+  le fond via `onOpenChange`, touche Échap via le même `onOpenChange`)
+  appellent toutes `close()` directement** — la fonction du store Zustand qui
+  met `productId` à `null` **immédiatement, de façon synchrone**.
+- Or `{productId != null && <ProductDetailContent .../>}` est un rendu
+  conditionnel strict : dès que `productId` devient `null`, `ProductDetailContent`
+  est **démonté sur le même rendu** que celui qui déclenche la fermeture du
+  Dialog — alors que Radix garde le nœud `DialogContent` lui-même monté
+  pendant toute la durée de l'animation de sortie (mécanisme `Presence`).
+- `DialogContent` (composant partagé, `client/src/components/ui/dialog.tsx`)
+  porte un fond de base codé en dur dans ses classes Tailwind,
+  `bg-background`, et le point d'appel de la modale Produit ne surcharge
+  jamais ce fond (son propre `className` ne contient aucune classe `bg-*`).
+  C'est `ProductDetailContent` qui, une fois monté, fournit le vrai fond
+  thématisé (`bg-white`/`bg-gray-900` selon `isDark`) sur ses propres `div`
+  internes — masquant ainsi le `bg-background` du `DialogContent` tant que
+  le contenu est affiché.
+- **Donc** : dès que `close()` est appelé directement, `ProductDetailContent`
+  disparaît instantanément, découvrant le `bg-background` nu du
+  `DialogContent` pendant toute la durée de l'animation de sortie restante
+  (~200 ms, l'animation par défaut de Radix) — c'est exactement le flash
+  blanc rapporté.
+- **Confirmation que `bg-background` est bien statiquement blanc, quel que
+  soit le thème** : `client/src/index.css` définit `--background: 210 20%
+  98%` (quasi-blanc) sous `:root`, et une seconde valeur sombre (`222 47%
+  11%`) existe mais est définie sous un sélecteur `.dark` — or il est déjà
+  établi dans ce projet (voir commentaires de
+  `barista-detail-modal.tsx`/`theme-store.ts` et l'audit de la tâche « Dark
+  Mode autofill ») qu'**aucun ancêtre de la modale Coffee Owner n'ajoute
+  jamais la classe littérale `.dark` au DOM** — cette surcharge sombre est
+  donc inerte dans ce contexte, et `bg-background` résout toujours vers la
+  valeur claire. Le flash apparaît donc en thème clair **et** sombre,
+  cohérent avec le rapport de la tâche (« un écran blanc », sans mention
+  d'un écran sombre en mode sombre).
+- **Le geste de défilement n'a jamais ce problème** : `useScrollDismiss`
+  (`client/src/hooks/use-scroll-dismiss.ts`) différait déjà l'appel réel à
+  `onDismiss` (= `close()`) de `SCROLL_DISMISS_ANIM_MS` (320 ms) via
+  `triggerGestureDismiss`/`setTimeout` — `productId` reste non-nul, donc
+  `ProductDetailContent` reste monté avec son propre fond thématisé pendant
+  toute l'animation personnalisée de glissement vers le bas. C'est
+  précisément pourquoi la tâche décrit le flash uniquement sur le clic
+  Close, et décrit l'animation de glissement comme déjà fonctionnelle mais
+  trop rapide.
+- **Conclusion** : les deux problèmes partagent la même cause structurelle —
+  le bouton Close (et le clic sur le fond / Échap) ne passent pas par le
+  même cycle de fermeture animé que le geste de défilement. Les unifier
+  (Phase 4 de la tâche) résout le flash blanc (Phase 2) comme effet direct,
+  sans correctif séparé ni couleur de secours arbitraire.
+- Aucune librairie d'accessibilité `prefers-reduced-motion` n'existe
+  ailleurs dans le projet (recherche exhaustive, aucune occurrence) — rien
+  à préserver sur ce point ; aucune nouvelle logique de ce type n'est
+  introduite ici, conformément à « ne pas ajouter de fonctionnalité non
+  demandée ».
+
+### Implémentation
+
+`client/src/hooks/use-scroll-dismiss.ts` :
+- `triggerGestureDismiss` renommé `requestDismiss` et **retourné par le
+  hook** (nouveau champ additif dans l'objet retourné) — expose désormais
+  publiquement le même point d'entrée animé que le geste utilise déjà en
+  interne, pour que n'importe quel autre déclencheur de fermeture
+  (bouton, fond, clavier) puisse l'utiliser au lieu d'appeler `onDismiss`
+  directement. La garde existante (`isDismissingRef`) protège déjà contre
+  les déclenchements multiples/concurrents — aucune modification requise
+  sur ce point.
+- Nouveau paramètre optionnel `animMs` (troisième argument de
+  `useScrollDismiss(isOpen, onDismiss, animMs = SCROLL_DISMISS_ANIM_MS)`)
+  — **additif, valeur par défaut inchangée (320 ms)** : les 9 autres
+  modales qui appellent `useScrollDismiss(isOpen, onDismiss)` sans ce
+  troisième argument gardent exactement la même durée qu'avant, aucune
+  régression possible sur leur animation. Seule la modale Produit passe
+  désormais une durée légèrement supérieure.
+- `dismissContentStyle`/`dismissOverlayStyle` utilisent `animMs` au lieu
+  de la constante globale — même courbe d'accélération
+  (`cubic-bezier(0.32, 0.72, 0, 1)`, déjà une courbe de décélération douce
+  et naturelle, non modifiée) mais durée paramétrable.
+
+`client/src/components/product-quick-view-modal.tsx` :
+- `useScrollDismiss(productId != null, close, 380)` — 380 ms au lieu de
+  320 ms (reste dans la fourchette 300–400 ms suggérée par la tâche ;
+  ajustement volontairement minime — « slightly slower », pas une
+  réécriture de la temporisation).
+- `onOpenChange={(open) => { if (!open) requestDismiss(); }}` (couvre le
+  clic sur le fond et la touche Échap).
+- `onBack={requestDismiss}` à la place de `onBack={close}` (bouton Close
+  du header, dans `ProductDetailContent`).
+- Plus aucun appel direct à `close()` dans ce fichier — les trois méthodes
+  de fermeture et le geste de défilement partagent désormais exactement
+  le même cycle : `requestDismiss()` → animation de glissement + fondu du
+  fond synchronisé → `ProductDetailContent` reste monté (donc son propre
+  fond thématisé reste visible, plus de `bg-background` nu exposé) →
+  `close()` réel appelé seulement après la fin de l'animation (320→380 ms),
+  ce qui démonte alors `ProductDetailContent` — mais à ce moment le
+  `DialogContent` est déjà invisible (opacité 0, translaté hors écran),
+  donc ce démontage final n'est plus perceptible.
+
+Aucune autre modale (Pack, Barista, Maintenance, Marketing, Academy,
+Print) n'est modifiée — leurs boutons Close respectifs continuent
+d'appeler leur propre `close`/`handleClose` directement, exactement comme
+avant. **Observation notée pour mémoire, non corrigée ici (hors
+périmètre)** : ces modales partagent probablement un bouton Close non
+unifié avec leur propre geste de défilement, donc un flash similaire y
+est théoriquement possible — à traiter dans une tâche dédiée si demandé,
+conformément à « ne pas modifier des composants non concernés ».
+
+### Vérification
+
+- `npx tsc --noEmit` : 0 erreur, code de sortie 0.
+- `npm run build` : build client + serveur réussi, aucune nouvelle
+  alerte (seul l'avertissement standard de taille de chunk, sans
+  rapport avec ce changement).
+- `git diff --stat` confirme exactement 2 fichiers modifiés par cette
+  tâche (`use-scroll-dismiss.ts` +36/-17, `product-quick-view-modal.tsx`
+  +27/-12) ; aucune des 9 autres modales consommatrices du hook partagé
+  n'apparaît dans le diff — confirme que le paramètre `animMs` additif
+  et l'ajout de `requestDismiss` au retour du hook n'ont aucun effet sur
+  elles (valeur par défaut inchangée, nouveau champ simplement ignoré
+  par les appelants qui ne le déstructurent pas).
+- **Non vérifié visuellement** (aucun outil de navigateur automatisé
+  disponible cette session) : la disparition réelle du flash blanc à
+  l'écran, la durée perçue de l'animation (380 ms), la synchronisation
+  fond/modale, le comportement en thème sombre, et la non-régression du
+  carrousel d'images / du défilement normal / du clavier (Échap) — à
+  vérifier manuellement avant de considérer ce point comme définitivement
+  clos.
+
+### Fichiers modifiés
+
+- `client/src/hooks/use-scroll-dismiss.ts` (ajout additif : export de
+  `requestDismiss`, paramètre optionnel `animMs`)
+- `client/src/components/product-quick-view-modal.tsx` (unification des
+  trois méthodes de fermeture vers `requestDismiss`, durée 380 ms)
+
+Aucun changement de schéma de base de données, aucune autre modale
+affectée (vérifié par la paramétrisation additive avec valeur par défaut
+inchangée), aucune nouvelle dépendance.
+
+---
+
+## 15. Tâche de suivi — Aligner la section image du Product Detail Modal sur le Pack Detail Modal
+
+### Audit
+
+- **Pack Detail Modal** (`pack-quick-view-modal.tsx`) — section image actuelle :
+  image héro pleine largeur (`PackImageGallery ... carousel`, `h-80 sm:h-[420px]`,
+  `rounded-t-3xl`, flush avec les coins du Dialog), AUCUNE barre d'en-tête
+  séparée — tous les contrôles (Fav/Thème/Fermer en haut-droite via
+  `PackImageTopIcons`, Avis en bas-droite, Précédent/Suivant/compteur via le
+  mode `carousel` de `PackImageGallery`) sont des overlays absolus posés
+  directement sur le conteneur de l'image. Le nom du pack et les infos
+  produit s'affichent EN DESSOUS, pleine largeur (pas côte-à-côte avec
+  l'image).
+- **Product Detail Modal** (`product-detail-content.tsx`, branche
+  `isModal`) — état actuel avant cette tâche : une barre d'en-tête séparée
+  (`ModalHeader`, thème à gauche / nom qui apparaît au scroll au centre /
+  fermer à droite) **au-dessus** de l'image ; l'image elle-même est petite
+  (`w-full sm:w-56 h-56`), affichée **côte-à-côte** avec les infos produit
+  (`flex sm:flex-row`), avec zoom au survol (`group-hover:scale-[2]`) et
+  une bande de miniatures cliquables en dessous — aucun bouton Fav, aucun
+  bouton Avis sur l'image, aucune navigation Précédent/Suivant, aucun geste
+  de balayage horizontal.
+- **Aucun mécanisme de favori produit n'existe actuellement dans ce
+  fichier** (recherche exhaustive : ni `useFavorites`, ni `Heart`). Le
+  store `useFavorites` (`client/src/hooks/use-favorites.ts`) possède déjà
+  un slot `shop`/`toggleShop` dédié aux produits (type `ShopFavItem = {id,
+  name, supplier, price, image}`), déjà utilisé ailleurs (ex.
+  `browse-products.tsx` : `toggleShop({ id: product.id, name:
+  product.name, supplier: product.category ?? "", price:
+  product.bestPrice ?? 0, image: product.imageUrl ?? "" })`,
+  `faved = useFavorites(s => !!s.shop[product.id])`) — il suffit de le
+  câbler ici, sans créer un second système de favoris.
+- **`PackImageGallery` est déjà un composant générique**, sans aucun
+  couplage au modèle de données Pack dans ses props (`imageUrl`,
+  `imageUrls`, `alt`, callbacks) — directement réutilisable pour les
+  produits sans duplication de la logique de carrousel/balayage/flèches
+  déjà validée à la tâche précédente.
+- **Écart d'ordre des images identifié et vérifié sur données réelles** :
+  pour les **packs**, `imageUrls` contient déjà `imageUrl` en doublon
+  (vérifié en base, ex. « Matcha Pack » id 25), donc l'ordre interne de
+  `PackImageGallery` (`[...imageUrls, imageUrl]` puis dédoublonnage par
+  `Set`, qui conserve la première occurrence) retombe de fait sur l'ordre
+  propre de `imageUrls`. Pour les **produits**, vérifié sur 4 produits
+  réels en base (`Boga`, `Illy Classico Arabica Beans 500g`, `CHICHA
+  Panda`, `chicha`) : `imageUrl` n'apparaît **jamais** dans `imageUrls` —
+  ce sont deux listes disjointes, et l'ordre établi côté produit est
+  `[imageUrl, ...imageUrls]` (image principale D'ABORD), exactement
+  l'inverse de la convention interne de `PackImageGallery`. Réutiliser le
+  composant tel quel avec `imageUrl`/`imageUrls` séparés inverserait donc
+  l'ordre existant des images produit — violerait explicitement « preserve
+  its established ordering » (Phase 4). **Décision** : ajouter un nouveau
+  prop optionnel `images?: string[]` à `PackImageGallery` — quand fourni,
+  utilisé directement comme liste ordonnée (sans fusion interne
+  `imageUrl`/`imageUrls`, sans déduplication supplémentaire, pour ne pas
+  changer un comportement produit préexistant) ; Pack et les deux usages
+  de `manage-packs.tsx` ne passent jamais ce prop et gardent leur fusion
+  interne exacte d'avant.
+- **`PackImageGallery` n'a aucun support pour l'ajustement de cadrage par
+  image (`imageAdjustments`)** — Pack n'a jamais eu cette fonctionnalité
+  (elle est strictement Produit, issue d'une tâche bien antérieure dans
+  cette session). Or la tâche exige explicitement de préserver « the
+  product's existing image source and cropping metadata » et « image
+  cropping and fallback behavior ». **Décision** : ajouter un second prop
+  optionnel `getImageStyle?: (url: string) => React.CSSProperties` —
+  quand fourni, enveloppe l'`<img>` affiché dans un `<div style={...}>`
+  supplémentaire (recalculé à chaque image affichée) ; absent (Pack,
+  `manage-packs.tsx`), le rendu reste un `<img>` nu, strictement
+  identique à avant. Le calcul réutilise les fonctions **pures** déjà
+  existantes `computeCoverZoomScale`/`getAdjustmentFor`
+  (`@/lib/image-adjustment`) — pas `useCoverZoomStyle` elle-même (qui
+  porte un préfixe `use` par convention bien qu'elle ne soit pas un vrai
+  hook react — elle ne contient aucun `useState`/`useEffect` interne,
+  vérifié par lecture du code — mais l'appeler depuis un callback imbriqué
+  risquerait de déclencher une règle de lint « rules-of-hooks » statique
+  sur le nom, donc évité par prudence).
+- **Bouton Avis** : la tâche demande de l'ajouter en overlay sur l'image,
+  « adapted to open the Product Review form ». Le workflow existant
+  (`reviewModalOpen`/`ReviewModal`, déjà français, déjà « Avis sur le
+  produit » uniquement depuis la tâche de localisation) reste
+  l'unique source de vérité — le nouveau bouton appelle
+  `setReviewModalOpen(true)`, exactement comme le bouton « Écrire un
+  avis » déjà existant dans la barre d'outils fournisseurs, qui n'est PAS
+  supprimé (la tâche ne le demande pas, et il sert un contexte différent
+  — visible seulement quand il y a des listings fournisseur à côté).
+  Gating identique à ce bouton existant : `isCafeOwner` (déjà calculé
+  dans ce fichier).
+- **La barre d'en-tête séparée (`ModalHeader`) est retirée uniquement de
+  la branche de rendu réussie (`isModal`, produit chargé sans erreur)** —
+  elle reste utilisée telle quelle pour les états de chargement et
+  d'erreur (hors périmètre de cette tâche, et Pack lui-même n'a pas
+  d'équivalent d'état d'erreur distinct à reproduire). L'état `scrolled`
+  (qui pilotait l'apparition du nom au défilement dans cet en-tête)
+  n'est plus mis à jour dans la branche réussie mais reste déclaré et lu
+  sans erreur de compilation — il n'affecte plus rien de visible puisque
+  les états chargement/erreur n'ont jamais de nom de produit à afficher
+  de toute façon.
+- Mise en page : Pack empile l'image (pleine largeur) puis les infos
+  (pleine largeur) ; Produit affichait l'image et les infos **côte à
+  côte** (`flex sm:flex-row`). Pour correspondre à Pack « au niveau de
+  l'image », la branche modale passe au même empilement pleine largeur ;
+  la branche PAGE (`isModal=false`, hors périmètre) garde le côte-à-côte
+  existant sans aucun changement (bloc `imageGallery` original conservé
+  intact, utilisé uniquement par la page).
+
+### Implémentation
+
+`client/src/components/pack-image-gallery.tsx` :
+- Nouveaux props additifs `images?: string[]` et
+  `getImageStyle?: (url: string) => React.CSSProperties`, défauts
+  inchangés pour tout appelant existant (voir ci-dessus).
+
+`client/src/components/product-detail-content.tsx` :
+- Nouveaux hooks `favedProduct`/`toggleShopFav`
+  (`useFavorites`, slot `shop`) déclarés avant tout retour conditionnel
+  (règle des hooks respectée).
+- Branche `isModal` du rendu réussi réécrite : suppression de
+  `<ModalHeader />` et de la disposition côte-à-côte ; nouvelle image
+  héro pleine largeur via `PackImageGallery` (`images={allImages}`,
+  `carousel`, `getImageStyle=...`) avec overlay Fav/Thème/Fermer
+  (haut-droite, mêmes classes exactes que `PackImageTopIcons`) + Avis
+  (bas-droite, gated `isCafeOwner`) ; infos produit (`productInfo`,
+  contenu inchangé) affichées pleine largeur en dessous.
+- Bloc `imageGallery` original (petit, côte-à-côte, zoom au survol,
+  miniatures) **conservé intact**, utilisé uniquement par la branche page
+  (`isModal=false`) — aucune régression possible sur la page complète.
+- Aucun changement aux filtres saveur/taille, à la barre d'outils
+  fournisseurs, aux cartes fournisseurs, au panier, ni à la logique
+  métier de tarification/stock/variantes.
+
+`client/src/components/product-quick-view-modal.tsx` : aucun changement
+— `onBack`/`requestDismiss` déjà câblés depuis la tâche précédente, le
+nouveau bouton Fermer sur l'image utilise exactement le même prop.
+
+### Vérification
+
+- `npx tsc --noEmit` : 0 erreur, code de sortie 0.
+- `npm run build` : build client + serveur réussi, aucune nouvelle
+  alerte (seul l'avertissement standard de taille de chunk, sans
+  rapport avec ce changement).
+- `git diff --stat` confirme exactement 2 fichiers modifiés par cette
+  tâche (`pack-image-gallery.tsx` +52/-6, `product-detail-content.tsx`
+  +92/-19) ; `pack-quick-view-modal.tsx` (Pack Detail Modal) **n'apparaît
+  pas** dans le diff de cette tâche — confirme qu'il n'a pas été touché.
+- Relecture confirmant que le bloc `imageGallery` original (petit, côte-
+  à-côte, zoom au survol, miniatures) n'est plus référencé que par la
+  branche page (`{imageGallery}` à la fin du fichier) — la branche page
+  complète (`isModal=false`) reste donc inchangée.
+- **Non vérifié visuellement** (aucun outil de navigateur automatisé
+  disponible cette session) : correspondance pixel des deux modales en
+  desktop/mobile, chevauchement des boutons, geste de balayage, compteur,
+  bascule favori/thème, ouverture du formulaire d'avis depuis l'image, et
+  non-régression de la page produit complète ni du Pack Detail Modal — à
+  vérifier manuellement avant de considérer ce point comme définitivement
+  clos.

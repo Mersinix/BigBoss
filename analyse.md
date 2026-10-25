@@ -12748,3 +12748,285 @@ navigateur dans cet environnement, déjà signalée plus haut et dans
 chaque tâche précédente de cette session — aucune fonctionnalité n'a
 été déclarée « vérifiée visuellement » alors qu'elle ne l'a été que par
 lecture de code et compilation.
+
+---
+
+## 23. Synchronisation des carrousels d'images (Pack/Product) + Navigation Store filtre-aware
+
+### Audit — état réel du code (lecture directe, rien supposé)
+
+**Image carousel — Pack/Product Detail Modal (`PackImageGallery`,
+`client/src/components/pack-image-gallery.tsx`)** :
+- Composant partagé par `PackQuickViewModal`
+  (`pack-quick-view-modal.tsx:798`, `carousel` activé) et
+  `ProductDetailContent` (`product-detail-content.tsx:1210`, `carousel`
+  activé) — les deux seuls appelants qui passent `carousel`. Les deux
+  autres appelants (`manage-packs.tsx:681,774`, côté Supplier) omettent
+  `carousel` et utilisent le mode bande de miniatures d'origine — non
+  concernés par cette tâche.
+- En mode `carousel`, l'implémentation actuelle est **100% manuelle** :
+  boutons overlay ChevronLeft/ChevronRight (`goPrev`/`goNext`) +
+  compteur texte « index/total » en bas à gauche. **Aucune rotation
+  automatique n'existe.** Swipe tactile horizontal déjà implémenté
+  (`handleTouchStart/Move/End`, seuil `SWIPE_THRESHOLD=50px`,
+  verrouillage d'axe `AXIS_LOCK_THRESHOLD=10px`, `stopPropagation` sur
+  swipe horizontal confirmé pour ne pas déclencher le swipe-to-dismiss
+  vertical de la modale via `useScrollDismiss`).
+- Les boutons Previous/Next **Produit** (navigation entre articles
+  mappés, pas entre images) sont un contrôle totalement séparé — dans
+  `pack-quick-view-modal.tsx` (lignes ~859-884, `hasPackNav`/
+  `navigateToPack`) et `product-detail-content.tsx` (lignes ~940-965,
+  `productNavButtons`/`onNavPrev`/`onNavNext`) — aucun état partagé avec
+  l'index d'image, confirmé par lecture : à ne pas toucher.
+
+**Rotation automatique de référence — Store Page
+(`CoverSlideshow`, `client/src/pages/cafe/store-detail-page.tsx:212`)** :
+- `setInterval(() => setIdx(i => (i+1) % active.length), 3500)` —
+  rotation uniquement si `active.length > 1`, `clearInterval` au
+  démontage/changement de longueur (via le tableau de dépendances
+  `[active.length]`).
+- Présentation : `<img key={active[idx]} ... className="... transition-opacity duration-500">`
+  (remount forcé à chaque changement d'index) + points de pagination
+  cliquables en bas centre (`absolute bottom-3 left-1/2 -translate-x-1/2
+  flex gap-1`, point actif `bg-white scale-125`, inactif `bg-white/50`).
+  **Aucune interaction manuelle autre que le clic direct sur un point**
+  — pas de swipe, pas de flèches. Cliquer un point ne redémarre PAS le
+  timer (l'effet ne dépend que de `active.length`), donc la rotation
+  continue sur la même cadence après une interaction manuelle — règle
+  existante à reproduire telle quelle, pas à « améliorer ».
+- Réutilisé tel quel par le Supplier (`pages/supplier/store-page.tsx:226`,
+  import direct depuis `store-detail-page.tsx`) — confirmé composant
+  unique de référence, pas de duplication de logique à chercher ailleurs.
+- Aucune gestion `prefers-reduced-motion` nulle part dans le codebase
+  (`grep` vide) — rien à préserver sur ce point, à noter explicitement
+  plutôt que d'inventer un comportement.
+
+**Navigation Store (Previous/Next Store) — état actuel** :
+- Aucune navigation Store précédent/suivant n'existe. La page Store
+  (`client/src/pages/cafe/store-detail-page.tsx`, route `/stores/:storeId`
+  via `useRoute`) affiche le nom du store en `<h1 className="... truncate">`
+  (ligne ~1083) sans aucun contrôle de navigation à côté.
+- Le Shop (`client/src/pages/cafe/browse-products.tsx`) a déjà sa PROPRE
+  section Stores dédiée (`StoresSection`, lignes 441-540) avec son propre
+  `filteredStores` **au niveau Store directement** (pas dérivé de cartes
+  Produit/Pack) : `stores.filter(s => s.productCount > 0)` puis
+  `categoryId`/`subCategoryId`/`brandId`/`search` — exactement le jeu de
+  données filtré nécessaire à Previous/Next Store, pas besoin de le
+  recalculer depuis les Produits/Packs filtrés (le type `StoreCard`
+  porte déjà `categoryIds`/`subCategoryIds`/`brandIds` précalculés
+  côté serveur). Pas de `sortBy` pour les stores (le Shop n'en propose
+  pas pour cette section) — ordre naturel de `stores` (déjà trié
+  serveur) préservé.
+- `filteredStores` est actuellement calculé **à l'intérieur** de
+  `StoresSection`, donc invisible au composant parent `BrowseProducts`.
+  Précédent direct déjà dans ce même fichier : `filteredPacks` a déjà
+  été « remonté » (lifted) du composant `PacksSection` vers le parent
+  pour exactement cette même raison — alimenter du state de navigation
+  partagé (`usePackQuickView.setNavIds`, lignes 1166-1200, commentaire
+  explicite « lifted up so BrowseProducts can also feed the same list »).
+  Même refactor à appliquer à `StoresSection`/`filteredStores`.
+- Précédent architectural direct pour l'état de navigation cross-page :
+  `useQuickView`/`usePackQuickView` (Zustand, `navIds`/`setNavIds`/
+  `navigateTo`) — mais ces deux stores pilotent une modale globale
+  singleton (changement de pack/produit SANS changement de route). La
+  page Store est une **vraie route** (`/stores/:storeId`), donc
+  Previous/Next Store doit faire un `navigate()` wouter réel (comme le
+  fait déjà `onSelect={(storeId) => navigate(\`/stores/${storeId}\`)}`
+  dans le Shop), pas un `navigateTo` in-place. Un nouveau store Zustand
+  minimal (`navIds`/`setNavIds` seulement, pas de `navigateTo`/`open`/
+  `close` — la route elle-même gère l'affichage) est le choix le plus
+  proche de l'existant : aucune nouvelle persistance (URL params, DB)
+  n'est nécessaire, conforme à la consigne « investigate existing route
+  state... before introducing a new persistence mechanism ».
+- `useItemNav` (créé à la tâche précédente, `client/src/hooks/use-item-nav.ts`)
+  est directement réutilisable ici sans modification : non circulaire,
+  sûr si le store courant n'est plus dans `navIds` (boutons simplement
+  masqués), exactement le comportement attendu au §4 Scenario C.
+- Pages Store **hors périmètre**, confirmées par lecture de leurs noms/
+  rôles et déjà exclues par la tâche elle-même (« Do not change the
+  separate navigation behavior already implemented for barista,
+  maintenance, marketing, academy, or print ») :
+  `academy-store-detail-page.tsx`, `marketing-store-detail-page.tsx`,
+  `print-store-detail-page.tsx` (stores des 3 autres sections
+  métier), et `pages/supplier/store-page.tsx` (vue du Supplier sur SON
+  PROPRE store — un seul store, naviguer entre « stores » n'a pas de
+  sens côté Supplier). Seul `pages/cafe/store-detail-page.tsx` est
+  concerné.
+
+### Plan d'implémentation minimal
+
+1. **`pack-image-gallery.tsx`** : ajouter un `useEffect` de rotation
+   automatique identique à `CoverSlideshow` (3500ms, actif seulement si
+   `carousel && images.length > 1`, cleanup au démontage/changement de
+   liste). Remplacer les flèches + compteur texte (mode `carousel`) par
+   des points de pagination cliquables identiques à `CoverSlideshow`
+   (même classes, même comportement — clic direct sans redémarrer le
+   timer). Ajouter `key={selectedImage}` + `transition-opacity
+   duration-500` sur le `<img>` affiché en mode carousel uniquement
+   (le mode miniature existant reste strictement inchangé — gardé
+   derrière `carousel &&`). Le swipe existant n'est pas touché. Retirer
+   l'import `ChevronLeft/ChevronRight` et `NAV_BUTTON_CLASS`, devenus
+   inutilisés après la suppression des flèches.
+2. **`browse-products.tsx`** : remonter `filteredStores` du composant
+   `StoresSection` vers `BrowseProducts` (même refactor que
+   `filteredPacks`), ajouter `storeNavIds = filteredStores.map(s => s.id)`,
+   créer `client/src/hooks/use-store-nav.ts` (Zustand, `navIds`/
+   `setNavIds`, même forme minimale), le synchroniser via `useEffect`
+   exactement comme `productNavIds`/`packNavIds`. Changer la signature
+   de `StoresSection` pour recevoir `filteredStores` déjà calculé au
+   lieu de `stores`/`categoryId`/`filters`/`search` bruts (supprimer son
+   `useMemo` interne, logique déplacée verbatim, pas dupliquée).
+3. **`store-detail-page.tsx`** : importer `useStoreNav` + `useItemNav`,
+   calculer `useItemNav(Number(storeId), navIds ?? [])`, ajouter les
+   boutons Previous/Next Store sur la même rangée que `<h1>{store.name}</h1>`
+   en réutilisant le composant partagé `ItemNavButtons`
+   (`client/src/components/shared/item-nav-buttons.tsx`, déjà créé et
+   vérifié à la tâche précédente) — même motif de rangée que les
+   titres de modales déjà traités (`flex items-start justify-between
+   gap-x-3 gap-y-1`, titre `min-w-0`, boutons `shrink-0`). Les
+   gestionnaires appellent `navigate(\`/stores/${id}\`)` (wouter), pas de
+   nouvel état local. Changement de `truncate` (ellipse une ligne) vers
+   wrap (`break-words`) sur le `<h1>` — seul changement visuel du nom de
+   store, nécessaire pour respecter la consigne explicite « must wrap
+   naturally... without pushing the navigation buttons onto an unrelated
+   line ».
+
+Rien de ceci ne touche aux API/DB/schémas existants, ni aux
+comportements Favoris/Avis/variantes/stock/Add-to-cart/thèmes/
+authentification déjà en place — changements additifs uniquement.
+
+### Implémentation réalisée
+
+**`client/src/components/pack-image-gallery.tsx`** (composant partagé,
+seul fichier touché pour le carrousel — Pack ET Product en héritent
+automatiquement) :
+- Ajout d'un `useEffect` de rotation automatique
+  (`AUTO_ROTATE_MS = 3500`, identique à `CoverSlideshow`), actif
+  uniquement si `carousel && images.length > 1`, nettoyé au démontage
+  et à chaque changement de `images.length` (empêche un timer périmé
+  de continuer sur le nouvel article après navigation Previous/Next
+  Produit).
+- Suppression des boutons flèches (`ChevronLeft`/`ChevronRight`,
+  `goPrev`/`goNext` overlay) et du compteur texte « index/total »,
+  remplacés par des points de pagination cliquables identiques à
+  `CoverSlideshow` (`bottom-3 left-1/2 -translate-x-1/2`, point actif
+  `bg-white scale-125`, inactif `bg-white/50`, clic direct sans
+  redémarrer le timer — même règle que la référence). Import
+  `ChevronLeft/ChevronRight` et `NAV_BUTTON_CLASS` retirés (devenus
+  inutilisés).
+- `key={selectedImage}` + classe `transition-opacity duration-500`
+  ajoutés sur le `<img>` affiché, uniquement en mode `carousel`
+  (reproduit le remount/fade de `CoverSlideshow` à l'identique) — le
+  mode miniature (non-carousel, utilisé par `manage-packs.tsx`) garde
+  `key={undefined}` et aucune classe de transition, donc rendu
+  strictement inchangé.
+- Swipe tactile existant (`handleTouchStart/Move/End`, seuil 50px,
+  verrouillage d'axe 10px, `stopPropagation` sur swipe horizontal
+  confirmé) **non touché** — continue de fonctionner en plus de la
+  rotation automatique et des points, exactement comme demandé
+  (A.3 : rotation automatique ne doit pas supprimer le swipe manuel).
+  Comme pour `CoverSlideshow`, ni le clic sur un point ni le swipe ne
+  redémarrent le timer de rotation — comportement identique à la
+  référence, pas « amélioré ».
+- Cas 1 image : `hasMultiple=false` → ni points ni rotation (déjà
+  garanti par les gardes existantes, non dupliqué).
+- Cas aucune image : branche `ImageOff` existante, non touchée.
+- Previous/Next **Produit** (dans `pack-quick-view-modal.tsx` et
+  `product-detail-content.tsx`) : aucun fichier ni ligne touchée —
+  confirmé par `git diff --stat` (ces deux fichiers n'apparaissent pas
+  dans les fichiers modifiés), donc le contrôle séparé et son état
+  restent strictement intacts.
+
+**`client/src/hooks/use-store-nav.ts`** (nouveau, minimal) : store
+Zustand `{ navIds: number[] | null; setNavIds }` — pas de
+`navigateTo`/`open`/`close` (la page Store est une vraie route, pas une
+modale singleton).
+
+**`client/src/pages/cafe/browse-products.tsx`** :
+- `filteredStores` remonté de `StoresSection` vers `BrowseProducts`
+  (même logique, verbatim) ; `StoresSection` reçoit maintenant
+  `filteredStores` déjà calculé au lieu de `stores`/`categoryId`/
+  `filters`/`search` bruts (vérifié : aucune référence résiduelle à ces
+  anciens props à l'intérieur du composant).
+- `storeNavIds = filteredStores.map(s => s.id)` + `useEffect` de
+  synchronisation vers `useStoreNav.setNavIds`, au même endroit et avec
+  le même style que les deux synchronisations existantes
+  (`productNavIds`/`packNavIds`) — réagit à un changement de filtre
+  pendant que la page Store est déjà ouverte (Scenario C), et reste la
+  liste complète dès qu'aucun filtre n'est actif (Scenario B, aucune
+  troncature de pagination : `filteredStores` lui-même n'est jamais
+  tronqué, seul son rendu « Voir Plus » l'était déjà avant cette tâche
+  et continue de l'être, sans rapport avec la liste de navigation).
+
+**`client/src/pages/cafe/store-detail-page.tsx`** :
+- Import `useStoreNav`, `useItemNav` (réutilisé tel quel, créé à la
+  tâche précédente), `ItemNavButtons` (composant partagé, réutilisé tel
+  quel).
+- `useItemNav(storeId ? Number(storeId) : null, storeNavIds ?? [])` —
+  si `storeNavIds` est `null` (Store Page ouverte directement, pas
+  depuis le Shop) ou si le store courant n'est plus dans la liste
+  (Scenario C), `hasStoreNav` est `false` et les boutons restent
+  simplement masqués, sans erreur ni navigation hasardeuse.
+- Boutons Previous/Next Store ajoutés sur la même rangée que
+  `<h1>{store.name}</h1>`, via `ItemNavButtons` (mêmes icônes/
+  tailles/espacements/hover/disabled/thèmes que les boutons Previous/
+  Next Produit déjà en place) ; gestionnaires appellent
+  `navigate(\`/stores/${id}\`)` — la même fonction wouter déjà utilisée
+  par le clic sur une carte Store du Shop, donc les mêmes mécanismes de
+  chargement/auth/autorisation existants s'appliquent sans changement.
+- `<h1>` : `truncate` remplacé par `break-words min-w-0` (le nom peut
+  maintenant s'enrouler sur plusieurs lignes au lieu d'une ellipse), la
+  rangée parente passant de `flex` implicite à
+  `flex items-start justify-between gap-x-3 gap-y-1` — même motif que
+  toutes les rangées de titre de modale déjà traitées cette session.
+  Seul changement visuel volontaire de cette tâche sur ce fichier.
+
+### Tests exécutés et résultats réels
+
+- `npx tsc --noEmit` (après l'ensemble des changements ci-dessus) :
+  **0 erreur** (exit code 0, aucune sortie).
+- `npm run build` : **succès** — `vite build` (2827 modules
+  transformés, ✓ built in 23.37s) + `esbuild` serveur
+  (`dist/index.cjs` 2.1 Mo, Done in 445ms). Seul avertissement :
+  le warning Rollup pré-existant sur la taille du chunk JS principal
+  (> 500 kB), sans rapport avec cette tâche.
+- `git status --short` / `git diff --stat` : confirmé que seuls les 4
+  fichiers listés ci-dessus sont modifiés/créés — aucun fichier des
+  tâches de navigation précédentes (barista/maintenance/marketing/
+  academy/print, ni les stores dédiés de ces sections) n'a été touché.
+- **Aucun test navigateur/runtime n'a été possible** dans cet
+  environnement (pas d'outil d'automatisation navigateur disponible
+  cette session, comme pour toutes les tâches précédentes). Donc :
+  - La rotation automatique réelle (cadence visuelle, absence de
+    flicker), le swipe manuel réel sur un appareil tactile, le clic
+    réel sur un point de pagination, et le comportement du fade
+    `transition-opacity` au remount n'ont été vérifiés que par lecture
+    de code — jamais observés en exécution.
+  - La navigation Previous/Next Store réelle (clic, changement de
+    route, mise à jour de tout le contenu du nouveau store, désactivation
+    aux limites, comportement avec/sans filtres actifs, comportement si
+    le store courant disparaît des résultats filtrés) n'a été vérifiée
+    que par lecture de code — jamais observée en exécution.
+  - Le rendu visuel du nom de store en wrap (au lieu de truncate) sur
+    mobile/desktop n'a pas été observé.
+  Ces limitations sont explicitement signalées plutôt que de prétendre
+  une vérification visuelle ou runtime qui n'a pas eu lieu.
+
+### Limitations et exceptions intentionnelles
+
+- Aucune gestion `prefers-reduced-motion` n'a été ajoutée : le codebase
+  n'en a nulle part (vérifié par recherche), donc rien d'existant à
+  préserver sur ce point et aucun nouveau mécanisme n'a été inventé
+  (la tâche demande de respecter l'existant « if supported », pas d'en
+  créer un).
+- Le fade `transition-opacity duration-500` reproduit fidèlement celui
+  de `CoverSlideshow`, y compris sa limite connue : comme l'image est
+  remontée (`key` changé) plutôt que recyclée, le navigateur peut ne
+  jamais visualiser de fondu réel (l'image apparaît déjà à son opacité
+  finale dès le montage) — c'est le comportement exact de la référence,
+  non « corrigé », conformément à « Do not invent a new carousel
+  design. The Store Page is the reference implementation. »
+- Aucune pagination/troncature n'affecte la liste de navigation Store :
+  `filteredStores` (dataset de navigation) n'a jamais été tronqué, ni
+  avant ni après cette tâche — seul son affichage (« Voir Plus ») l'est,
+  sans rapport avec `storeNavIds`.

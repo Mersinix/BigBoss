@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ImageOff, ChevronLeft, ChevronRight } from "lucide-react";
+import { ImageOff } from "lucide-react";
 
 type PackImageGalleryProps = {
   imageUrl?: string | null;
@@ -32,12 +32,13 @@ type PackImageGalleryProps = {
   // undefined, nothing changes for any existing caller.
   overlay?: ReactNode;
   // Additive, defaults to false — when true, replaces the clickable
-  // thumbnail strip with overlaid Previous/Next arrows, a small image
-  // counter, and left/right swipe navigation on the main image, instead of
-  // the thumbnail row underneath it. Every existing caller (the Supplier's
-  // pack-creation live preview and its own "Pack Preview" dialog in
-  // manage-packs.tsx) omits this prop and keeps the original thumbnail-strip
-  // behavior, byte-for-byte unchanged.
+  // thumbnail strip with the Store Page's own carousel presentation
+  // (CoverSlideshow, store-detail-page.tsx): automatic rotation, clickable
+  // pagination dots, and left/right swipe navigation on the main image,
+  // instead of the thumbnail row underneath it. Every existing caller (the
+  // Supplier's pack-creation live preview and its own "Pack Preview" dialog
+  // in manage-packs.tsx) omits this prop and keeps the original
+  // thumbnail-strip behavior, byte-for-byte unchanged.
   carousel?: boolean;
   // Additive — when provided, called with whichever image URL is currently
   // displayed to get a wrapper style (e.g. a saved per-image crop/zoom
@@ -48,11 +49,10 @@ type PackImageGalleryProps = {
   getImageStyle?: (url: string) => React.CSSProperties;
 };
 
-// Same visual language as the Pack Detail Modal's existing Close/Favorite/
-// Theme overlay buttons (PackImageTopIcons in pack-quick-view-modal.tsx) —
-// reused verbatim rather than inventing a new button style.
-const NAV_BUTTON_CLASS =
-  "w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all hover:scale-105 bg-black/40 backdrop-blur-sm";
+// Auto-rotation interval (ms) — matches the Store Page's own CoverSlideshow
+// exactly (client/src/pages/cafe/store-detail-page.tsx), the reference
+// carousel this component now mirrors in carousel mode.
+const AUTO_ROTATE_MS = 3500;
 
 // Minimum net horizontal movement (px) before a swipe counts as intentional
 // navigation, and the deadzone (px) used to decide whether a touch gesture
@@ -86,6 +86,20 @@ export function PackImageGallery({
 
   const selectedImage = images[selectedIndex];
   const hasMultiple = images.length > 1;
+
+  // Automatic rotation — same cadence/behavior as the Store Page's own
+  // CoverSlideshow: ticks on a fixed interval regardless of manual
+  // interaction (clicking a dot or swiping doesn't restart the timer,
+  // matching that component's existing rule exactly). Only runs in
+  // carousel mode with multiple images; cleanup on unmount or whenever the
+  // image list changes (e.g. navigating to a different pack/product),
+  // which also prevents a stale timer from ticking onto the new item's
+  // images.
+  useEffect(() => {
+    if (!carousel || images.length <= 1) return;
+    const t = setInterval(() => setSelectedIndex((i) => (i + 1) % images.length), AUTO_ROTATE_MS);
+    return () => clearInterval(t);
+  }, [carousel, images.length]);
 
   const goNext = () => setSelectedIndex((i) => (i + 1) % images.length);
   const goPrev = () => setSelectedIndex((i) => (i - 1 + images.length) % images.length);
@@ -139,16 +153,18 @@ export function PackImageGallery({
           getImageStyle ? (
             <div style={getImageStyle(selectedImage)}>
               <img
+                key={carousel ? selectedImage : undefined}
                 src={selectedImage}
-                className="w-full h-full object-cover"
+                className={`w-full h-full object-cover ${carousel ? "transition-opacity duration-500" : ""}`}
                 alt={alt}
                 draggable={!carousel}
               />
             </div>
           ) : (
             <img
+              key={carousel ? selectedImage : undefined}
               src={selectedImage}
-              className="w-full h-full object-cover"
+              className={`w-full h-full object-cover ${carousel ? "transition-opacity duration-500" : ""}`}
               alt={alt}
               draggable={!carousel}
             />
@@ -157,30 +173,26 @@ export function PackImageGallery({
           <ImageOff className={`w-8 h-8 ${emptyClassName}`} />
         )}
         {overlay}
+        {/* Pagination dots — same presentation and behavior as the Store
+            Page's own CoverSlideshow: a direct jump on click, no Previous/
+            Next arrows, no restart of the rotation timer. Replaces the
+            previous manual Prev/Next buttons + "x / y" counter. */}
         {carousel && hasMultiple && (
-          <>
-            <button
-              type="button"
-              onClick={(event) => { event.stopPropagation(); goPrev(); }}
-              aria-label="Image précédente"
-              className={`absolute left-3 top-1/2 -translate-y-1/2 z-20 ${NAV_BUTTON_CLASS}`}
-              data-testid="button-pack-image-prev"
-            >
-              <ChevronLeft className="w-4 h-4 text-white" />
-            </button>
-            <button
-              type="button"
-              onClick={(event) => { event.stopPropagation(); goNext(); }}
-              aria-label="Image suivante"
-              className={`absolute right-3 top-1/2 -translate-y-1/2 z-20 ${NAV_BUTTON_CLASS}`}
-              data-testid="button-pack-image-next"
-            >
-              <ChevronRight className="w-4 h-4 text-white" />
-            </button>
-            <div className="absolute bottom-3 left-3 z-20 bg-black/40 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">
-              {selectedIndex + 1} / {images.length}
-            </div>
-          </>
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1 z-20">
+            {images.map((_, index) => (
+              <button
+                key={index}
+                type="button"
+                onClick={(event) => { event.stopPropagation(); setSelectedIndex(index); }}
+                aria-label={`Show image ${index + 1}`}
+                aria-pressed={selectedIndex === index}
+                className={`w-1.5 h-1.5 rounded-full transition-all ${
+                  index === selectedIndex ? "bg-white scale-125" : "bg-white/50"
+                }`}
+                data-testid={`button-pack-image-dot-${index}`}
+              />
+            ))}
+          </div>
         )}
       </div>
       {!carousel && images.length > 1 && (

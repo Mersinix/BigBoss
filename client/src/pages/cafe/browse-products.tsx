@@ -22,6 +22,7 @@ import { calculateDistance, formatDistance } from "@/lib/distance";
 import { useSearchLocationStore } from "@/store/search-location-store";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
+import { useStoreNav } from "@/hooks/use-store-nav";
 import type { MarketplaceProduct, CategoryWithCount, StoreCard, PackDetail, TaxonomyLabel, SubCategoryWithDetails, BrandWithCount, FlavorWithCount, SizeWithCount } from "@shared/schema";
 import { FlashMode } from "@/components/flash-mode";
 import { useServiceHeroConfig } from "@/hooks/use-service-hero-config";
@@ -439,17 +440,16 @@ function StoreCardTile({
 }
 
 function StoresSection({
-  stores, categoryId, filters, search, onSelect, searchLat, searchLng, hasSearchLocation, isDark,
+  filteredStores, onSelect, searchLat, searchLng, hasSearchLocation, isDark,
 }: {
-  stores: StoreCard[];
-  categoryId: string;
-  filters: FilterState;
-  // Extend SHOP Search to Products, Stores, and Packs — same query, same
-  // normalization (.trim().toLowerCase().includes()) as the products match
-  // below, applied here against this store's own name/description. Combines
-  // with the existing category/sub-category/brand filters via plain AND,
-  // same as every other condition in this list.
-  search: string;
+  // Already filtered by the caller (BrowseProducts) — productCount > 0,
+  // category, sub-category, brand, and search, exactly as this component
+  // computed internally before (logic moved verbatim, not duplicated) —
+  // lifted up so BrowseProducts can also feed the same list into
+  // useStoreNav's navIds (task: "Synchronize Detail Modal Image Carousels
+  // and Add Filter-Aware Store Navigation"). Same refactor already applied
+  // to PacksSection/filteredPacks above.
+  filteredStores: StoreCard[];
   onSelect: (storeId: number) => void;
   searchLat: number | null;
   searchLng: number | null;
@@ -459,18 +459,6 @@ function StoresSection({
   const t = useTheme(isDark);
   const [expanded, setExpanded] = useState(false);
   const INITIAL_LIMIT = 5;
-
-  const filteredStores = useMemo(() => {
-    let list = stores.filter((s) => s.productCount > 0);
-    if (categoryId) list = list.filter((s) => s.categoryIds.includes(Number(categoryId)));
-    if (filters.subCategoryId) list = list.filter((s) => s.subCategoryIds.includes(Number(filters.subCategoryId)));
-    if (filters.brandId) list = list.filter((s) => s.brandIds.includes(Number(filters.brandId)));
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      list = list.filter((s) => s.name.toLowerCase().includes(q) || (s.description ?? "").toLowerCase().includes(q));
-    }
-    return list;
-  }, [stores, categoryId, filters.subCategoryId, filters.brandId, search]);
 
   if (!filteredStores.length) return null;
 
@@ -1185,19 +1173,42 @@ export default function BrowseProducts() {
     return list;
   }, [packs, categoryId, filters.subCategoryId, filters.brandId, search]);
 
-  // ── Previous/Next Product navigation — keep both quick-view stores' navIds
-  // in sync with the Shop's own live-filtered lists, so the Coffee Owner
-  // changing a filter while a detail modal is open updates the navigation
-  // dataset instead of leaving it stale (task: "Navigate Between Mapped
-  // Products and Packs Without Closing the Detail Modal"). Reusing the
-  // existing filtered/filteredPacks collections directly — no separate
-  // filter system.
+  // ── Filtered stores — same filter logic StoresSection used to compute
+  // internally, lifted up verbatim (not duplicated) so this page can also
+  // feed the same ordered store-ID list into useStoreNav's navIds (task:
+  // "Synchronize Detail Modal Image Carousels and Add Filter-Aware Store
+  // Navigation"). Stores have no sortBy dimension — unchanged, they never
+  // did.
+  const filteredStores = useMemo(() => {
+    let list = stores.filter((s) => s.productCount > 0);
+    if (categoryId) list = list.filter((s) => s.categoryIds.includes(Number(categoryId)));
+    if (filters.subCategoryId) list = list.filter((s) => s.subCategoryIds.includes(Number(filters.subCategoryId)));
+    if (filters.brandId) list = list.filter((s) => s.brandIds.includes(Number(filters.brandId)));
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((s) => s.name.toLowerCase().includes(q) || (s.description ?? "").toLowerCase().includes(q));
+    }
+    return list;
+  }, [stores, categoryId, filters.subCategoryId, filters.brandId, search]);
+
+  // ── Previous/Next Product/Pack/Store navigation — keep all three
+  // navigation stores' navIds in sync with the Shop's own live-filtered
+  // lists, so the Coffee Owner changing a filter while a detail modal (or
+  // a Store Page opened from here) is open updates the navigation dataset
+  // instead of leaving it stale (task: "Navigate Between Mapped Products
+  // and Packs Without Closing the Detail Modal" / "Synchronize Detail
+  // Modal Image Carousels and Add Filter-Aware Store Navigation"). Reusing
+  // the existing filtered/filteredPacks/filteredStores collections
+  // directly — no separate filter system.
   const productNavIds = useMemo(() => filtered.map((p) => p.id), [filtered]);
   const packNavIds = useMemo(() => filteredPacks.map((p) => p.id), [filteredPacks]);
+  const storeNavIds = useMemo(() => filteredStores.map((s) => s.id), [filteredStores]);
   const setProductNavIds = useQuickView((s) => s.setNavIds);
   const setPackNavIds = usePackQuickView((s) => s.setNavIds);
+  const setStoreNavIds = useStoreNav((s) => s.setNavIds);
   useEffect(() => { setProductNavIds(productNavIds); }, [productNavIds, setProductNavIds]);
   useEffect(() => { setPackNavIds(packNavIds); }, [packNavIds, setPackNavIds]);
+  useEffect(() => { setStoreNavIds(storeNavIds); }, [storeNavIds, setStoreNavIds]);
 
   // ── Flash products — all marketplace products with hasPromo derived from promotions ──
   const flashProducts = useMemo(() => {
@@ -1405,10 +1416,7 @@ export default function BrowseProducts() {
             its own filteredStores above) and simply renders nothing (existing
             `if (!filteredStores.length) return null`) when nothing matches. */}
         <StoresSection
-          stores={stores}
-          categoryId={categoryId}
-          filters={filters}
-          search={search}
+          filteredStores={filteredStores}
           onSelect={(storeId) => navigate(`/stores/${storeId}`)}
           searchLat={searchLat}
           searchLng={searchLng}

@@ -28,6 +28,9 @@ import { useCoverZoomStyle, getAdjustmentFor } from "@/lib/image-adjustment";
 import { useSearchLocationStore } from "@/store/search-location-store";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
+import { useStoreNav } from "@/hooks/use-store-nav";
+import { useItemNav } from "@/hooks/use-item-nav";
+import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 import { FlashMode } from "@/components/flash-mode";
 import { PackCardTile } from "@/pages/cafe/browse-products";
 import type { StoreDetail, ProductWithTaxonomy, OpeningHoursMap, PackDetail, CategoryWithCount, ListingPromotion, SubCategoryWithDetails, BrandWithCount, FlavorWithCount, SizeWithCount, SupplierProductReview } from "@shared/schema";
@@ -682,6 +685,21 @@ export default function StoreDetailPage() {
   const faved = useStoreFavorites((s) => (storeId ? !!s.stores[Number(storeId)] : false));
   const toggleStore = useStoreFavorites((s) => s.toggleStore);
 
+  // Previous/Next Store navigation — browses the Shop's own currently
+  // filtered Stores list (navIds), kept live-synced by browse-products.tsx
+  // (task: "Synchronize Detail Modal Image Carousels and Add Filter-Aware
+  // Store Navigation"). Null when the Store Page was opened directly, not
+  // from the Shop — both buttons simply stay hidden rather than guessing,
+  // same convention as the Pack/Product nav buttons. Navigating to another
+  // store is a real route change (this page is a real route, not a global
+  // singleton modal), using the exact same navigate() the Shop's own Store
+  // card click already uses.
+  const storeNavIds = useStoreNav((s) => s.navIds);
+  const { prevId: prevStoreId, nextId: nextStoreId, hasNav: hasStoreNav } = useItemNav(
+    storeId ? Number(storeId) : null,
+    storeNavIds ?? [],
+  );
+
   // ── Dark / light mode (dark by default — matches Favorites modal + /products page) ──
   const isDark = useThemeStore((s) => s.isDark);
   const t = useTheme(isDark);
@@ -1079,13 +1097,28 @@ export default function StoreDetailPage() {
               <Store className={`w-7 h-7 ${t.textMuted}`} />
             )}
           </div>
-          <div className="relative top-4 min-w-0 flex-1">
-            <h1
-              className={`font-extrabold text-xl leading-tight truncate ${t.textPrimary}`}
-              data-testid="text-store-name"
-            >
-              {store.name}
-            </h1>
+          <div className="relative top-4 min-w-0 flex-1 mt-2">
+            <div className="flex items-start justify-between gap-x-3 gap-y-1 mt-4">
+              <h1
+                className={`font-extrabold text-xl leading-tight break-words min-w-0 ${t.textPrimary}`}
+                data-testid="text-store-name"
+              >
+                {store.name}
+              </h1>
+              {hasStoreNav && (
+                <ItemNavButtons
+                  isDark={isDark}
+                  canPrev={prevStoreId != null}
+                  canNext={nextStoreId != null}
+                  onPrev={() => prevStoreId != null && navigate(`/stores/${prevStoreId}`)}
+                  onNext={() => nextStoreId != null && navigate(`/stores/${nextStoreId}`)}
+                  prevLabel="Store précédent"
+                  nextLabel="Store suivant"
+                  prevTestId="button-store-nav-prev"
+                  nextTestId="button-store-nav-next"
+                />
+              )}
+            </div>
             <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs mt-1 ${t.metaAccent}`}>
               <span className="flex items-center gap-1">
                 <Package className="w-3 h-3" />{store.productCount} products

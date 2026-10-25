@@ -23,6 +23,7 @@ import {
   Star, MapPin, Clock, Flag, Heart, MessageCircle, X, Printer, Package, Layers, ShoppingCart, ListChecks,
 } from "lucide-react";
 import { ReviewsModal } from "@/components/account/reviews-modal";
+import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 
 function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -53,6 +54,11 @@ export function PrintServiceDetailModal({
   onClose,
   onOpenCompany,
   readOnly = false,
+  hasItemNav = false,
+  canNavPrev = false,
+  canNavNext = false,
+  onNavPrev,
+  onNavNext,
 }: {
   serviceId: number | null;
   open: boolean;
@@ -63,6 +69,11 @@ export function PrintServiceDetailModal({
   // modal files never import each other.
   onOpenCompany?: (printerId: number) => void;
   readOnly?: boolean;
+  hasItemNav?: boolean;
+  canNavPrev?: boolean;
+  canNavNext?: boolean;
+  onNavPrev?: () => void;
+  onNavNext?: () => void;
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -217,7 +228,22 @@ export function PrintServiceDetailModal({
                   {service.category && <Badge className={`text-[10px] border-0 px-1.5 ${isDark ? "bg-blue-900/50 text-blue-300" : "bg-blue-100 text-blue-700"}`}>{service.category}</Badge>}
                   {service.subCategory && <Badge variant="outline" className={`text-[10px] ${isDark ? "border-gray-700 text-gray-300" : ""}`}>{service.subCategory}</Badge>}
                 </div>
-                <h2 className={`font-bold text-xl leading-tight ${t.textPrimary}`}>{service.name}</h2>
+                <div className="flex items-start justify-between gap-x-3 gap-y-1">
+                  <h2 className={`font-bold text-xl leading-tight min-w-0 ${t.textPrimary}`}>{service.name}</h2>
+                  {hasItemNav && (
+                    <ItemNavButtons
+                      isDark={isDark}
+                      canPrev={canNavPrev}
+                      canNext={canNavNext}
+                      onPrev={() => onNavPrev?.()}
+                      onNext={() => onNavNext?.()}
+                      prevLabel="Service précédent"
+                      nextLabel="Service suivant"
+                      prevTestId="button-print-service-nav-prev"
+                      nextTestId="button-print-service-nav-next"
+                    />
+                  )}
+                </div>
                 {service.description && <p className={`text-sm leading-relaxed mt-1.5 ${t.textMuted}`}>{service.description}</p>}
                 <div className={`flex items-center gap-3 mt-2.5 text-xs flex-wrap ${t.textMuted}`}>
                   {service.reviewCount > 0 ? (

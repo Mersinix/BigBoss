@@ -22,6 +22,7 @@ import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY, getHeroSubtitle
 import type { PrintCatalogCard, PrintCompanyListCard } from "@shared/schema";
 import { printCategoryIcon } from "@/lib/print-category-icons";
 import { useFallbackImage } from "@/hooks/use-fallback-image";
+import { useItemNav } from "@/hooks/use-item-nav";
 import { PrintFastSearch } from "@/components/print/print-fast-search";
 import { PrintBlacklistModal } from "@/components/print/print-blacklist-modal";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
@@ -666,6 +667,9 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
     return list;
   }, [facetFiltered, searchQuery, filters.sortBy]);
 
+  const printServiceNavIds = useMemo(() => filtered.map((c) => c.id), [filtered]);
+  const { prevId: prevPrintServiceId, nextId: nextPrintServiceId, hasNav: hasPrintServiceNav } = useItemNav(previewServiceId, printServiceNavIds);
+
   // Filter synchronization (task: "Synchronize All Filters and Display Only
   // Options With Matching Results") — mirrors the /products fix exactly:
   // selecting a Sous-catégorie/Société/Matière/Livraison directly used to
@@ -963,6 +967,11 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
         open={previewServiceId != null}
         onClose={() => setPreviewServiceId(null)}
         onOpenCompany={(printerId) => setPreviewCompanyId(printerId)}
+        hasItemNav={hasPrintServiceNav}
+        canNavPrev={prevPrintServiceId != null}
+        canNavNext={nextPrintServiceId != null}
+        onNavPrev={() => setPreviewServiceId(prevPrintServiceId)}
+        onNavNext={() => setPreviewServiceId(nextPrintServiceId)}
       />
       <PrintCompanyDetailModal
         printerUserId={previewCompanyId}

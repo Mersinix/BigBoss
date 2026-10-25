@@ -17,6 +17,7 @@ import {
   type AcademyCourseLevel,
 } from "@/hooks/use-barista-academy";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -164,6 +165,18 @@ export function AcademyDetailModal({
   onEnroll,
   readOnly = false,
   messagesBasePath = "/cafe/messages",
+  // Optional — Previous/Next Formation navigation (task: "Add Consistent
+  // Previous/Next Navigation to All Coffee Owner Service Detail Modals").
+  // The owning page computes its own filtered formation list and the
+  // current position within it; this modal only renders the buttons and
+  // calls the provided callbacks. Omitted by every other caller (Admin,
+  // the Academy's own profile preview, etc.), so the buttons simply don't
+  // render there.
+  hasItemNav = false,
+  canNavPrev = false,
+  canNavNext = false,
+  onNavPrev,
+  onNavNext,
 }: {
   courseId: number | null;
   open: boolean;
@@ -182,6 +195,11 @@ export function AcademyDetailModal({
   // (analyse.md "Aligner Espace Barista Marketplace → Académie sur Coffee
   // Owner /academy").
   messagesBasePath?: string;
+  hasItemNav?: boolean;
+  canNavPrev?: boolean;
+  canNavNext?: boolean;
+  onNavPrev?: () => void;
+  onNavNext?: () => void;
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -370,9 +388,24 @@ export function AcademyDetailModal({
             {/* Body */}
             <div className="p-5 sm:p-6 space-y-5">
               <div>
-                <div className="flex items-start justify-between gap-2 flex-wrap">
-                  <h2 className={`font-bold text-xl leading-tight ${t.textPrimary}`}>{course.title}</h2>
-                  <Badge className={`text-[10px] border-0 px-1.5 shrink-0 ${LEVEL_COLORS[course.level]}`}>{LEVEL_LABELS[course.level]}</Badge>
+                <div className="flex items-start justify-between gap-x-3 gap-y-1">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <h2 className={`font-bold text-xl leading-tight min-w-0 ${t.textPrimary}`}>{course.title}</h2>
+                    <Badge className={`text-[10px] border-0 px-1.5 shrink-0 ${LEVEL_COLORS[course.level]}`}>{LEVEL_LABELS[course.level]}</Badge>
+                  </div>
+                  {hasItemNav && (
+                    <ItemNavButtons
+                      isDark={isDark}
+                      canPrev={canNavPrev}
+                      canNext={canNavNext}
+                      onPrev={() => onNavPrev?.()}
+                      onNext={() => onNavNext?.()}
+                      prevLabel="Formation précédente"
+                      nextLabel="Formation suivante"
+                      prevTestId="button-academy-course-nav-prev"
+                      nextTestId="button-academy-course-nav-next"
+                    />
+                  )}
                 </div>
                 <div className={`flex items-center gap-3 mt-2.5 text-xs flex-wrap ${t.textMuted}`}>
                   <span className="flex items-center gap-1 text-amber-500"><Star className="w-3 h-3 fill-amber-400" /> {(course.rating / 10).toFixed(1)} ({course.reviewCount} avis)</span>

@@ -17,6 +17,8 @@ import type { MaintenanceMarketplaceCard, OpeningHoursMap } from "@shared/schema
 import { encodeMaintenanceSubSkillKey, decodeMaintenanceSubSkillKey } from "@shared/maintenance-sub-skill-key";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
+import { useItemNav } from "@/hooks/use-item-nav";
+import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -361,6 +363,18 @@ function MaintenanceAvailabilityModal({
 
 export function AgentDetailModal({
   agent, open, onClose, onContact, isDark, readOnly = false,
+  // Optional — Previous/Next Maintenance provider navigation (task: "Add
+  // Consistent Previous/Next Navigation to All Coffee Owner Service Detail
+  // Modals"). The owning page computes its own filtered provider list and
+  // the current position within it; this modal only renders the buttons
+  // and calls the provided callbacks. Omitted by every caller that doesn't
+  // provide a navigable list (e.g. the provider's own "preview my
+  // profile"), so the buttons simply don't render there.
+  hasItemNav = false,
+  canNavPrev = false,
+  canNavNext = false,
+  onNavPrev,
+  onNavNext,
 }: {
   agent: MaintenanceMarketplaceCard | null;
   open: boolean;
@@ -374,6 +388,11 @@ export function AgentDetailModal({
   // hidden (see the icon row below) — only Disponibilité stays functional,
   // since it just displays the agent's own real saved availability.
   readOnly?: boolean;
+  hasItemNav?: boolean;
+  canNavPrev?: boolean;
+  canNavNext?: boolean;
+  onNavPrev?: () => void;
+  onNavNext?: () => void;
 }) {
   const t = useTheme(isDark);
   const queryClient = useQueryClient();
@@ -597,9 +616,24 @@ export function AgentDetailModal({
             {/* Name + type badge share a row, subtitle underneath — same DOM
                 shape as the Barista modal's Name+Level/bio header (Part 5). */}
             <div>
-              <div className="flex items-start justify-between gap-2 flex-wrap">
-                <h2 className={`font-bold text-xl leading-tight ${t.textPrimary}`}>{agent.name}</h2>
-                <Badge className={`text-[10px] border-0 px-1.5 shrink-0 ${TYPE_COLORS[agent.profileType] ?? "bg-gray-100 text-gray-700"}`}>{agent.profileType}</Badge>
+              <div className="flex items-start justify-between gap-x-3 gap-y-1">
+                <div className="flex items-center gap-2 flex-wrap min-w-0">
+                  <h2 className={`font-bold text-xl leading-tight min-w-0 ${t.textPrimary}`}>{agent.name}</h2>
+                  <Badge className={`text-[10px] border-0 px-1.5 shrink-0 ${TYPE_COLORS[agent.profileType] ?? "bg-gray-100 text-gray-700"}`}>{agent.profileType}</Badge>
+                </div>
+                {hasItemNav && (
+                  <ItemNavButtons
+                    isDark={isDark}
+                    canPrev={canNavPrev}
+                    canNext={canNavNext}
+                    onPrev={() => onNavPrev?.()}
+                    onNext={() => onNavNext?.()}
+                    prevLabel="Prestataire précédent"
+                    nextLabel="Prestataire suivant"
+                    prevTestId="button-maintenance-nav-prev"
+                    nextTestId="button-maintenance-nav-next"
+                  />
+                )}
               </div>
               <p className={`text-sm leading-relaxed mt-1.5 ${t.textMuted}`}>{agent.jobTitle}</p>
               {/* Rating / location / distance inline row — same treatment as
@@ -1041,6 +1075,19 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
     if (filterLocation) list = list.filter((item) => item.location === filterLocation);
     return list;
   }, [profiles, search, filterCategory, filterSubSkill, filterType, filterAvailability, filterLocation]);
+
+  // Previous/Next Maintenance provider navigation (task: "Add Consistent
+  // Previous/Next Navigation to All Coffee Owner Service Detail Modals") —
+  // browses `filtered`, the same list already shown above, so navigation
+  // always respects the currently active filters.
+  const maintenanceNavIds = useMemo(() => filtered.map((a) => a.userId), [filtered]);
+  const { prevId: prevAgentId, nextId: nextAgentId, hasNav: hasAgentNav } = useItemNav(selectedAgent?.userId ?? null, maintenanceNavIds);
+  const navToAgent = (id: number | null) => {
+    if (id == null) return;
+    const agent = filtered.find((a) => a.userId === id);
+    if (agent) setSelectedAgent(agent);
+  };
+
   const contact = async (agent: MaintenanceMarketplaceCard) => {
       try {
         const response = await apiRequest("POST", "/api/messages/conversations", {
@@ -1235,7 +1282,18 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
           <div className="max-w-7xl mx-auto px-4 py-8">
              {filtered.length === 0 ? <div className="flex flex-col items-center justify-center py-16 gap-3 text-center"><Wrench className={`w-12 h-12 ${t.textSubtle}`} /><p className={`font-semibold ${t.textPrimary}`}>Aucun technicien trouvé</p><p className={`text-sm ${t.textMuted}`}>{profiles.length === 0 ? "Aucun profil Maintenance publié pour le moment." : "Essayez d'ajuster vos filtres."}</p></div> : <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">{filtered.map((agent) => <AgentCard key={agent.userId} agent={agent} onOpenDetail={openDetail} onContact={contact} categoryIcons={categoryIcons} isDark={isDark} />)}</div>}
           </div>
-           <AgentDetailModal agent={selectedAgent} open={detailOpen} onClose={() => setDetailOpen(false)} onContact={contact} isDark={isDark} />
+           <AgentDetailModal
+             agent={selectedAgent}
+             open={detailOpen}
+             onClose={() => setDetailOpen(false)}
+             onContact={contact}
+             isDark={isDark}
+             hasItemNav={hasAgentNav}
+             canNavPrev={prevAgentId != null}
+             canNavNext={nextAgentId != null}
+             onNavPrev={() => navToAgent(prevAgentId)}
+             onNavNext={() => navToAgent(nextAgentId)}
+           />
         </>
       )}
       {/* Blacklist (Parts 20-22) — same `profiles` list, own

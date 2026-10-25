@@ -52,6 +52,7 @@ import {
 import type { MarketingCompanyListCard } from "@shared/schema";
 import { MarketingDetailModal } from "@/components/marketing/marketing-detail-modal";
 import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
+import { useItemNav } from "@/hooks/use-item-nav";
 import { MarketingMappedServiceCard } from "@/components/marketing/marketing-mapped-service-card";
 import { MarketingFastSearch } from "@/components/marketing/marketing-fast-search";
 import { MarketingBlacklistModal } from "@/components/marketing/marketing-blacklist-modal";
@@ -592,6 +593,13 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
     return list;
   }, [facetFilteredServices, search, sortBy]);
 
+  // Previous/Next Marketing Service navigation (task: "Add Consistent
+  // Previous/Next Navigation to All Coffee Owner Service Detail Modals") —
+  // browses filteredServices, the same list already shown in the grid, so
+  // navigation always respects the currently active filters/search/sort.
+  const marketingServiceNavIds = useMemo(() => filteredServices.map((s) => s.id), [filteredServices]);
+  const { prevId: prevMarketingServiceId, nextId: nextMarketingServiceId, hasNav: hasMarketingServiceNav } = useItemNav(detailServiceId, marketingServiceNavIds);
+
   // Reconcile existing selections that a sibling filter change just made
   // invalid — clears only the one no longer compatible, never resets
   // unrelated filters; each effect only ever clears (never sets a new
@@ -957,6 +965,11 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
         onClose={() => setDetailServiceId(null)}
         onRequestQuote={(p) => { setDetailServiceId(null); setQuoteProvider(p); }}
         onOpenAgency={(agencyId) => setDetailAgencyId(agencyId)}
+        hasItemNav={hasMarketingServiceNav}
+        canNavPrev={prevMarketingServiceId != null}
+        canNavNext={nextMarketingServiceId != null}
+        onNavPrev={() => prevMarketingServiceId != null && setDetailServiceId(prevMarketingServiceId)}
+        onNavNext={() => nextMarketingServiceId != null && setDetailServiceId(nextMarketingServiceId)}
       />
 
       <MarketingDetailModal

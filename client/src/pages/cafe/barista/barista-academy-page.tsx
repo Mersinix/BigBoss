@@ -39,6 +39,7 @@ import {
   type AcademyCourseCard, type AcademyCourseLevel,
 } from "@/hooks/use-barista-academy";
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
+import { useItemNav } from "@/hooks/use-item-nav";
 import { AcademyFastSearch } from "@/components/academy/academy-fast-search";
 import { AcademyBlacklistModal } from "@/components/academy/academy-blacklist-modal";
 import { AcademyMappedCourseCard } from "@/components/academy/academy-mapped-course-card";
@@ -284,6 +285,13 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
   }, [searchFilteredCourses, trainingLevel, trainingCert, trainingSortBy]);
   const hasTrainingFilters = !!(trainingSearch || trainingLevel || trainingCert || trainingSortBy);
   const certifiedCount = useMemo(() => courses.filter((c) => c.hasCertification).length, [courses]);
+
+  // Previous/Next Formation navigation (task: "Add Consistent Previous/Next
+  // Navigation to All Coffee Owner Service Detail Modals") — browses
+  // filteredTraining, the same list already shown above, so navigation
+  // always respects the currently active filters/search/sort.
+  const academyCourseNavIds = useMemo(() => filteredTraining.map((c) => c.id), [filteredTraining]);
+  const { prevId: prevCourseId, nextId: nextCourseId, hasNav: hasCourseNav } = useItemNav(detailCourseId, academyCourseNavIds);
 
   const canAct = !!user && user.role === "CAFE_OWNER" && accessLevel === "approved";
 
@@ -571,6 +579,11 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
         open={detailCourseId != null}
         onClose={() => setDetailCourseId(null)}
         onEnroll={(c) => { setDetailCourseId(null); handleEnroll(c); }}
+        hasItemNav={hasCourseNav}
+        canNavPrev={prevCourseId != null}
+        canNavNext={nextCourseId != null}
+        onNavPrev={() => prevCourseId != null && setDetailCourseId(prevCourseId)}
+        onNavNext={() => nextCourseId != null && setDetailCourseId(nextCourseId)}
       />
 
       <AcademyBlacklistModal open={blacklistOpen} onClose={() => setBlacklistOpen(false)} />

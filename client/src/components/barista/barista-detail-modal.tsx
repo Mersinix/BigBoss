@@ -31,6 +31,7 @@ import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
 import { ReviewsModal } from "@/components/account/reviews-modal";
 import { BaristaJobTargetButton } from "@/components/barista/barista-job-target-button";
+import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 import type { OpeningHoursMap } from "@shared/schema";
 
 const LEVEL_LABELS: Record<string, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
@@ -161,6 +162,18 @@ export function BaristaDetailModal({
   onClose,
   onRecruit,
   readOnly = false,
+  // Optional — Previous/Next Barista navigation (task: "Add Consistent
+  // Previous/Next Navigation to All Coffee Owner Service Detail Modals").
+  // The owning page computes its own filtered barista list and the
+  // current position within it; this modal only renders the buttons and
+  // calls the provided callbacks. Omitted by every caller that doesn't
+  // provide a navigable list (e.g. the Barista's own "preview my profile"),
+  // so the buttons simply don't render there.
+  hasItemNav = false,
+  canNavPrev = false,
+  canNavNext = false,
+  onNavPrev,
+  onNavNext,
 }: {
   baristaUserId: number | null;
   open: boolean;
@@ -176,6 +189,11 @@ export function BaristaDetailModal({
   // self-report, or self-review) — only Disponibilité stays functional, since
   // it's just displaying the Barista's own real saved availability.
   readOnly?: boolean;
+  hasItemNav?: boolean;
+  canNavPrev?: boolean;
+  canNavNext?: boolean;
+  onNavPrev?: () => void;
+  onNavNext?: () => void;
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -389,9 +407,24 @@ export function BaristaDetailModal({
             {/* Body */}
             <div className="p-5 sm:p-6 space-y-5">
               <div>
-                <div className="flex items-start justify-between gap-2 flex-wrap">
-                  <h2 className={`font-bold text-xl leading-tight ${t.textPrimary}`}>{card.name}</h2>
-                  <Badge className={`text-[10px] border-0 px-1.5 shrink-0 ${LEVEL_COLORS[card.level]}`}>{LEVEL_LABELS[card.level]}</Badge>
+                <div className="flex items-start justify-between gap-x-3 gap-y-1">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    <h2 className={`font-bold text-xl leading-tight min-w-0 ${t.textPrimary}`}>{card.name}</h2>
+                    <Badge className={`text-[10px] border-0 px-1.5 shrink-0 ${LEVEL_COLORS[card.level]}`}>{LEVEL_LABELS[card.level]}</Badge>
+                  </div>
+                  {hasItemNav && (
+                    <ItemNavButtons
+                      isDark={isDark}
+                      canPrev={canNavPrev}
+                      canNext={canNavNext}
+                      onPrev={() => onNavPrev?.()}
+                      onNext={() => onNavNext?.()}
+                      prevLabel="Barista précédent"
+                      nextLabel="Barista suivant"
+                      prevTestId="button-barista-nav-prev"
+                      nextTestId="button-barista-nav-next"
+                    />
+                  )}
                 </div>
                 {card.bio && <p className={`text-sm leading-relaxed mt-1.5 ${t.textMuted}`}>{card.bio}</p>}
                 <div className={`flex items-center gap-3 mt-2.5 text-xs flex-wrap ${t.textMuted}`}>

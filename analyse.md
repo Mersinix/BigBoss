@@ -12587,3 +12587,164 @@ de code, aucune correction nécessaire côté Pack.
   des packs au clic sur une catégorie côté Store Page, et non-régression
   du geste de fermeture/carrousel — à vérifier manuellement avant de
   considérer cette tâche comme définitivement terminée.
+
+---
+
+## 22. Tâche de suivi — Navigation Précédent/Suivant sur les 5 sections Coffee Owner (reprise après interruption)
+
+### Audit de reprise — état réel vérifié par le code, pas supposé
+
+Exécution précédente interrompue (limite d'usage). Vérification de l'état
+réel via `git status --short` + recherche directe des marqueurs de
+l'implémentation dans chaque fichier, puis `npx tsc --noEmit` comme
+baseline :
+
+- **Infrastructure partagée créée et conservée** :
+  `client/src/hooks/use-item-nav.ts` (hook `useItemNav(currentId, navIds)`
+  — trouve l'index courant, calcule `prevId`/`nextId`/`hasNav`, non
+  circulaire, sûr si l'élément courant n'est plus dans la liste) et
+  `client/src/components/shared/item-nav-buttons.tsx` (`ItemNavButtons`,
+  mêmes classes/dimensions/icônes que les boutons Précédent/Suivant
+  Produit existants). Aucune modification nécessaire, réutilisés tels
+  quels pour la suite.
+- **`/barista` — TERMINÉ et vérifié par relecture** :
+  `barista-page.tsx` (calcul `baristaNavIds`/`useItemNav`, câblage sur
+  `<BaristaDetailModal>`) et `barista-detail-modal.tsx` (nouveaux props,
+  rangée titre+note+bouton restructurée avec `ItemNavButtons`) —
+  confirmés tous deux modifiés (`git status`) avec les marqueurs attendus
+  présents.
+- **`/maintenance` — TERMINÉ et vérifié par relecture** : tout dans
+  `maintenance-page.tsx` (page ET `AgentDetailModal` dans le même
+  fichier) — `maintenanceNavIds`/`useItemNav`/`navToAgent`, nouveaux
+  props, rangée titre restructurée. Confirmé modifié avec les marqueurs
+  attendus.
+- **`/marketing` (Services) — TERMINÉ et vérifié par relecture** :
+  `marketing-page.tsx` (`marketingServiceNavIds`/`useItemNav`, câblage) et
+  `marketing-service-detail-modal.tsx` (nouveaux props, rangée titre avec
+  les deux badges existants regroupés + `ItemNavButtons`). Confirmé
+  modifié avec les marqueurs attendus.
+- **`/academy` (Formations) — PAS ENCORE COMMENCÉ** : ni
+  `barista-academy-page.tsx` ni `academy-detail-modal.tsx` n'apparaissent
+  dans `git status`. Audit déjà effectué avant l'interruption (jeu de
+  données confirmé : `filteredTraining`, champ `c.id`, site d'appel
+  `<AcademyDetailModal courseId={detailCourseId} .../>` ligne ~569) —
+  implémentation à faire dans cette reprise.
+- **`/print` (Service) — PAS DU TOUT AUDITÉ NI COMMENCÉ** : aucune
+  modification, aucun audit préalable. À auditer puis implémenter dans
+  cette reprise.
+- `npx tsc --noEmit` sur l'état actuel (avant toute nouvelle modification
+  de cette reprise) : 0 erreur — confirme que les trois sections déjà
+  faites sont dans un état sain, rien à réparer.
+
+### Checklist de complétion
+
+| Section | Boutons + position | Comportement nav | Filtres/dataset | État |
+|---|---|---|---|---|
+| `/barista` | ✅ | ✅ (relecture code) | ✅ (réutilise `filteredBaristas`) | **Terminé** |
+| `/maintenance` | ✅ | ✅ (relecture code) | ✅ (réutilise `filtered`) | **Terminé** |
+| `/marketing` Services | ✅ | ✅ (relecture code) | ✅ (réutilise `filteredServices`) | **Terminé** |
+| `/academy` Formations | ❌ | ❌ | ❌ | **À faire** |
+| `/print` Service | ❌ | ❌ | ❌ | **À faire — audit non démarré** |
+
+Aucun test runtime/navigateur exécuté pour aucune des 3 sections déjà
+« terminées » — seule une vérification par lecture de code + `tsc` a été
+faite jusqu'ici, à rappeler explicitement dans le rapport final plutôt
+que de prétendre un comportement visuel vérifié.
+
+### Suite de la reprise — Academy et Print implémentés, vérification finale
+
+**`/academy` (Formations) — implémenté dans cette reprise** :
+- `barista-academy-page.tsx` : import `useItemNav`, ajout de
+  `academyCourseNavIds = useMemo(() => filteredTraining.map((c) => c.id), [filteredTraining])`
+  juste après `certifiedCount`, puis
+  `useItemNav(detailCourseId, academyCourseNavIds)`. Site d'appel
+  `<AcademyDetailModal>` mis à jour avec les 5 nouveaux props (handlers
+  → `setDetailCourseId(prevCourseId/nextCourseId)`).
+- `academy-detail-modal.tsx` : import `ItemNavButtons`, 5 nouveaux props
+  optionnels insérés dans la déstructuration et le type (juste après
+  `messagesBasePath`), rangée titre `course.title` + badge niveau
+  restructurée selon le motif établi (`flex items-start justify-between
+  gap-x-3 gap-y-1` + `min-w-0` sur le titre). Labels « Formation
+  précédente »/« Formation suivante », test-ids
+  `button-academy-course-nav-prev`/`-next`. `isDark` déjà en scope.
+
+**`/print` (Service) — audité puis implémenté dans cette reprise** :
+- Audit : deux `useMemo` nommés `filtered` dans `print-page.tsx` (ligne
+  259, portée différente/sans rapport, et ligne 651). Confirmé par
+  lecture directe que celui de la ligne 651 est le bon : il part de
+  `facetFiltered` (filtres de facettes) puis applique recherche + tri —
+  c'est lui qui est rendu (`filtered.map((card) => ...)` ligne ~923) et
+  qui alimente `setPreviewServiceId(card.id)`. Site d'appel
+  `<PrintServiceDetailModal>` confirmé ligne ~961 avec props
+  `serviceId`/`open`/`onClose`/`onOpenCompany`.
+- `print-page.tsx` : import `useItemNav`, ajout de
+  `printServiceNavIds = useMemo(() => filtered.map((c) => c.id), [filtered])`
+  juste après le memo `filtered`, puis
+  `useItemNav(previewServiceId, printServiceNavIds)`. Site d'appel
+  `<PrintServiceDetailModal>` mis à jour avec les 5 nouveaux props
+  (handlers → `setPreviewServiceId(prevPrintServiceId/nextPrintServiceId)`).
+  Comme `printServiceNavIds` dérive de `filtered`, qui dépend déjà de
+  `facetFiltered`/`searchQuery`/`filters.sortBy`, la liste de navigation
+  reste automatiquement à jour si les filtres changent pendant que la
+  modale est ouverte — même garantie que les 4 autres sections.
+- `print-service-detail-modal.tsx` : import `ItemNavButtons`, 5 nouveaux
+  props optionnels ajoutés à la signature. Cas structurel différent des
+  4 autres (confirmé par relecture) : les badges catégorie/sous-catégorie
+  étaient déjà sur leur propre rangée AU-DESSUS du `<h2>{service.name}</h2>`
+  (pas de badge à côté du titre à déplacer) — donc simple ajout d'une
+  rangée `flex items-start justify-between gap-x-3 gap-y-1` autour du
+  `<h2>` (avec `min-w-0`) et `ItemNavButtons` en frère direct, sans
+  toucher aux badges. Labels « Service précédent »/« Service suivant »,
+  test-ids `button-print-service-nav-prev`/`-next`.
+
+**Vérification finale (sweep complet, les 5 sections + les 2 fichiers
+partagés)** :
+- `npx tsc --noEmit` → **0 erreur** (exit code 0, aucune sortie).
+- `npm run build` → **succès** (`vite build` : 2826 modules transformés,
+  ✓ built in 1m 7s ; `esbuild` serveur : `dist/index.cjs` 2.1 Mo, Done in
+  545 ms). Le seul avertissement est le warning Rollup pré-existant sur
+  la taille du chunk JS principal (> 500 kB), sans rapport avec cette
+  tâche.
+- **Aucun test navigateur/runtime n'a été possible** dans cet
+  environnement (pas d'outil d'automatisation navigateur disponible
+  cette session) — donc le comportement visuel réel (clic sur les
+  boutons, absence de flicker, mise à jour des favoris/avis/réservation
+  sur la nouvelle entité, désactivation aux limites, réactivité aux
+  changements de filtres pendant que la modale est ouverte) n'a été
+  vérifié QUE par lecture de code, jamais observé en exécution. C'est
+  une limitation d'environnement explicite, pas un résultat inventé.
+
+### Checklist de complétion finale
+
+| Section | Boutons + position | Comportement nav (code) | Filtres/dataset (code) | Nav runtime observée | État |
+|---|---|---|---|---|---|
+| `/barista` | ✅ | ✅ | ✅ (`filteredBaristas`) | ❌ non observable | **Terminé (vérifié par code + build)** |
+| `/maintenance` | ✅ | ✅ | ✅ (`filtered` + `navToAgent`) | ❌ non observable | **Terminé (vérifié par code + build)** |
+| `/marketing` Services | ✅ | ✅ | ✅ (`filteredServices`) | ❌ non observable | **Terminé (vérifié par code + build)** |
+| `/academy` Formations | ✅ | ✅ | ✅ (`filteredTraining`) | ❌ non observable | **Terminé (vérifié par code + build)** |
+| `/print` Service | ✅ | ✅ | ✅ (`filtered`, ligne 651) | ❌ non observable | **Terminé (vérifié par code + build)** |
+
+Comportement de navigation partagé (hook/composant communs) : **vérifié
+au niveau code uniquement** (relecture + `tsc` + `build`) — **non vérifié
+en exécution/navigateur** (aucun outil de ce type disponible cette
+session).
+
+**Fichiers modifiés (tâche complète, 5 sections)** :
+- Nouveaux : `client/src/hooks/use-item-nav.ts`,
+  `client/src/components/shared/item-nav-buttons.tsx`.
+- `/barista` : `client/src/pages/cafe/barista/barista-page.tsx`,
+  `client/src/components/barista/barista-detail-modal.tsx`.
+- `/maintenance` : `client/src/pages/cafe/maintenance/maintenance-page.tsx`.
+- `/marketing` : `client/src/pages/cafe/marketing/marketing-page.tsx`,
+  `client/src/components/marketing/marketing-service-detail-modal.tsx`.
+- `/academy` : `client/src/pages/cafe/barista/barista-academy-page.tsx`,
+  `client/src/components/academy/academy-detail-modal.tsx`.
+- `/print` : `client/src/pages/cafe/print/print-page.tsx`,
+  `client/src/components/print/print-service-detail-modal.tsx`.
+
+**Problèmes restants / exceptions intentionnelles** : aucun blocage
+technique rencontré. La seule limitation est l'absence d'outil de test
+navigateur dans cet environnement, déjà signalée plus haut et dans
+chaque tâche précédente de cette session — aucune fonctionnalité n'a
+été déclarée « vérifiée visuellement » alors qu'elle ne l'a été que par
+lecture de code et compilation.

@@ -13,6 +13,8 @@ import { printCategoryIcon, printSubCategoryIcon } from "@/lib/print-category-ic
 import { PrintCompanyAvailabilityModal } from "@/components/print/print-company-detail-modal";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
 import { ReviewsModal } from "@/components/account/reviews-modal";
+import { ModalGrabber } from "@/components/shared/modal-grabber";
+import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -152,6 +154,15 @@ export default function PrintStoreDetailPage() {
   const [reviewComment, setReviewComment] = useState("");
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
+
+  // Swipe-to-dismiss on the Signaler dialog's own grabber (task: "Standardize
+  // Grabber Design and Swipe-to-Dismiss Across Store Information and Service
+  // Modals") — same shared hook/parameters as the established reference.
+  const {
+    onBodyWheel: reportOnBodyWheel, onBodyTouchStart: reportOnBodyTouchStart,
+    onBodyTouchMove: reportOnBodyTouchMove, onBodyTouchEnd: reportOnBodyTouchEnd,
+    dismissContentStyle: reportDismissContentStyle, dismissOverlayStyle: reportDismissOverlayStyle,
+  } = useScrollDismiss(reportModalOpen, () => { setReportModalOpen(false); setReportReason(""); }, undefined, true);
 
   const eligibleOrders = useMemo(
     () => myOrders.filter((o) => card && o.printerId === card.userId && o.status === "DELIVERED"),
@@ -599,6 +610,7 @@ export default function PrintStoreDetailPage() {
         reviewCount={card.reviewCount ?? reviews.length}
         reviews={reviews.map((r) => ({ ...r, createdAt: r.createdAt ? String(r.createdAt) : undefined }))}
         isDark={isDark}
+        showGrabber
         reviewForm={eligibleOrders.length > 0 ? (
           <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
             <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
@@ -634,9 +646,20 @@ export default function PrintStoreDetailPage() {
           (rounded-[2rem] container, circular close button), close button on
           the right, standardized across the app this session. */}
       <Dialog open={reportModalOpen} onOpenChange={(v) => { if (!v) { setReportModalOpen(false); setReportReason(""); } }}>
-        <DialogContent className={`sm:max-w-md p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden ${isDark ? "bg-gray-900" : "bg-white"}`}>
+        <DialogContent
+          className={`sm:max-w-md p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden ${isDark ? "bg-gray-900" : "bg-white"}`}
+          style={reportDismissContentStyle}
+          overlayStyle={reportDismissOverlayStyle}
+        >
           <VisuallyHidden><DialogTitle>Signaler {card.name}</DialogTitle></VisuallyHidden>
-          <div className="px-5 pt-5 pb-5 space-y-3">
+          <div
+            className="px-5 pt-1 pb-5 space-y-3"
+            onWheel={reportOnBodyWheel}
+            onTouchStart={reportOnBodyTouchStart}
+            onTouchMove={reportOnBodyTouchMove}
+            onTouchEnd={reportOnBodyTouchEnd}
+          >
+            <ModalGrabber isDark={isDark} />
             <div className="flex items-center justify-between">
               <div className="w-8 h-8" />
               <span className={`text-[13px] font-semibold tracking-tight leading-tight ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler {card.name}</span>

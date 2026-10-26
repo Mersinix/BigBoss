@@ -14058,3 +14058,466 @@ geste existante — strictement visuel, conforme à la consigne.
   uniquement lecture de code, `tsc`, `build`, et vérification ciblée
   par recherche textuelle, signalé explicitement plutôt que supposé
   vérifié.
+
+---
+
+## 29. Repositionnement de la note Pack sur les cartes Pack mappées
+
+### Audit
+
+**Composant réel** : `PackCardTile` (`client/src/pages/cafe/browse-
+products.tsx`, lignes 544-722) — carte Pack mappée du Shop,
+**réutilisée telle quelle** par `store-detail-page.tsx` (confirmé par
+le commentaire existant sur la prop `navIds` : « this component is
+also reused by store-detail-page.tsx »). Une seule implémentation à
+modifier couvre donc les deux emplacements (Shop ET Store Page).
+
+**Deux notes distinctes sur cette carte, confirmées différentes**
+(la tâche demande explicitement de ne pas les confondre) :
+- **Note du Store/Supplier** (ligne 673-685, « Row 3b ») :
+  `pack.supplierReviewCount`/`pack.supplierAvgRating`, affichée à
+  droite du nom du fournisseur — **à ne pas toucher**.
+- **Note du Pack lui-même** (ligne 717, « Row 5 », coin bas-droit de
+  la carte) : `<StarRating rating={pack.packAvgRating} count=
+  {pack.packReviewCount} isDark={isDark} />` — **c'est elle qui doit
+  être déplacée**, sur l'image, coin bas-gauche.
+- `StarRating` (composant local à ce fichier, exporté, utilisé
+  ailleurs aussi) a sa propre condition d'affichage déjà existante :
+  `if (!count) return null` — donc la note Pack ne s'affiche
+  actuellement que si `packReviewCount > 0`, **sans** condition
+  `hasCommercialAccess` (contrairement à l'overlay de note déjà
+  existant sur les cartes Produit, voir ci-dessous) — condition à
+  préserver EXACTEMENT telle quelle, sans ajouter de nouvelle
+  restriction d'accès qui n'existait pas avant.
+
+**Convention déjà existante à réutiliser, trouvée dans le même
+fichier** : la carte **Produit** (même fichier, un peu plus haut,
+lignes 300-307) affiche déjà SA propre note produit en overlay
+« bottom-left sur l'image » :
+```
+{hasCommercialAccess && hasReviews && (
+  <span className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/40 backdrop-blur-sm rounded-full px-1.5 py-0.5 shadow-sm">
+    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+    <span className="text-[10px] font-medium text-white">{product.avgRating.toFixed(1)}</span>
+    <span className="text-[10px] text-white/80">({product.reviewCount})</span>
+  </span>
+)}
+```
+C'est exactement le motif demandé par la tâche (« Use the existing
+badge or overlay styling conventions »). Réutilisé pour Pack avec les
+mêmes classes, en remplaçant uniquement la condition d'affichage par
+celle déjà existante du Pack (`pack.packReviewCount > 0`, sans le
+`hasCommercialAccess` que la carte Produit a mais que la carte Pack
+n'a jamais eu).
+
+### Implémentation
+
+**`client/src/pages/cafe/browse-products.tsx`, `PackCardTile`** :
+1. Ajout de l'overlay de note, dans le conteneur `relative aspect-[4/3]`
+   de l'image (après le bouton Favori existant, même emplacement
+   relatif que sur la carte Produit) :
+   ```
+   {pack.packReviewCount > 0 && (
+     <span className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/40 backdrop-blur-sm rounded-full px-1.5 py-0.5 shadow-sm">
+       <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+       <span className="text-[10px] font-medium text-white">{pack.packAvgRating.toFixed(1)}</span>
+       <span className="text-[10px] text-white/80">({pack.packReviewCount})</span>
+     </span>
+   )}
+   ```
+2. Suppression de `<StarRating rating={pack.packAvgRating} count=
+   {pack.packReviewCount} isDark={isDark} />` de la Row 5 (bas du
+   corps de la carte). La ligne garde Expiry (gauche) et Distance —
+   avec seulement 2 enfants restants dans ce `flex justify-between`,
+   ils se répartissent naturellement aux deux extrémités (effet
+   mécanique inévitable de la suppression d'un 3ᵉ enfant dans un
+   `justify-between`, pas une modification volontaire de leur
+   positionnement ou de leur contenu).
+3. Aucune autre ligne touchée — nom, description, catégories, note
+   Store/Supplier, prix, quantité, tout reste identique.
+4. Le composant `StarRating` lui-même (défini/exporté dans ce même
+   fichier) n'est pas modifié ni supprimé — seul son appel à cet
+   endroit précis est retiré ; il reste disponible pour d'éventuels
+   autres appelants.
+
+Comme `PackCardTile` est partagée entre `/products` (Shop) et
+`store-detail-page.tsx` (Store Page), ce changement s'applique
+automatiquement aux deux emplacements sans duplication de code, et ne
+touche aucune autre carte (Produit/Store) ni leur propre logique.
+
+### Tests exécutés et résultats réels
+
+- `npx tsc --noEmit` : **0 erreur** (exit code 0, aucune sortie).
+- `npm run build` : **succès** — `vite build` (2831 modules
+  transformés, ✓ built in 31.97s) + `esbuild` serveur
+  (`dist/index.cjs` 2.1 Mo, Done in 1894ms). Seul avertissement : le
+  warning Rollup pré-existant sur la taille du chunk JS, sans rapport.
+- `git status --short` / `git diff --stat` : seul
+  `client/src/pages/cafe/browse-products.tsx` modifié (+15/-2 lignes)
+  — confirme un changement strictement localisé à `PackCardTile`.
+- `grep "<StarRating\b"` dans tout `client/src` : confirme que les 3
+  autres `StarRating` existants (Barista/Print/Maintenance) sont des
+  composants homonymes définis localement dans leurs propres fichiers,
+  jamais importés depuis `browse-products.tsx` — la suppression de cet
+  unique appel ne régresse donc rien ailleurs.
+- **Aucun test navigateur/runtime n'a été possible** dans cet
+  environnement (pas d'outil d'automatisation navigateur disponible
+  cette session). N'ont été vérifiés QUE par lecture de code — jamais
+  observés en exécution : le rendu visuel réel de l'overlay (position,
+  contraste sur une vraie photo de pack, lisibilité), l'absence de
+  l'ancienne note en bas-droite, le comportement avec 0 avis (overlay
+  absent, confirmé par lecture de la condition `packReviewCount > 0`
+  mais pas observé), et le rendu clair/sombre.
+
+---
+
+## 30. Standardisation du geste du grabber sur les modales Avis Coffee Owner
+
+### Audit — cause racine confirmée sur « Modifier votre avis »
+
+**`client/src/components/review-modal.tsx`** (Avis Produit, « Modifier
+votre avis » / « Écrire un avis ») : depuis la tâche 28, ce modal a un
+`<ModalGrabber isDark={dk} />` **purement visuel** — confirmé par
+lecture complète du fichier (modifié entre-temps par l'utilisateur
+dans l'IDE : en-tête réordonné, toggle thème à gauche, titre centré,
+Fermer à droite, label « Avis sur le produit » déplacé dans la zone
+scrollable — pris comme état actuel, non annulé). **Aucun
+`useScrollDismiss` n'est importé ni utilisé dans ce fichier** — le
+bouton Fermer et `onOpenChange` appellent `handleClose` directement, et
+le div scrollable (`overflow-y-auto`, ligne ~211) n'a aucun
+`onWheel`/`onTouchStart`/`onTouchMove`/`onTouchEnd`. **C'est la cause
+racine exacte** : le grabber ne fait rien du tout au toucher — pas un
+conflit de geste, une absence totale de geste.
+
+**Référence désignée par la tâche — Product Detail Modal**
+(`product-quick-view-modal.tsx`) : `useScrollDismiss(productId != null,
+close, 520, true)` — `liveDrag=true`, seuil 70px, animation 520ms,
+exactement les mêmes paramètres que les 19 autres consommateurs déjà
+audités en tâche 27 (Maintenance Signaler compris). Donc « suivre le
+comportement établi du Product Detail Modal au swipe » = utiliser
+`useScrollDismiss` avec ces mêmes paramètres, pas une nouvelle logique.
+
+### Découverte des modales Avis Coffee Owner concernées (§4.1)
+
+- **Shop → Product Detail Modal → Avis** : `review-modal.tsx`
+  (`ReviewModal`, non partagé en dehors de ce contexte) — geste
+  manquant, à corriger.
+- **Shop → Pack Detail Modal → Avis** : `PackReviewsModal`
+  (`pack-quick-view-modal.tsx`, local) → enveloppe le composant
+  partagé `ReviewsModal` (`client/src/components/account/reviews-
+  modal.tsx`) avec `showGrabber` (tâche 28) — grabber déjà affiché
+  mais **également purement visuel**, confirmé par lecture : aucun
+  `useScrollDismiss` dans `reviews-modal.tsx`.
+- **Store Page → Avis (Supplier)** : `SupplierReviewsModal`
+  (`store-detail-page.tsx`, local) → même composant partagé
+  `ReviewsModal` avec `showGrabber` — même constat.
+- **Point critique** : `ReviewsModal` est partagé par **15 appelants**
+  au total (vérifié tâche 28) ; seuls 2 (Pack, Store Page) sont dans le
+  périmètre « Coffee Owner Shop/Store Page » de cette tâche. Les 13
+  autres (Barista/Maintenance/Marketing/Academy/Print ×2 chacun +
+  Delivery/Driver) ne passent jamais `showGrabber` → toute nouvelle
+  logique de geste doit être strictement conditionnée à ce même flag
+  pour ne RIEN changer chez eux (conforme à « Do not modify unrelated
+  Store Page, supplier, admin, or other account-type review behavior
+  unless... verified as safe »).
+- `DialogContent` de `ReviewsModal` est lui-même le conteneur
+  scrollable (`overflow-y-auto` directement sur `DialogContent`, pas de
+  div interne séparé) — exactement le même motif que les modales
+  Détail Barista/Maintenance/etc. déjà auditées (geste posé directement
+  sur `DialogContent`), donc le point d'attache est déjà clair.
+
+### Décision de portée — geste standardisé partout, design PAS re-fondu
+
+**Fait** : le style visuel du grabber lui-même (taille, forme, couleur
+thème) est **déjà unifié** depuis la tâche 28 (même composant partagé
+`ModalGrabber` dans les deux modales). Le style du bouton Fermer est
+**déjà identique** (mêmes classes `w-8 h-8 rounded-full ...
+bg-gray-800/bg-gray-100 ...` dans les deux fichiers, vérifié ligne à
+ligne).
+
+**Décision** : la hiérarchie d'en-tête (titre centré + toggle thème à
+gauche + Fermer à droite dans `review-modal.tsx`, VS icône+nom à
+gauche + note/compteur + Fermer à droite, sans toggle thème, dans
+`reviews-modal.tsx`) reste **structurellement différente**, et n'est
+**pas refondue** dans cette tâche. Raison explicite : `reviews-
+modal.tsx` est partagé par 13 appelants hors périmètre ; changer sa
+disposition d'en-tête pour « matcher » `review-modal.tsx` changerait
+l'apparence de TOUTES les modales Avis Barista/Maintenance/Marketing/
+Academy/Print/Delivery/Driver — contraire à « Keep changes focused on
+Coffee Owner Review Modals » et à « avoid unnecessary architecture
+rewrites », et impossible à faire sans dupliquer son JSX derrière un
+nouveau flag conditionnel (risque non justifié par le gain visuel).
+Signalé explicitement comme limitation plutôt que tenté en silence.
+Le VRAI écart concret, mesurable et sûr à corriger est le **geste** —
+c'est l'objet de cette tâche, traité en entier ci-dessous.
+
+### Implémentation
+
+1. **`review-modal.tsx`** : import `useScrollDismiss` ; appel
+   `useScrollDismiss(open, handleClose, undefined, true)` — mêmes
+   paramètres que la référence Product Detail Modal. `style=
+   {dismissContentStyle}`/`overlayStyle={dismissOverlayStyle}` sur
+   `<DialogContent>` ; `onWheel`/`onTouchStart`/`onTouchMove`/
+   `onTouchEnd` sur le div scrollable existant (ligne ~211). Bouton
+   Fermer et `onOpenChange` **non modifiés** — appellent toujours
+   `handleClose` directement (aucun risque de flash de contenu
+   démonté ici, `product`/`listings` restent fournis par le parent
+   indépendamment de `open`, contrairement au Product Detail Modal qui
+   démonte `ProductDetailContent` via `productId != null` — donc pas
+   besoin de router ces chemins par `requestDismiss`, exactement le
+   même raisonnement déjà appliqué à `ProductPreviewModal` en tâche 27).
+2. **`reviews-modal.tsx`** : import `useScrollDismiss`, appelé
+   **sans condition** (`useScrollDismiss(open, onClose, undefined,
+   true)` — un Hook ne peut pas être appelé conditionnellement), mais
+   ses handlers/styles ne sont attachés à `<DialogContent>` **que si
+   `showGrabber` est vrai** (`style={showGrabber ? dismissContentStyle
+   : undefined}`, etc.) — donc pour les 13 appelants hors périmètre qui
+   ne passent jamais `showGrabber`, rien n'est attaché à aucun élément
+   DOM, `requestDismiss` n'est jamais déclenché, **zéro changement de
+   comportement** pour eux (vérifié : la seule chose qui change pour
+   eux est l'exécution interne, invisible, du Hook — aucun handler
+   DOM, aucun style appliqué, aucun appel à `onClose` possible par ce
+   chemin).
+3. `PackReviewsModal`/`SupplierReviewsModal` : aucune modification —
+   ils passent déjà `showGrabber` (tâche 28) et `onClose`, qui
+   suffisent désormais à activer le vrai geste.
+
+### Tests exécutés et résultats réels
+
+- `npx tsc --noEmit` : **0 erreur** (exit code 0, aucune sortie),
+  exécuté après chacune des deux étapes (review-modal.tsx puis
+  reviews-modal.tsx).
+- `npm run build` : **succès** — `vite build` (2831 modules
+  transformés, ✓ built in 22.11s) + `esbuild` serveur
+  (`dist/index.cjs` 2.1 Mo, Done in 1330ms). Seul avertissement : le
+  warning Rollup pré-existant sur la taille du chunk JS, sans rapport.
+- `git status --short` / `git diff --stat` : seuls
+  `review-modal.tsx` et `account/reviews-modal.tsx` modifiés dans ce
+  tour (`browse-products.tsx` reste le diff inchangé de la tâche 29,
+  non retouché) — confirme un changement strictement limité aux deux
+  fichiers concernés.
+- **Aucun test navigateur/runtime n'a été possible** dans cet
+  environnement (pas d'outil d'automatisation navigateur disponible
+  cette session). N'ont été vérifiés QUE par lecture de code — jamais
+  observés en exécution : le comportement réel du drag live sur le
+  grabber de « Modifier votre avis », le retour élastique sous le
+  seuil, la fermeture animée au-delà, l'absence de fermeture
+  accidentelle du Product/Pack Detail Modal parent, le bon
+  fonctionnement du scroll normal et des étoiles/formulaire sans
+  déclenchement accidentel, et l'absence de régression sur les 13
+  autres appelants de `ReviewsModal` (vérifiée uniquement par lecture
+  de code confirmant qu'aucun handler n'est jamais attaché chez eux).
+
+### Rapport final
+
+- **Cause racine** : le grabber de `review-modal.tsx` (et, par
+  extension, celui de `reviews-modal.tsx` partout où `showGrabber` est
+  déjà utilisé) était purement décoratif depuis la tâche 28 — aucun
+  `useScrollDismiss` n'y était câblé, donc aucun geste de dismissal
+  n'existait réellement sur ces deux modales malgré la présence
+  visuelle du grabber.
+- **Changements apportés à « Modifier votre avis »** : ajout de
+  `useScrollDismiss(open, handleClose, undefined, true)` (mêmes
+  paramètres que la référence Product Detail Modal), handlers/styles
+  attachés à son div scrollable et à `<DialogContent>`. Bouton
+  Fermer/backdrop/Escape inchangés.
+- **Modales Avis Coffee Owner identifiées et mises à jour** :
+  `review-modal.tsx` (Produit) et, via la prop `showGrabber` déjà
+  existante sur le composant partagé `reviews-modal.tsx`, `Pack
+  Detail → Avis` et `Store Page → Avis` (Supplier) — les 3 instances
+  listées en §4.1 de la tâche.
+- **Logique de geste réutilisée** : oui, intégralement —
+  `useScrollDismiss` est la même abstraction déjà partagée par toute
+  l'application (confirmée uniforme en tâche 27) ; aucune nouvelle
+  logique de geste n'a été inventée, seulement câblée là où elle
+  manquait.
+- **Différences intentionnellement conservées** : la hiérarchie
+  d'en-tête de `reviews-modal.tsx` (icône+nom à gauche, sans toggle
+  thème) n'a PAS été refondue pour imiter celle de `review-modal.tsx`
+  (titre centré + toggle thème) — documenté explicitement ci-dessus
+  comme une limitation volontaire, pas un oubli, pour éviter de changer
+  l'apparence des 13 autres comptes professionnels qui partagent ce
+  même composant. Le contenu/contexte spécifique (avis Produit vs avis
+  Pack vs avis Supplier/Store) n'a pas été touché.
+- **Limitations** : aucune vérification visuelle/runtime n'a été
+  possible dans cet environnement (pas d'outil de navigateur) —
+  uniquement lecture de code, `tsc`, `build`, signalé explicitement
+  plutôt que supposé vérifié.
+
+---
+
+## 31. Standardisation du grabber (design + geste) — Store Information + Barista/Maintenance/Marketing/Academy/Print
+
+### Phase One — Audit
+
+**Store Information modal (`InfoModal`, `store-detail-page.tsx`)** :
+même défaut que « Modifier votre avis » avant la tâche 30 — le grabber
+(ajouté tâche 28) était **purement décoratif**, aucun `useScrollDismiss`
+câblé. Corrigé avec le même motif exact que `review-modal.tsx`
+(tâche 30) : `useScrollDismiss(open, onClose, undefined, true)`,
+handlers posés sur le div scrollable existant, `style`/`overlayStyle`
+sur `DialogContent`, bouton Fermer/backdrop inchangés.
+
+**Cartographie exhaustive de la Section 4** — recherche de
+`^function |^export function |useScrollDismiss\(` dans les 11
+fichiers concernés, pour localiser précisément QUI a déjà le geste
+réel :
+
+| Fichier | Modale(s) avec geste réel déjà câblé | Modale(s) SANS geste ni grabber |
+|---|---|---|
+| `barista-detail-modal.tsx` | `BaristaDetailModal` (principal) | `BaristaAvailabilityModal`, Signaler (Dialog local), `<ReviewsModal>` |
+| `maintenance-page.tsx` | `AgentDetailModal` (principal) | `MaintenanceAvailabilityModal`, Signaler, `<ReviewsModal>` |
+| `marketing-detail-modal.tsx` (Agence) | `MarketingDetailModal` (principal) | `MarketingAvailabilityModal`, Signaler, `<ReviewsModal>` |
+| `marketing-service-detail-modal.tsx` | `MarketingServiceDetailModal` (principal) | Signaler, `<ReviewsModal>` (pas de Disponibilité au niveau service) |
+| `marketing-store-detail-page.tsx` | — (aucun `useScrollDismiss` dans ce fichier) | Signaler local, `<ReviewsModal>` local (Avis Agence depuis la Store Page) |
+| `academy-detail-modal.tsx` (Formation — correspond au « Academy Detail Modal » de la tâche, nommage littéral confirmé) | `AcademyDetailModal` (principal) | `AcademyAvailabilityModal`, Signaler, `<ReviewsModal>` |
+| `academy-profile-modal.tsx` (Académie) | `AcademyProfileModal` (principal) | `AcademyProfileAvailabilityModal`, Signaler, `<ReviewsModal>` |
+| `academy-store-detail-page.tsx` | — | Signaler local, `<ReviewsModal>` local |
+| `print-company-detail-modal.tsx` (Société) | `PrintCompanyDetailModal` (principal) | `PrintCompanyAvailabilityModal`, Signaler, `<ReviewsModal>` |
+| `print-service-detail-modal.tsx` | `PrintServiceDetailModal` (principal) | Signaler, `<ReviewsModal>` (pas de Disponibilité au niveau service) |
+| `print-store-detail-page.tsx` | — | Signaler local, `<ReviewsModal>` local |
+
+**Interprétation du nommage de la tâche** (« Marketing Detail Modal »,
+« Academy Detail Modal », « Print Detail Modal »), vérifiée plutôt que
+supposée, en cohérence avec la tâche 26 qui a traité cette même
+formulation en couvrant à la fois le niveau Agence/Académie/Société
+ET le niveau Service/Formation accessibles depuis la même route de
+premier niveau (`/marketing`, `/academy`, `/print`) : tous les niveaux
+réellement atteignables depuis chaque route sont couverts ci-dessus,
+sans forcer le nombre exact d'éléments listés par section de la tâche
+(ex. Section C n'énumère que Signaler+Avis pour Marketing, Section E
+énumère Signaler+Avis+Disponibilité pour Academy) à correspondre à un
+seul fichier précis — conformément à l'instruction explicite de la
+tâche elle-même : « The routes are starting points for discovering the
+actual components... Do not assume that all modal types exist on
+every route. »
+
+**Conclusion de l'audit** : pour les 11 fichiers, la modale PRINCIPALE
+(Barista/Maintenance/Marketing×2/Academy×2/Print×2) a déjà le geste
+réel (câblé bien avant l'introduction du composant `ModalGrabber`) —
+il ne lui manque QUE le pictogramme visuel. En revanche, **chacune**
+des modales Disponibilité (6 composants), Signaler (11 instances) et
+Avis (11 appels `<ReviewsModal>`) n'a **ni** grabber **ni** geste réel
+— identique au défaut déjà corrigé en tâche 30 pour « Modifier votre
+avis » et le Store Information modal. Le composant `ModalGrabber`
+(tâche 28) et le mécanisme conditionnel `showGrabber` de `ReviewsModal`
+(tâche 30) sont réutilisés tels quels, sans nouvelle abstraction.
+
+### Plan d'implémentation
+
+1. **8 modales principales** (déjà gestuelles) : ajouter uniquement
+   `<ModalGrabber isDark={isDark} onImage />` en overlay sur leur image
+   hero existante (toutes ont une bannière flush-top, même langage
+   visuel que Pack/Product) — aucun changement de geste.
+2. **6 modales Disponibilité** + **11 Signaler** : ajouter
+   `useScrollDismiss(open, onClose/handleClose, undefined, true)` +
+   `<ModalGrabber isDark={isDark} />` (variante thème, pas de photo en
+   en-tête) + handlers sur leur propre `DialogContent`.
+3. **11 appels `<ReviewsModal>`** : ajouter la prop `showGrabber` déjà
+   existante (tâche 30) — active immédiatement le geste réel ET le
+   pictogramme, sans aucune autre modification.
+4. Aucun changement à `use-scroll-dismiss.ts`, `ModalGrabber`, ni à la
+   logique métier (avis/disponibilité/signalement/horaires) dans
+   aucun des 11 fichiers.
+
+### Implémentation réalisée
+
+**Phase Two — Store Information modal** : `InfoModal`
+(`store-detail-page.tsx`) corrigé exactement comme `review-modal.tsx`
+(tâche 30) — `useScrollDismiss(open, onClose, undefined, true)`
+câblé sur son div scrollable existant, `style`/`overlayStyle` sur
+`DialogContent`. Bouton Fermer/backdrop inchangés.
+
+**Phase Three — 11 fichiers**, motif appliqué de façon identique et
+systématique partout (vérifié `tsc` après chaque fichier) :
+- 8 modales principales (`BaristaDetailModal`, `AgentDetailModal`,
+  `MarketingDetailModal`, `MarketingServiceDetailModal`,
+  `AcademyDetailModal`, `AcademyProfileModal`, `PrintCompanyDetailModal`,
+  `PrintServiceDetailModal`) : `<ModalGrabber isDark onImage />` ajouté
+  en overlay sur leur bannière hero existante — aucun changement de
+  geste (déjà présent).
+- 6 modales Disponibilité (`BaristaAvailabilityModal`,
+  `MaintenanceAvailabilityModal`, `MarketingAvailabilityModal`,
+  `AcademyAvailabilityModal`, `AcademyProfileAvailabilityModal`,
+  `PrintCompanyAvailabilityModal`) : `useScrollDismiss(open, onClose,
+  undefined, true)` ajouté + `<ModalGrabber isDark />` (variante thème)
+  + handlers sur leur div scrollable existant.
+- 8 Dialogs Signaler imbriqués dans les fichiers principaux (un second
+  appel indépendant de `useScrollDismiss`, avec des noms déstructurés
+  renommés `reportOnBodyWheel`/etc. pour coexister avec le premier appel
+  de la modale principale dans la même fonction) + 3 Dialogs Signaler
+  locaux aux Store Pages (Marketing/Academy/Print) — même traitement,
+  `reportModalOpen`/`setReportReason` comme cible de fermeture.
+  `pt-5`→`pt-1` sur leur conteneur, `<ModalGrabber isDark />` ajouté en
+  première ligne, handlers posés directement sur le conteneur de
+  contenu (pas de scroll réel ici, mais même sémantique — épinglé en
+  haut en permanence puisqu'il n'y a rien à faire défiler, cohérent
+  avec le mécanisme existant plutôt qu'un cas spécial inventé).
+- 11 appels `<ReviewsModal>` (8 dans les fichiers principaux + 3 dans
+  les Store Pages) : prop `showGrabber` ajoutée — active immédiatement
+  le geste réel ET le pictogramme via le mécanisme déjà construit en
+  tâche 30, sans toucher à `reviews-modal.tsx` lui-même dans cette
+  tâche (déjà prêt).
+
+**Fichiers modifiés** (12 au total, confirmés par `git status
+--short`) : `store-detail-page.tsx`, `barista-detail-modal.tsx`,
+`maintenance-page.tsx`, `marketing-detail-modal.tsx`,
+`marketing-service-detail-modal.tsx`, `marketing-store-detail-page.tsx`,
+`academy-detail-modal.tsx`, `academy-profile-modal.tsx`,
+`academy-store-detail-page.tsx`, `print-company-detail-modal.tsx`,
+`print-service-detail-modal.tsx`, `print-store-detail-page.tsx`.
+
+**Types de modales demandés mais non trouvés** : aucun — chaque type
+mentionné (Signaler, Avis, Disponibilité, Opening Hours) existe
+effectivement à chacun des emplacements listés en Section 4 et en
+Phase Two ; aucune fonctionnalité n'a été créée.
+
+### Tests exécutés et résultats réels
+
+- `npx tsc --noEmit` : exécuté **après chacun des 12 fichiers**
+  individuellement pendant l'implémentation, puis une dernière fois sur
+  l'ensemble complet — **0 erreur** à chaque étape (exit code 0,
+  aucune sortie).
+- `npm run build` : **succès** — `vite build` (2831 modules
+  transformés, ✓ built in 59.08s) + `esbuild` serveur
+  (`dist/index.cjs` 2.1 Mo, Done in 4526ms). Seul avertissement : le
+  warning Rollup pré-existant sur la taille du chunk JS, sans rapport.
+- `git status --short` : exactement 12 fichiers avec de nouvelles
+  modifications dans ce tour, correspondant précisément au plan
+  (11 fichiers de la Section 4 + `store-detail-page.tsx` pour la
+  Phase Two) — les 4 autres fichiers listés comme modifiés
+  (`reviews-modal.tsx`, `review-modal.tsx`, `pack-quick-view-modal.tsx`,
+  `browse-products.tsx`) sont des restes non committés des tâches
+  29/30, non retouchés dans ce tour.
+- **Aucun test navigateur/runtime n'a été possible** dans cet
+  environnement (pas d'outil d'automatisation navigateur disponible
+  cette session). N'ont été vérifiés QUE par lecture de code — jamais
+  observés en exécution : l'apparence réelle du grabber sur chacune des
+  22 modales corrigées (8 principales + 6 Disponibilité + 11 Signaler/
+  Avis — certaines modales apparaissant dans plusieurs catégories),
+  le comportement réel du swipe/drag, l'absence de régression sur la
+  modale de référence Maintenance « Signaler » (non modifiée dans cette
+  tâche, confirmé par `git status`), et l'absence de fermeture
+  accidentelle en interagissant avec les étoiles/formulaires/textarea.
+
+### Rapport final
+
+- **Store Information modal** : corrigé, même défaut et même solution
+  que « Modifier votre avis » (tâche 30) — grabber décoratif →
+  geste réel câblé.
+- **Composant/logique de geste réutilisé** : intégralement — aucune
+  nouvelle abstraction, `useScrollDismiss` et `ModalGrabber` réutilisés
+  tels quels à chaque point d'implémentation, exactement les mêmes
+  paramètres (`undefined, true`) que la référence Maintenance
+  Signaler/Product Detail Modal partout.
+- **Composants mis à jour par section** : Barista (1 fichier, 3
+  modales) ; Maintenance (1 fichier, 3 modales, référence « Signaler »
+  elle-même non touchée/non régressée) ; Marketing (3 fichiers,
+  Agence+Service+Store Page) ; Academy (3 fichiers, Formation+
+  Académie+Store Page) ; Print (3 fichiers, Société+Service+Store
+  Page) ; Store Information (1 fichier).
+- **Types de modales absents** : aucun.
+- **Limitations** : aucune vérification visuelle/runtime n'a été
+  possible dans cet environnement (pas d'outil de navigateur) —
+  uniquement lecture de code, `tsc` (exécuté après chaque fichier),
+  et `build`, signalé explicitement plutôt que supposé vérifié.

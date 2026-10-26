@@ -17,6 +17,7 @@ import type { MaintenanceMarketplaceCard, OpeningHoursMap } from "@shared/schema
 import { encodeMaintenanceSubSkillKey, decodeMaintenanceSubSkillKey } from "@shared/maintenance-sub-skill-key";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
+import { ModalGrabber } from "@/components/shared/modal-grabber";
 import { useItemNav } from "@/hooks/use-item-nav";
 import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 import { Button } from "@/components/ui/button";
@@ -296,13 +297,26 @@ function MaintenanceAvailabilityModal({
   const timeColor = dk ? "text-gray-300" : "text-gray-700";
   const closedColor = dk ? "text-red-400" : "text-red-500";
 
+  // Swipe-to-dismiss on the grabber (task: "Standardize Grabber Design and
+  // Swipe-to-Dismiss Across Store Information and Service Modals") — same
+  // shared hook/parameters as the established reference.
+  const {
+    onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
+    dismissContentStyle, dismissOverlayStyle,
+  } = useScrollDismiss(open, onClose, undefined, true);
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-sm p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
+      <DialogContent
+        className="sm:max-w-sm p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden"
+        style={dismissContentStyle}
+        overlayStyle={dismissOverlayStyle}
+      >
         <VisuallyHidden><DialogTitle>Disponibilité — {agentName}</DialogTitle></VisuallyHidden>
         <div className={`flex flex-col max-h-[88vh] overflow-hidden transition-colors duration-200 ${bg}`}>
-          <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
-            <div className="flex items-center justify-between mb-4">
+          <div className={`shrink-0 ${bg} px-5 pt-1 pb-4`}>
+            <ModalGrabber isDark={dk} />
+            <div className="flex items-center justify-between mb-4 mt-2">
               <button onClick={onClose} aria-label="Close" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}>
                 <X className="w-4 h-4" />
               </button>
@@ -322,6 +336,10 @@ function MaintenanceAvailabilityModal({
               [&::-webkit-scrollbar-thumb]:bg-gray-700
               hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
             style={{ WebkitOverflowScrolling: "touch" }}
+            onWheel={onBodyWheel}
+            onTouchStart={onBodyTouchStart}
+            onTouchMove={onBodyTouchMove}
+            onTouchEnd={onBodyTouchEnd}
           >
             {weeklyHours ? (
               <div className="space-y-2 pb-2">
@@ -531,6 +549,17 @@ export function AgentDetailModal({
     dismissContentStyle, dismissOverlayStyle,
   } = useScrollDismiss(open, onClose, undefined, true);
 
+  // Same swipe-to-dismiss, independently, for the nested Signaler dialog
+  // (task: "Standardize Grabber Design and Swipe-to-Dismiss Across Store
+  // Information and Service Modals") — a separate Dialog/open state, so a
+  // separate hook instance; safe since this dialog is already rendered as a
+  // sibling of the main modal's own gesture container, never a descendant.
+  const {
+    onBodyWheel: reportOnBodyWheel, onBodyTouchStart: reportOnBodyTouchStart,
+    onBodyTouchMove: reportOnBodyTouchMove, onBodyTouchEnd: reportOnBodyTouchEnd,
+    dismissContentStyle: reportDismissContentStyle, dismissOverlayStyle: reportDismissOverlayStyle,
+  } = useScrollDismiss(reportModalOpen, () => { setReportModalOpen(false); setReportReason(""); }, undefined, true);
+
   if (!agent) return null;
 
   return (
@@ -557,6 +586,7 @@ export function AgentDetailModal({
               Barista Details Modal reference: full-width banner instead of a
               small avatar, favorite/report/close overlaid on the image. */}
           <div className={`relative w-full h-56 sm:h-72 shrink-0 rounded-t-2xl overflow-hidden ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
+            <ModalGrabber isDark={isDark} onImage />
             {/* Cover (Part 4) — when set (or Profile/Flash fall back in, see
                 analyse.md image-mapping task), shown as the banner background with
                 the logo demoted to a small corner badge; falls back to the existing
@@ -755,9 +785,20 @@ export function AgentDetailModal({
         right (docs/coffee_owner_favorites_reporting_nested_modal_audit.md
         Section 9). Content/functionality unchanged. */}
     <Dialog open={reportModalOpen} onOpenChange={(v) => { if (!v) { setReportModalOpen(false); setReportReason(""); } }}>
-      <DialogContent className={`sm:max-w-md p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden ${isDark ? "bg-gray-900" : "bg-white"}`}>
+      <DialogContent
+        className={`sm:max-w-md p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden ${isDark ? "bg-gray-900" : "bg-white"}`}
+        style={reportDismissContentStyle}
+        overlayStyle={reportDismissOverlayStyle}
+      >
         <VisuallyHidden><DialogTitle>Signaler {agent.name}</DialogTitle></VisuallyHidden>
-        <div className="px-5 pt-5 pb-5 space-y-3">
+        <div
+          className="px-5 pt-1 pb-5 space-y-3"
+          onWheel={reportOnBodyWheel}
+          onTouchStart={reportOnBodyTouchStart}
+          onTouchMove={reportOnBodyTouchMove}
+          onTouchEnd={reportOnBodyTouchEnd}
+        >
+          <ModalGrabber isDark={isDark} />
           <div className="flex items-center justify-between">
             <div className="w-8 h-8" />
             <span className={`text-[13px] font-semibold tracking-tight leading-tight ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler {agent.name}</span>
@@ -805,6 +846,7 @@ export function AgentDetailModal({
       reviewCount={agent.reviewCount}
       reviews={reviewsQuery.data ?? []}
       isDark={isDark}
+      showGrabber
       reviewForm={!readOnly && reviewReservation ? (
         <div className={`${t.mutedBg} rounded-xl p-3 space-y-2.5`}>
           <h3 className={`font-semibold text-sm ${t.textPrimary}`}>Évaluer votre intervention</h3>

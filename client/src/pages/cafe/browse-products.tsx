@@ -636,6 +636,19 @@ export function PackCardTile({
             <Heart className={`w-3.5 h-3.5 transition-colors ${faved ? "fill-rose-500 text-rose-500" : "text-white/80"}`} />
           </button>
         )}
+
+        {/* Pack rating — bottom-left image overlay, same convention as the
+            Product card's own rating overlay above. Display condition
+            unchanged from before (packReviewCount > 0, no commercial-access
+            gate — the Product card's overlay has one, the Pack rating never
+            did). */}
+        {pack.packReviewCount > 0 && (
+          <span className="absolute bottom-2 left-2 flex items-center gap-1 bg-black/40 backdrop-blur-sm rounded-full px-1.5 py-0.5 shadow-sm">
+            <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+            <span className="text-[10px] font-medium text-white">{pack.packAvgRating.toFixed(1)}</span>
+            <span className="text-[10px] text-white/80">({pack.packReviewCount})</span>
+          </span>
+        )}
       </div>
 
       {/* Body — fixed height so all cards are identical */}
@@ -704,7 +717,8 @@ export function PackCardTile({
 
        
 
-        {/* Row 5 (bottom): Expiry left · Distance center · Rating right */}
+        {/* Row 5 (bottom): Expiry left · Distance right — rating moved to
+            the image's bottom-left overlay (above). */}
         <div className={`flex items-center justify-between gap-1 mt-auto pt-1.5 border-t ${t.priceBorder}`}>
           <span className={`text-[10px] truncate shrink-0 ${expiryLabel ? priceColor : t.textMuted}`}>
             {expiryLabel ? `Exp: ${expiryLabel}` : "\u00A0"}
@@ -714,7 +728,6 @@ export function PackCardTile({
               <MapPin className="w-2.5 h-2.5 shrink-0" />{formatDistance(distance)}
             </span>
           ) : <span />}
-          <StarRating rating={pack.packAvgRating} count={pack.packReviewCount} isDark={isDark} />
         </div>
       </div>
     </div>

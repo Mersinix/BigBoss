@@ -19,6 +19,7 @@ import {
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
+import { ModalGrabber } from "@/components/shared/modal-grabber";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
@@ -91,13 +92,26 @@ function AcademyAvailabilityModal({
   const textMuted = dk ? "text-gray-400" : "text-gray-500";
   const rowBg = dk ? "bg-gray-800 border-gray-700/60" : "bg-gray-50 border-gray-100";
 
+  // Swipe-to-dismiss on the grabber (task: "Standardize Grabber Design and
+  // Swipe-to-Dismiss Across Store Information and Service Modals") — same
+  // shared hook/parameters as the established reference.
+  const {
+    onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
+    dismissContentStyle, dismissOverlayStyle,
+  } = useScrollDismiss(open, onClose, undefined, true);
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-sm p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
+      <DialogContent
+        className="sm:max-w-sm p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden"
+        style={dismissContentStyle}
+        overlayStyle={dismissOverlayStyle}
+      >
         <VisuallyHidden><DialogTitle>Disponibilité — {courseTitle}</DialogTitle></VisuallyHidden>
         <div className={`flex flex-col max-h-[88vh] overflow-hidden transition-colors duration-200 ${bg}`}>
-          <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
-            <div className="flex items-center justify-between mb-4">
+          <div className={`shrink-0 ${bg} px-5 pt-1 pb-4`}>
+            <ModalGrabber isDark={dk} />
+            <div className="flex items-center justify-between mb-4 mt-2">
               <div className="w-8 h-8" />
               <div className="flex flex-col items-center gap-0.5">
                 <span className={`text-[13px] font-semibold tracking-tight leading-tight ${textPrimary}`}>{courseTitle}</span>
@@ -117,6 +131,10 @@ function AcademyAvailabilityModal({
               [&::-webkit-scrollbar-thumb]:bg-gray-700
               hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
             style={{ WebkitOverflowScrolling: "touch" }}
+            onWheel={onBodyWheel}
+            onTouchStart={onBodyTouchStart}
+            onTouchMove={onBodyTouchMove}
+            onTouchEnd={onBodyTouchEnd}
           >
             {isLoading ? (
               <div className={`text-center py-12 ${textMuted}`}>Chargement…</div>
@@ -288,6 +306,17 @@ export function AcademyDetailModal({
     dismissContentStyle, dismissOverlayStyle,
   } = useScrollDismiss(open, handleClose, undefined, true);
 
+  // Same swipe-to-dismiss, independently, for the nested Signaler dialog
+  // (task: "Standardize Grabber Design and Swipe-to-Dismiss Across Store
+  // Information and Service Modals") — a separate Dialog/open state, so a
+  // separate hook instance; safe since this dialog is already rendered as a
+  // sibling of the main modal's own gesture container, never a descendant.
+  const {
+    onBodyWheel: reportOnBodyWheel, onBodyTouchStart: reportOnBodyTouchStart,
+    onBodyTouchMove: reportOnBodyTouchMove, onBodyTouchEnd: reportOnBodyTouchEnd,
+    dismissContentStyle: reportDismissContentStyle, dismissOverlayStyle: reportDismissOverlayStyle,
+  } = useScrollDismiss(reportModalOpen, () => { setReportModalOpen(false); setReportReason(""); }, undefined, true);
+
   const handleMessage = async () => {
     if (!course || readOnly) return;
     setMessaging(true);
@@ -347,6 +376,7 @@ export function AcademyDetailModal({
             {/* Header image — formation image, Academy public photo fallback,
                 same treatment/position as Barista's modal. */}
             <div className={`w-full h-56 sm:h-72 relative shrink-0 rounded-t-2xl overflow-hidden ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
+              <ModalGrabber isDark={isDark} onImage />
               <Avatar className="w-full h-full rounded-none">
                 <AvatarImage src={getAvatarUrl({ profileImageUrl: heroImage })} alt={course.title} className="object-cover" />
                 <AvatarFallback className="rounded-none bg-gradient-to-br from-indigo-600 to-violet-700">
@@ -506,9 +536,20 @@ export function AcademyDetailModal({
         (docs/print_marketing_ui_synchronization_audit.md Section 14-17). Content/
         functionality unchanged. */}
     <Dialog open={reportModalOpen} onOpenChange={(v) => { if (!v) { setReportModalOpen(false); setReportReason(""); } }}>
-      <DialogContent className={`sm:max-w-md p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden ${t.modalBg}`}>
+      <DialogContent
+        className={`sm:max-w-md p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden ${t.modalBg}`}
+        style={reportDismissContentStyle}
+        overlayStyle={reportDismissOverlayStyle}
+      >
         <VisuallyHidden><DialogTitle>Signaler {course?.academyName ?? ""}</DialogTitle></VisuallyHidden>
-        <div className="px-5 pt-5 pb-5 space-y-3">
+        <div
+          className="px-5 pt-1 pb-5 space-y-3"
+          onWheel={reportOnBodyWheel}
+          onTouchStart={reportOnBodyTouchStart}
+          onTouchMove={reportOnBodyTouchMove}
+          onTouchEnd={reportOnBodyTouchEnd}
+        >
+          <ModalGrabber isDark={isDark} />
           <div className="flex items-center justify-between">
             <div className="w-8 h-8" />
             <span className={`text-[13px] font-semibold tracking-tight leading-tight ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler {course?.academyName}</span>
@@ -547,6 +588,7 @@ export function AcademyDetailModal({
       reviewCount={course?.reviewCount ?? 0}
       reviews={reviews}
       isDark={isDark}
+      showGrabber
       reviewForm={eligibleRegistrations.length > 0 ? (
         <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
           <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>

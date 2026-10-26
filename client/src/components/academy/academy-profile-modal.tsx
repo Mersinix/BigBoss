@@ -13,6 +13,7 @@ import {
 } from "@/hooks/use-barista-academy";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
+import { ModalGrabber } from "@/components/shared/modal-grabber";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
@@ -58,13 +59,26 @@ export function AcademyProfileAvailabilityModal({
   const timeColor = dk ? "text-gray-300" : "text-gray-700";
   const closedColor = dk ? "text-red-400" : "text-red-500";
 
+  // Swipe-to-dismiss on the grabber (task: "Standardize Grabber Design and
+  // Swipe-to-Dismiss Across Store Information and Service Modals") — same
+  // shared hook/parameters as the established reference.
+  const {
+    onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
+    dismissContentStyle, dismissOverlayStyle,
+  } = useScrollDismiss(open, onClose, undefined, true);
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-sm p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
+      <DialogContent
+        className="sm:max-w-sm p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden"
+        style={dismissContentStyle}
+        overlayStyle={dismissOverlayStyle}
+      >
         <VisuallyHidden><DialogTitle>Disponibilité — {academyName}</DialogTitle></VisuallyHidden>
         <div className={`flex flex-col max-h-[88vh] overflow-hidden transition-colors duration-200 ${bg}`}>
-          <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
-            <div className="flex items-center justify-between mb-4">
+          <div className={`shrink-0 ${bg} px-5 pt-1 pb-4`}>
+            <ModalGrabber isDark={dk} />
+            <div className="flex items-center justify-between mb-4 mt-2">
               <div className="w-8 h-8" />
               <div className="flex flex-col items-center gap-0.5">
                 <span className={`text-[13px] font-semibold tracking-tight leading-tight ${textPrimary}`}>{academyName}</span>
@@ -86,6 +100,10 @@ export function AcademyProfileAvailabilityModal({
               [&::-webkit-scrollbar-thumb]:bg-gray-700
               hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
             style={{ WebkitOverflowScrolling: "touch" }}
+            onWheel={onBodyWheel}
+            onTouchStart={onBodyTouchStart}
+            onTouchMove={onBodyTouchMove}
+            onTouchEnd={onBodyTouchEnd}
           >
             {weeklyHours ? (
               <div className="space-y-2 pb-2">
@@ -199,6 +217,17 @@ export function AcademyProfileModal({
     dismissContentStyle, dismissOverlayStyle,
   } = useScrollDismiss(open, handleClose, undefined, true);
 
+  // Same swipe-to-dismiss, independently, for the nested Signaler dialog
+  // (task: "Standardize Grabber Design and Swipe-to-Dismiss Across Store
+  // Information and Service Modals") — a separate Dialog/open state, so a
+  // separate hook instance; safe since this dialog is already rendered as a
+  // sibling of the main modal's own gesture container, never a descendant.
+  const {
+    onBodyWheel: reportOnBodyWheel, onBodyTouchStart: reportOnBodyTouchStart,
+    onBodyTouchMove: reportOnBodyTouchMove, onBodyTouchEnd: reportOnBodyTouchEnd,
+    dismissContentStyle: reportDismissContentStyle, dismissOverlayStyle: reportDismissOverlayStyle,
+  } = useScrollDismiss(reportModalOpen, () => { setReportModalOpen(false); setReportReason(""); }, undefined, true);
+
   const handleMessage = async () => {
     if (!card || readOnly) return;
     setMessaging(true);
@@ -245,6 +274,7 @@ export function AcademyProfileModal({
         ) : (
           <div className="flex flex-col">
             <div className={`w-full h-56 sm:h-72 relative shrink-0 rounded-t-2xl overflow-hidden ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
+              <ModalGrabber isDark={isDark} onImage />
               {/* Cover (Part 4) — when set (or Profile/Flash fall back in, see
                   analyse.md image-mapping task), shown as the banner background with
                   the logo/profileImageUrl as a small corner badge instead of filling
@@ -387,9 +417,20 @@ export function AcademyProfileModal({
         (docs/print_marketing_ui_synchronization_audit.md Section 14-17). Content/
         functionality unchanged. */}
     <Dialog open={reportModalOpen} onOpenChange={(v) => { if (!v) { setReportModalOpen(false); setReportReason(""); } }}>
-      <DialogContent className={`sm:max-w-md p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden ${t.modalBg}`}>
+      <DialogContent
+        className={`sm:max-w-md p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden ${t.modalBg}`}
+        style={reportDismissContentStyle}
+        overlayStyle={reportDismissOverlayStyle}
+      >
         <VisuallyHidden><DialogTitle>Signaler {card?.name ?? ""}</DialogTitle></VisuallyHidden>
-        <div className="px-5 pt-5 pb-5 space-y-3">
+        <div
+          className="px-5 pt-1 pb-5 space-y-3"
+          onWheel={reportOnBodyWheel}
+          onTouchStart={reportOnBodyTouchStart}
+          onTouchMove={reportOnBodyTouchMove}
+          onTouchEnd={reportOnBodyTouchEnd}
+        >
+          <ModalGrabber isDark={isDark} />
           <div className="flex items-center justify-between">
             <div className="w-8 h-8" />
             <span className={`text-[13px] font-semibold tracking-tight leading-tight ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler {card?.name}</span>
@@ -426,6 +467,7 @@ export function AcademyProfileModal({
       reviewCount={card?.reviewCount ?? 0}
       reviews={reviews}
       isDark={isDark}
+      showGrabber
     />
 
     {/* Flash (Phase 3/5E) — real Coffee Owner-facing mode (not preview). */}

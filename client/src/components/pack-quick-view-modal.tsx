@@ -204,7 +204,7 @@ function PackReviewsModal({
       showGrabber
       reviewForm={canReview ? (
         <div className={`p-3 rounded-xl border space-y-2 ${t.dk ? "border-gray-700" : "border-gray-200"}`}>
-          <p className={`text-xs font-medium ${t.textPrimary}`}>{myReview ? "Modifier votre avis" : "Leave a review"}</p>
+          <p className={`text-xs font-medium ${t.textPrimary}`}>{myReview ? "Modifier votre avis" : "Laisser un avis"}</p>
           <StarRatingInput value={rating} onChange={setRating} />
           <Textarea
             placeholder="Share your experience with this pack…"
@@ -383,7 +383,7 @@ function ProductPreviewModal({ productId, onClose }: { productId: number | null;
         <div className={`flex flex-col max-h-[85vh] overflow-hidden transition-colors duration-200 ${bg}`}>
 
           {/* ── Fixed header ── */}
-          <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
+          <div className={`shrink-0 ${bg} px-5 pt-2 pb-4`}>
             <ModalGrabber isDark={dk} />
             <div className="flex items-center justify-between mb-4 mt-2">
               <button

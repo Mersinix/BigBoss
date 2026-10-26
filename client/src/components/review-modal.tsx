@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 import { ModalGrabber } from "@/components/shared/modal-grabber";
+import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import type { MarketplaceListing, MarketplaceProduct } from "@shared/schema";
 
 interface Props {
@@ -161,24 +162,43 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
 
   const ratingLabel = ["", "Médiocre", "Correct", "Bien", "Très bien", "Excellent"][rating] ?? "";
 
+  // Swipe-to-dismiss on the grabber (task: "Standardize Coffee Owner Review
+  // Modals and Grabber Dismissal Behavior") — same shared hook, same
+  // parameters as the Product Detail Modal reference (liveDrag=true, 70px
+  // threshold, 520ms exit). The grabber previously rendered here was purely
+  // decorative; this wires it to the modal's own existing scroll container.
+  // Close button / backdrop / Escape still call handleClose directly,
+  // unchanged — unlike the Product Detail Modal, this modal's content isn't
+  // conditionally unmounted by its own open flag, so there's no premature-
+  // unmount flash to guard against on those paths.
+  const {
+    onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
+    dismissContentStyle, dismissOverlayStyle,
+  } = useScrollDismiss(open, handleClose, undefined, true);
+
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
-      <DialogContent className="sm:max-w-[480px] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
+      <DialogContent
+        className="sm:max-w-[480px] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden"
+        style={dismissContentStyle}
+        overlayStyle={dismissOverlayStyle}
+      >
         <VisuallyHidden><DialogTitle>Écrire un avis</DialogTitle></VisuallyHidden>
 
         <div className={`flex flex-col max-h-[90vh] overflow-hidden transition-colors duration-200 ${bg}`}>
 
           {/* ── Fixed header ── */}
-          <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
+          <div className={`shrink-0 ${bg} px-5 pt-1 pb-4`}>
             <ModalGrabber isDark={dk} />
-            <div className="flex items-center justify-between mb-4 mt-2">
-              {/* Close */}
+            <div className="flex items-center justify-between mb-4 mt-1">
+             
+        {/* Dark / light toggle */}
               <button
-                onClick={handleClose}
-                aria-label="Fermer"
+                onClick={toggle}
+                aria-label="Changer de thème"
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
               >
-                <X className="w-4 h-4" />
+                {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
               </button>
 
               {/* Centered title */}
@@ -188,24 +208,22 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
                 </span>
                 <span className={`text-[11px] font-medium ${textMuted}`}>{product.name}</span>
               </div>
-
-              {/* Dark / light toggle */}
+            {/* Close */}
               <button
-                onClick={toggle}
-                aria-label="Changer de thème"
+                onClick={handleClose}
+                aria-label="Fermer"
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
               >
-                {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
+                <X className="w-4 h-4" />
               </button>
+              
             </div>
 
-            {/* Review type label */}
-            <div className={`flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold rounded-xl ${dk ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-700"}`}>
-              <Package className="w-3.5 h-3.5" /> Avis sur le produit
-            </div>
+            
 
             {/* Divider */}
             <div className={`mt-4 h-px w-full ${divider}`} />
+            
           </div>
 
           {/* ── Scrollable content ── */}
@@ -217,7 +235,15 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
               [&::-webkit-scrollbar-thumb]:bg-gray-700
               hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
             style={{ WebkitOverflowScrolling: "touch" }}
+            onWheel={onBodyWheel}
+            onTouchStart={onBodyTouchStart}
+            onTouchMove={onBodyTouchMove}
+            onTouchEnd={onBodyTouchEnd}
           >
+            {/* Review type label */}
+            <div className={`flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold rounded-xl ${dk ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-700"}`}>
+              <Package className="w-3.5 h-3.5" /> Avis sur le produit
+            </div>
             {submitted ? (
               <div className="flex flex-col items-center gap-3 py-12 text-center">
                 <div className={`w-16 h-16 rounded-full flex items-center justify-center ${dk ? "bg-emerald-500/15" : "bg-emerald-50"}`}>
@@ -228,23 +254,10 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
               </div>
             ) : (
               <div className="flex flex-col gap-5 py-1">
-                {/* Edit mode notice */}
-                {isEditing && (
-                  <div className={`flex items-center gap-2 border rounded-2xl px-4 py-3 text-sm ${dk ? "bg-blue-500/10 border-blue-500/30 text-blue-300" : "bg-blue-50 border-blue-200 text-blue-800"}`}>
-                    <Pencil className="w-4 h-4 shrink-0 text-blue-500" />
-                    <span className="text-[13px]">Vous avez déjà publié un avis. Vous pouvez le modifier ci-dessous.</span>
-                  </div>
-                )}
-
-                {/* Context hint for product review */}
-                {!isEditing && (
-                  <p className={`text-xs rounded-2xl px-4 py-3 border ${dk ? "text-gray-400 bg-gray-800/60 border-gray-700/40" : "text-gray-500 bg-gray-50 border-gray-100"}`}>
-                    Votre avis porte sur le produit lui-même — qualité, fidélité de la description, etc.
-                  </p>
-                )}
+            
 
                 {/* Star rating */}
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <label className={labelCls}>Note *</label>
                   <StarPicker value={rating} onChange={setRating} />
                   {rating > 0 && (
@@ -277,10 +290,10 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
                 {/* Existing product reviews */}
                 {existingReviews.length > 0 && (
                   <div className="mt-2">
-                    <div className={`h-px w-full ${divider} mb-4`} />
-                    <p className={`text-xs font-semibold mb-3 ${textMuted}`}>
-                      {existingReviews.length} avis sur ce produit
-                    </p>
+                    <div className={`h-px w-full ${divider} mb-4`} />              
+                    <div className={`flex items-center justify-center gap-1.5 py-2 mb-3 text-[11px] font-semibold rounded-xl ${dk ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-700"}`}>
+                      <Star className="w-3.5 h-3.5" /> {existingReviews.length} avis sur ce produit
+                    </div>
                     <div className="flex flex-col gap-3">
                       {existingReviews.map((r: any) => (
                         <div key={r.id} className={`border rounded-2xl p-4 space-y-2 ${reviewCardBg}`}>

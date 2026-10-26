@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ReviewsModal } from "@/components/account/reviews-modal";
 import { ModalGrabber } from "@/components/shared/modal-grabber";
+import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
@@ -288,9 +289,24 @@ export function InfoModal({ open, onClose, openingHours, storeName }: {
     ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white"
     : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800";
 
+  // Swipe-to-dismiss on the grabber (task: "Standardize Grabber Design and
+  // Swipe-to-Dismiss Across Store Information and Service Modals") — same
+  // shared hook/parameters as the Product Detail Modal reference. The
+  // grabber previously rendered here was purely decorative; this wires it
+  // to the modal's own existing scroll container. Close button / backdrop
+  // / Escape still call onClose directly, unchanged.
+  const {
+    onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
+    dismissContentStyle, dismissOverlayStyle,
+  } = useScrollDismiss(open, onClose, undefined, true);
+
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-sm p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
+      <DialogContent
+        className="sm:max-w-sm p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden"
+        style={dismissContentStyle}
+        overlayStyle={dismissOverlayStyle}
+      >
         <div className={`flex flex-col max-h-[88vh] overflow-hidden transition-colors duration-200 ${bg}`}>
 
           {/* ── Fixed header ── */}
@@ -341,6 +357,10 @@ export function InfoModal({ open, onClose, openingHours, storeName }: {
               [&::-webkit-scrollbar-thumb]:bg-gray-700
               hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
             style={{ WebkitOverflowScrolling: "touch" }}
+            onWheel={onBodyWheel}
+            onTouchStart={onBodyTouchStart}
+            onTouchMove={onBodyTouchMove}
+            onTouchEnd={onBodyTouchEnd}
           >
             {openingHours ? (
               <div className="space-y-2 pb-2">

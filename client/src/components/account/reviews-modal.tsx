@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Star, X } from "lucide-react";
 import { ModalGrabber } from "@/components/shared/modal-grabber";
+import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 
 // Shared dedicated reviews modal (Phase 7) — the "Avis" block that used to
 // render inline inside each of the 7 professional Details Modals, now opened
@@ -35,12 +36,34 @@ export function ReviewsModal({
   reviewForm?: ReactNode;
   showGrabber?: boolean;
 }) {
+  // Swipe-to-dismiss, gated behind showGrabber (task: "Standardize Coffee
+  // Owner Review Modals and Grabber Dismissal Behavior") — same shared hook/
+  // parameters as the Product Detail Modal reference. Called unconditionally
+  // (a Hook can't be called conditionally), but its handlers/styles are only
+  // ever attached to the DOM when showGrabber is true, below — for every
+  // other existing caller of this shared component (Barista/Maintenance/
+  // Marketing/Academy/Print/Delivery/Driver, none of which pass showGrabber),
+  // nothing is attached to any element and requestDismiss never fires, so
+  // their behavior is completely unchanged.
+  const {
+    onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
+    dismissContentStyle, dismissOverlayStyle,
+  } = useScrollDismiss(open, onClose, undefined, true);
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       {/* Close button synchronized to the Hero Signaler modal's standardized
           design (docs/coffee_owner_avis_close_icon_audit.md) — default shadcn
           close hidden, replaced with the same circular button. */}
-      <DialogContent className={`sm:max-w-md max-h-[80vh] overflow-y-auto rounded-2xl border-0 shadow-2xl [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${isDark ? "bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
+      <DialogContent
+        className={`sm:max-w-md max-h-[80vh] overflow-y-auto rounded-2xl border-0 shadow-2xl [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${isDark ? "bg-gray-900 text-white" : "bg-white text-gray-900"}`}
+        style={showGrabber ? dismissContentStyle : undefined}
+        overlayStyle={showGrabber ? dismissOverlayStyle : undefined}
+        onWheel={showGrabber ? onBodyWheel : undefined}
+        onTouchStart={showGrabber ? onBodyTouchStart : undefined}
+        onTouchMove={showGrabber ? onBodyTouchMove : undefined}
+        onTouchEnd={showGrabber ? onBodyTouchEnd : undefined}
+      >
         {showGrabber && <ModalGrabber isDark={isDark} />}
         <DialogHeader>
           <VisuallyHidden><DialogTitle>Avis — {professionalName}</DialogTitle></VisuallyHidden>

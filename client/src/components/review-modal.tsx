@@ -4,7 +4,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Star, Loader2, CheckCircle, Package, X, Sun, Moon, Pencil } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Star, CheckCircle, Package, X, Sun, Moon, Pencil } from "lucide-react";
 import { useThemeStore } from "@/store/theme-store";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -23,7 +24,7 @@ interface Props {
 function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const [hovered, setHovered] = useState(0);
   return (
-    <div className="flex gap-1">
+    <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map((i) => (
         <button
           key={i}
@@ -31,13 +32,13 @@ function StarPicker({ value, onChange }: { value: number; onChange: (v: number) 
           onMouseEnter={() => setHovered(i)}
           onMouseLeave={() => setHovered(0)}
           onClick={() => onChange(i)}
-          className="transition-transform hover:scale-110 focus:outline-none"
+          className="p-0.5"
         >
           <Star
-            className={`w-7 h-7 transition-colors ${
+            className={`w-5 h-5 transition-colors ${
               i <= (hovered || value)
                 ? "fill-amber-400 text-amber-400"
-                : "text-gray-600/40 dark:text-gray-400/40"
+                : "text-gray-400"
             }`}
           />
         </button>
@@ -254,38 +255,42 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
               </div>
             ) : (
               <div className="flex flex-col gap-5 py-1">
-            
 
-                {/* Star rating */}
-                <div className="space-y-1">
-                  <label className={labelCls}>Note *</label>
-                  <StarPicker value={rating} onChange={setRating} />
-                  {rating > 0 && (
-                    <p className={`text-xs ${textMuted}`}>{ratingLabel}</p>
-                  )}
+                {/* Review form — same card/control styling as the Pack
+                    Detail Modal's own Avis form (pack-quick-view-modal.tsx),
+                    task: "Standardize Product Review Forms with Pack Review
+                    Form Design". Labels ("Note *" / "Commentaire
+                    (facultatif)") stay — product-specific content, not part
+                    of Pack's own form — only the surrounding presentation
+                    (card, star size, textarea rows, button) is matched. */}
+                <div className={`p-3 rounded-xl border space-y-2 ${dk ? "border-gray-700" : "border-gray-200"}`}>
+                  <div className="space-y-1">
+                    <label className={labelCls}>Note *</label>
+                    <StarPicker value={rating} onChange={setRating} />
+                    {rating > 0 && (
+                      <p className={`text-xs ${textMuted}`}>{ratingLabel}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Textarea
+                      value={comment}
+                      onChange={(e) => setComment(e.target.value)}
+                      placeholder="Partagez votre expérience avec ce produit…"
+                      className={`resize-none text-sm rounded-xl ${inputCls}`}
+                      rows={2}
+                    />
+                  </div>
+
+                  <Button
+                    size="sm"
+                    onClick={() => mutation.mutate()}
+                    disabled={!canSubmit || mutation.isPending}
+                    className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white border-0"
+                  >
+                    {mutation.isPending ? "Enregistrement…" : isEditing ? "Mettre à jour l'avis" : "Publier l'avis"}
+                  </Button>
                 </div>
-
-                <div className="space-y-1.5">
-                  <label className={labelCls}>Commentaire (facultatif)</label>
-                  <Textarea
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    placeholder="Partagez votre expérience avec ce produit…"
-                    className={`${inputCls} resize-none`}
-                    rows={3}
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => mutation.mutate()}
-                  disabled={!canSubmit || mutation.isPending}
-                  className="w-full rounded-2xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3.5 text-sm font-semibold transition-all shadow-lg shadow-amber-500/20 active:scale-[0.98]"
-                >
-                  {mutation.isPending ? (
-                    <span className="flex items-center justify-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Enregistrement…</span>
-                  ) : isEditing ? "Mettre à jour l'avis" : "Publier l'avis"}
-                </button>
 
                 {/* Existing product reviews */}
                 {existingReviews.length > 0 && (

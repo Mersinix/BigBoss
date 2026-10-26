@@ -14521,3 +14521,116 @@ Phase Two ; aucune fonctionnalité n'a été créée.
   possible dans cet environnement (pas d'outil de navigateur) —
   uniquement lecture de code, `tsc` (exécuté après chaque fichier),
   et `build`, signalé explicitement plutôt que supposé vérifié.
+
+---
+
+## 32. Alignement visuel du formulaire Avis Produit sur le formulaire Avis Pack
+
+### Audit
+
+**Référence — Pack Detail Modal → Avis → formulaire** (`pack-quick-
+view-modal.tsx`, `PackReviewsModal`, prop `reviewForm` passée à
+`ReviewsModal` partagé) : UN seul bloc JSX pour les deux états
+(édition/création), texte conditionnel uniquement (`myReview ? "..." :
+"..."`) :
+- Carte avec bordure : `p-3 rounded-xl border space-y-2` (couleur de
+  bordure selon le thème).
+- Une seule ligne de titre (`text-xs font-medium`) : « Modifier votre
+  avis » / « Laisser un avis ».
+- `StarRatingInput` (local à ce fichier) : étoiles `w-5 h-5`, conteneur
+  `gap-0.5`, bouton `p-0.5`, pas d'effet de survol `scale`, couleur non
+  sélectionnée `text-gray-400` (neutre, pas de variante dark séparée).
+- `Textarea` : `resize-none text-sm rounded-xl` + classe de thème,
+  `rows={2}`.
+- `<Button size="sm">` (composant partagé shadcn, pas un `<button>`
+  brut) : `rounded-xl bg-amber-500 hover:bg-amber-600 text-white
+  border-0`, PAS pleine largeur, pas d'ombre, pas d'icône de
+  chargement — juste le texte « Submitting… » pendant l'envoi.
+
+**Cible — Product Detail Modal → Avis → formulaire**
+(`review-modal.tsx`, lignes 259-288, MÊME bloc JSX unique pour les
+deux états, texte conditionnel `isEditing ? "..." : "..."` — donc pas
+de distinction structurelle entre A et B à réconcilier, la référence
+non plus) : actuellement sans carte/bordure, avec labels séparés
+« Note * » et « Commentaire (facultatif) » (`labelCls`,
+`text-xs font-semibold`), `StarPicker` (local, `w-7 h-7`, `gap-1`,
+hover `scale-110`, couleur non sélectionnée `text-gray-600/40 dark:
+text-gray-400/40`), `Textarea` avec `rows={3}`, et un `<button>` brut
+pleine largeur `rounded-2xl py-3.5 shadow-lg shadow-amber-500/20
+active:scale-[0.98]` avec icône `Loader2` pendant l'envoi.
+
+### Décision de portée
+
+Les labels « Note * » / « Commentaire (facultatif) » et le texte
+d'aide (« Médiocre »/« Correct »/etc. sous les étoiles) sont des
+éléments PROPRES à Product, explicitement listés par la tâche parmi
+ce qui doit être préservé — ils restent, seule leur présentation
+visuelle (taille/couleur des étoiles, carte, bouton) est alignée sur
+Pack. Le titre « Modifier votre avis »/« Laisser un avis » de Pack
+n'est PAS dupliqué à l'intérieur de la carte de Product — Product
+l'affiche déjà dans son propre en-tête fixe (« Modifier votre avis » /
+« Écrire un avis »), explicitement protégé par la tâche (« Preserve the
+product-specific heading »), donc aucune duplication ajoutée.
+
+### Implémentation
+
+**`client/src/components/review-modal.tsx`** :
+1. `StarPicker` (local, utilisé uniquement dans ce formulaire) :
+   restylé pour correspondre visuellement à `StarRatingInput` de
+   Pack — `w-7 h-7`→`w-5 h-5`, `gap-1`→`gap-0.5`, bouton `p-0.5`
+   (ajouté), suppression du `hover:scale-110`, couleur non
+   sélectionnée uniformisée à `text-gray-400` (au lieu de la variante
+   opacity dark-aware). Aucune autre modification au composant
+   (toujours local, non exporté, non partagé ailleurs).
+2. Bloc formulaire (lignes 259-288) enveloppé dans une carte
+   `p-3 rounded-xl border space-y-2` (couleur de bordure selon le
+   thème, même valeurs que Pack) — les labels « Note * » et
+   « Commentaire (facultatif) » restent, inchangés dans leur texte et
+   leur fonction.
+3. `Textarea` : `rows={3}` → `rows={2}` (aligné sur Pack) ; classe
+   inchangée par ailleurs (`inputCls` déjà équivalent au token de
+   thème de Pack).
+4. Bouton : remplacé par le composant partagé `<Button size="sm">`
+   (import ajouté) avec les classes exactes de Pack
+   (`rounded-xl bg-amber-500 hover:bg-amber-600 text-white border-0`),
+   `w-full`/`shadow-lg`/`active:scale`/icône `Loader2` retirés, état
+   d'envoi simplifié au texte seul (« Enregistrement… »), comme Pack.
+   `onClick`/`disabled` (logique métier) inchangés.
+5. Aucun changement à l'en-tête, à l'image, à la navigation, à la
+   liste des avis existants, au grabber/geste de swipe, au thème, ni à
+   aucune logique de soumission/validation/API/base de données.
+   `PackReviewsModal`/`reviews-modal.tsx`/tout autre modal Avis non
+   touchés.
+
+### Tests exécutés et résultats réels
+
+- `npx tsc --noEmit` : **0 erreur** (exit code 0, aucune sortie).
+- `npm run build` : **succès** — `vite build` (2831 modules
+  transformés, ✓ built in 1m 5s) + `esbuild` serveur
+  (`dist/index.cjs` 2.1 Mo, Done in 665ms). Seul avertissement : le
+  warning Rollup pré-existant sur la taille du chunk JS, sans rapport.
+- `git status --short` / `git diff --stat` : seul
+  `client/src/components/review-modal.tsx` modifié dans ce tour
+  (+40/-34 lignes) — confirme un changement strictement limité à ce
+  fichier, aucun autre modal Avis ni `pack-quick-view-modal.tsx`
+  touchés.
+- **Aucun test navigateur/runtime n'a été possible** dans cet
+  environnement (pas d'outil d'automatisation navigateur disponible
+  cette session). N'ont été vérifiés QUE par lecture de code — jamais
+  observés en exécution : le rendu visuel réel de la carte/étoiles/
+  bouton dans les deux états (« Modifier votre avis » / « Laisser un
+  avis »), la sélection d'étoiles, la saisie du commentaire, la
+  soumission réelle (création et mise à jour), le rendu clair/sombre,
+  et la non-régression du Pack Detail Modal et des autres modales
+  Avis (non modifiés, confirmé par `git status`, mais pas observés
+  visuellement).
+
+### Note sur un import devenu superflu, non touché
+
+L'import `Pencil` (lucide-react) dans `review-modal.tsx` n'est plus
+utilisé dans le fichier (le bloc qui s'en servait — « Edit mode notice »
+— avait déjà été retiré par une modification manuelle antérieure de
+l'utilisateur dans l'IDE, avant cette tâche). Ce n'est pas une
+régression introduite ici ; laissé tel quel, hors du périmètre strict
+de cette tâche (restylage du seul formulaire Avis), pour éviter un
+changement non demandé.

@@ -386,6 +386,15 @@ function ProductPreviewModal({ productId, onClose }: { productId: number | null;
           <div className={`shrink-0 ${bg} px-5 pt-2 pb-4`}>
             <ModalGrabber isDark={dk} />
             <div className="flex items-center justify-between mb-4 mt-2">
+              
+                <button
+                onClick={toggle}
+                aria-label="Toggle theme"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
+              >
+                {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
+              </button>
+              <span className={`text-[13px] font-semibold tracking-tight ${textPrimary}`}>Product Preview</span>
               <button
                 onClick={onClose}
                 aria-label="Close"
@@ -393,16 +402,7 @@ function ProductPreviewModal({ productId, onClose }: { productId: number | null;
               >
                 <X className="w-4 h-4" />
               </button>
-
-              <span className={`text-[13px] font-semibold tracking-tight ${textPrimary}`}>Product Preview</span>
-
-              <button
-                onClick={toggle}
-                aria-label="Toggle theme"
-                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
-              >
-                {dk ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
-              </button>
+             
             </div>
             <div className={`h-px w-full ${divider}`} />
           </div>

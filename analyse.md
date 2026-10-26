@@ -13454,3 +13454,213 @@ inchangés.
 - Aucun autre changement de layout, de badge, ou de logique de mapping
   n'a été introduit dans `PrintServiceDetailModal` au-delà de ce
   repositionnement.
+
+---
+
+## 26. Bug de fermeture imbriquée (Product Detail Modal) + audit de standardisation du swipe-to-dismiss
+
+### Audit — mécanisme du geste et cause racine du bug Product
+
+**`client/src/hooks/use-scroll-dismiss.ts`** : hook partagé, état 100%
+local à l'instance qui l'appelle (refs/state internes, pas de store
+global). Il expose `onBodyWheel`/`onBodyTouchStart`/`onBodyTouchMove`/
+`onBodyTouchEnd` à poser sur LE conteneur scrollable d'UNE modale, plus
+`dismissContentStyle`/`dismissOverlayStyle` pour l'animation de
+fermeture. Règle de geste : quand le scroll est épinglé en haut
+(`scrollTop <= 0`) et qu'un tirage supplémentaire vers le haut dépasse
+`DISMISS_THRESHOLD` (70px), la modale se ferme (slide-down + fade,
+`SCROLL_DISMISS_ANIM_MS` = 520ms). Mode `liveDrag` (utilisé par
+Pack/Product/Barista/Maintenance/Marketing/Academy/Print — tous les
+appels passent `true` en 4ᵉ argument) : le doigt entraîne la modale en
+direct, avec retour élastique si le geste ne dépasse pas le seuil au
+relâchement. Rien dans ce hook ne gère les modales imbriquées — c'est
+une responsabilité de PLACEMENT dans l'arbre React de chaque appelant,
+pas du hook lui-même.
+
+**Mécanisme réel du bug** : les modales imbriquées (Avis/Disponibilité/
+Signalement, via `ReviewsModal`/`ReviewModal`/`*AvailabilityModal`) sont
+elles-mêmes des `<Dialog>` Radix SÉPARÉES, montées dans un PORTAIL React
+(nœud DOM ajouté ailleurs, hors de l'arbre DOM du parent). **Mais React
+fait remonter (bubble) ses événements synthétiques selon l'ARBRE DE
+COMPOSANTS REACT, pas selon l'arbre DOM réel** — un `Portal` ne casse
+PAS la chaîne de bubbling côté React. Donc si le JSX d'une modale
+enfant est rendu comme DESCENDANT (dans l'arborescence JSX) du
+conteneur qui porte `onTouchStart`/`onTouchMove`/`onTouchEnd` de
+`useScrollDismiss`, un geste tactile qui démarre VISUELLEMENT à
+l'intérieur de l'enfant (ailleurs dans le DOM réel) remonte quand même
+jusqu'aux gestionnaires du PARENT et peut déclencher la fermeture du
+parent — alors que l'enfant, lui, reste ouvert (son propre état
+`open`/`onClose` n'a pas été touché). C'est exactement le bug décrit :
+« swipe intended to dismiss the Product Detail Modal can cause [it] to
+close while the Review Modal remains open ».
+
+**Confirmation par comparaison directe de code — Pack (référence,
+correct) vs Product (buggé)** :
+- `pack-quick-view-modal.tsx` : le div scrollable portant `onWheel=
+  {handleBodyWheel}`/`onTouchStart={handleBodyTouchStart}`/etc.
+  s'ouvre ligne 762 et se ferme ligne 1029 (juste après « Bottom
+  spacer »). `<ProductPreviewModal>` et `<PackReviewsModal>` sont
+  rendus ligne 1081-1092, **après** `</DialogContent>` (ligne 1079) —
+  SIBLINGS du conteneur scrollable, jamais ses descendants. Aucun
+  risque de remontée d'événement.
+- `product-detail-content.tsx` (rendu par `product-quick-view-modal.tsx`,
+  qui instancie `useScrollDismiss` et transmet ses handlers en props à
+  ce composant partagé, puisqu'il sert aussi de page complète sans
+  geste) : le div scrollable s'ouvre ligne 1201 avec `onTouchStart=
+  {onBodyTouchStart}`/etc. (props reçues du parent). `auxModals`
+  (fragment contenant `<LocationPickerModal>` + `<ReviewModal>`, ce
+  dernier étant la modale Avis du produit) était inséré ligne 1331,
+  **avant** la fermeture du div scrollable (ligne 1332) — donc
+  DESCENDANT du conteneur à geste. C'est la cause racine exacte,
+  confirmée par lecture directe (pas supposée) : c'est la seule
+  différence structurelle entre le cas Pack (correct) et le cas Product
+  (buggé) parmi tous les modaux audités.
+- Le composant `ReviewModal` (Product, singulier — différent de
+  `ReviewsModal` pluriel partagé par Barista/Maintenance/Marketing/
+  Academy/Print/Pack) n'a lui-même AUCUN geste de swipe-dismiss propre
+  (scroll natif `overflow-y-auto` uniquement, fermeture via bouton
+  X/Escape/clic sur le fond) — donc le bug n'était pas « deux gestes en
+  conflit », mais bien « le geste du PARENT qui capte, par remontée
+  d'événement, un toucher qui a lieu dans l'enfant ».
+
+### Audit de balayage complet — tous les autres modaux listés en Section 5
+
+Vérifié par lecture directe (numéros de ligne de fermeture comparés),
+pour chacun des fichiers qui appellent `useScrollDismiss` et rendent au
+moins une modale imbriquée : le div/`DialogContent` à geste se ferme
+TOUJOURS avant tout `<Dialog>`/`<...Modal>` imbriqué (Avis/
+Disponibilité/Signalement), qui sont tous des SIBLINGS, jamais des
+descendants — donc aucun autre bug de ce type dans toute l'application :
+
+| Fichier | Modale(s) imbriquée(s) | Position relative au conteneur à geste |
+|---|---|---|
+| `barista-detail-modal.tsx` | Signalement, Disponibilité, Portfolio, Avis | Toutes après `</Dialog>` du modal principal — **correct** |
+| `maintenance-page.tsx` (`AgentDetailModal`) | Signalement, Disponibilité, Avis | Après `</Dialog>` — **correct** |
+| `marketing-service-detail-modal.tsx` | Signalement, Avis | Après `</Dialog>` — **correct** |
+| `academy-detail-modal.tsx` | Signalement, Disponibilité, Avis | Après `</Dialog>` — **correct** |
+| `print-service-detail-modal.tsx` | Signalement, Avis | Après `</Dialog>` — **correct** |
+| `marketing-detail-modal.tsx` (Agence) | Signalement, Disponibilité, Avis | Après `</Dialog>` — **correct** |
+| `academy-profile-modal.tsx` (Académie) | Signalement, Disponibilité, Avis | Après `</Dialog>` — **correct** |
+| `print-company-detail-modal.tsx` (Société) | Signalement, Disponibilité, Avis | Après `</Dialog>` — **correct** |
+| `pack-quick-view-modal.tsx` | Aperçu Produit, Avis Pack | Après `</DialogContent>` — **correct (référence)** |
+| `product-quick-view-modal.tsx` / `product-detail-content.tsx` | LocationPicker, Avis Produit | **AVANT** fermeture du div à geste — **bug confirmé, corrigé dans cette tâche** |
+
+Les 9 autres consommateurs de `useScrollDismiss` (formulaires de
+publication/gestion de mission Barista/Maintenance, modales de liste
+noire Barista/Maintenance/Marketing/Academy/Print) ne rendent chacun
+qu'**un seul** `<Dialog>` (`grep -c "<Dialog" == 1` pour les 9,
+vérifié) — aucune modale imbriquée, donc aucun risque de ce bug, rien à
+changer.
+
+**Store Pages (Section A de la tâche)** : aucune des Store Pages
+(`store-detail-page.tsx` Coffee Owner, `marketing-store-detail-page.tsx`,
+`academy-store-detail-page.tsx`, `print-store-detail-page.tsx`,
+`supplier/store-page.tsx`) n'importe `useScrollDismiss` — confirmé par
+recherche, aucune occurrence. Leurs propres modales Avis
+(`SupplierReviewsModal`→`ReviewsModal`) et Heures d'ouverture
+(`InfoModal`) sont de simples `<Dialog>` à scroll natif, sans aucun
+geste de swipe-dismiss — cohérent avec le fait qu'une Store Page est une
+page normale (scroll de navigateur), pas une Dialog avec son propre
+geste, donc il n'existe structurellement AUCUNE couche de geste parente
+avec laquelle ces modales pourraient entrer en conflit. La consigne de
+la tâche elle-même (§4.1 : « should follow the finger naturally **where
+supported by the existing design** ») exclut explicitement d'inventer
+un geste là où il n'existait pas — confirmé qu'aucun changement n'est
+nécessaire ni souhaitable ici.
+
+### Correction appliquée (Phase Two)
+
+**`client/src/components/product-detail-content.tsx`** : `{auxModals}`
+déplacé de l'intérieur du div scrollable à geste (juste avant sa
+fermeture, ligne ~1331 avant correction) vers l'extérieur de ce même
+div (juste après sa fermeture, toujours à l'intérieur du wrapper
+extérieur `<div className="flex-1 min-h-0 flex flex-col ...">`) — même
+principe de placement que `pack-quick-view-modal.tsx`. Changement d'une
+seule ligne de position (coupé-collé), aucune logique, aucun contenu,
+aucun style modifié. Le rendu en mode page complète (branche
+`!isModal`, ligne ~1365, où `auxModals` n'est de toute façon dans
+aucun conteneur à geste puisque le mode page n'a pas de swipe-dismiss)
+reste totalement inchangé.
+
+### Conclusion de la Phase Three (standardisation)
+
+Le « standard » demandé par la tâche (placement des modales imbriquées
+en dehors du conteneur à geste de leur parent) existait déjà,
+correctement, dans TOUS les fichiers de l'application sauf un —
+confirmé par audit exhaustif plutôt que supposé. Aucune extraction de
+logique partagée supplémentaire n'était nécessaire ou justifiée :
+`useScrollDismiss` est déjà le seul et unique point de geste partagé,
+et le vrai « standard » manquant n'était pas une histoire de hook mais
+de PLACEMENT JSX dans un seul fichier — corrigé ci-dessus. Créer une
+abstraction plus large (ex. un composant wrapper générique « modale
+imbriquée ») aurait été une réécriture non justifiée par l'ampleur réelle
+du problème (un seul fichier, une seule ligne déplacée) et contraire à
+la consigne « Avoid a large modal-system rewrite ».
+
+### Tests exécutés et résultats réels
+
+- `npx tsc --noEmit` : **0 erreur** (exit code 0, aucune sortie),
+  exécuté après la correction.
+- `npm run build` : **succès** — `vite build` (2830 modules
+  transformés, ✓ built in 24.46s) + `esbuild` serveur (`dist/index.cjs`
+  2.1 Mo, Done in 633ms). Seul avertissement : le warning Rollup
+  pré-existant sur la taille du chunk JS, sans rapport.
+- `git status --short` : seuls `analyse.md` et
+  `client/src/components/product-detail-content.tsx` modifiés dans ce
+  tour (les tâches précédentes de cette session ont depuis été
+  committées séparément par l'utilisateur) — confirme que le correctif
+  est strictement limité au fichier identifié comme cause racine,
+  aucun autre fichier touché.
+- **Aucun test navigateur/runtime n'a été possible** dans cet
+  environnement (pas d'outil d'automatisation navigateur disponible
+  cette session, comme pour toutes les tâches précédentes). N'ont été
+  vérifiés QUE par lecture de code — jamais observés en exécution : le
+  comportement réel du swipe vers le haut à l'intérieur de la Review
+  Modal du Produit (avant/après correctif), la fermeture en bonne
+  séquence, l'absence de modale orpheline, le drag live (`liveDrag`)
+  en temps réel sur mobile, et la non-régression du comportement
+  Pack/Barista/Maintenance/Marketing/Academy/Print déjà confirmé par
+  lecture structurelle mais jamais observé visuellement.
+
+### Rapport final
+
+**Cause racine du bug Product** : `{auxModals}` (contenant
+`ReviewModal`, la modale Avis du Produit) était rendu comme DESCENDANT
+du div scrollable portant les gestionnaires `onBodyTouchStart/Move/End`
+de `useScrollDismiss` (transmis en props depuis
+`product-quick-view-modal.tsx`) à l'intérieur de `product-detail-
+content.tsx`. Comme React fait remonter ses événements synthétiques
+selon l'arbre de composants (pas l'arbre DOM réel, malgré le Portal
+Radix de la modale Avis), un geste tactile à l'intérieur de la Review
+Modal remontait jusqu'aux gestionnaires du parent et pouvait fermer le
+Produit tout en laissant la Review Modal ouverte.
+
+**Changement effectué** : une seule relocalisation JSX dans
+`client/src/components/product-detail-content.tsx` — `{auxModals}`
+déplacé hors du div à geste (maintenant son sibling), sans toucher à
+aucune logique, donnée, ou style. Aucun changement à `use-scroll-
+dismiss.ts` (le hook partagé n'a pas eu besoin d'être modifié ni
+étendu) ni à aucun autre fichier.
+
+**Fichiers modifiés** : `client/src/components/product-detail-
+content.tsx` uniquement (+ `analyse.md`).
+
+**Modales/sections requises par la tâche, trouvées et vérifiées** :
+Store Page Review/Opening Hours (4 Store Pages Coffee Owner/Marketing/
+Academy/Print + Supplier) — vérifiées, aucun geste existant, rien à
+changer ; Product + Review (corrigé) ; Pack + Review (vérifié non
+régressé) ; Maintenance/Barista Detail + Review/Disponibilité/
+Signalement (vérifiés déjà corrects) ; Marketing/Academy/Print — à la
+fois les modales « Agence/Académie/Société » et « Service/Formation »,
+plus leurs Store Pages (vérifiés déjà corrects).
+
+**Modales demandées mais non trouvées / non applicables** : aucune —
+chaque type de modale mentionné par la tâche (Review, Disponibilité/
+Availability, Report/Signalement, Opening Hours) existe déjà dans
+l'application à chacun des emplacements listés en Section 5 ; aucun
+n'a dû être créé.
+
+**Limitations** : comme pour toutes les tâches de cette session, aucune
+vérification visuelle/runtime n'a été possible (pas d'outil de
+navigateur) — uniquement lecture de code + `tsc` + `build`, signalé
+explicitement plutôt que supposé vérifié.

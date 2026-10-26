@@ -1327,9 +1327,21 @@ export function ProductDetailContent({
               <CommercialGate isPending={isPending} />
             )}
           </div>
-
-          {auxModals}
         </div>
+
+        {/* auxModals (LocationPickerModal + ReviewModal) rendered OUTSIDE the
+            scrollable gesture div above, not as its descendant — otherwise a
+            touch gesture starting inside one of these nested Dialogs (e.g. a
+            swipe meant to scroll/dismiss the Review Modal) bubbles up through
+            React's synthetic event tree into this component's own
+            onBodyTouchMove/onBodyTouchEnd (passed down from
+            product-quick-view-modal.tsx's useScrollDismiss) and can dismiss
+            THIS modal while the nested one stays open underneath — the exact
+            bug this fixes. Matches the Pack Detail Modal's own nested-modal
+            placement (pack-quick-view-modal.tsx renders PackReviewsModal/
+            ProductPreviewModal as siblings of its own gesture-bound
+            DialogContent, never inside it). */}
+        {auxModals}
       </div>
     );
   }

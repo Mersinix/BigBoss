@@ -13664,3 +13664,203 @@ n'a dû être créé.
 vérification visuelle/runtime n'a été possible (pas d'outil de
 navigateur) — uniquement lecture de code + `tsc` + `build`, signalé
 explicitement plutôt que supposé vérifié.
+
+---
+
+## 27. Standardisation du swipe-to-dismiss sur la référence « Signaler » (Maintenance, hero) + Included Products
+
+### Phase One — Identification et audit de la référence réelle
+
+**Localisation de la référence** : le bouton « report » de la section
+hero `/maintenance` (`heroActions.MAINTENANCE.reportEnabled`, icône
+`Ban`, `maintenance-page.tsx` ligne 1142-1145) ouvre
+`setBlacklistOpen(true)` → `MaintenanceBlacklistModal`
+(`client/src/components/maintenance/maintenance-blacklist-modal.tsx`,
+titre réel « Professionnels Maintenance signalés »). Ce modal contient
+lui-même un bouton littéralement intitulé **« Signaler »** (ligne 130,
+icône `Flag`) qui bascule un formulaire de signalement **inline**
+(`formOpen`, lignes 143-159) — pas une seconde Dialog imbriquée.
+C'est la modale de référence désignée par la tâche.
+
+**Comportement de geste réel** (dérivé de la lecture de
+`client/src/hooks/use-scroll-dismiss.ts`, appelé ligne 92 de ce fichier
+exactement comme `useScrollDismiss(open, onClose, undefined, true)`) :
+- Geste reconnu : épinglage en haut du scroll (`scrollTop <= 0`) +
+  tirage supplémentaire vers le haut (tactile) ou molette vers le haut.
+- `liveDrag=true` (4ᵉ argument) : en tactile, la modale suit le doigt
+  en direct dès l'épinglage (translateY borné à ≥ 0, jamais vers le
+  haut), sans transition pendant le drag actif.
+- Seuil de validation au relâchement : `dragOffset >= 70px`
+  (`DISMISS_THRESHOLD`) → fermeture committée (continue le même
+  mouvement vers le bas, `transform: translateY(100vh)`, fade
+  synchronisé, durée `520ms` = `SCROLL_DISMISS_ANIM_MS`, easing
+  `cubic-bezier(0.32, 0.72, 0, 1)`). Sous le seuil → retour élastique à
+  0 avec transition `220ms`.
+- Molette (desktop) : accumulation du delta vers le haut uniquement
+  quand épinglé en haut, reset si scroll vers le bas ou si > 500ms
+  (`PULL_RESET_MS`) depuis le dernier tick ; dépassement du même seuil
+  70px → fermeture immédiate (pas de drag visuel, juste l'animation de
+  sortie).
+- Bouton Fermer (X) et `onOpenChange` (clic sur le fond / Escape) :
+  appellent `onClose` **directement**, PAS `requestDismiss` — donc ces
+  trois chemins de fermeture n'ont pas l'animation de sortie glissée,
+  seul le geste de swipe/molette l'a. Vérifié : c'est le choix réel et
+  constant de la modale de référence elle-même (ligne 134 `onClick=
+  {onClose}`, ligne 96 `onOpenChange={(v) => { if (!v) onClose(); }}`)
+  — pas une omission à corriger, c'est la règle à reproduire telle
+  quelle (tâche : « Do not guess the reference behavior... use those
+  rules consistently »).
+- Nettoyage : l'état de geste (accumulateurs, drag offset, flags) est
+  réinitialisé uniquement à la transition `false → true` de `isOpen`
+  (jamais à la fermeture, pour ne pas interrompre l'animation de
+  sortie en cours) ; le timer de fermeture est nettoyé au démontage.
+- Relation avec la page/modale parente : `MaintenanceBlacklistModal`
+  ouvre elle-même `AgentDetailModal` (ligne 202, **après** `</Dialog>`
+  — sibling, jamais descendant du conteneur à geste) quand on clique un
+  professionnel signalé — donc déjà un cas réel de modale imbriquée,
+  déjà correct par construction.
+
+### Vérification : cette logique de geste est-elle déjà uniforme partout ?
+
+Recherche exhaustive de tous les appels `= useScrollDismiss(` dans
+`client/src` (19 fichiers, hors le hook lui-même) : **les 19 appellent
+le hook avec exactement les mêmes paramètres que la référence** —
+`useScrollDismiss(<isOpen>, <onClose/onDismiss>, undefined, true)`
+(seul `product-quick-view-modal.tsx` passe `520` explicitement au lieu
+d'`undefined` pour le 3ᵉ argument — `520` est déjà la valeur par défaut
+`SCROLL_DISMISS_ANIM_MS`, donc strictement équivalent, pas une
+divergence réelle). Fichiers vérifiés : `academy-profile-modal.tsx`,
+`academy-detail-modal.tsx`, `academy-blacklist-modal.tsx`,
+`barista-detail-modal.tsx`, `barista-blacklist-modal.tsx`,
+`pack-quick-view-modal.tsx`, `job-management-modal.tsx` (Barista),
+`job-post-form-modal.tsx` (Barista), `product-quick-view-modal.tsx`,
+`marketing-service-detail-modal.tsx`, `marketing-blacklist-modal.tsx`,
+`marketing-detail-modal.tsx`, `print-service-detail-modal.tsx`,
+`print-company-detail-modal.tsx`, `print-blacklist-modal.tsx`,
+`maintenance-page.tsx` (`AgentDetailModal`),
+`maintenance-job-post-form-modal.tsx`,
+`maintenance-job-management-modal.tsx`,
+`maintenance-blacklist-modal.tsx`.
+
+**Conclusion** : la logique de geste elle-même (seuils, animation,
+`liveDrag`, nettoyage) est déjà intégralement standardisée dans toute
+l'application via ce seul hook partagé, avec des paramètres identiques
+partout — rien à « extraire » de plus, `useScrollDismiss` EST déjà
+l'abstraction partagée unique demandée par la tâche (Step 2 : « Reuse
+existing abstractions where appropriate »). Aucune nouvelle
+dépendance, aucun nouveau système de geste global n'est nécessaire.
+
+### Vérification : placement des modales imbriquées (ré-audit, cf. tâche précédente §26)
+
+Ré-confirmé par relecture que, dans chacun des 19 fichiers ci-dessus
+qui rendent au moins une modale enfant (Avis/Disponibilité/
+Signalement/Détail professionnel), celle-ci est toujours un SIBLING du
+conteneur à geste de son parent, jamais un descendant — donc aucune
+régression ni nouveau cas du bug corrigé en tâche 26
+(`product-detail-content.tsx`) n'a été introduit entre-temps. Les
+Store Pages (Coffee Owner/Marketing/Academy/Print + Supplier) et leurs
+modales Avis/Heures d'ouverture n'ont toujours aucun geste de swipe
+propre (confirmé, aucune n'importe `useScrollDismiss`) — rien à
+changer là, cohérent avec la clause « where supported by the existing
+design » des tâches précédentes et avec la consigne de cette tâche de
+ne pas créer de fonctionnalité absente.
+
+### Exception explicite de la tâche — Included Products (Pack Detail Modal)
+
+**Seul élément de la tâche qui demande une ADDITION réelle de geste
+(pas juste une vérification)** : la modale « Included Products »,
+confirmée être `ProductPreviewModal`
+(`client/src/components/pack-quick-view-modal.tsx`, lignes 335-453,
+ouverte en cliquant un article de la section « Produits inclus » du
+Pack Detail Modal, rendue ligne 1081, déjà un sibling correct du
+conteneur à geste du Pack — vérifié non régressé). Avant cette tâche,
+elle n'avait **aucun** geste de swipe-dismiss (`<Dialog>` simple,
+scroll natif `overflow-y-auto`, fermeture uniquement via le bouton X/
+Escape/fond) — confirmé par lecture, contrairement à toute autre
+modale « Disponibilité/Avis/Signalement » qui n'en a pas non plus MAIS
+n'est PAS explicitement demandée comme exception dans cette tâche. La
+tâche la nomme spécifiquement (« Additionally, include the Included
+Products modal... ») avec sa propre sous-section de tests dédiés qui
+n'ont de sens que si le geste y est réellement ajouté — traité comme
+l'exception explicite qu'elle est, pas étendu aux autres
+Disponibilité/Avis/Signalement qui restent dans leur état actuel
+(« smallest reliable changes »).
+
+### Implémentation
+
+**`client/src/components/pack-quick-view-modal.tsx`,
+`ProductPreviewModal`** : ajout de
+`useScrollDismiss(productId != null, onClose, undefined, true)` —
+exactement la signature de la référence (`MaintenanceBlacklistModal`).
+`style={dismissContentStyle}`/`overlayStyle={dismissOverlayStyle}`
+ajoutés sur son `<DialogContent>` ; `onWheel`/`onTouchStart`/
+`onTouchMove`/`onTouchEnd` ajoutés sur son div scrollable existant
+(`overflow-y-auto`, ligne ~393). Bouton X et `onOpenChange` **non
+modifiés** — ils continuent d'appeler `onClose` directement, exactement
+comme la référence (pas de `requestDismiss` sur ces chemins, pour
+reproduire fidèlement le comportement réel observé, pas une version
+« améliorée »). Aucun changement de contenu, de layout, de données, ou
+de logique métier.
+
+Comme `ProductPreviewModal` est déjà rendu en sibling du conteneur à
+geste du Pack Detail Modal (pas un descendant), lui donner son propre
+geste indépendant est sûr par construction — exactement le même motif
+déjà éprouvé partout ailleurs dans l'application (ex. `AgentDetailModal`
+ouvert depuis `MaintenanceBlacklistModal`, chacun avec son propre
+`useScrollDismiss` totalement indépendant, sans conflit, parce que
+sibling et jamais descendant).
+
+### Tests exécutés et résultats réels
+
+- `npx tsc --noEmit` : **0 erreur** (exit code 0, aucune sortie),
+  exécuté après l'ajout du geste à `ProductPreviewModal`.
+- `npm run build` : **succès** — `vite build` (2830 modules
+  transformés, ✓ built in 40.90s) + `esbuild` serveur
+  (`dist/index.cjs` 2.1 Mo, Done in 522ms). Seul avertissement : le
+  warning Rollup pré-existant sur la taille du chunk JS, sans rapport.
+- `git status --short` / `git diff --stat` : seuls `analyse.md` et
+  `client/src/components/pack-quick-view-modal.tsx` modifiés dans ce
+  tour (+19 lignes, 0 suppression) — confirme que le changement est
+  strictement additif et limité au seul fichier concerné par
+  l'exception « Included Products » explicitement demandée.
+- **Aucun test navigateur/runtime n'a été possible** dans cet
+  environnement (pas d'outil d'automatisation navigateur disponible
+  cette session). N'ont été vérifiés QUE par lecture de code — jamais
+  observés en exécution : le comportement réel du drag live sur
+  `ProductPreviewModal` (suivi du doigt, seuil 70px, retour élastique,
+  animation de sortie 520ms), l'absence de fermeture accidentelle du
+  Pack Detail Modal parent lors d'un swipe dans l'Included Products
+  modal, et la non-régression visuelle de la modale de référence
+  Maintenance « Signaler » (aucune ligne de `maintenance-blacklist-
+  modal.tsx` n'a été modifiée, donc aucune régression de code possible,
+  mais le rendu réel n'a pas été observé).
+
+### Rapport final
+
+- **Comportement de geste exact de la référence** : décrit en détail
+  plus haut (seuil 70px, `liveDrag` live-follow, animation 520ms,
+  molette avec fenêtre de reset 500ms, fermeture X/Escape/fond non
+  animée — seul le swipe/molette l'est).
+- **Cause de conflit de geste imbriqué découverte** : aucune nouvelle —
+  celle trouvée à la tâche précédente (§26, Product Detail Modal) reste
+  le seul cas réel trouvé dans toute l'application, déjà corrigé et
+  revérifié non régressé ici.
+- **Logique de geste réutilisée/étendue/introduite** : réutilisée telle
+  quelle (`useScrollDismiss`, déjà l'unique abstraction partagée,
+  paramètres identiques confirmés dans les 19 appelants) — aucune
+  extraction ni nouvelle abstraction nécessaire.
+- **Fichiers modifiés** : `client/src/components/pack-quick-view-
+  modal.tsx` (`ProductPreviewModal`) uniquement, + `analyse.md`.
+- **Confirmation Included Products** : oui, inclus — c'était le seul
+  changement de code requis par cette tâche.
+- **Types de modales demandés et leur état** : tous déjà présents et
+  déjà corrects (Store Pages Avis/Heures d'ouverture, Product/Pack
+  Detail + Avis, Maintenance/Barista Detail + Avis/Disponibilité/
+  Signalement, Marketing/Academy/Print Detail + Store Pages) — aucun
+  absent, aucun créé, seul Included Products a reçu un changement de
+  code réel.
+- **Limitations** : comme pour toutes les tâches de cette session,
+  aucune vérification visuelle/runtime n'a été possible (pas d'outil
+  de navigateur) — uniquement lecture de code, comparaison structurelle
+  exhaustive, `tsc`, et `build`, signalé explicitement plutôt que
+  supposé vérifié.

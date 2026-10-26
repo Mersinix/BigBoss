@@ -335,6 +335,19 @@ function FlavorDistributionRow({ item, allocations, onChange, isDark }: {
 function ProductPreviewModal({ productId, onClose }: { productId: number | null; onClose: () => void }) {
   const { isDark, toggle } = useThemeStore();
 
+  // Swipe-to-dismiss (task: "Standardize Swipe-to-Dismiss Across All
+  // Modals Using the Maintenance 'Signaler' Modal as the Reference") —
+  // same shared hook, same call signature as every other modal in the app
+  // (e.g. maintenance-blacklist-modal.tsx's own useScrollDismiss(open,
+  // onClose, undefined, true)). Close button / backdrop / Escape still
+  // call onClose directly, unchanged — only the swipe/wheel gesture goes
+  // through requestDismiss's animated exit, matching the reference's own
+  // actual behavior exactly (not an invented "improvement").
+  const {
+    onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
+    dismissContentStyle, dismissOverlayStyle,
+  } = useScrollDismiss(productId != null, onClose, undefined, true);
+
   const { data: product, isLoading } = useQuery<ProductWithTaxonomy>({
     queryKey: ["/api/marketplace", productId],
     queryFn: async () => {
@@ -359,6 +372,8 @@ function ProductPreviewModal({ productId, onClose }: { productId: number | null;
     <Dialog open={productId != null} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent
         className="max-w-md w-[calc(100%-2rem)] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden"
+        style={dismissContentStyle}
+        overlayStyle={dismissOverlayStyle}
         data-testid="modal-pack-product-preview"
       >
         <VisuallyHidden><DialogTitle>Product Preview</DialogTitle></VisuallyHidden>
@@ -398,6 +413,10 @@ function ProductPreviewModal({ productId, onClose }: { productId: number | null;
               [&::-webkit-scrollbar-thumb]:bg-gray-700
               hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
             style={{ WebkitOverflowScrolling: "touch" }}
+            onWheel={onBodyWheel}
+            onTouchStart={onBodyTouchStart}
+            onTouchMove={onBodyTouchMove}
+            onTouchEnd={onBodyTouchEnd}
           >
             {isLoading || !product ? (
               <div className="space-y-4 py-2">

@@ -13864,3 +13864,197 @@ sibling et jamais descendant).
   de navigateur) — uniquement lecture de code, comparaison structurelle
   exhaustive, `tsc`, et `build`, signalé explicitement plutôt que
   supposé vérifié.
+
+---
+
+## 28. Grabber (poignée de glissement) sur 11 modales — Shop + Store Page
+
+### Audit — correspondance exacte des 11 catégories demandées
+
+**Pack/Product Detail Modal** : singletons globaux montés une seule
+fois dans `marketplace-layout.tsx` (`PackQuickViewModal`/
+`ProductQuickViewModal`) — donc « Coffee Owner → Shop » et « Store
+Page » partagent **littéralement la même instance** ; une seule
+implémentation à modifier par type, pas deux.
+
+**« Signaler Modal » — introuvable dans ce périmètre** : recherche
+exhaustive (`Signaler|ReportModal|reportModalOpen`) dans
+`pack-quick-view-modal.tsx`, `product-quick-view-modal.tsx`,
+`product-detail-content.tsx`, `store-detail-page.tsx` → aucune
+occurrence réelle (une seule correspondance, un commentaire de la tâche
+précédente). Le Shop (Pack/Produit) et la Store Page Coffee Owner
+n'ont **aucune fonctionnalité de signalement** — contrairement à
+Barista/Maintenance/Marketing/Academy/Print qui en ont une pour leurs
+professionnels. Conformément à la consigne de ne pas créer de
+fonctionnalité absente, ce point est documenté comme **introuvable**,
+pas implémenté, ni inventé.
+
+**Correspondance finale des 11 catégories → fichiers/composants réels** :
+
+| # | Catégorie | Composant réel | Partagé ? |
+|---|---|---|---|
+| A1/B1 | Pack Detail Modal | `pack-quick-view-modal.tsx` (`PackQuickViewModal`) | Oui, singleton Shop=Store Page |
+| A2/B2 | Product Detail Modal | `product-quick-view-modal.tsx` + `product-detail-content.tsx` | Oui, singleton Shop=Store Page |
+| A3 | Review Modal (Shop) | `PackReviewsModal`→`ReviewsModal` (Pack) ET `ReviewModal` singulier (Produit, `review-modal.tsx`) | `ReviewsModal` partagé par 15 appelants au total (dont Barista/Maintenance/Marketing/Academy/Print — hors périmètre) |
+| A4/B4 | Signaler Modal | **Introuvable** dans ce périmètre | — |
+| A5/B5 | Produits inclus Modal | `ProductPreviewModal` (local à `pack-quick-view-modal.tsx`) | Non, local |
+| B3 | Review Modal (Store Page) | `SupplierReviewsModal`→`ReviewsModal` (local à `store-detail-page.tsx`) | Même `ReviewsModal` partagé |
+| B6 | Opening Hours Modal | `InfoModal` (local à `store-detail-page.tsx`, aussi réutilisé par `pages/supplier/store-page.tsx` pour SA PROPRE prévisualisation — même fonctionnalité « Opening Hours », pas hors périmètre) | Réutilisé mais seulement par des usages « Opening Hours » légitimes |
+
+**Point d'attention majeur** : `ReviewsModal` (`client/src/components/
+account/reviews-modal.tsx`) est le composant Avis **partagé par 15
+appelants** dans toute l'application, dont 13 sont hors périmètre
+(Barista/Maintenance/Marketing/Academy/Print + Delivery/Driver). Lui
+ajouter le grabber sans condition l'appliquerait globalement, en
+violation directe de « ensure the grabber is enabled only for the
+explicitly listed modals ». Solution : nouvelle prop optionnelle
+`showGrabber?: boolean` (défaut `false`/absent), que seuls les deux
+appelants dans le périmètre (`PackReviewsModal` et
+`SupplierReviewsModal`) passeront à `true` ; les 13 autres appelants
+restent inchangés (omettent la prop, comportement visuel identique à
+avant). Aucune autre modification de `ReviewsModal`.
+
+**État réel du swipe/drag existant pour chacune des 11 catégories**
+(à documenter, pas à créer, conformément à la consigne « report that
+finding rather than silently adding a new gesture system ») :
+- Pack Detail Modal : **a déjà** le swipe/drag (`useScrollDismiss`,
+  `liveDrag=true`).
+- Product Detail Modal : **a déjà** le swipe/drag (idem).
+- Produits inclus Modal : **a déjà** le swipe/drag (ajouté tâche 27).
+- Review Modal (Shop ET Store Page, via `ReviewsModal`) : **n'a
+  aucun** geste de swipe/drag — confirmé par lecture, aucun
+  `useScrollDismiss` dans `reviews-modal.tsx` ni `review-modal.tsx`
+  (Produit). Le grabber y sera ajouté en tant qu'amélioration
+  purement visuelle (demandée explicitement par la tâche), sans
+  aucune logique de geste nouvelle.
+- Opening Hours Modal (`InfoModal`) : **n'a aucun** geste de swipe/
+  drag — confirmé, aucun `useScrollDismiss` dans `store-detail-
+  page.tsx`. Même traitement : grabber visuel uniquement.
+- Signaler Modal : sans objet (introuvable dans ce périmètre).
+
+### Composant partagé créé
+
+**`client/src/components/shared/modal-grabber.tsx`** — `ModalGrabber`,
+deux présentations :
+- Par défaut (`onImage` omis) : pilule neutre `w-9 h-1 rounded-full`
+  (36×4px, dans la fourchette 32-40×4-5px demandée), couleur selon le
+  thème (`isDark ? "bg-gray-600" : "bg-gray-300"`), centrée dans un
+  conteneur `flex justify-center`, pour les modales à en-tête de fond
+  plein (Review/Produits inclus/Opening Hours).
+- `onImage` : la même pilule (en blanc translucide, pour rester
+  visible sur n'importe quelle photo) posée dans sa propre petite
+  capsule `bg-black/25 backdrop-blur-sm`, positionnée en
+  `absolute top-2.5 left-1/2 -translate-x-1/2 z-20` — même langage
+  visuel que les icônes de overlay déjà existantes sur ces images
+  (Fav/Thème/Fermer utilisent déjà `bg-black/40 backdrop-blur-sm`),
+  pour Pack/Product Detail dont l'image hero est flush avec les coins
+  du modal (« without unnecessarily moving or restructuring the
+  image » — l'image elle-même n'est pas touchée, le grabber est un
+  overlay en plus, exactement comme les icônes déjà présentes).
+
+### Plan d'implémentation (7 points de code)
+
+1. `pack-quick-view-modal.tsx` — Pack Detail Modal : `<ModalGrabber
+   isDark onImage />` ajouté dans le prop `overlay` déjà existant de
+   `<PackImageGallery>` (même mécanisme que les icônes Fav/Thème/
+   Fermer actuelles).
+2. `product-detail-content.tsx` — Product Detail Modal (branche
+   `isModal`) : même traitement, ajouté dans le prop `overlay` de son
+   propre `<PackImageGallery>`.
+3. `reviews-modal.tsx` — nouvelle prop `showGrabber?: boolean`,
+   rendue juste après l'ouverture de `<DialogContent>`, avant
+   `<DialogHeader>`.
+4. `pack-quick-view-modal.tsx` — `PackReviewsModal` passe
+   `showGrabber` à `<ReviewsModal>` (composant local, pas de nouvelle
+   prop à threader plus loin).
+5. `review-modal.tsx` (Produit, singulier, non partagé) :
+   `<ModalGrabber isDark={dk} />` ajouté directement en tête de son
+   en-tête fixe.
+6. `pack-quick-view-modal.tsx` — `ProductPreviewModal` (Produits
+   inclus, local) : même traitement que #5.
+7. `store-detail-page.tsx` — `SupplierReviewsModal` passe
+   `showGrabber` à `<ReviewsModal>` (même mécanisme que #4) ;
+   `InfoModal` (Opening Hours) reçoit `<ModalGrabber isDark={dk} />`
+   directement en tête de son en-tête fixe.
+
+Aucun changement à `use-scroll-dismiss.ts` ni à aucune logique de
+geste existante — strictement visuel, conforme à la consigne.
+
+### Implémentation réalisée
+
+- **`client/src/components/shared/modal-grabber.tsx`** (nouveau) —
+  composant `ModalGrabber` décrit ci-dessus, deux présentations
+  (`onImage` et par défaut).
+- **`pack-quick-view-modal.tsx`** : `<ModalGrabber isDark onImage />`
+  ajouté dans le prop `overlay` du `<PackImageGallery>` principal (état
+  chargé ET squelette de chargement, pour cohérence) ; `PackReviewsModal`
+  passe `showGrabber` à `<ReviewsModal>` ; `ProductPreviewModal`
+  (Produits inclus) reçoit `<ModalGrabber isDark={dk} />` en tête de son
+  en-tête fixe existant.
+- **`product-detail-content.tsx`** : `<ModalGrabber isDark={dk}
+  onImage />` ajouté dans le prop `overlay` du `<PackImageGallery>` de
+  la branche `isModal` (Product Detail Modal).
+- **`client/src/components/account/reviews-modal.tsx`** : nouvelle
+  prop optionnelle `showGrabber?: boolean` (défaut `false`), rendue
+  juste après l'ouverture de `<DialogContent>` — vérifié par recherche
+  (`grep showGrabber`) que seuls les 2 appelants dans le périmètre
+  (`PackReviewsModal`, `SupplierReviewsModal`) la passent ; les 13
+  autres appelants (Barista/Maintenance/Marketing/Academy/Print ×2
+  chacun + Delivery/Driver) ne la passent pas et restent visuellement
+  identiques.
+- **`client/src/components/review-modal.tsx`** (Avis Produit,
+  singulier, non partagé) : `<ModalGrabber isDark={dk} />` ajouté en
+  tête de son en-tête fixe existant.
+- **`store-detail-page.tsx`** : `SupplierReviewsModal` passe
+  `showGrabber` à `<ReviewsModal>` ; `InfoModal` (Opening Hours) reçoit
+  `<ModalGrabber isDark={dk} />` en tête de son en-tête fixe existant.
+
+### Tests exécutés et résultats réels
+
+- `npx tsc --noEmit` : **0 erreur** (exit code 0, aucune sortie).
+- `npm run build` : **succès** — `vite build` (2831 modules
+  transformés, ✓ built in 45.90s) + `esbuild` serveur
+  (`dist/index.cjs` 2.1 Mo, Done in 532ms). Seul avertissement : le
+  warning Rollup pré-existant sur la taille du chunk JS, sans rapport.
+- `git status --short` : exactement 5 fichiers modifiés + 1 nouveau
+  fichier (`modal-grabber.tsx`) — aucun autre fichier touché.
+- Vérification ciblée (`grep showGrabber` dans tout `client/src`) :
+  confirme que seuls les 2 appelants prévus passent la prop ; les 13
+  autres appelants de `ReviewsModal` restent inchangés.
+- **Aucun test navigateur/runtime n'a été possible** dans cet
+  environnement (pas d'outil d'automatisation navigateur disponible
+  cette session). N'ont été vérifiés QUE par lecture de code — jamais
+  observés en exécution : l'apparence réelle du grabber (position,
+  contraste sur une vraie photo pour Pack/Product, rendu clair/sombre),
+  l'absence d'interférence avec le swipe/drag existant, le scroll, les
+  carrousels d'image, et la navigation d'éléments.
+
+### Rapport final
+
+- **Fichiers/composants modifiés** : `modal-grabber.tsx` (nouveau),
+  `pack-quick-view-modal.tsx`, `product-detail-content.tsx`,
+  `reviews-modal.tsx`, `review-modal.tsx`, `store-detail-page.tsx`.
+- **Catégories des 11 demandées, état** : Pack Detail Modal (A1/B1) ✅,
+  Product Detail Modal (A2/B2) ✅, Review Modal Shop (A3, Pack+Produit)
+  ✅, Review Modal Store Page (B3) ✅, Produits inclus Modal (A5/B5) ✅,
+  Opening Hours Modal (B6) ✅, **Signaler Modal (A4/B4) : introuvable
+  dans ce périmètre** — aucune fonctionnalité de signalement n'existe
+  pour le Shop/Store Page Coffee Owner (contrairement à Barista/
+  Maintenance/Marketing/Academy/Print) ; documenté plutôt qu'inventé,
+  conformément à la consigne « Do not create missing features ».
+- **Composant grabber partagé** : oui, `ModalGrabber`, utilisé
+  directement par 5 des 10 points d'implémentation réels, et via une
+  nouvelle prop conditionnelle (`showGrabber`) sur le composant
+  `ReviewsModal` déjà partagé pour les 2 autres (Pack/Store Page Avis).
+- **Gestes de swipe/drag existants préservés** : aucun changement à
+  `use-scroll-dismiss.ts` ni à aucun des gestionnaires `onBody*`
+  existants. Deux des 11 catégories (Review Modal, Opening Hours
+  Modal) n'avaient et n'ont toujours **aucun** geste de swipe/drag —
+  signalé explicitement ci-dessus plutôt que d'en ajouter un nouveau,
+  conformément à « Do not add swipe-to-dismiss behavior to any modal
+  that does not already support it ».
+- **Limitations** : aucune vérification visuelle/runtime n'a été
+  possible dans cet environnement (pas d'outil de navigateur) —
+  uniquement lecture de code, `tsc`, `build`, et vérification ciblée
+  par recherche textuelle, signalé explicitement plutôt que supposé
+  vérifié.

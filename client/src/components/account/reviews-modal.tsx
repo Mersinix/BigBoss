@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Star, X } from "lucide-react";
+import { ModalGrabber } from "@/components/shared/modal-grabber";
 
 // Shared dedicated reviews modal (Phase 7) — the "Avis" block that used to
 // render inline inside each of the 7 professional Details Modals, now opened
@@ -16,6 +17,13 @@ import { Star, X } from "lucide-react";
 // completed order / already reviewed / viewing their own read-only preview).
 export function ReviewsModal({
   open, onClose, professionalName, rating, reviewCount, reviews, isDark, reviewForm,
+  // Additive, defaults to false — shows the small drag-handle pill at the
+  // top of this modal (task: "Add a Drag Handle (Grabber) to Specific
+  // Modals"). Only the two callers explicitly in that task's scope (Pack
+  // Detail's own Avis modal, Store Page's own Avis modal) pass true; every
+  // other existing caller (Barista/Maintenance/Marketing/Academy/Print/
+  // Delivery/Driver) omits this and renders exactly as before.
+  showGrabber = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -25,6 +33,7 @@ export function ReviewsModal({
   reviews: { id: number | string; cafeOwnerName?: string | null; cafeName?: string | null; rating: number; comment?: string | null; createdAt?: string }[];
   isDark: boolean;
   reviewForm?: ReactNode;
+  showGrabber?: boolean;
 }) {
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -32,6 +41,7 @@ export function ReviewsModal({
           design (docs/coffee_owner_avis_close_icon_audit.md) — default shadcn
           close hidden, replaced with the same circular button. */}
       <DialogContent className={`sm:max-w-md max-h-[80vh] overflow-y-auto rounded-2xl border-0 shadow-2xl [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${isDark ? "bg-gray-900 text-white" : "bg-white text-gray-900"}`}>
+        {showGrabber && <ModalGrabber isDark={isDark} />}
         <DialogHeader>
           <VisuallyHidden><DialogTitle>Avis — {professionalName}</DialogTitle></VisuallyHidden>
           <div className="flex items-center justify-between gap-2">

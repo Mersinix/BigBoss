@@ -22,6 +22,7 @@ import { useThemeStore } from "@/store/theme-store";
 import { useSearchLocationStore } from "@/store/search-location-store";
 import { calculateDistance, formatDistance } from "@/lib/distance";
 import { PackImageGallery } from "@/components/pack-image-gallery";
+import { ModalGrabber } from "@/components/shared/modal-grabber";
 import { ReviewsModal } from "@/components/account/reviews-modal";
 import type { PackDetail, SupplierProductReview, PackVariantOption, ProductWithTaxonomy } from "@shared/schema";
 
@@ -200,6 +201,7 @@ function PackReviewsModal({
       reviewCount={reviewCount}
       reviews={reviewRows}
       isDark={isDark}
+      showGrabber
       reviewForm={canReview ? (
         <div className={`p-3 rounded-xl border space-y-2 ${t.dk ? "border-gray-700" : "border-gray-200"}`}>
           <p className={`text-xs font-medium ${t.textPrimary}`}>{myReview ? "Modifier votre avis" : "Leave a review"}</p>
@@ -382,7 +384,8 @@ function ProductPreviewModal({ productId, onClose }: { productId: number | null;
 
           {/* ── Fixed header ── */}
           <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
-            <div className="flex items-center justify-between mb-4">
+            <ModalGrabber isDark={dk} />
+            <div className="flex items-center justify-between mb-4 mt-2">
               <button
                 onClick={onClose}
                 aria-label="Close"
@@ -789,6 +792,7 @@ export function PackQuickViewModal({ previewPack, previewOpen, onPreviewClose }:
           {isLoading || !pack ? (
             <div className="px-3 sm:px-5 py-6 space-y-4">
               <div className={`relative h-48 w-full rounded-2xl animate-pulse ${t.dk ? "bg-gray-800" : "bg-gray-100"}`}>
+                <ModalGrabber isDark={isDark} onImage />
                 <PackImageTopIcons
                   faved={false}
                   onToggleFav={() => {}}
@@ -825,6 +829,7 @@ export function PackQuickViewModal({ previewPack, previewOpen, onPreviewClose }:
                   carousel
                   overlay={
                     <>
+                      <ModalGrabber isDark={isDark} onImage />
                       <PackImageTopIcons
                         faved={faved}
                         onToggleFav={isPreview ? () => {} : () => togglePack(pack.id)}

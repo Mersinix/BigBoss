@@ -20,6 +20,7 @@ import type { MarketplaceProduct, MarketplaceListing, MarketplaceVariant, Listin
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import { ReviewModal } from "@/components/review-modal";
 import { PackImageGallery } from "@/components/pack-image-gallery";
+import { ModalGrabber } from "@/components/shared/modal-grabber";
 import { useCoverZoomStyle, computeCoverZoomScale, getAdjustmentFor } from "@/lib/image-adjustment";
 
 // ── Promotion helpers ─────────────────────────────────────────────────────────
@@ -1220,6 +1221,7 @@ export function ProductDetailContent({
               carousel
               overlay={
                 <>
+                  <ModalGrabber isDark={dk} onImage />
                   <div className="absolute top-3 right-3 z-20 flex gap-2">
                     <button
                       onClick={() => toggleShopFav({

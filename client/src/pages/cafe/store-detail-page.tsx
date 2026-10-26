@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ReviewsModal } from "@/components/account/reviews-modal";
+import { ModalGrabber } from "@/components/shared/modal-grabber";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
@@ -128,6 +129,7 @@ function SupplierReviewsModal({ open, onClose, supplierId, supplierName, isDark 
       reviewCount={reviews.length}
       reviews={reviewRows}
       isDark={isDark}
+      showGrabber
       reviewForm={canReview ? (
         <div className={`p-3 rounded-xl border space-y-2 ${isDark ? "border-gray-700" : "border-gray-200"}`}>
           <p className={`text-xs font-medium ${isDark ? "text-white" : "text-gray-900"}`}>{myReview ? "Modifier votre avis" : `Review ${supplierName}`}</p>
@@ -293,8 +295,9 @@ export function InfoModal({ open, onClose, openingHours, storeName }: {
 
           {/* ── Fixed header ── */}
           <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
+            <ModalGrabber isDark={dk} />
             {/* Title row */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 mt-2">
               {/* Close */}
               <button
                 onClick={onClose}

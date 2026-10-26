@@ -9,6 +9,7 @@ import { useThemeStore } from "@/store/theme-store";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
+import { ModalGrabber } from "@/components/shared/modal-grabber";
 import type { MarketplaceListing, MarketplaceProduct } from "@shared/schema";
 
 interface Props {
@@ -169,7 +170,8 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
 
           {/* ── Fixed header ── */}
           <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
-            <div className="flex items-center justify-between mb-4">
+            <ModalGrabber isDark={dk} />
+            <div className="flex items-center justify-between mb-4 mt-2">
               {/* Close */}
               <button
                 onClick={handleClose}

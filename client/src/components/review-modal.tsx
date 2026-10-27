@@ -1,24 +1,72 @@
-import { useState, useEffect } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect, type ReactNode } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Star, CheckCircle, Package, X, Sun, Moon, Pencil } from "lucide-react";
+import { Star, CheckCircle, Package, X, Sun, Moon } from "lucide-react";
 import { useThemeStore } from "@/store/theme-store";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 import { ModalGrabber } from "@/components/shared/modal-grabber";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
-import type { MarketplaceListing, MarketplaceProduct } from "@shared/schema";
+
+// Shared Coffee Owner -> Shop "Avis" modal — used by BOTH the Product Detail
+// and Pack Detail modals (task: "Use One Shared Avis Modal for Products and
+// Packs"). One visual/structural source of truth: this component owns the
+// form UI, local rating/comment state, the submitted/success screen, the
+// existing-reviews list rendering, and the swipe-to-dismiss/grabber
+// behavior. It makes no network calls itself — each caller fetches its own
+// existing reviews and performs its own target-specific submit mutation
+// (different API route, payload shape, and cache invalidation for products
+// vs packs), supplied here via props/callbacks.
+
+export interface AvisReviewRow {
+  id: number | string;
+  cafeId?: number;
+  cafeOwnerName?: string | null;
+  cafeName?: string | null;
+  rating: number;
+  comment?: string | null;
+  createdAt?: string;
+}
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  product: MarketplaceProduct;
-  listings: MarketplaceListing[]; // visible / filtered listings
+  // Target name shown in the header subtitle (product name or pack name).
+  targetName: string;
+  // Badge text under the header (e.g. "Avis sur le produit" / "Avis sur le
+  // pack") — content differs per target, presentation does not.
+  reviewTypeLabel: string;
+  existingReviews: AvisReviewRow[];
+  // The viewer's own existing review for this target, already resolved by
+  // the caller (its own query/derivation) — null/undefined means "creating
+  // a new review".
+  myReview?: { rating: number; comment?: string | null } | null;
+  // Performs the actual mutation (API call + cache invalidation) for
+  // whichever target this instance represents. Throw to signal failure —
+  // the generic error toast below handles presentation.
+  onSubmit: (rating: number, comment: string) => Promise<void> | void;
+  isSubmitting: boolean;
+  // Additive, defaults to true — when false, the write-a-review form is
+  // hidden and only the existing-reviews list is shown. Matches the Pack
+  // Detail Avis modal's existing permission gating (canReview), preserved
+  // as-is. The Product Detail Avis modal never needed this: its own "Avis"
+  // button is already hidden for ineligible viewers by its caller, so it
+  // always passes the default.
+  canReview?: boolean;
+  // Additive, defaults to undefined (no extra content) — a target-specific
+  // slot rendered inside the form card, above the "Note *" rating label.
+  // Only Barista uses this today (its mission-select dropdown, shown when
+  // the viewer has more than one eligible completed mission to review) —
+  // every other target omits it.
+  extraFormContent?: ReactNode;
+  // Additive, defaults to 0 — initial star rating when creating a new
+  // review (myReview is null/undefined). Only Barista overrides this (its
+  // existing workflow pre-selects 5 stars for a brand-new review); every
+  // other target keeps the default.
+  defaultRating?: number;
 }
 
 function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
@@ -60,11 +108,13 @@ function StarDisplay({ rating }: { rating: number }) {
   );
 }
 
-export function ReviewModal({ open, onClose, product, listings }: Props) {
+export function ReviewModal({
+  open, onClose, targetName, reviewTypeLabel, existingReviews, myReview, onSubmit, isSubmitting, canReview = true,
+  extraFormContent, defaultRating = 0,
+}: Props) {
   const { toast } = useToast();
   const { user } = useAuth();
-  const queryClient = useQueryClient();
-  const [rating, setRating] = useState(0);
+  const [rating, setRating] = useState(defaultRating);
   const [comment, setComment] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const { isDark, toggle } = useThemeStore();
@@ -84,73 +134,21 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
   const labelCls    = dk ? "text-xs font-semibold text-gray-300" : "text-xs font-semibold text-gray-700";
   const reviewCardBg = dk ? "bg-gray-800/60 border-gray-700/40" : "bg-gray-50 border-gray-100";
 
-  // Fetch existing product reviews for display
-  const { data: existingReviews = [] } = useQuery<any[]>({
-    queryKey: ["/api/reviews/product", product.id, "list"],
-    queryFn: async () => {
-      const res = await fetch(`/api/reviews/product/${product.id}/list`);
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled: open,
-  });
-
-  // Fetch user's own product review (for pre-filling)
-  const { data: myProductReview } = useQuery<any>({
-    queryKey: ["/api/reviews/my/product", product.id],
-    queryFn: async () => {
-      const res = await fetch(`/api/reviews/my/product/${product.id}`);
-      if (!res.ok) return null;
-      return res.json();
-    },
-    enabled: open && !!user,
-  });
-
-  // Pre-populate form when an existing review is found
+  // Pre-populate (or reset) the form whenever the caller's resolved
+  // "my review" changes — same behavior the Product Detail modal already
+  // had, now also covering Pack (which previously never reset to empty
+  // when no review existed).
   useEffect(() => {
-    if (myProductReview) {
-      setRating(myProductReview.rating ?? 0);
-      setComment(myProductReview.comment ?? "");
+    if (myReview) {
+      setRating(myReview.rating ?? 0);
+      setComment(myReview.comment ?? "");
     } else {
-      setRating(0);
+      setRating(defaultRating);
       setComment("");
     }
-  }, [myProductReview]);
+  }, [myReview, defaultRating]);
 
-  const isEditing = !!myProductReview;
-
-  const mutation = useMutation({
-    mutationFn: async () => {
-      const body: Record<string, unknown> = {
-        productId: product.id,
-        rating,
-        comment: comment.trim() || null,
-        productName: product.name,
-        reviewType: "PRODUCT",
-      };
-      const res = await fetch("/api/reviews", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error((await res.json()).message);
-      return res.json();
-    },
-    onSuccess: () => {
-      setSubmitted(true);
-      queryClient.invalidateQueries({ queryKey: ["/api/reviews/product", String(product.id)] });
-      queryClient.invalidateQueries({ queryKey: ["/api/reviews/product", product.id, "list"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/reviews/my/product", product.id] });
-      invalidateMarketplace(queryClient, product.id);
-      toast({ title: isEditing ? "Avis mis à jour" : "Avis publié", description: "Votre avis a été enregistré." });
-      setTimeout(() => {
-        handleClose();
-      }, 1500);
-    },
-    onError: (err: Error) => {
-      toast({ title: "Erreur", description: err.message, variant: "destructive" });
-    },
-  });
+  const isEditing = !!myReview;
 
   const handleClose = () => {
     setRating(0);
@@ -159,19 +157,25 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
     onClose();
   };
 
+  const handleSubmit = async () => {
+    try {
+      await onSubmit(rating, comment);
+      setSubmitted(true);
+      toast({ title: isEditing ? "Avis mis à jour" : "Avis publié", description: "Votre avis a été enregistré." });
+      setTimeout(() => {
+        handleClose();
+      }, 1500);
+    } catch (err) {
+      toast({ title: "Erreur", description: err instanceof Error ? err.message : "Veuillez réessayer.", variant: "destructive" });
+    }
+  };
+
   const canSubmit = rating > 0;
 
   const ratingLabel = ["", "Médiocre", "Correct", "Bien", "Très bien", "Excellent"][rating] ?? "";
 
-  // Swipe-to-dismiss on the grabber (task: "Standardize Coffee Owner Review
-  // Modals and Grabber Dismissal Behavior") — same shared hook, same
-  // parameters as the Product Detail Modal reference (liveDrag=true, 70px
-  // threshold, 520ms exit). The grabber previously rendered here was purely
-  // decorative; this wires it to the modal's own existing scroll container.
-  // Close button / backdrop / Escape still call handleClose directly,
-  // unchanged — unlike the Product Detail Modal, this modal's content isn't
-  // conditionally unmounted by its own open flag, so there's no premature-
-  // unmount flash to guard against on those paths.
+  // Swipe-to-dismiss on the grabber — same shared hook/parameters as every
+  // other modal in the app (liveDrag=true, 70px threshold, 520ms exit).
   const {
     onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
     dismissContentStyle, dismissOverlayStyle,
@@ -192,8 +196,7 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
           <div className={`shrink-0 ${bg} px-5 pt-1 pb-4`}>
             <ModalGrabber isDark={dk} />
             <div className="flex items-center justify-between mb-4 mt-1">
-             
-        {/* Dark / light toggle */}
+              {/* Dark / light toggle */}
               <button
                 onClick={toggle}
                 aria-label="Changer de thème"
@@ -207,9 +210,10 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
                 <span className={`text-[13px] font-semibold tracking-tight ${textPrimary}`}>
                   {isEditing ? "Modifier votre avis" : "Écrire un avis"}
                 </span>
-                <span className={`text-[11px] font-medium ${textMuted}`}>{product.name}</span>
+                <span className={`text-[11px] font-medium ${textMuted}`}>{targetName}</span>
               </div>
-            {/* Close */}
+
+              {/* Close */}
               <button
                 onClick={handleClose}
                 aria-label="Fermer"
@@ -217,14 +221,10 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
               >
                 <X className="w-4 h-4" />
               </button>
-              
             </div>
-
-            
 
             {/* Divider */}
             <div className={`mt-4 h-px w-full ${divider}`} />
-            
           </div>
 
           {/* ── Scrollable content ── */}
@@ -243,7 +243,7 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
           >
             {/* Review type label */}
             <div className={`flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold rounded-xl ${dk ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-700"}`}>
-              <Package className="w-3.5 h-3.5" /> Avis sur le produit
+              <Package className="w-3.5 h-3.5" /> {reviewTypeLabel}
             </div>
             {submitted ? (
               <div className="flex flex-col items-center gap-3 py-12 text-center">
@@ -256,51 +256,45 @@ export function ReviewModal({ open, onClose, product, listings }: Props) {
             ) : (
               <div className="flex flex-col gap-5 py-1">
 
-                {/* Review form — same card/control styling as the Pack
-                    Detail Modal's own Avis form (pack-quick-view-modal.tsx),
-                    task: "Standardize Product Review Forms with Pack Review
-                    Form Design". Labels ("Note *" / "Commentaire
-                    (facultatif)") stay — product-specific content, not part
-                    of Pack's own form — only the surrounding presentation
-                    (card, star size, textarea rows, button) is matched. */}
-                <div className={`p-3 rounded-xl border space-y-2 ${dk ? "border-gray-700" : "border-gray-200"}`}>
-                  <div className="space-y-1">
-                    <label className={labelCls}>Note *</label>
-                    <StarPicker value={rating} onChange={setRating} />
-                    {rating > 0 && (
-                      <p className={`text-xs ${textMuted}`}>{ratingLabel}</p>
-                    )}
-                  </div>
+                {canReview && (
+                  <div className={`p-3 rounded-xl border space-y-2 ${dk ? "border-gray-700" : "border-gray-200"}`}>
+                    {extraFormContent}
+                    <div className="space-y-1">
+                      <label className={labelCls}>Note *</label>
+                      <StarPicker value={rating} onChange={setRating} />
+                      {rating > 0 && (
+                        <p className={`text-xs ${textMuted}`}>{ratingLabel}</p>
+                      )}
+                    </div>
 
-                  <div className="space-y-1.5">
                     <Textarea
                       value={comment}
                       onChange={(e) => setComment(e.target.value)}
-                      placeholder="Partagez votre expérience avec ce produit…"
+                      placeholder="Partagez votre expérience…"
                       className={`resize-none text-sm rounded-xl ${inputCls}`}
                       rows={2}
                     />
+
+                    <Button
+                      size="sm"
+                      onClick={handleSubmit}
+                      disabled={!canSubmit || isSubmitting}
+                      className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white border-0"
+                    >
+                      {isSubmitting ? "Enregistrement…" : isEditing ? "Mettre à jour l'avis" : "Publier l'avis"}
+                    </Button>
                   </div>
+                )}
 
-                  <Button
-                    size="sm"
-                    onClick={() => mutation.mutate()}
-                    disabled={!canSubmit || mutation.isPending}
-                    className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white border-0"
-                  >
-                    {mutation.isPending ? "Enregistrement…" : isEditing ? "Mettre à jour l'avis" : "Publier l'avis"}
-                  </Button>
-                </div>
-
-                {/* Existing product reviews */}
+                {/* Existing reviews */}
                 {existingReviews.length > 0 && (
                   <div className="mt-2">
-                    <div className={`h-px w-full ${divider} mb-4`} />              
+                    <div className={`h-px w-full ${divider} mb-4`} />
                     <div className={`flex items-center justify-center gap-1.5 py-2 mb-3 text-[11px] font-semibold rounded-xl ${dk ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-700"}`}>
-                      <Star className="w-3.5 h-3.5" /> {existingReviews.length} avis sur ce produit
+                      <Star className="w-3.5 h-3.5" /> {existingReviews.length} avis
                     </div>
                     <div className="flex flex-col gap-3">
-                      {existingReviews.map((r: any) => (
+                      {existingReviews.map((r) => (
                         <div key={r.id} className={`border rounded-2xl p-4 space-y-2 ${reviewCardBg}`}>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">

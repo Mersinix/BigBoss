@@ -25,7 +25,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Star, MapPin, Clock, Flag, MessageCircle, X, GraduationCap, BookOpen, Image as ImageIcon, Zap, Heart,
 } from "lucide-react";
-import { ReviewsModal } from "@/components/account/reviews-modal";
+import { ReviewModal } from "@/components/review-modal";
 import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
@@ -459,15 +459,16 @@ export function AcademyProfileModal({
 
     {/* Avis (Phase 7) — same useAcademyReviews data as before, relocated.
         card.rating is stored x10. */}
-    <ReviewsModal
+    <ReviewModal
       open={reviewsModalOpen}
       onClose={() => setReviewsModalOpen(false)}
-      professionalName={card?.name ?? ""}
-      rating={(card?.rating ?? 0) / 10}
-      reviewCount={card?.reviewCount ?? 0}
-      reviews={reviews}
-      isDark={isDark}
-      showGrabber
+      targetName={card?.name ?? ""}
+      reviewTypeLabel="Avis sur l'académie"
+      existingReviews={reviews}
+      myReview={null}
+      canReview={false}
+      onSubmit={() => {}}
+      isSubmitting={false}
     />
 
     {/* Flash (Phase 3/5E) — real Coffee Owner-facing mode (not preview). */}

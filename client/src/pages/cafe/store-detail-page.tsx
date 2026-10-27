@@ -8,10 +8,9 @@ import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ReviewsModal } from "@/components/account/reviews-modal";
+import { ReviewModal } from "@/components/review-modal";
 import { ModalGrabber } from "@/components/shared/modal-grabber";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import {
@@ -37,37 +36,12 @@ import { FlashMode } from "@/components/flash-mode";
 import { PackCardTile } from "@/pages/cafe/browse-products";
 import type { StoreDetail, ProductWithTaxonomy, OpeningHoursMap, PackDetail, CategoryWithCount, ListingPromotion, SubCategoryWithDetails, BrandWithCount, FlavorWithCount, SizeWithCount, SupplierProductReview } from "@shared/schema";
 
-// ── Star rating input (mirrors the same small helper already used by the
-// Pack Detail Modal's own review form — kept local rather than imported,
-// following this codebase's existing convention of each review-capable
-// modal owning its own trivial star picker). ────────────────────────────────
-function StarRatingInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  const [hovered, setHovered] = useState(0);
-  return (
-    <div className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map(n => (
-        <button
-          key={n}
-          type="button"
-          onMouseEnter={() => setHovered(n)}
-          onMouseLeave={() => setHovered(0)}
-          onClick={() => onChange(n)}
-          className="p-0.5"
-        >
-          <Star className={`w-5 h-5 transition-colors ${n <= (hovered || value) ? "fill-amber-400 text-amber-400" : "text-gray-400"}`} />
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// ── Supplier Reviews modal (Phase 5 — "Move Supplier Reviews to the store
-// image") — reuses the exact same /api/reviews/supplier-public/:supplierId
-// query and POST /api/reviews (reviewType: SUPPLIER) mutation that used to
-// live inside the Pack Detail Modal's "Supplier Reviews" tab (that tab is
-// removed as part of the same change set — see pack-quick-view-modal.tsx).
-// No new endpoint, no new data source, only relocated to this page and
-// opened via its own icon instead. ──────────────────────────────────────────
+// ── Supplier Reviews modal — renders the shared Avis modal
+// (client/src/components/review-modal.tsx, task: "Extend the Shared Avis
+// Modal Across Store, Barista, and Maintenance") instead of ReviewsModal +
+// a local form. Reuses the exact same /api/reviews/supplier-public/:supplierId
+// query and POST /api/reviews (reviewType: SUPPLIER) mutation as before — no
+// new endpoint, no new data source, only the presentation shell changed.
 function SupplierReviewsModal({ open, onClose, supplierId, supplierName, isDark }: {
   open: boolean;
   onClose: () => void;
@@ -76,10 +50,7 @@ function SupplierReviewsModal({ open, onClose, supplierId, supplierName, isDark 
   isDark: boolean;
 }) {
   const { user } = useAuth();
-  const { toast } = useToast();
   const qc = useQueryClient();
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState("");
 
   const canReview = user?.role === "CAFE_OWNER" && (user as any).status === "approved";
 
@@ -95,25 +66,17 @@ function SupplierReviewsModal({ open, onClose, supplierId, supplierName, isDark 
 
   const myReview = user ? reviews.find(r => r.cafeId === user.id) : undefined;
 
-  useEffect(() => {
-    if (myReview) {
-      setRating(myReview.rating);
-      setComment(myReview.comment ?? "");
-    }
-  }, [myReview?.id]);
-
   const submit = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/reviews", { reviewType: "SUPPLIER", supplierId, rating, comment: comment.trim() || undefined }),
+    mutationFn: ({ rating, comment }: { rating: number; comment: string }) =>
+      apiRequest("POST", "/api/reviews", { reviewType: "SUPPLIER", supplierId, rating, comment: comment.trim() || undefined }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/reviews/supplier-public", supplierId] });
-      toast({ title: "Review submitted!" });
     },
-    onError: (err: any) => toast({ title: err?.message ?? "Error submitting review", variant: "destructive" }),
   });
 
-  const avgRating = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
   const reviewRows = useMemo(() => reviews.map(r => ({
     id: r.id,
+    cafeId: r.cafeId,
     cafeOwnerName: r.cafeOwnerName,
     cafeName: r.cafeName,
     rating: r.rating,
@@ -122,36 +85,16 @@ function SupplierReviewsModal({ open, onClose, supplierId, supplierName, isDark 
   })), [reviews]);
 
   return (
-    <ReviewsModal
+    <ReviewModal
       open={open}
       onClose={onClose}
-      professionalName={supplierName}
-      rating={avgRating}
-      reviewCount={reviews.length}
-      reviews={reviewRows}
-      isDark={isDark}
-      showGrabber
-      reviewForm={canReview ? (
-        <div className={`p-3 rounded-xl border space-y-2 ${isDark ? "border-gray-700" : "border-gray-200"}`}>
-          <p className={`text-xs font-medium ${isDark ? "text-white" : "text-gray-900"}`}>{myReview ? "Modifier votre avis" : `Review ${supplierName}`}</p>
-          <StarRatingInput value={rating} onChange={setRating} />
-          <Textarea
-            placeholder="Share your experience with this supplier…"
-            value={comment}
-            onChange={e => setComment(e.target.value)}
-            className={`resize-none text-sm rounded-xl ${isDark ? "bg-gray-800 border-gray-700 text-gray-200 placeholder:text-gray-500" : ""}`}
-            rows={2}
-          />
-          <Button
-            size="sm"
-            onClick={() => submit.mutate()}
-            disabled={rating === 0 || submit.isPending}
-            className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white border-0"
-          >
-            {submit.isPending ? "Submitting…" : myReview ? "Mettre à jour l'avis" : "Submit Review"}
-          </Button>
-        </div>
-      ) : undefined}
+      targetName={supplierName}
+      reviewTypeLabel="Avis sur le fournisseur"
+      existingReviews={reviewRows}
+      myReview={myReview ? { rating: myReview.rating, comment: myReview.comment } : null}
+      onSubmit={async (rating, comment) => { await submit.mutateAsync({ rating, comment }); }}
+      isSubmitting={submit.isPending}
+      canReview={canReview}
     />
   );
 }
@@ -314,24 +257,7 @@ export function InfoModal({ open, onClose, openingHours, storeName }: {
             <ModalGrabber isDark={dk} />
             {/* Title row */}
             <div className="flex items-center justify-between mb-4 mt-2">
-              {/* Close */}
-              <button
-                onClick={onClose}
-                aria-label="Close"
-                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
-              >
-                <X className="w-4 h-4" />
-              </button>
-
-              {/* Centered title */}
-              <div className="flex flex-col items-center gap-0.5">
-                <span className={`text-[13px] font-semibold tracking-tight leading-tight ${textPrimary}`}>
-                  {storeName}
-                </span>
-                <span className={`text-[11px] font-medium ${textMuted}`}>Opening Hours</span>
-              </div>
-
-              {/* Dark / light toggle */}
+             {/* Dark / light toggle */}
               <button
                 onClick={() => toggle()}
                 aria-label="Toggle theme"
@@ -342,6 +268,24 @@ export function InfoModal({ open, onClose, openingHours, storeName }: {
                   : <Moon className="w-4 h-4 text-gray-500" />
                 }
               </button>
+
+              {/* Centered title */}
+              <div className="flex flex-col items-center gap-0.5">
+                <span className={`text-[13px] font-semibold tracking-tight leading-tight ${textPrimary}`}>
+                  {storeName}
+                </span>
+                <span className={`text-[11px] font-medium ${textMuted}`}>Opening Hours</span>
+              </div>
+
+              {/* Close */}
+              <button
+                onClick={onClose}
+                aria-label="Close"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
+              >
+                <X className="w-4 h-4" />
+              </button>
+              
             </div>
 
             {/* Divider */}

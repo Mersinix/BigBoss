@@ -29,21 +29,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Star, MapPin, Navigation, Flag, Heart, MessageCircle, X, Megaphone, Layers, ListChecks,
 } from "lucide-react";
-import { ReviewsModal } from "@/components/account/reviews-modal";
+import { ReviewModal } from "@/components/review-modal";
 
 const PROVIDER_TYPE_LABELS: Record<string, string> = { Agency: "Agence", Freelancer: "Freelancer", Studio: "Studio" };
-
-function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="flex items-center gap-1">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} type="button" onClick={() => onChange(n)} data-testid={`button-star-${n}`}>
-          <Star className={`w-5 h-5 ${n <= value ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
-        </button>
-      ))}
-    </div>
-  );
-}
 
 // Comprehensive Coffee-Owner-facing Marketing SERVICE details modal (Agency →
 // Multiple Services) — mirrors AcademyDetailModal's exact structure/hierarchy/
@@ -112,8 +100,6 @@ export function MarketingServiceDetailModal({
   const toggleMarketingService = useFavorites((s) => s.toggleMarketingService);
 
   const [reviewProjectId, setReviewProjectId] = useState<number | null>(null);
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState("");
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
@@ -179,15 +165,9 @@ export function MarketingServiceDetailModal({
     }
   };
 
-  const submitReview = () => {
-    if (!service || !activeProjectId || readOnly) return;
-    createReview.mutate(
-      { marketingUserId: service.marketingUserId, projectId: activeProjectId, rating: reviewRating, comment: reviewComment.trim() || undefined },
-      {
-        onSuccess: () => { toast({ title: "Avis envoyé" }); setReviewComment(""); },
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      }
-    );
+  const submitReview = async (rating: number, comment: string) => {
+    if (!service || !activeProjectId || readOnly) throw new Error("Aucun projet terminé à évaluer");
+    await createReview.mutateAsync({ marketingUserId: service.marketingUserId, projectId: activeProjectId, rating, comment: comment.trim() || undefined });
   };
 
   const submitReport = () => {
@@ -408,43 +388,28 @@ export function MarketingServiceDetailModal({
         reviews and the same review form/mutation (submitReview) as before,
         relocated out of the main modal's body, mirroring MarketingDetailModal's
         identical pattern. */}
-    <ReviewsModal
+    <ReviewModal
       open={reviewsModalOpen}
       onClose={() => setReviewsModalOpen(false)}
-      professionalName={service?.agencyName ?? ""}
-      rating={service ? service.rating / 10 : 0}
-      reviewCount={service?.reviewCount ?? reviews.length}
-      reviews={reviews}
-      isDark={isDark}
-      showGrabber
-      reviewForm={!readOnly && eligibleProjects.length > 0 ? (
-        <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
-          <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
-          {eligibleProjects.length > 1 && (
-            <select
-              className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
-              value={activeProjectId ?? ""}
-              onChange={(e) => setReviewProjectId(Number(e.target.value))}
-              data-testid="select-review-project"
-            >
-              {eligibleProjects.map((p) => (
-                <option key={p.id} value={p.id}>Projet #{p.id} {myReviewByProject.has(p.id) ? "(déjà noté)" : ""}</option>
-              ))}
-            </select>
-          )}
-          <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
-          <Textarea
-            placeholder="Commentaire (facultatif)"
-            rows={2}
-            defaultValue={existingReview?.comment ?? ""}
-            onChange={(e) => setReviewComment(e.target.value)}
-            className={t.inputBg}
-            data-testid="input-review-comment"
-          />
-          <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-purple-600 hover:bg-purple-700 text-white" data-testid="button-submit-review">
-            {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
-          </Button>
-        </div>
+      targetName={service?.agencyName ?? ""}
+      reviewTypeLabel="Avis sur l'agence"
+      existingReviews={reviews}
+      myReview={existingReview ? { rating: existingReview.rating, comment: existingReview.comment } : null}
+      defaultRating={5}
+      canReview={!readOnly && eligibleProjects.length > 0}
+      onSubmit={submitReview}
+      isSubmitting={createReview.isPending}
+      extraFormContent={eligibleProjects.length > 1 ? (
+        <select
+          className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
+          value={activeProjectId ?? ""}
+          onChange={(e) => setReviewProjectId(Number(e.target.value))}
+          data-testid="select-review-project"
+        >
+          {eligibleProjects.map((p) => (
+            <option key={p.id} value={p.id}>Projet #{p.id} {myReviewByProject.has(p.id) ? "(déjà noté)" : ""}</option>
+          ))}
+        </select>
       ) : undefined}
     />
     </>

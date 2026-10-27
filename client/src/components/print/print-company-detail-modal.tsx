@@ -24,21 +24,9 @@ import {
 } from "lucide-react";
 import { useFallbackImage } from "@/hooks/use-fallback-image";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
-import { ReviewsModal } from "@/components/account/reviews-modal";
+import { ReviewModal } from "@/components/review-modal";
 import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
-
-function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="flex items-center gap-1">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} type="button" onClick={() => onChange(n)} data-testid={`button-star-${n}`}>
-          <Star className={`w-5 h-5 ${n <= value ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
-        </button>
-      ))}
-    </div>
-  );
-}
 
 // Availability modal — same container/header/scrollbar/today-highlight chrome as
 // every other synchronized service's availability modal (DeliveryCompanyAvailabilityModal/
@@ -201,8 +189,6 @@ export function PrintCompanyDetailModal({
   const reportPrinter = useReportPrinter();
 
   const [reviewOrderId, setReviewOrderId] = useState<number | null>(null);
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState("");
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
@@ -267,15 +253,9 @@ export function PrintCompanyDetailModal({
     }
   };
 
-  const submitReview = () => {
-    if (!card || !activeOrderId || readOnly) return;
-    createReview.mutate(
-      { printerId: card.userId, printOrderId: activeOrderId, rating: reviewRating, comment: reviewComment.trim() || undefined },
-      {
-        onSuccess: () => { toast({ title: "Avis envoyé" }); setReviewComment(""); },
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      }
-    );
+  const submitReview = async (rating: number, comment: string) => {
+    if (!card || !activeOrderId || readOnly) throw new Error("Aucune commande livrée à évaluer");
+    await createReview.mutateAsync({ printerId: card.userId, printOrderId: activeOrderId, rating, comment: comment.trim() || undefined });
   };
 
   const submitReport = () => {
@@ -523,43 +503,28 @@ export function PrintCompanyDetailModal({
         form/mutation (submitReview) as before, relocated out of the main
         modal's body. card.rating is stored in tenths (see the header's
         (card.rating / 10) display), hence the /10 here. */}
-    <ReviewsModal
+    <ReviewModal
       open={reviewsModalOpen}
       onClose={() => setReviewsModalOpen(false)}
-      professionalName={card?.name ?? ""}
-      rating={(card?.rating ?? 0) / 10}
-      reviewCount={card?.reviewCount ?? reviews.length}
-      reviews={reviews.map((r) => ({ ...r, createdAt: r.createdAt ? String(r.createdAt) : undefined }))}
-      isDark={isDark}
-      showGrabber
-      reviewForm={!readOnly && eligibleOrders.length > 0 ? (
-        <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
-          <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
-          {eligibleOrders.length > 1 && (
-            <select
-              className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
-              value={activeOrderId ?? ""}
-              onChange={(e) => setReviewOrderId(Number(e.target.value))}
-              data-testid="select-review-order"
-            >
-              {eligibleOrders.map((o) => (
-                <option key={o.id} value={o.id}>Commande #{o.id} {myReviewByOrder.has(o.id) ? "(déjà notée)" : ""}</option>
-              ))}
-            </select>
-          )}
-          <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
-          <Textarea
-            placeholder="Commentaire (facultatif)"
-            rows={2}
-            defaultValue={existingReview?.comment ?? ""}
-            onChange={(e) => setReviewComment(e.target.value)}
-            className={t.inputBg}
-            data-testid="input-review-comment"
-          />
-          <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="button-submit-review">
-            {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
-          </Button>
-        </div>
+      targetName={card?.name ?? ""}
+      reviewTypeLabel="Avis sur l'imprimerie"
+      existingReviews={reviews.map((r) => ({ ...r, createdAt: r.createdAt ? String(r.createdAt) : undefined }))}
+      myReview={existingReview ? { rating: existingReview.rating, comment: existingReview.comment } : null}
+      defaultRating={5}
+      canReview={!readOnly && eligibleOrders.length > 0}
+      onSubmit={submitReview}
+      isSubmitting={createReview.isPending}
+      extraFormContent={eligibleOrders.length > 1 ? (
+        <select
+          className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
+          value={activeOrderId ?? ""}
+          onChange={(e) => setReviewOrderId(Number(e.target.value))}
+          data-testid="select-review-order"
+        >
+          {eligibleOrders.map((o) => (
+            <option key={o.id} value={o.id}>Commande #{o.id} {myReviewByOrder.has(o.id) ? "(déjà notée)" : ""}</option>
+          ))}
+        </select>
       ) : undefined}
     />
 

@@ -32,7 +32,7 @@ import {
   Flag, Heart, X, GraduationCap, Layers, Users, Calendar, Zap, ListChecks,
 } from "lucide-react";
 import { AcademyProfileModal } from "@/components/academy/academy-profile-modal";
-import { ReviewsModal } from "@/components/account/reviews-modal";
+import { ReviewModal } from "@/components/review-modal";
 import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
 
 const LEVEL_LABELS: Record<AcademyCourseLevel, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
@@ -45,18 +45,6 @@ function levelColors(isDark: boolean): Record<AcademyCourseLevel, string> {
   return isDark
     ? { BEGINNER: "bg-green-900/50 text-green-300", ADVANCED: "bg-blue-900/50 text-blue-300", EXPERT: "bg-purple-900/50 text-purple-300" }
     : { BEGINNER: "bg-green-100 text-green-700", ADVANCED: "bg-blue-100 text-blue-700", EXPERT: "bg-purple-100 text-purple-700" };
-}
-
-function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="flex items-center gap-1">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} type="button" onClick={() => onChange(n)} data-testid={`button-star-${n}`}>
-          <Star className={`w-5 h-5 ${n <= value ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
-        </button>
-      ))}
-    </div>
-  );
 }
 
 const REGISTRATION_STATUS_LABELS: Record<string, string> = {
@@ -250,8 +238,6 @@ export function AcademyDetailModal({
   const toggleAcademy = useFavorites((s) => s.toggleAcademyCourse);
 
   const [reviewRegistrationId, setReviewRegistrationId] = useState<number | null>(null);
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState("");
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
@@ -331,15 +317,9 @@ export function AcademyDetailModal({
     }
   };
 
-  const submitReview = () => {
-    if (!course || !activeRegistrationId || readOnly) return;
-    createReview.mutate(
-      { academyUserId: course.academyUserId, registrationId: activeRegistrationId, rating: reviewRating, comment: reviewComment.trim() || undefined },
-      {
-        onSuccess: () => { toast({ title: "Avis envoyé" }); setReviewComment(""); },
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      }
-    );
+  const submitReview = async (rating: number, comment: string) => {
+    if (!course || !activeRegistrationId || readOnly) throw new Error("Aucune inscription terminée à évaluer");
+    await createReview.mutateAsync({ academyUserId: course.academyUserId, registrationId: activeRegistrationId, rating, comment: comment.trim() || undefined });
   };
 
   const submitReport = () => {
@@ -580,43 +560,28 @@ export function AcademyDetailModal({
         data/mutation/eligibility as before (reviews/submitReview/
         eligibleRegistrations), just relocated out of the main modal's body.
         course.rating is stored x10 (academy-level aggregate). */}
-    <ReviewsModal
+    <ReviewModal
       open={reviewsModalOpen}
       onClose={() => setReviewsModalOpen(false)}
-      professionalName={course?.academyName ?? ""}
-      rating={(course?.rating ?? 0) / 10}
-      reviewCount={course?.reviewCount ?? 0}
-      reviews={reviews}
-      isDark={isDark}
-      showGrabber
-      reviewForm={eligibleRegistrations.length > 0 ? (
-        <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
-          <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
-          {eligibleRegistrations.length > 1 && (
-            <select
-              className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
-              value={activeRegistrationId ?? ""}
-              onChange={(e) => setReviewRegistrationId(Number(e.target.value))}
-              data-testid="select-review-registration"
-            >
-              {eligibleRegistrations.map((r) => (
-                <option key={r.id} value={r.id}>{r.courseTitle || `Formation #${r.courseId}`} {myReviewByRegistration.has(r.id) ? "(déjà noté)" : ""}</option>
-              ))}
-            </select>
-          )}
-          <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
-          <Textarea
-            placeholder="Commentaire (facultatif)"
-            rows={2}
-            defaultValue={existingReview?.comment ?? ""}
-            onChange={(e) => setReviewComment(e.target.value)}
-            className={t.inputBg}
-            data-testid="input-review-comment"
-          />
-          <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-indigo-600 hover:bg-indigo-700 text-white" data-testid="button-submit-review">
-            {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
-          </Button>
-        </div>
+      targetName={course?.academyName ?? ""}
+      reviewTypeLabel="Avis sur l'académie"
+      existingReviews={reviews}
+      myReview={existingReview ? { rating: existingReview.rating, comment: existingReview.comment } : null}
+      defaultRating={5}
+      canReview={eligibleRegistrations.length > 0}
+      onSubmit={submitReview}
+      isSubmitting={createReview.isPending}
+      extraFormContent={eligibleRegistrations.length > 1 ? (
+        <select
+          className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
+          value={activeRegistrationId ?? ""}
+          onChange={(e) => setReviewRegistrationId(Number(e.target.value))}
+          data-testid="select-review-registration"
+        >
+          {eligibleRegistrations.map((r) => (
+            <option key={r.id} value={r.id}>{r.courseTitle || `Formation #${r.courseId}`} {myReviewByRegistration.has(r.id) ? "(déjà noté)" : ""}</option>
+          ))}
+        </select>
       ) : undefined}
     />
 

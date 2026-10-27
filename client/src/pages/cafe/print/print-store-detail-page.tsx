@@ -12,7 +12,7 @@ import {
 import { printCategoryIcon, printSubCategoryIcon } from "@/lib/print-category-icons";
 import { PrintCompanyAvailabilityModal } from "@/components/print/print-company-detail-modal";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
-import { ReviewsModal } from "@/components/account/reviews-modal";
+import { ReviewModal } from "@/components/review-modal";
 import { ModalGrabber } from "@/components/shared/modal-grabber";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { Button } from "@/components/ui/button";
@@ -44,18 +44,6 @@ const PRODUCTION_TIME_BUCKETS = [
 ];
 function bucketLabelFor(days: number): string {
   return PRODUCTION_TIME_BUCKETS.find((b) => b.test(days))?.label ?? "";
-}
-
-function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="flex items-center gap-1">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} type="button" onClick={() => onChange(n)} data-testid={`button-store-star-${n}`}>
-          <Star className={`w-5 h-5 ${n <= value ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
-        </button>
-      ))}
-    </div>
-  );
 }
 
 // Coffee Owner /print's dedicated Store page — the /print equivalent of
@@ -150,8 +138,6 @@ export default function PrintStoreDetailPage() {
   const reportPrinter = useReportPrinter();
   const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
   const [reviewOrderId, setReviewOrderId] = useState<number | null>(null);
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState("");
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
 
@@ -176,15 +162,9 @@ export default function PrintStoreDetailPage() {
   const activeOrderId = reviewOrderId ?? eligibleOrders.find((o) => !myReviewByOrder.has(o.id))?.id ?? eligibleOrders[0]?.id ?? null;
   const existingReview = activeOrderId ? myReviewByOrder.get(activeOrderId) : undefined;
 
-  const submitReview = () => {
-    if (!card || !activeOrderId) return;
-    createReview.mutate(
-      { printerId: card.userId, printOrderId: activeOrderId, rating: reviewRating, comment: reviewComment.trim() || undefined },
-      {
-        onSuccess: () => { toast({ title: "Avis envoyé" }); setReviewComment(""); },
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      }
-    );
+  const submitReview = async (rating: number, comment: string) => {
+    if (!card || !activeOrderId) throw new Error("Aucune commande livrée à évaluer");
+    await createReview.mutateAsync({ printerId: card.userId, printOrderId: activeOrderId, rating, comment: comment.trim() || undefined });
   };
 
   const submitReport = () => {
@@ -602,43 +582,28 @@ export default function PrintStoreDetailPage() {
         isDark={isDark}
       />
 
-      <ReviewsModal
+      <ReviewModal
         open={reviewsModalOpen}
         onClose={() => setReviewsModalOpen(false)}
-        professionalName={card.name}
-        rating={card.rating / 10}
-        reviewCount={card.reviewCount ?? reviews.length}
-        reviews={reviews.map((r) => ({ ...r, createdAt: r.createdAt ? String(r.createdAt) : undefined }))}
-        isDark={isDark}
-        showGrabber
-        reviewForm={eligibleOrders.length > 0 ? (
-          <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
-            <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
-            {eligibleOrders.length > 1 && (
-              <select
-                className={`w-full text-xs rounded-lg border px-2 py-1.5 ${isDark ? "bg-gray-800 border-gray-700 text-white" : "bg-gray-50 border-gray-200"}`}
-                value={activeOrderId ?? ""}
-                onChange={(e) => setReviewOrderId(Number(e.target.value))}
-                data-testid="select-store-review-order"
-              >
-                {eligibleOrders.map((o) => (
-                  <option key={o.id} value={o.id}>Commande #{o.id} {myReviewByOrder.has(o.id) ? "(déjà notée)" : ""}</option>
-                ))}
-              </select>
-            )}
-            <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
-            <Textarea
-              placeholder="Commentaire (facultatif)"
-              rows={2}
-              defaultValue={existingReview?.comment ?? ""}
-              onChange={(e) => setReviewComment(e.target.value)}
-              className={isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200"}
-              data-testid="input-store-review-comment"
-            />
-            <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="button-submit-store-review">
-              {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
-            </Button>
-          </div>
+        targetName={card.name}
+        reviewTypeLabel="Avis sur l'imprimerie"
+        existingReviews={reviews.map((r) => ({ ...r, createdAt: r.createdAt ? String(r.createdAt) : undefined }))}
+        myReview={existingReview ? { rating: existingReview.rating, comment: existingReview.comment } : null}
+        defaultRating={5}
+        canReview={eligibleOrders.length > 0}
+        onSubmit={submitReview}
+        isSubmitting={createReview.isPending}
+        extraFormContent={eligibleOrders.length > 1 ? (
+          <select
+            className={`w-full text-xs rounded-lg border px-2 py-1.5 ${isDark ? "bg-gray-800 border-gray-700 text-white" : "bg-gray-50 border-gray-200"}`}
+            value={activeOrderId ?? ""}
+            onChange={(e) => setReviewOrderId(Number(e.target.value))}
+            data-testid="select-store-review-order"
+          >
+            {eligibleOrders.map((o) => (
+              <option key={o.id} value={o.id}>Commande #{o.id} {myReviewByOrder.has(o.id) ? "(déjà notée)" : ""}</option>
+            ))}
+          </select>
         ) : undefined}
       />
 

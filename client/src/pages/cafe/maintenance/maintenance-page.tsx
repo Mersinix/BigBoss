@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { MaintenanceFastSearch } from "@/components/maintenance/maintenance-fast-search";
 import { MaintenanceBlacklistModal } from "@/components/maintenance/maintenance-blacklist-modal";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
-import { ReviewsModal } from "@/components/account/reviews-modal";
+import { ReviewModal } from "@/components/review-modal";
 import type { MaintenanceMarketplaceCard, OpeningHoursMap } from "@shared/schema";
 import { encodeMaintenanceSubSkillKey, decodeMaintenanceSubSkillKey } from "@shared/maintenance-sub-skill-key";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
@@ -415,8 +415,6 @@ export function AgentDetailModal({
   const t = useTheme(isDark);
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState("");
   // Portfolio gallery — reuses the exact same lightbox already used by the
   // Marketing details modal (Part 25), no separate gallery component.
   const [albumOpen, setAlbumOpen] = useState(false);
@@ -491,26 +489,20 @@ export function AgentDetailModal({
   const reviewedReservationIds = new Set((reviewsQuery.data ?? []).map((review) => review.reservationId).filter(Boolean));
   const reviewReservation = eligibleReservations.find((reservation) => !reviewedReservationIds.has(reservation.id));
   const submitReview = useMutation({
-    mutationFn: () => {
+    mutationFn: ({ rating, comment }: { rating: number; comment: string }) => {
       if (!agent || !reviewReservation || readOnly) throw new Error("Aucune intervention terminée à évaluer");
       return apiRequest("POST", "/api/maintenance/reviews", {
         maintenanceUserId: agent.userId,
         reservationId: reviewReservation.id,
-        rating: reviewRating,
-        comment: reviewComment.trim() || undefined,
+        rating,
+        comment: comment.trim() || undefined,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/maintenance/reviews", agent?.userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/maintenance/profiles"] });
-      setReviewComment("");
-      setReviewRating(5);
     },
   });
-  useEffect(() => {
-    setReviewComment("");
-    setReviewRating(5);
-  }, [agent?.userId]);
   const faved = useFavorites((s) => agent ? !!s.maintenance[agent.userId] : false);
   const toggleMaintenance = useFavorites((s) => s.toggleMaintenance);
   // Cover is the detail modal's primary hero image; Photo de profil then Flash
@@ -838,43 +830,16 @@ export function AgentDetailModal({
     {/* Avis (Phase 7) — dedicated modal, opened via the new Star icon. Same
         review data/mutation as before (reviewsQuery/submitReview), just
         relocated out of the main modal's body into this one. */}
-    <ReviewsModal
+    <ReviewModal
       open={reviewsModalOpen}
       onClose={() => setReviewsModalOpen(false)}
-      professionalName={agent.name}
-      rating={Number(ratingValue(agent)) || 0}
-      reviewCount={agent.reviewCount}
-      reviews={reviewsQuery.data ?? []}
-      isDark={isDark}
-      showGrabber
-      reviewForm={!readOnly && reviewReservation ? (
-        <div className={`${t.mutedBg} rounded-xl p-3 space-y-2.5`}>
-          <h3 className={`font-semibold text-sm ${t.textPrimary}`}>Évaluer votre intervention</h3>
-          <div className="flex items-center gap-1">
-            {[1, 2, 3, 4, 5].map((value) => (
-              <button key={value} type="button" onClick={() => setReviewRating(value)} aria-label={`${value} étoiles`}>
-                <Star className={`w-5 h-5 ${value <= reviewRating ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
-              </button>
-            ))}
-          </div>
-          <Textarea
-            value={reviewComment}
-            onChange={(event) => setReviewComment(event.target.value)}
-            placeholder="Partagez votre expérience (facultatif)"
-            rows={2}
-            className={t.inputBg}
-          />
-          <Button
-            size="sm"
-            onClick={() => submitReview.mutate()}
-            disabled={submitReview.isPending}
-            className="bg-orange-600 hover:bg-orange-700 text-white rounded-xl"
-            data-testid="button-submit-maintenance-review"
-          >
-            {submitReview.isPending ? "Envoi…" : "Publier l'avis"}
-          </Button>
-        </div>
-      ) : undefined}
+      targetName={agent.name}
+      reviewTypeLabel="Avis sur l'intervention"
+      existingReviews={reviewsQuery.data ?? []}
+      myReview={null}
+      canReview={!readOnly && !!reviewReservation}
+      onSubmit={async (rating, comment) => { await submitReview.mutateAsync({ rating, comment }); }}
+      isSubmitting={submitReview.isPending}
     />
 
     </>

@@ -12,7 +12,7 @@ import { MarketingMappedServiceCard } from "@/components/marketing/marketing-map
 import { resolveMarketingCategoryIcon, resolveMarketingSubCategoryIcon } from "@/lib/marketing-category-icon";
 import { MarketingAvailabilityModal } from "@/components/marketing/marketing-detail-modal";
 import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
-import { ReviewsModal } from "@/components/account/reviews-modal";
+import { ReviewModal } from "@/components/review-modal";
 import { ModalGrabber } from "@/components/shared/modal-grabber";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { QuoteRequestDialog } from "@/pages/cafe/marketing/marketing-page";
@@ -32,18 +32,6 @@ import {
 } from "lucide-react";
 import type { MarketingMarketplaceCard } from "@/hooks/use-marketing";
 import { formatDistance } from "@/lib/distance";
-
-function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="flex items-center gap-1">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} type="button" onClick={() => onChange(n)} data-testid={`button-store-star-${n}`}>
-          <Star className={`w-5 h-5 ${n <= value ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
-        </button>
-      ))}
-    </div>
-  );
-}
 
 // Coffee Owner /marketing's dedicated Store page — the /marketing equivalent
 // of /stores/:storeId and /print/stores/:printerId
@@ -163,8 +151,6 @@ export default function MarketingStoreDetailPage() {
   const reportProvider = useReportMarketingProvider();
   const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
   const [reviewProjectId, setReviewProjectId] = useState<number | null>(null);
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState("");
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
 
@@ -189,15 +175,9 @@ export default function MarketingStoreDetailPage() {
   const activeProjectId = reviewProjectId ?? eligibleProjects.find((p) => !myReviewByProject.has(p.id))?.id ?? eligibleProjects[0]?.id ?? null;
   const existingReview = activeProjectId ? myReviewByProject.get(activeProjectId) : undefined;
 
-  const submitReview = () => {
-    if (!card || !activeProjectId) return;
-    createReview.mutate(
-      { marketingUserId: card.userId, projectId: activeProjectId, rating: reviewRating, comment: reviewComment.trim() || undefined },
-      {
-        onSuccess: () => { toast({ title: "Avis envoyé" }); setReviewComment(""); },
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      }
-    );
+  const submitReview = async (rating: number, comment: string) => {
+    if (!card || !activeProjectId) throw new Error("Aucun projet terminé à évaluer");
+    await createReview.mutateAsync({ marketingUserId: card.userId, projectId: activeProjectId, rating, comment: comment.trim() || undefined });
   };
 
   const submitReport = () => {
@@ -599,43 +579,28 @@ export default function MarketingStoreDetailPage() {
         isDark={isDark}
       />
 
-      <ReviewsModal
+      <ReviewModal
         open={reviewsModalOpen}
         onClose={() => setReviewsModalOpen(false)}
-        professionalName={card.name}
-        rating={card.rating / 10}
-        reviewCount={card.reviewCount ?? reviews.length}
-        reviews={reviews}
-        isDark={isDark}
-        showGrabber
-        reviewForm={eligibleProjects.length > 0 ? (
-          <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
-            <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
-            {eligibleProjects.length > 1 && (
-              <select
-                className={`w-full text-xs rounded-lg border px-2 py-1.5 ${isDark ? "bg-gray-800 border-gray-700 text-white" : "bg-gray-50 border-gray-200"}`}
-                value={activeProjectId ?? ""}
-                onChange={(e) => setReviewProjectId(Number(e.target.value))}
-                data-testid="select-store-review-project"
-              >
-                {eligibleProjects.map((p) => (
-                  <option key={p.id} value={p.id}>{p.service || `Projet #${p.id}`} {myReviewByProject.has(p.id) ? "(déjà noté)" : ""}</option>
-                ))}
-              </select>
-            )}
-            <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
-            <Textarea
-              placeholder="Commentaire (facultatif)"
-              rows={2}
-              defaultValue={existingReview?.comment ?? ""}
-              onChange={(e) => setReviewComment(e.target.value)}
-              className={isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200"}
-              data-testid="input-store-review-comment"
-            />
-            <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-purple-600 hover:bg-purple-700 text-white" data-testid="button-submit-store-review">
-              {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
-            </Button>
-          </div>
+        targetName={card.name}
+        reviewTypeLabel="Avis sur l'agence"
+        existingReviews={reviews}
+        myReview={existingReview ? { rating: existingReview.rating, comment: existingReview.comment } : null}
+        defaultRating={5}
+        canReview={eligibleProjects.length > 0}
+        onSubmit={submitReview}
+        isSubmitting={createReview.isPending}
+        extraFormContent={eligibleProjects.length > 1 ? (
+          <select
+            className={`w-full text-xs rounded-lg border px-2 py-1.5 ${isDark ? "bg-gray-800 border-gray-700 text-white" : "bg-gray-50 border-gray-200"}`}
+            value={activeProjectId ?? ""}
+            onChange={(e) => setReviewProjectId(Number(e.target.value))}
+            data-testid="select-store-review-project"
+          >
+            {eligibleProjects.map((p) => (
+              <option key={p.id} value={p.id}>{p.service || `Projet #${p.id}`} {myReviewByProject.has(p.id) ? "(déjà noté)" : ""}</option>
+            ))}
+          </select>
         ) : undefined}
       />
 

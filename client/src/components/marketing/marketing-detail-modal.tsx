@@ -32,7 +32,7 @@ import {
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import type { OpeningHoursMap } from "@shared/schema";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
-import { ReviewsModal } from "@/components/account/reviews-modal";
+import { ReviewModal } from "@/components/review-modal";
 import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
 
 const PROVIDER_TYPE_LABELS: Record<string, string> = { Agency: "Agence", Freelancer: "Freelancer", Studio: "Studio" };
@@ -41,18 +41,6 @@ const PROVIDER_TYPE_COLORS: Record<string, string> = {
 };
 function providerTypeLabel(type: string) { return PROVIDER_TYPE_LABELS[type] ?? type; }
 function providerTypeColor(type: string) { return PROVIDER_TYPE_COLORS[type] ?? "bg-gray-100 text-gray-700"; }
-
-function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="flex items-center gap-1">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} type="button" onClick={() => onChange(n)} data-testid={`button-star-${n}`}>
-          <Star className={`w-5 h-5 ${n <= value ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
-        </button>
-      ))}
-    </div>
-  );
-}
 
 // Availability modal — same structure/scrollbar/today-highlight treatment as
 // BaristaAvailabilityModal (client/src/components/barista/barista-detail-modal.tsx),
@@ -219,8 +207,6 @@ export function MarketingDetailModal({
   const toggleMarketing = useFavorites((s) => s.toggleMarketingAgency);
 
   const [reviewProjectId, setReviewProjectId] = useState<number | null>(null);
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState("");
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
@@ -294,15 +280,9 @@ export function MarketingDetailModal({
     }
   };
 
-  const submitReview = () => {
-    if (!card || !activeProjectId || readOnly) return;
-    createReview.mutate(
-      { marketingUserId: card.userId, projectId: activeProjectId, rating: reviewRating, comment: reviewComment.trim() || undefined },
-      {
-        onSuccess: () => { toast({ title: "Avis envoyé" }); setReviewComment(""); },
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      }
-    );
+  const submitReview = async (rating: number, comment: string) => {
+    if (!card || !activeProjectId || readOnly) throw new Error("Aucun projet terminé à évaluer");
+    await createReview.mutateAsync({ marketingUserId: card.userId, projectId: activeProjectId, rating, comment: comment.trim() || undefined });
   };
 
   const submitReport = () => {
@@ -551,43 +531,28 @@ export function MarketingDetailModal({
     {/* Avis — dedicated modal, opened via the Star icon. Same review data,
         eligibility and mutation as before (reviews/eligibleProjects/submitReview),
         just relocated out of the main modal's body into this one. */}
-    <ReviewsModal
+    <ReviewModal
       open={reviewsModalOpen}
       onClose={() => setReviewsModalOpen(false)}
-      professionalName={card?.name ?? ""}
-      rating={card ? card.rating / 10 : 0}
-      reviewCount={card?.reviewCount ?? reviews.length}
-      reviews={reviews}
-      isDark={isDark}
-      showGrabber
-      reviewForm={eligibleProjects.length > 0 ? (
-        <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
-          <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
-          {eligibleProjects.length > 1 && (
-            <select
-              className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
-              value={activeProjectId ?? ""}
-              onChange={(e) => setReviewProjectId(Number(e.target.value))}
-              data-testid="select-review-project"
-            >
-              {eligibleProjects.map((p) => (
-                <option key={p.id} value={p.id}>{p.service || `Projet #${p.id}`} {myReviewByProject.has(p.id) ? "(déjà noté)" : ""}</option>
-              ))}
-            </select>
-          )}
-          <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
-          <Textarea
-            placeholder="Commentaire (facultatif)"
-            rows={2}
-            defaultValue={existingReview?.comment ?? ""}
-            onChange={(e) => setReviewComment(e.target.value)}
-            className={t.inputBg}
-            data-testid="input-review-comment"
-          />
-          <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-purple-600 hover:bg-purple-700 text-white" data-testid="button-submit-review">
-            {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
-          </Button>
-        </div>
+      targetName={card?.name ?? ""}
+      reviewTypeLabel="Avis sur l'agence"
+      existingReviews={reviews}
+      myReview={existingReview ? { rating: existingReview.rating, comment: existingReview.comment } : null}
+      defaultRating={5}
+      canReview={eligibleProjects.length > 0}
+      onSubmit={submitReview}
+      isSubmitting={createReview.isPending}
+      extraFormContent={eligibleProjects.length > 1 ? (
+        <select
+          className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
+          value={activeProjectId ?? ""}
+          onChange={(e) => setReviewProjectId(Number(e.target.value))}
+          data-testid="select-review-project"
+        >
+          {eligibleProjects.map((p) => (
+            <option key={p.id} value={p.id}>{p.service || `Projet #${p.id}`} {myReviewByProject.has(p.id) ? "(déjà noté)" : ""}</option>
+          ))}
+        </select>
       ) : undefined}
     />
 

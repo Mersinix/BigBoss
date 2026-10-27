@@ -5,7 +5,6 @@ import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Layers, Minus, Plus, Package, Heart, Star, MapPin, AlertCircle, X, Lock, Sun, Moon,
   ChevronLeft, ChevronRight,
@@ -23,7 +22,7 @@ import { useSearchLocationStore } from "@/store/search-location-store";
 import { calculateDistance, formatDistance } from "@/lib/distance";
 import { PackImageGallery } from "@/components/pack-image-gallery";
 import { ModalGrabber } from "@/components/shared/modal-grabber";
-import { ReviewsModal } from "@/components/account/reviews-modal";
+import { ReviewModal } from "@/components/review-modal";
 import type { PackDetail, SupplierProductReview, PackVariantOption, ProductWithTaxonomy } from "@shared/schema";
 
 // ── Pack image overlay icons (Fav / Theme / Close) — shared between the
@@ -102,55 +101,24 @@ function useTheme(isDark: boolean) {
   };
 }
 
-// ── Star rating input ─────────────────────────────────────────────────────────
-
-function StarRatingInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  const [hovered, setHovered] = useState(0);
-  return (
-    <div className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map(n => (
-        <button
-          key={n}
-          type="button"
-          onMouseEnter={() => setHovered(n)}
-          onMouseLeave={() => setHovered(0)}
-          onClick={() => onChange(n)}
-          className="p-0.5"
-        >
-          <Star
-            className={`w-5 h-5 transition-colors ${
-              n <= (hovered || value) ? "fill-amber-400 text-amber-400" : "text-gray-400"
-            }`}
-          />
-        </button>
-      ))}
-    </div>
-  );
-}
-
 // ── Pack Reviews (opened via the Star icon on the pack image) ────────────────
-// Reuses the exact same /api/reviews/pack/:packId query + submission mutation
-// as before — only the presentation shell changed, from an inline modal tab to
-// the shared ReviewsModal (the same pattern already used by Marketing/Barista/
-// Academy/Print's own "Avis" icon). No new API, no duplicated data source.
+// Renders the shared Avis modal (client/src/components/review-modal.tsx) —
+// the same component Product Detail uses (task: "Use One Shared Avis Modal
+// for Products and Packs") — so both have one visual/structural source of
+// truth. This component is only the pack-specific data adapter: its own
+// query/mutation/cache-invalidation against /api/reviews/pack/:packId,
+// exactly as before: only the presentation shell changed.
 
 function PackReviewsModal({
-  open, onClose, packId, packName, avgRating, reviewCount, isDark,
+  open, onClose, packId, packName,
 }: {
   open: boolean;
   onClose: () => void;
   packId: number;
   packName: string;
-  avgRating: number;
-  reviewCount: number;
-  isDark: boolean;
 }) {
-  const t = useTheme(isDark);
   const { user } = useAuth();
-  const { toast } = useToast();
   const qc = useQueryClient();
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState("");
 
   const canReview = user?.role === "CAFE_OWNER" && (user as any).status === "approved";
 
@@ -166,25 +134,18 @@ function PackReviewsModal({
 
   const myReview = user ? reviews.find(r => r.cafeId === user.id) : undefined;
 
-  useEffect(() => {
-    if (myReview) {
-      setRating(myReview.rating);
-      setComment(myReview.comment ?? "");
-    }
-  }, [myReview?.id]);
-
   const submit = useMutation({
-    mutationFn: () => apiRequest("POST", `/api/reviews/pack/${packId}`, { rating, comment: comment.trim() || undefined }),
+    mutationFn: ({ rating, comment }: { rating: number; comment: string }) =>
+      apiRequest("POST", `/api/reviews/pack/${packId}`, { rating, comment: comment.trim() || undefined }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/reviews/pack", packId] });
       qc.invalidateQueries({ queryKey: ["/api/marketplace/packs"] });
-      toast({ title: "Review submitted!" });
     },
-    onError: (err: any) => toast({ title: err?.message ?? "Error submitting review", variant: "destructive" }),
   });
 
   const reviewRows = useMemo(() => reviews.map(r => ({
     id: r.id,
+    cafeId: r.cafeId,
     cafeOwnerName: r.cafeOwnerName,
     cafeName: r.cafeName,
     rating: r.rating,
@@ -193,36 +154,16 @@ function PackReviewsModal({
   })), [reviews]);
 
   return (
-    <ReviewsModal
+    <ReviewModal
       open={open}
       onClose={onClose}
-      professionalName={packName}
-      rating={avgRating}
-      reviewCount={reviewCount}
-      reviews={reviewRows}
-      isDark={isDark}
-      showGrabber
-      reviewForm={canReview ? (
-        <div className={`p-3 rounded-xl border space-y-2 ${t.dk ? "border-gray-700" : "border-gray-200"}`}>
-          <p className={`text-xs font-medium ${t.textPrimary}`}>{myReview ? "Modifier votre avis" : "Laisser un avis"}</p>
-          <StarRatingInput value={rating} onChange={setRating} />
-          <Textarea
-            placeholder="Share your experience with this pack…"
-            value={comment}
-            onChange={e => setComment(e.target.value)}
-            className={`resize-none text-sm rounded-xl ${t.inputCls}`}
-            rows={2}
-          />
-          <Button
-            size="sm"
-            onClick={() => submit.mutate()}
-            disabled={rating === 0 || submit.isPending}
-            className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white border-0"
-          >
-            {submit.isPending ? "Submitting…" : myReview ? "Mettre à jour l'avis" : "Submit Review"}
-          </Button>
-        </div>
-      ) : undefined}
+      targetName={packName}
+      reviewTypeLabel="Avis sur le pack"
+      existingReviews={reviewRows}
+      myReview={myReview ? { rating: myReview.rating, comment: myReview.comment } : null}
+      onSubmit={async (rating, comment) => { await submit.mutateAsync({ rating, comment }); }}
+      isSubmitting={submit.isPending}
+      canReview={canReview}
     />
   );
 }
@@ -1110,9 +1051,6 @@ export function PackQuickViewModal({ previewPack, previewOpen, onPreviewClose }:
           onClose={() => setPackReviewsOpen(false)}
           packId={pack.id}
           packName={pack.name}
-          avgRating={pack.packAvgRating}
-          reviewCount={pack.packReviewCount}
-          isDark={isDark}
         />
       )}
     </Dialog>

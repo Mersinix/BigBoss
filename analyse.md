@@ -14634,3 +14634,648 @@ l'utilisateur dans l'IDE, avant cette tâche). Ce n'est pas une
 régression introduite ici ; laissé tel quel, hors du périmètre strict
 de cette tâche (restylage du seul formulaire Avis), pour éviter un
 changement non demandé.
+
+---
+
+## 33. Alignement inverse — le formulaire Avis Pack doit suivre le design du formulaire Avis Produit
+
+### Audit — état réel des deux formulaires (après la tâche 32 + modification manuelle de l'utilisateur)
+
+**Référence — Product Detail → Avis → formulaire actuel**
+(`review-modal.tsx`, lignes 257-293) : depuis la tâche 32 (plus une
+modification manuelle ultérieure de l'utilisateur dans l'IDE, retirant
+le label « Commentaire (facultatif) » — pris comme état actuel) :
+- Carte `p-3 rounded-xl border space-y-2` (bordure selon le thème).
+- **Pas de ligne de titre à l'intérieur de la carte** — seulement un
+  label `labelCls` (`text-xs font-semibold text-gray-300/700`) :
+  « Note * », suivi de `StarPicker` (`w-5 h-5`, `gap-0.5`, non
+  sélectionné `text-gray-400`), suivi d'un texte descriptif conditionnel
+  sous les étoiles (`rating > 0 && <p>{ratingLabel}</p>`, 5 niveaux :
+  Médiocre/Correct/Bien/Très bien/Excellent).
+- `Textarea` **sans label**, `resize-none text-sm rounded-xl` + classe
+  de thème, `rows={2}`.
+- `<Button size="sm">` : `rounded-xl bg-amber-500 hover:bg-amber-600
+  text-white border-0`.
+- Le titre « Modifier votre avis »/« Écrire un avis » et le nom du
+  produit sont affichés dans l'EN-TÊTE FIXE du modal (hors du bloc
+  `reviewForm`), jamais répétés dans la carte elle-même. Le label
+  « Avis sur le produit » est lui aussi hors du bloc formulaire
+  (rendu séparément, toujours visible, avant la carte).
+
+**Cible — Pack Detail → Avis → formulaire actuel**
+(`pack-quick-view-modal.tsx`, `PackReviewsModal`, lignes 196-227,
+inchangé depuis le début de la session) :
+- Même carte `p-3 rounded-xl border space-y-2` — **déjà identique**.
+- **Une ligne de titre À L'INTÉRIEUR de la carte** :
+  `<p className="text-xs font-medium ...">{myReview ? "Modifier votre
+  avis" : "Laisser un avis"}</p>` — absente chez Produit.
+- `StarRatingInput` : `w-5 h-5`, `gap-0.5`, non sélectionné
+  `text-gray-400` — **déjà rigoureusement identique** à `StarPicker`
+  de Produit (ironie : Produit avait copié EXACTEMENT ce style à la
+  tâche 32). Aucun texte descriptif sous les étoiles (absent).
+- `Textarea` sans label, `rows={2}`, mêmes classes — **déjà
+  identique**.
+- `Button` : mêmes classes exactes `rounded-xl bg-amber-500
+  hover:bg-amber-600 text-white border-0`, `size="sm"` — **déjà
+  identique** (hérité de la tâche 32).
+- En-tête fixe de `ReviewsModal` (partagé, HORS PÉRIMÈTRE — section 4
+  de la tâche l'interdit explicitement) : affiche déjà le nom du pack
+  (`professionalName`), structuré différemment du header de Produit
+  (icône+nom à gauche au lieu de titre centré+toggle thème) — non
+  touché, puisque modifier l'en-tête de `ReviewsModal` affecterait les
+  13 autres appelants partagés (Barista/Maintenance/Marketing/Academy/
+  Print/Delivery/Driver), explicitement hors périmètre.
+
+### Décision de portée
+
+Grâce aux tâches 28/30/32 précédentes, le style visuel du conteneur
+(carte), des étoiles, du Textarea, et du bouton est **déjà
+rigoureusement identique** entre les deux formulaires — il ne reste
+que **deux différences réelles** à corriger, toutes deux strictement
+à l'intérieur du bloc `reviewForm` de Pack (jamais dans l'en-tête
+partagé, jamais dans la liste d'avis, jamais dans la logique de
+soumission) :
+1. Retirer la ligne de titre répétée dans la carte de Pack (absente
+   chez Produit, qui l'affiche déjà dans son en-tête, hors du
+   `reviewForm`).
+2. Ajouter le label « Note * » (manquant chez Pack) et le texte
+   descriptif sous les étoiles (manquant chez Pack), pour que la
+   hiérarchie visuelle du contenu de la carte corresponde exactement.
+
+**Le libellé du bouton de Pack n'est PAS renommé** (« Submit Review »/
+« Mettre à jour l'avis » restent tels quels — la tâche demande
+explicitement de ne pas remplacer le libellé propre à Pack par celui
+de Produit : « Use the appropriate existing pack-review action label
+and behavior; do not replace it with a product-specific label or
+workflow »). Aucun label « Avis sur le pack » n'est ajouté (hors du
+`reviewForm`, nécessiterait de modifier `ReviewsModal` partagé — la
+tâche l'autorise seulement « if used by the existing pack-review
+interface », ce qui n'est pas le cas).
+
+### Implémentation
+
+**`client/src/components/pack-quick-view-modal.tsx`,
+`PackReviewsModal`** : dans le bloc `reviewForm`, remplacement de la
+ligne de titre par un label « Note * » (même classes que `labelCls`
+de Produit, adaptées au système de thème `t` déjà existant dans ce
+fichier) placé juste avant `StarRatingInput`, et ajout du texte
+descriptif conditionnel sous les étoiles (même tableau de 5 niveaux
+et même style `text-xs ${t.textMuted}` que Produit). Aucun autre
+changement — `Textarea`, `Button`, logique de soumission, en-tête,
+liste d'avis, grabber/geste, inchangés.
+
+### Tests exécutés et résultats réels
+
+- `npx tsc --noEmit` : **0 erreur** (exit code 0, aucune sortie).
+- `npm run build` : **succès** — `vite build` (2831 modules
+  transformés, ✓ built in 25.35s) + `esbuild` serveur
+  (`dist/index.cjs` 2.1 Mo, Done in 2268ms). Seul avertissement : le
+  warning Rollup pré-existant sur la taille du chunk JS, sans rapport.
+- `git status --short` / `git diff --stat` : seul
+  `client/src/components/pack-quick-view-modal.tsx` modifié dans ce
+  tour (+14/-2 lignes) — `store-detail-page.tsx` apparaît aussi comme
+  modifié mais c'est le reste non committé de la tâche 31 (Store
+  Information modal), non retouché ici. `review-modal.tsx` (Produit,
+  la référence) confirmé **non modifié**, conformément à la consigne
+  « it is the reference and must remain unchanged ».
+- **Aucun test navigateur/runtime n'a été possible** dans cet
+  environnement (pas d'outil d'automatisation navigateur disponible
+  cette session). N'ont été vérifiés QUE par lecture de code — jamais
+  observés en exécution : le rendu visuel réel des deux formulaires
+  côte à côte (carte, label « Note * », étoiles, texte descriptif,
+  Textarea, bouton) dans les deux états (nouveau/édition), la
+  sélection d'étoiles, la soumission réelle (création et mise à jour)
+  du Pack, le rendu clair/sombre, et la non-régression du Product
+  Detail Avis modal (non modifié, confirmé par `git status`, mais pas
+  observé visuellement).
+
+### Rapport final
+
+- **Formulaires comparés** : Product Detail Avis (référence,
+  inchangé) vs Pack Detail Avis (`PackReviewsModal`) — grâce aux
+  tâches 28/30/32 déjà réalisées cette session, carte/étoiles/
+  Textarea/bouton étaient déjà visuellement identiques ; seules la
+  ligne de titre intra-carte (retirée) et le label « Note * » + texte
+  descriptif (ajoutés) manquaient pour une correspondance complète.
+- **Contenu propre à Pack préservé** : libellés de bouton (« Submit
+  Review »/« Mettre à jour l'avis »), placeholder du Textarea,
+  logique de soumission (`/api/reviews/pack/:packId`), pré-remplissage
+  depuis `myReview`, tout inchangé.
+- **Éléments explicitement laissés hors périmètre** : l'en-tête
+  partagé de `ReviewsModal` (nom du pack, structure icône+nom) et le
+  label « Avis sur le produit »/équivalent pack — tous deux en dehors
+  du bloc `reviewForm`, donc nécessiteraient de modifier le composant
+  partagé lui-même (13 autres appelants non concernés par cette
+  tâche) ; non touchés, conformément à la consigne stricte de portée.
+- **Limitations** : aucune vérification visuelle/runtime n'a été
+  possible dans cet environnement (pas d'outil de navigateur) —
+  uniquement lecture de code, `tsc`, `build`, signalé explicitement
+  plutôt que supposé vérifié.
+
+---
+
+## 34. Un seul composant Avis partagé pour Produit et Pack
+
+### Audit — architectures réelles des deux implémentations
+
+**Product Detail Avis** (`client/src/components/review-modal.tsx`,
+`ReviewModal`, seul importeur : `product-detail-content.tsx`) : modal
+Dialog **autonome et complet** — en-tête propre (grabber, toggle thème,
+titre centré + nom produit, fermer), badge « Avis sur le produit »,
+état succès, carte formulaire (Note*, étoiles, commentaire, bouton),
+liste des avis existants. **Récupère ses propres données en interne**
+via deux `useQuery` : `GET /api/reviews/product/:id/list` (liste) et
+`GET /api/reviews/my/product/:id` (avis de l'utilisateur, pour le
+pré-remplissage). Soumission : `POST /api/reviews` avec `{productId,
+rating, comment, productName, reviewType: "PRODUCT"}`, upsert côté
+serveur (`storage.upsertReview`). Prop `listings` déclarée mais
+**jamais utilisée** dans le corps du composant (confirmé par
+recherche) — code mort.
+
+**Pack Detail Avis** (`pack-quick-view-modal.tsx`, `PackReviewsModal`)
+: PAS un modal autonome — calcule ses propres données (`useQuery` sur
+`GET /api/reviews/pack/:packId`, qui renvoie TOUS les avis du pack ;
+`myReview` dérivé client-side via `reviews.find(r => r.cafeId ===
+user.id)`) puis délègue le RENDU à `ReviewsModal` (composant partagé
+générique, `client/src/components/account/reviews-modal.tsx`, utilisé
+par 13 autres appelants hors périmètre — Barista/Maintenance/
+Marketing/Academy/Print/Delivery/Driver), en lui passant une carte
+`reviewForm` construite localement (Note*, étoiles, commentaire,
+bouton — déjà alignée visuellement sur Produit depuis les tâches
+28/30/32/33, mais structurellement un fichier séparé, pas le même
+composant). Soumission : `POST /api/reviews/pack/:packId` avec
+`{rating, comment}` (pas de `reviewType` — endpoint dédié), upsert
+server-side distinct (`existingPackReview` + insert/update manuel).
+Permission : `canReview = user?.role === "CAFE_OWNER" &&
+user.status === "approved"` — **conditionne l'affichage du
+formulaire** (la liste d'avis reste visible même sans ce droit).
+
+**Différence de déclenchement confirmée (à préserver, pas une
+incohérence à corriger)** : le bouton/icône qui OUVRE la modale Avis
+Produit est déjà entouré de `{hasCommercial && (...)}` dans
+`product-detail-content.tsx` (donc jamais atteignable par un
+utilisateur non éligible) — Produit n'a donc jamais eu besoin d'un
+garde `canReview` interne. L'icône Avis de Pack, elle, est toujours
+visible (n'importe qui peut consulter les avis), seul le formulaire
+est masqué par `canReview`. Cette différence de portée du bouton
+déclencheur est hors du composant partagé lui-même — elle reste
+gérée par chaque appelant, inchangée.
+
+**Forme des lignes d'avis — déjà compatible** : les deux API
+retournent des lignes de la même table `supplierProductReviews`
+(discriminant `reviewType`), avec les mêmes noms de champs
+(`id, cafeId, cafeOwnerName, cafeName, rating, comment, createdAt`).
+Seule différence : le `reviewRows` actuellement construit par Pack
+**omet `cafeId`** lors du mapping — à ajouter pour que le badge
+« Vous » (déjà présent dans le composant Produit, basé sur
+`r.cafeId === user.id`) fonctionne aussi pour Pack après
+l'unification.
+
+**Geste/grabber** : les deux ont déjà `useScrollDismiss(open, onClose
+ou handleClose, undefined, true)` — Produit l'a directement (propre à
+`ReviewModal`), Pack l'obtient via la prop `showGrabber` de
+`ReviewsModal` (tâche 30). Après le passage au composant partagé, Pack
+héritera du `useScrollDismiss` interne de `ReviewModal` — strictement
+équivalent, aucune régression de comportement de geste.
+
+### Plan — composant partagé, données/mutations laissées aux appelants
+
+Conformément à la préférence explicite de la tâche (« reuse the actual
+existing Product Detail Avis modal »), `ReviewModal`
+(`review-modal.tsx`) devient le **seul composant Avis** pour Produit
+ET Pack, inversé en contrôle : il ne fait plus AUCUN appel réseau lui-
+même — il reçoit `targetName`, `reviewTypeLabel`, `existingReviews`
+(déjà chargées), `myReview` (déjà résolu), `onSubmit` (callback vers
+la mutation réelle de chaque appelant), `isSubmitting`, et `canReview`
+(optionnel, défaut `true`). Chaque appelant garde intégralement sa
+propre requête/mutation/invalidation de cache — aucune API, schéma,
+ou règle d'autorisation serveur modifiée. La prop `listings` (morte)
+est supprimée avec le refactor.
+
+Fichiers à modifier : `review-modal.tsx` (généralisé),
+`product-detail-content.tsx` (remonte ses 2 `useQuery` + sa mutation,
+qui existaient déjà mais étaient internes à l'ancien `ReviewModal` —
+désormais possédées par l'appelant), `pack-quick-view-modal.tsx`
+(`PackReviewsModal` n'utilise plus `ReviewsModal`/`StarRatingInput`/
+`Textarea` — rend directement le `ReviewModal` partagé ; imports et
+fonction locale `StarRatingInput` devenus morts, supprimés après
+vérification qu'ils ne sont plus utilisés nulle part dans ce fichier).
+
+`reviews-modal.tsx` (le composant générique partagé par les 13 autres
+comptes professionnels) **n'est pas modifié** — Pack cesse simplement
+de l'utiliser, les 13 autres appelants continuent inchangés.
+
+### Implémentation réalisée
+
+**`client/src/components/review-modal.tsx`** — réécrit entièrement en
+composant partagé `ReviewModal`, désormais sans aucun appel réseau
+propre : nouvelles props `targetName`, `reviewTypeLabel`,
+`existingReviews` (type exporté `AvisReviewRow`), `myReview`,
+`onSubmit`, `isSubmitting`, `canReview` (optionnel, défaut `true`).
+Même en-tête (grabber, toggle thème, titre centré, fermer), même
+badge de type d'avis, même état succès, même carte formulaire (Note*,
+étoiles, commentaire, bouton), même liste d'avis existants, même
+`useScrollDismiss` — strictement la même structure visuelle, juste
+réalimentée par props au lieu de requêtes internes. Généralisations de
+contenu minimes nécessaires au partage : le texte « {n} avis sur ce
+produit » devient « {n} avis » (générique), le placeholder du
+Textarea devient « Partagez votre expérience… » (générique) — ni l'un
+ni l'autre n'est une donnée produit/pack spécifique, seulement un mot
+qui ne peut plus être codé en dur pour un seul des deux contextes.
+Prop `listings` (jamais utilisée) supprimée.
+
+**`client/src/components/product-detail-content.tsx`** — les deux
+`useQuery` (liste des avis, avis personnel) et la mutation
+(`POST /api/reviews`, invalidation de cache) qui vivaient avant à
+l'intérieur de `ReviewModal` sont maintenant possédées ici, à
+l'identique (mêmes clés de requête, même payload, même logique
+d'invalidation) — c'est l'adaptateur produit, symétrique à
+`PackReviewsModal`. Site d'appel de `<ReviewModal>` mis à jour avec
+les nouvelles props (`targetName={product.name}`,
+`reviewTypeLabel="Avis sur le produit"`, etc.).
+
+**`client/src/components/pack-quick-view-modal.tsx`** —
+`PackReviewsModal` rend désormais directement le `ReviewModal`
+partagé au lieu de `ReviewsModal` + formulaire local. Sa propre
+requête (`GET /api/reviews/pack/:packId`) et sa mutation
+(`POST /api/reviews/pack/:packId`) restent **exactement les mêmes**
+(aucune API ni payload modifié) ; `reviewRows` ajoute désormais
+`cafeId` (manquant avant) pour que le badge « Vous » fonctionne aussi
+côté Pack, comme côté Produit. `canReview` passé tel quel (gating du
+formulaire préservé, comportement « liste visible même sans ce
+droit » inchangé). Props `avgRating`/`reviewCount` (plus utilisées,
+l'en-tête du composant partagé n'affiche pas de note moyenne) et le
+composant local `StarRatingInput` ainsi que les imports `Textarea`/
+`ReviewsModal` (tous confirmés inutilisés après le refactor, vérifiés
+par recherche) supprimés.
+
+### Tests exécutés et résultats réels
+
+- `npx tsc --noEmit` : **0 erreur** (exit code 0, aucune sortie),
+  exécuté après chacun des trois fichiers puis une dernière fois sur
+  l'ensemble (une erreur de type intermédiaire — `Promise<Response>`
+  non assignable à `Promise<void>` sur `onSubmit` de Pack — détectée
+  et corrigée en entourant `submit.mutateAsync(...)` d'un wrapper
+  `async` qui n'en retourne pas la valeur).
+- `npm run build` : **succès** — `vite build` (2831 modules
+  transformés, ✓ built in 26.93s) + `esbuild` serveur
+  (`dist/index.cjs` 2.1 Mo, Done in 292ms). Seul avertissement : le
+  warning Rollup pré-existant sur la taille du chunk JS, sans rapport.
+- `git status --short` / `git diff --stat` : exactement les 3 fichiers
+  prévus modifiés dans ce tour (`review-modal.tsx` +217/-local,
+  `product-detail-content.tsx` +59, `pack-quick-view-modal.tsx`
+  -100/+local) — `store-detail-page.tsx` apparaît aussi modifié mais
+  c'est le reste non committé de la tâche 31, non retouché ici.
+  `reviews-modal.tsx` confirmé **sans aucun diff** (`git diff --stat`
+  vide) — intact, et ses 13 autres appelants (vérifiés par recherche
+  `from "@/components/account/reviews-modal"`) restent inchangés.
+  `pack-quick-view-modal.tsx` confirmé ne plus référencer
+  `ReviewsModal` du tout (recherche ciblée).
+- **Aucun test navigateur/runtime n'a été possible** dans cet
+  environnement (pas d'outil d'automatisation navigateur disponible
+  cette session). N'ont été vérifiés QUE par lecture de code — jamais
+  observés en exécution : la création/édition réelle d'un avis Produit
+  et d'un avis Pack (les deux scénarios, avec et sans avis existant),
+  le chargement et l'affichage réels des avis existants pour chaque
+  cible, l'absence d'interférence entre avis Produit et avis Pack, le
+  rendu visuel identique des deux modales côte à côte, et le
+  comportement réel du grabber/geste/fermeture dans les deux contextes.
+
+### Rapport final
+
+- **Composant partagé unique** : oui — `ReviewModal`
+  (`review-modal.tsx`) est désormais le seul composant Avis pour
+  Produit ET Pack, conformément à la préférence explicite de la tâche
+  de réutiliser l'implémentation Produit existante comme référence.
+- **Workflows produit/pack** : préservés indépendamment — APIs,
+  payloads, clés d'invalidation de cache, et permissions (`canReview`
+  pour Pack, gating du bouton d'ouverture par `hasCommercial` pour
+  Produit) tous inchangés, chacun dans son propre adaptateur
+  (`product-detail-content.tsx` / `pack-quick-view-modal.tsx`).
+- **Code dupliqué retiré, confirmé obsolète avant suppression** :
+  `StarRatingInput` local à Pack, props `listings` (Produit) et
+  `avgRating`/`reviewCount` (Pack), imports `Textarea`/`ReviewsModal`
+  dans `pack-quick-view-modal.tsx` — chacun vérifié par recherche
+  textuelle comme n'ayant plus aucun usage avant d'être retiré.
+- **`reviews-modal.tsx` et ses 13 autres appelants** : non modifiés,
+  confirmé par `git diff` vide sur ce fichier.
+- **Limitations** : aucune vérification visuelle/runtime n'a été
+  possible dans cet environnement (pas d'outil de navigateur) —
+  uniquement lecture de code, `tsc`, `build`, signalé explicitement
+  plutôt que supposé vérifié.
+
+---
+
+## 35. Extension du modal Avis partagé — Store, Barista, Maintenance
+
+### Audit — trois modèles de données réellement différents
+
+**Store Page → héros → Avis fournisseur** (`SupplierReviewsModal`,
+`store-detail-page.tsx`) : le plus proche de Produit/Pack — UN avis par
+(fournisseur, cafe owner), `POST /api/reviews` avec `{reviewType:
+"SUPPLIER", supplierId, rating, comment}` (même endpoint que Produit,
+discriminant différent), `GET /api/reviews/supplier-public/:id`
+(liste), `canReview` = rôle + statut approuvé. `reviewRows` omet
+`cafeId` (même lacune que Pack avant la tâche 34). `StarRatingInput`
+local, utilisé une seule fois (mort après refactor).
+
+**Barista → Avis** (`barista-detail-modal.tsx`) : modèle **plus
+complexe** — un avis est lié à une **mission complétée**
+(`baristaMissionId`), pas au barista directement ; un Coffee Owner
+peut avoir **plusieurs missions éligibles** (complétées, pas encore
+notées) simultanément, auquel cas un **`<select>` de choix de
+mission** s'affiche au-dessus des étoiles (élément propre à Barista,
+absent partout ailleurs). `canReview` = `!readOnly && eligibleMissions.
+length > 0`. Particularité supplémentaire : la note par défaut d'un
+AVIS NEUF est **5** (`reviewRating` initialisé à 5), pas 0 comme
+Produit/Pack/Store. `useBaristaReviews`/`useCreateBaristaReview`
+(hooks dédiés, déjà avec invalidation de cache intégrée) renvoient/
+acceptent déjà exactement la forme `{id, cafeId, cafeOwnerName,
+cafeName, rating, comment, createdAt}` — aucun mapping nécessaire.
+
+**Maintenance → Avis** (`maintenance-page.tsx`) : modèle **encore
+différent** — un avis est lié à une **réservation complétée**
+(`reservationId`), mais **sans sélecteur** : `reviewReservation` est
+choisi automatiquement (la première réservation complétée pas encore
+notée) ; **aucun mode édition n'existe** — le formulaire ne sert
+jamais qu'à créer un nouvel avis (jamais « Modifier votre avis », le
+bouton affiche toujours « Publier l'avis »). `canReview` = `!readOnly
+&& !!reviewReservation`. `storage.getMaintenanceReviews` renvoie déjà
+des `SupplierProductReview[]` — même forme compatible, directement
+utilisable sans mapping.
+
+### Décision — deux extensions minimales du composant partagé
+
+Pour couvrir ces trois modèles sans dupliquer la structure visuelle,
+`review-modal.tsx` reçoit deux nouvelles props optionnelles :
+- `extraFormContent?: ReactNode` — emplacement générique à l'intérieur
+  de la carte formulaire, juste au-dessus du label « Note * » (même
+  position relative que le `<select>` de mission de Barista
+  aujourd'hui). Seul Barista l'utilise ; les 4 autres l'omettent.
+- `defaultRating?: number` (défaut `0`) — valeur initiale des étoiles
+  quand `myReview` est `null` (création). Seul Barista passe `5`
+  (préserve son comportement existant) ; les autres gardent le défaut
+  `0` déjà en place.
+
+**Unification volontaire, pas une différence à préserver** : la
+couleur du bouton (vert pour Barista, orange pour Maintenance, ambre
+pour Produit/Pack/Store) et les titres redondants affichés À
+L'INTÉRIEUR de la carte formulaire (« Évaluer votre intervention » de
+Maintenance, « Modifier votre avis »/« Laisser un avis » de Barista et
+Store) sont retirés/unifiés sur le style déjà partagé — ce ne sont pas
+des règles métier, seulement une présentation que la tâche demande
+explicitement de ne plus différencier par cible. Le texte du badge
+sous l'en-tête (`reviewTypeLabel`) reste, lui, spécifique à chaque
+cible (« Avis sur le fournisseur » / « Avis sur le barista » / « Avis
+sur l'intervention »), conformément à « Target names, review content,
+state-specific headings… may vary when required ».
+
+### Implémentation
+
+1. **`review-modal.tsx`** : ajout de `extraFormContent?: ReactNode`
+   (rendu avant le label « Note * », à l'intérieur du bloc
+   `canReview &&`) et `defaultRating?: number = 0` (utilisé dans la
+   branche « pas d'avis existant » du `useEffect` de pré-remplissage).
+   Aucun autre changement structurel.
+2. **`store-detail-page.tsx`** : `SupplierReviewsModal` rend le
+   `ReviewModal` partagé au lieu de `ReviewsModal` + formulaire local ;
+   `reviewRows` ajoute `cafeId` ; `reviewTypeLabel="Avis sur le
+   fournisseur"` ; `StarRatingInput` local, import `Textarea`/
+   `Button`/`ReviewsModal` et le calcul `avgRating` supprimés après
+   vérification qu'ils ne sont plus utilisés ailleurs dans ce fichier.
+3. **`barista-detail-modal.tsx`** : `<ReviewsModal>` remplacé par le
+   `ReviewModal` partagé ; le `<select>` de mission devient
+   `extraFormContent` ; `defaultRating={5}` ; `onSubmit` encapsule
+   `createReview.mutateAsync({baristaUserId, missionId: activeMissionId,
+   rating, comment})` ; états locaux `reviewRating`/`reviewComment` et
+   la fonction `submitReview` (devenus inutiles, le composant partagé
+   possède maintenant cet état) supprimés ; `StarPicker` local retiré
+   si confirmé inutilisé ailleurs dans ce fichier.
+4. **`maintenance-page.tsx`** : `<ReviewsModal>` remplacé par le
+   `ReviewModal` partagé ; `myReview` toujours `null` (jamais de mode
+   édition, comportement préservé à l'identique) ; `reviewTypeLabel=
+   "Avis sur l'intervention"` ; `onSubmit` encapsule
+   `submitReview.mutateAsync()` (la mutation existante reste
+   inchangée) ; bloc d'étoiles inline (`[1,2,3,4,5].map`) retiré.
+
+`reviews-modal.tsx` (encore utilisé par Marketing/Academy/Print/
+Delivery/Driver, 10 appelants restants, hors périmètre de cette
+tâche) **n'est pas modifié**.
+
+### Tests exécutés et résultats réels
+
+- `npx tsc --noEmit` : **0 erreur** (exit code 0, aucune sortie),
+  exécuté après chacun des quatre fichiers (`review-modal.tsx`,
+  `store-detail-page.tsx`, `barista-detail-modal.tsx`,
+  `maintenance-page.tsx`) puis une dernière fois sur l'ensemble.
+- `npm run build` : **succès** — `vite build` (2831 modules
+  transformés, ✓ built in 30.04s) + `esbuild` serveur
+  (`dist/index.cjs` 2.1 Mo, Done in 1552ms). Seul avertissement : le
+  warning Rollup pré-existant sur la taille du chunk JS, sans rapport.
+- `git diff --stat` : confirme que `pack-quick-view-modal.tsx`
+  (-100/+local) et `product-detail-content.tsx` (+59) sont strictement
+  identiques à leur état de fin de tâche 34 (non retouchés ce tour) ;
+  seuls `review-modal.tsx` (extension incrémentale), `store-detail-
+  page.tsx`, `barista-detail-modal.tsx`, `maintenance-page.tsx` portent
+  de nouvelles modifications dans ce tour.
+- `git diff --stat client/src/components/account/reviews-modal.tsx` :
+  **vide** — confirmé intact. Recherche `from "@/components/account/
+  reviews-modal"` : exactement **11 appelants restants**
+  (Academy ×2, Marketing ×2, Print ×2, Delivery, Driver, + les 3 Store
+  Pages Marketing/Academy/Print) — tous hors périmètre de cette tâche,
+  aucun touché. Store (Supplier)/Barista/Maintenance confirmés absents
+  de cette liste (migration réussie, 14 → 11 appelants).
+- **Aucun test navigateur/runtime n'a été possible** dans cet
+  environnement (pas d'outil d'automatisation navigateur disponible
+  cette session). N'ont été vérifiés QUE par lecture de code — jamais
+  observés en exécution : la création/édition réelle d'un avis Store/
+  Barista/Maintenance (y compris le sélecteur de mission Barista avec
+  plusieurs missions éligibles, et l'absence de mode édition pour
+  Maintenance), le chargement et l'affichage réels des avis existants
+  pour chaque cible, l'isolation réelle des données entre les cinq
+  cibles, le rendu visuel identique des cinq modales côte à côte, et le
+  comportement réel du grabber/geste/fermeture dans ces trois nouveaux
+  contextes.
+
+### Rapport final
+
+- **Architecture confirmée** : `ReviewModal` (`review-modal.tsx`) reste
+  l'unique source de vérité visuelle, désormais pour 5 cibles (Produit,
+  Pack, Fournisseur/Store, Barista, Maintenance), via deux extensions
+  additives minimales (`extraFormContent`, `defaultRating`) — aucune
+  réécriture large, conforme à « make the smallest safe refactor ».
+- **Différences de modèle de données réellement préservées,
+  documentées dans l'audit** : avis liés à une mission (Barista, avec
+  sélecteur si plusieurs missions éligibles) vs à une réservation
+  auto-sélectionnée sans mode édition (Maintenance) vs un avis unique
+  par cible (Produit/Pack/Fournisseur) — chaque adaptateur garde son
+  API, sa mutation, son invalidation de cache, et ses règles de
+  permission (`canReview`) propres et inchangées.
+- **Unifications volontaires appliquées** : couleur de bouton (ambre
+  partout, retrait du vert Barista et de l'orange Maintenance), titres
+  redondants à l'intérieur de la carte formulaire retirés (le nom de
+  la cible et l'état édition/création sont déjà dans l'en-tête partagé)
+  — explicitement demandées par la tâche, pas des régressions.
+- **Code dupliqué retiré, confirmé obsolète avant suppression** :
+  `StarRatingInput` (Store) et `StarPicker` (Barista) locaux, états
+  `reviewRating`/`reviewComment` et fonctions `submitReview` (Barista/
+  Maintenance), bloc d'étoiles inline (Maintenance), import `Textarea`
+  (Store, devenu inutile dans ce fichier) — chacun vérifié par
+  recherche textuelle comme n'ayant plus aucun usage avant d'être
+  retiré ; `Textarea`/`Star`/`Button` conservés dans Barista/
+  Maintenance car encore utilisés ailleurs (formulaire Signaler,
+  icônes d'affichage).
+- **`reviews-modal.tsx` et ses 11 appelants restants** : non modifiés,
+  confirmé par `git diff` vide et recherche textuelle.
+- **Limitations** : aucune vérification visuelle/runtime n'a été
+  possible dans cet environnement (pas d'outil de navigateur) —
+  uniquement lecture de code, `tsc`, `build`, signalé explicitement
+  plutôt que supposé vérifié.
+
+---
+
+## 36. Extension du modal Avis partagé — Marketing, Print, Academy (9 fichiers)
+
+### Audit — découverte majeure : une seule relation d'avis par section, pas deux
+
+Contrairement à l'hypothèse de départ (« Marketing service reviews must
+remain separate from Marketing store reviews »), l'audit confirme par
+lecture directe des mutations que **Marketing et Print n'ont qu'UNE
+SEULE relation d'avis** (vers l'agence/l'imprimerie, jamais vers le
+service individuel) — le modal Service-level ET le modal Agence/
+Société-level ET la Store Page soumettent au **même endpoint, avec le
+même identifiant cible** :
+- Marketing : les 3 (`marketing-detail-modal.tsx`,
+  `marketing-service-detail-modal.tsx`, `marketing-store-detail-
+  page.tsx`) envoient `POST /api/marketing/reviews
+  {marketingUserId, projectId, rating, comment}` — `marketingUserId`
+  identique dans les 3 cas (l'agence).
+- Print : les 3 (`print-company-detail-modal.tsx`,
+  `print-service-detail-modal.tsx`, `print-store-detail-page.tsx`)
+  envoient `POST /api/print/reviews {printerId, printOrderId, rating,
+  comment}` — `printerId` identique dans les 3 cas (l'imprimerie).
+- Academy diffère : `academy-detail-modal.tsx` (niveau Formation)
+  envoie aussi vers `academyUserId` (l'académie, pas la formation) —
+  même relation unique. MAIS `academy-profile-modal.tsx` (niveau
+  Académie) et `academy-store-detail-page.tsx` (Store Page) sont
+  **en lecture seule** : aucun `reviewForm`, aucune mutation, aucun
+  état de note/commentaire dans ces deux fichiers — seule la LISTE
+  des avis y est affichée, jamais de formulaire d'écriture.
+
+Les 7 fichiers avec formulaire (tous sauf les 2 Académie en lecture
+seule) suivent le **même motif sélecteur** déjà traité pour Barista en
+tâche 35 : l'avis est lié à un **projet** (Marketing, via
+`marketingProjectId`), une **réservation** (Academy, via
+`academyRegistrationId`), ou une **commande** (Print, via
+`printOrderId`) — jamais directement au provider — avec un
+`<select>` affiché seulement si plusieurs éléments éligibles non
+encore notés existent, exactement le motif `extraFormContent` déjà
+construit pour Barista.
+
+Toutes les requêtes de liste renvoient déjà `cafeId` (types
+`MarketingReview`/`AcademyReview`/`SupplierProductReview`, tous avec
+`cafeId`) — aucune lacune à corriger contrairement à Pack/Store avant
+la tâche 34.
+
+### Plan — 3 groupes, réutilisation stricte de `extraFormContent`
+
+1. **Marketing** (agence, `marketingUserId`, libellé « Avis sur
+   l'agence ») : `marketing-detail-modal.tsx`,
+   `marketing-service-detail-modal.tsx` (reviewForm existant, cible
+   réellement l'agence du service, pas le service),
+   `marketing-store-detail-page.tsx`.
+2. **Academy** (académie, `academyUserId`, libellé « Avis sur
+   l'académie ») : `academy-detail-modal.tsx` (formulaire complet,
+   sélecteur d'inscription) ; `academy-profile-modal.tsx` et
+   `academy-store-detail-page.tsx` (lecture seule — `canReview={false}`,
+   `myReview={null}`, aucun `extraFormContent`, `onSubmit` jamais
+   réellement invoqué puisque le formulaire reste masqué).
+3. **Print** (imprimerie, `printerId`, libellé « Avis sur
+   l'imprimerie ») : `print-company-detail-modal.tsx`,
+   `print-service-detail-modal.tsx` (cible réellement l'imprimerie, pas
+   le service), `print-store-detail-page.tsx`.
+
+Dans chaque fichier : la liste/la mutation existantes restent
+strictement inchangées (mêmes clés de requête, même endpoint, même
+payload, même invalidation) ; seul le rendu passe de `<ReviewsModal
+reviewForm={...}>` à `<ReviewModal extraFormContent={...}>` avec le
+sélecteur (projet/inscription/commande) déplacé dans
+`extraFormContent`. États `reviewRating`/`reviewComment` et fonctions
+`StarPicker` locales supprimés après vérification qu'ils ne sont plus
+utilisés ailleurs dans chaque fichier (plusieurs de ces fichiers ont
+aussi un formulaire Signaler séparé qui réutilise les mêmes imports
+`Textarea`/`Button`/`Star` — ces imports restent si ce second usage
+existe). `defaultRating={5}` repris pour tous (même valeur par défaut
+pré-existante que Barista/Maintenance). `reviews-modal.tsx` (plus
+aucun appelant après cette tâche) **n'est pas supprimé** — rien dans
+la tâche ne demande sa suppression, et Delivery/Driver pourraient
+encore l'utiliser (à vérifier en fin de tâche).
+
+### Implémentation réalisée
+
+Les 9 fichiers ont été migrés selon le plan ci-dessus, sans aucune
+modification de `review-modal.tsx` lui-même (l'extension `extraFormContent`/
+`defaultRating` faite en tâche 35 s'est révélée suffisante telle quelle) :
+
+- **Marketing** : `marketing-detail-modal.tsx`,
+  `marketing-service-detail-modal.tsx`,
+  `marketing-store-detail-page.tsx` — `reviewTypeLabel="Avis sur
+  l'agence"`, sélecteur de projet dans `extraFormContent` si
+  `eligibleProjects.length > 1`, `canReview` dérivé de
+  `eligibleProjects.length > 0` (et `!readOnly` pour les 2 fichiers qui
+  ont ce concept ; la Store Page n'en a pas).
+- **Academy** : `academy-detail-modal.tsx` — `reviewTypeLabel="Avis sur
+  l'académie"`, sélecteur d'inscription dans `extraFormContent`.
+  `academy-profile-modal.tsx` et `academy-store-detail-page.tsx` —
+  migrés en `canReview={false}`, `myReview={null}`,
+  `onSubmit={() => {}}`, `isSubmitting={false}` (aucun changement de
+  comportement : ces deux vues restaient déjà en lecture seule avant
+  la migration).
+- **Print** : `print-company-detail-modal.tsx`,
+  `print-service-detail-modal.tsx`, `print-store-detail-page.tsx` —
+  `reviewTypeLabel="Avis sur l'imprimerie"`, sélecteur de commande
+  dans `extraFormContent` si `eligibleOrders.length > 1`, `canReview`
+  dérivé de `eligibleOrders.length > 0` (et `!readOnly` pour les 2
+  fichiers qui ont ce concept ; la Store Page n'en a pas).
+
+Dans chaque fichier : import `ReviewsModal` → `ReviewModal` depuis
+`@/components/review-modal` ; états locaux `reviewRating`/
+`reviewComment` supprimés (remplacés par les props `rating`/`comment`
+que `ReviewModal` gère en interne) ; fonction locale `StarPicker`
+supprimée après confirmation par recherche qu'elle n'avait plus
+aucun autre usage dans le fichier ; `submitReview` réécrit en
+`async (rating, comment) => { ...; await créerAvis.mutateAsync(...); }`
+(lève une erreur si la garde d'origine — `!card`/`!cible éligible`/
+`readOnly` — échoue, capturée et affichée par `ReviewModal` lui-même) ;
+transform `createdAt: String(...)` conservé tel quel partout où il
+existait déjà dans la requête de liste d'origine.
+
+Après la migration, recherche confirmée : `reviews-modal.tsx` n'a
+plus que 2 appelants dans toute l'app —
+`delivery-company-detail-modal.tsx` et `driver-detail-modal.tsx` —
+donc non supprimé, conformément au plan.
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` exécuté après **chaque fichier individuel** au
+  fil de la migration (0 erreur à chaque étape), puis une dernière
+  fois sur l'ensemble du projet après le 9e fichier : **0 erreur**
+  (hors l'erreur de base pré-existante, non liée à cette tâche, dans
+  `prospecting-page.tsx`).
+- `npm run build` exécuté sur l'ensemble du projet après les 9
+  fichiers : **build réussi** (client Vite + bundle serveur
+  `dist/index.cjs`, aucune erreur TypeScript ni de bundling).
+- `git status --short` vérifié : exactement les 9 fichiers cibles
+  modifiés par cette tâche, plus `analyse.md` ; aucun fichier
+  inattendu touché (les autres fichiers listés en `M` dans le statut
+  — `review-modal.tsx`, `barista-detail-modal.tsx`,
+  `pack-quick-view-modal.tsx`, `product-detail-content.tsx`,
+  `maintenance-page.tsx`, `store-detail-page.tsx` — proviennent des
+  tâches précédentes 34/35, non retouchés ici).
+- **Non vérifiable cette session** : aucun test dans un navigateur
+  réel n'a été possible (pas d'outil d'automatisation navigateur
+  disponible dans cet environnement) — le comportement visuel exact
+  (position du grabber, swipe-to-dismiss, cohérence de style entre
+  les 14 points d'entrée au total, thème clair/sombre réellement
+  rendu) n'a été vérifié que par lecture de code et compilation, pas
+  par observation directe à l'exécution.

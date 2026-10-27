@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import { useQuickView } from "@/hooks/use-quick-view";
 import type { MarketplaceProduct, MarketplaceListing, MarketplaceVariant, ListingPromotion } from "@shared/schema";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import { ReviewModal } from "@/components/review-modal";
+import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 import { PackImageGallery } from "@/components/pack-image-gallery";
 import { ModalGrabber } from "@/components/shared/modal-grabber";
 import { useCoverZoomStyle, computeCoverZoomScale, getAdjustmentFor } from "@/lib/image-adjustment";
@@ -540,6 +541,54 @@ export function ProductDetailContent({
   // shape/pattern; reuses the one existing product-favorite slot instead of
   // introducing a second favorite system for this modal's image overlay.
   const favedProduct = useFavorites((s) => (product ? !!s.shop[product.id] : false));
+
+  // ── Avis (Review) — data-fetching/mutation moved here from the now-shared
+  // ReviewModal component (task: "Use One Shared Avis Modal for Products and
+  // Packs"). ReviewModal itself is presentation-only; this is the
+  // product-specific adapter that supplies its props, exactly mirroring the
+  // pack-specific adapter in pack-quick-view-modal.tsx's PackReviewsModal.
+  const queryClient = useQueryClient();
+  const { data: existingProductReviews = [] } = useQuery<any[]>({
+    queryKey: ["/api/reviews/product", product?.id, "list"],
+    queryFn: async () => {
+      const res = await fetch(`/api/reviews/product/${product!.id}/list`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: reviewModalOpen && !!product,
+  });
+  const { data: myProductReview } = useQuery<any>({
+    queryKey: ["/api/reviews/my/product", product?.id],
+    queryFn: async () => {
+      const res = await fetch(`/api/reviews/my/product/${product!.id}`);
+      if (!res.ok) return null;
+      return res.json();
+    },
+    enabled: reviewModalOpen && !!product && !!user,
+  });
+  const submitProductReview = useMutation({
+    mutationFn: async ({ rating, comment }: { rating: number; comment: string }) => {
+      const res = await fetch("/api/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: product!.id,
+          rating,
+          comment: comment.trim() || null,
+          productName: product!.name,
+          reviewType: "PRODUCT",
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).message);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/reviews/product", String(product!.id)] });
+      queryClient.invalidateQueries({ queryKey: ["/api/reviews/product", product!.id, "list"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/reviews/my/product", product!.id] });
+      invalidateMarketplace(queryClient, product!.id);
+    },
+  });
   const toggleShopFav = useFavorites((s) => s.toggleShop);
 
   // Clear item-specific selection state when switching to a different
@@ -1177,8 +1226,12 @@ export function ProductDetailContent({
       <ReviewModal
         open={reviewModalOpen}
         onClose={() => setReviewModalOpen(false)}
-        product={product}
-        listings={filteredListings.length > 0 ? filteredListings.map(fl => fl.listing) : storeListings}
+        targetName={product.name}
+        reviewTypeLabel="Avis sur le produit"
+        existingReviews={existingProductReviews}
+        myReview={myProductReview ?? null}
+        onSubmit={(rating, comment) => submitProductReview.mutateAsync({ rating, comment })}
+        isSubmitting={submitProductReview.isPending}
       />
     </>
   );

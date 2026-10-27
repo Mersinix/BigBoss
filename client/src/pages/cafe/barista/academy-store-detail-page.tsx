@@ -9,7 +9,7 @@ import {
 } from "@/hooks/use-barista-academy";
 import { AcademyProfileAvailabilityModal } from "@/components/academy/academy-profile-modal";
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
-import { ReviewsModal } from "@/components/account/reviews-modal";
+import { ReviewModal } from "@/components/review-modal";
 import { ModalGrabber } from "@/components/shared/modal-grabber";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { EnrollDialog } from "@/pages/cafe/barista/barista-academy-page";
@@ -470,15 +470,16 @@ export default function AcademyStoreDetailPage() {
         isDark={isDark}
       />
 
-      <ReviewsModal
+      <ReviewModal
         open={reviewsModalOpen}
         onClose={() => setReviewsModalOpen(false)}
-        professionalName={card.name}
-        rating={card.rating / 10}
-        reviewCount={card.reviewCount ?? reviews.length}
-        reviews={reviews}
-        isDark={isDark}
-        showGrabber
+        targetName={card.name}
+        reviewTypeLabel="Avis sur l'académie"
+        existingReviews={reviews}
+        myReview={null}
+        canReview={false}
+        onSubmit={() => {}}
+        isSubmitting={false}
       />
 
       {/* Signaler — same modal chrome as the Disponibilité modal above

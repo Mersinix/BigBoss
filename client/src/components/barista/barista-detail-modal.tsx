@@ -30,7 +30,7 @@ import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { ModalGrabber } from "@/components/shared/modal-grabber";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
-import { ReviewsModal } from "@/components/account/reviews-modal";
+import { ReviewModal } from "@/components/review-modal";
 import { BaristaJobTargetButton } from "@/components/barista/barista-job-target-button";
 import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 import type { OpeningHoursMap } from "@shared/schema";
@@ -50,18 +50,6 @@ function levelColors(isDark: boolean): Record<string, string> {
   return isDark
     ? { BEGINNER: "bg-green-900/50 text-green-300", ADVANCED: "bg-blue-900/50 text-blue-300", EXPERT: "bg-purple-900/50 text-purple-300" }
     : { BEGINNER: "bg-green-100 text-green-700", ADVANCED: "bg-blue-100 text-blue-700", EXPERT: "bg-purple-100 text-purple-700" };
-}
-
-function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="flex items-center gap-1">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} type="button" onClick={() => onChange(n)} data-testid={`button-star-${n}`}>
-          <Star className={`w-5 h-5 ${n <= value ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
-        </button>
-      ))}
-    </div>
-  );
 }
 
 // Availability modal — same UX concept as the Maintenance one (own component,
@@ -245,8 +233,6 @@ export function BaristaDetailModal({
   const toggleBaristaMarket = useFavorites((s) => s.toggleBaristaMarket);
 
   const [reviewMissionId, setReviewMissionId] = useState<number | null>(null);
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState("");
   // Signaler now opens its own separate Dialog instead of an inline
   // collapsible panel — same mutation/validation/success-error behavior.
   const [reportModalOpen, setReportModalOpen] = useState(false);
@@ -316,17 +302,6 @@ export function BaristaDetailModal({
     } finally {
       setMessaging(false);
     }
-  };
-
-  const submitReview = () => {
-    if (!card || !activeMissionId || readOnly) return;
-    createReview.mutate(
-      { baristaUserId: card.userId, missionId: activeMissionId, rating: reviewRating, comment: reviewComment.trim() || undefined },
-      {
-        onSuccess: () => { toast({ title: "Avis envoyé" }); setReviewComment(""); },
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      }
-    );
   };
 
   const submitReport = () => {
@@ -635,46 +610,39 @@ export function BaristaDetailModal({
       providerName={card?.name ?? ""}
     />
 
-    {/* Avis (Phase 7) — dedicated modal, opened via the new Star icon. Same
-        review data/mutation/eligibility as before (reviews/createReview/
-        eligibleMissions), just relocated out of the main modal's body. */}
-    <ReviewsModal
+    {/* Avis — renders the shared Avis modal (client/src/components/
+        review-modal.tsx, task: "Extend the Shared Avis Modal Across Store,
+        Barista, and Maintenance") instead of ReviewsModal + a local form.
+        Same review data/mutation/eligibility as before (reviews/
+        createReview/eligibleMissions) — only the presentation shell
+        changed. The mission-select dropdown (only shown when there is more
+        than one eligible completed mission to review) is this target's one
+        genuinely extra field, passed via extraFormContent. */}
+    <ReviewModal
       open={reviewsModalOpen}
       onClose={() => setReviewsModalOpen(false)}
-      professionalName={card?.name ?? ""}
-      rating={(card?.rating ?? 0) / 10}
-      reviewCount={card?.reviewCount ?? reviews.length}
-      reviews={reviews}
-      isDark={isDark}
-      showGrabber
-      reviewForm={!readOnly && eligibleMissions.length > 0 ? (
-        <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
-          <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
-          {eligibleMissions.length > 1 && (
-            <select
-              className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
-              value={activeMissionId ?? ""}
-              onChange={(e) => setReviewMissionId(Number(e.target.value))}
-              data-testid="select-review-mission"
-            >
-              {eligibleMissions.map((m) => (
-                <option key={m.id} value={m.id}>{m.missionType || `Mission #${m.id}`} {myReviewByMission.has(m.id) ? "(déjà noté)" : ""}</option>
-              ))}
-            </select>
-          )}
-          <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
-          <Textarea
-            placeholder="Commentaire (facultatif)"
-            rows={2}
-            defaultValue={existingReview?.comment ?? ""}
-            onChange={(e) => setReviewComment(e.target.value)}
-            className={t.inputBg}
-            data-testid="input-review-comment"
-          />
-          <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-green-600 hover:bg-green-700 text-white" data-testid="button-submit-review">
-            {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
-          </Button>
-        </div>
+      targetName={card?.name ?? ""}
+      reviewTypeLabel="Avis sur le barista"
+      existingReviews={reviews}
+      myReview={existingReview ? { rating: existingReview.rating, comment: existingReview.comment } : null}
+      defaultRating={5}
+      canReview={!readOnly && eligibleMissions.length > 0}
+      onSubmit={async (rating, comment) => {
+        if (!card || !activeMissionId) throw new Error("Aucune mission terminée à évaluer");
+        await createReview.mutateAsync({ baristaUserId: card.userId, missionId: activeMissionId, rating, comment: comment.trim() || undefined });
+      }}
+      isSubmitting={createReview.isPending}
+      extraFormContent={eligibleMissions.length > 1 ? (
+        <select
+          className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
+          value={activeMissionId ?? ""}
+          onChange={(e) => setReviewMissionId(Number(e.target.value))}
+          data-testid="select-review-mission"
+        >
+          {eligibleMissions.map((m) => (
+            <option key={m.id} value={m.id}>{m.missionType || `Mission #${m.id}`} {myReviewByMission.has(m.id) ? "(déjà noté)" : ""}</option>
+          ))}
+        </select>
       ) : undefined}
     />
     </>

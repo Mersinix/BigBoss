@@ -23,20 +23,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Star, MapPin, Clock, Flag, Heart, MessageCircle, X, Printer, Package, Layers, ShoppingCart, ListChecks,
 } from "lucide-react";
-import { ReviewsModal } from "@/components/account/reviews-modal";
+import { ReviewModal } from "@/components/review-modal";
 import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
-
-function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="flex items-center gap-1">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} type="button" onClick={() => onChange(n)} data-testid={`button-star-${n}`}>
-          <Star className={`w-5 h-5 ${n <= value ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
-        </button>
-      ))}
-    </div>
-  );
-}
 
 // PRINT Service Details Modal — the real per-item ("service") preview, opened
 // from Coffee Owner's /print marketplace card AND from Espace Imprimerie's own
@@ -103,8 +91,6 @@ export function PrintServiceDetailModal({
   const togglePrint = useFavorites((s) => s.togglePrintProduct);
 
   const [reviewOrderId, setReviewOrderId] = useState<number | null>(null);
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState("");
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportReason, setReportReason] = useState("");
   const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
@@ -167,15 +153,9 @@ export function PrintServiceDetailModal({
     }
   };
 
-  const submitReview = () => {
-    if (!service || !activeOrderId || readOnly) return;
-    createReview.mutate(
-      { printerId: service.printerId, printOrderId: activeOrderId, rating: reviewRating, comment: reviewComment.trim() || undefined },
-      {
-        onSuccess: () => { toast({ title: "Avis envoyé" }); setReviewComment(""); },
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      }
-    );
+  const submitReview = async (rating: number, comment: string) => {
+    if (!service || !activeOrderId || readOnly) throw new Error("Aucune commande livrée à évaluer");
+    await createReview.mutateAsync({ printerId: service.printerId, printOrderId: activeOrderId, rating, comment: comment.trim() || undefined });
   };
 
   const submitReport = () => {
@@ -400,43 +380,28 @@ export function PrintServiceDetailModal({
         reviews (usePrintReviews) and the same review form/mutation (submitReview)
         as before, relocated out of the main modal's body, mirroring
         PrintCompanyDetailModal's identical pattern. */}
-    <ReviewsModal
+    <ReviewModal
       open={reviewsModalOpen}
       onClose={() => setReviewsModalOpen(false)}
-      professionalName={service?.printerName ?? ""}
-      rating={(service?.rating ?? 0) / 10}
-      reviewCount={service?.reviewCount ?? reviews.length}
-      reviews={reviews.map((r) => ({ ...r, createdAt: r.createdAt ? String(r.createdAt) : undefined }))}
-      isDark={isDark}
-      showGrabber
-      reviewForm={!readOnly && eligibleOrders.length > 0 ? (
-        <div className={`mt-3 p-3 rounded-xl border space-y-2 ${t.border}`}>
-          <p className={`text-xs font-medium ${t.textPrimary}`}>{existingReview ? "Modifier votre avis" : "Laisser un avis"}</p>
-          {eligibleOrders.length > 1 && (
-            <select
-              className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
-              value={activeOrderId ?? ""}
-              onChange={(e) => setReviewOrderId(Number(e.target.value))}
-              data-testid="select-review-order"
-            >
-              {eligibleOrders.map((o) => (
-                <option key={o.id} value={o.id}>Commande #{o.id} {myReviewByOrder.has(o.id) ? "(déjà notée)" : ""}</option>
-              ))}
-            </select>
-          )}
-          <StarPicker value={existingReview?.rating ?? reviewRating} onChange={setReviewRating} />
-          <Textarea
-            placeholder="Commentaire (facultatif)"
-            rows={2}
-            defaultValue={existingReview?.comment ?? ""}
-            onChange={(e) => setReviewComment(e.target.value)}
-            className={t.inputBg}
-            data-testid="input-review-comment"
-          />
-          <Button size="sm" onClick={submitReview} disabled={createReview.isPending} className="bg-blue-600 hover:bg-blue-700 text-white" data-testid="button-submit-review">
-            {createReview.isPending ? "Envoi…" : existingReview ? "Mettre à jour l'avis" : "Envoyer l'avis"}
-          </Button>
-        </div>
+      targetName={service?.printerName ?? ""}
+      reviewTypeLabel="Avis sur l'imprimerie"
+      existingReviews={reviews.map((r) => ({ ...r, createdAt: r.createdAt ? String(r.createdAt) : undefined }))}
+      myReview={existingReview ? { rating: existingReview.rating, comment: existingReview.comment } : null}
+      defaultRating={5}
+      canReview={!readOnly && eligibleOrders.length > 0}
+      onSubmit={submitReview}
+      isSubmitting={createReview.isPending}
+      extraFormContent={eligibleOrders.length > 1 ? (
+        <select
+          className={`w-full text-xs rounded-lg border px-2 py-1.5 ${t.inputBg}`}
+          value={activeOrderId ?? ""}
+          onChange={(e) => setReviewOrderId(Number(e.target.value))}
+          data-testid="select-review-order"
+        >
+          {eligibleOrders.map((o) => (
+            <option key={o.id} value={o.id}>Commande #{o.id} {myReviewByOrder.has(o.id) ? "(déjà notée)" : ""}</option>
+          ))}
+        </select>
       ) : undefined}
     />
     </>

@@ -15719,3 +15719,104 @@ conteneur `dir="rtl"`.
   test (Jest/Vitest) n'étant configuré dans le projet, aucun test
   automatisé n'a été ajouté pour le formateur partagé, conformément à
   « if the project's test setup supports them ».
+
+---
+
+## 39. Correction ciblée de la devise globale — Supplier uniquement
+
+### Audit — balayage exhaustif de `client/src/pages/supplier/` et `client/src/components/supplier/`
+
+Rappel de la référence déjà en place (tâche 38) : `client/src/lib/format.ts`
+(`formatCurrency`/`formatDecimalCurrency`, montant d'abord + 3 décimales +
+symbole à droite) via `useFormatCurrency`/`useFormatDecimalCurrency`/
+`useCurrency` (`client/src/hooks/use-currency.ts`), déjà adopté dans 103+
+fichiers du projet. Recherche exhaustive dans tout le périmètre Supplier
+(29 pages sous `pages/supplier/`, 5 sous `pages/supplier/inventory/`, 4
+sous `components/supplier/`) :
+
+- `toFixed(2)`/`toFixed(1)`/`toFixed(0)` : tous les usages trouvés dans
+  `dashboard.tsx`, `earnings-page.tsx`, `finance-analytics-page.tsx`,
+  `delivery-status-page.tsx`, `reviews-page.tsx` concernent des
+  pourcentages ou des notes moyennes (non monétaires) — aucune
+  correction nécessaire. Les deux usages de `toFixed(2)` dans
+  `manage-packs.tsx` alimentent des **valeurs par défaut de champs de
+  saisie** (`defaultPrice`, `placeholder`), pas un affichage — laissés
+  inchangés conformément à « do not change how prices are entered ».
+- Toute division `/100`/`/1000` hors formateur partagé : toutes
+  rattachées soit à des champs de saisie (valeurs de formulaire), soit
+  déjà passées ensuite à `fmt()`/`fmtDecimal()` correctement
+  (`discount-codes-page.tsx`, `promotions-page.tsx`, `manage-packs.tsx`
+  ligne 403 → nourrit uniquement `PackQuickViewModal`/`FlashMode`, deux
+  composants Shop déjà corrigés globalement).
+- Tous les modales/pages avec montants réels (`orders-page.tsx`,
+  `invoices-page.tsx`, `payouts-page.tsx`, `cafes-page.tsx`,
+  `supplier-order-details-modal.tsx`, `supplier-cancel-items-modal.tsx`,
+  `inventory-stats-cards.tsx`, `inventory-table.tsx`) utilisaient déjà
+  correctement `useFormatCurrency`/`fmt(...)`.
+- **Bug réel trouvé** : `client/src/pages/supplier/manage-products.tsx`
+  — deux libellés de champ codaient en dur un code de devise qui ne
+  correspond ni à la devise configurée NI même l'un à l'autre :
+  - Ligne 392 (`VariantGroupBuilder`, formulaire d'ajout de variantes
+    par groupe taille/parfum) : `Price (TND)`.
+  - Ligne 446 (`VariantMatrix`, tableau de variantes en mode matrice)
+    : `Price (USD)`.
+  Le montant réellement saisi dans ces champs est ensuite correctement
+  prévisualisé via `fmtDecimal(price)` (`ListingLivePreview`, ligne
+  570, déjà branché sur `useFormatDecimalCurrency` — donc le calcul
+  était bon, seul le libellé du champ de saisie affichait un code de
+  devise figé et erroné). C'est le point visible et répété (à chaque
+  variante ajoutée) qui correspond à « the Supplier part is still
+  broken » — tous les autres montants réellement affichés (totaux,
+  listes, modales) étaient déjà corrects depuis la tâche 38.
+  `useCurrency` était déjà importé dans ce fichier mais jamais appelé
+  (import mort constaté lors de l'audit de la tâche 38) — confirmé
+  qu'aucune autre fonction du fichier ne l'utilisait, donc aucune
+  collision à gérer en le rendant actif.
+- Aucune autre occurrence de "TND"/"USD"/"EUR"/"Prix (" ou "Price ("
+  codée en dur trouvée ailleurs dans tout le périmètre Supplier après
+  recherche exhaustive.
+- Noté mais **non modifié**, hors périmètre de cette tâche (Admin, pas
+  Supplier) : `client/src/pages/admin/products-page.tsx`'s
+  `SupplierProductsSection` contient un `const fmt = useFormatCurrency();`
+  ajouté par erreur lors de la tâche 38 (basé sur une mauvaise lecture
+  des bornes de fonction à l'époque — l'édition réelle du prix non
+  formaté se trouvait en fait dans `AdminPackPreviewModal`, qui avait
+  déjà son propre `fmt`) ; cette variable est inutilisée dans
+  `SupplierProductsSection` mais totalement inoffensive (aucun bug
+  visible, juste une variable morte). Conformément à la consigne stricte
+  de cette tâche (« Do not modify the Admin... section »), elle n'a
+  pas été retirée ici — à nettoyer lors d'une prochaine tâche touchant
+  légitimement ce fichier Admin.
+
+### Implémentation réalisée
+
+Un seul fichier modifié : `client/src/pages/supplier/manage-products.tsx`.
+
+- `VariantGroupBuilder` : ajout de `const symbol = useCurrency();` ;
+  libellé changé de `Price (TND)` à `Price ({symbol})`.
+- `VariantMatrix` : ajout de `const symbol = useCurrency();` ;
+  libellé changé de `Price (USD)` à `Price ({symbol})`.
+- Aucun changement à `ListingLivePreview`/`fmtDecimal` (déjà correct),
+  aucun changement de validation, de state, de payload de sauvegarde,
+  ni de aucune autre page Supplier.
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` sur l'ensemble du projet : **0 erreur** (hors
+  l'erreur de base pré-existante non liée à cette tâche dans
+  `prospecting-page.tsx`).
+- `npm run build` : **build réussi** (client Vite + bundle serveur).
+- `git status --short` : **un seul fichier modifié**,
+  `client/src/pages/supplier/manage-products.tsx` — confirmé qu'aucune
+  autre section (Admin, Shop, Barista, Maintenance, Marketing, Print,
+  Academy) n'a été touchée par cette tâche.
+- Recherche de régression : aucune autre occurrence de code de devise
+  en dur ("TND", "USD", "EUR") restante dans tout le périmètre
+  Supplier après correction.
+- **Non vérifiable cette session** : aucun test dans un navigateur réel
+  n'a été possible (pas d'outil d'automatisation navigateur disponible
+  dans cet environnement) — le rendu visuel effectif du libellé
+  corrigé (`Price (DT)`, `Price (د.ت)`, etc. selon la devise
+  configurée) dans les formulaires d'ajout/édition de produit n'a pas
+  été observé à l'exécution, uniquement vérifié par lecture de code et
+  compilation.

@@ -290,6 +290,7 @@ function VariantGroupBuilder({
   groups: VariantGroup[];
   onChange: (groups: VariantGroup[]) => void;
 }) {
+  const symbol = useCurrency();
   const addGroup = () => onChange([...groups, { id: crypto.randomUUID(), sizeId: "", flavorIds: [], price: "", qty: "", flavorStocks: {} }]);
   const update = (id: string, patch: Partial<VariantGroup>) => onChange(groups.map(g => g.id === id ? { ...g, ...patch } : g));
   const remove = (id: string) => onChange(groups.filter(g => g.id !== id));
@@ -389,7 +390,7 @@ function VariantGroupBuilder({
               />
             )}
             <div className="space-y-1">
-              <Label className="text-xs">Price (TND)</Label>
+              <Label className="text-xs">Price ({symbol})</Label>
               <Input type="number" step="0.01" min="0" value={g.price} onChange={e => update(g.id, { price: e.target.value })} placeholder="0.00" />
             </div>
             {hasFlavors ? (
@@ -431,6 +432,7 @@ function VariantGroupBuilder({
 // ── Variant Matrix Table ──────────────────────────────────────────────────────
 
 function VariantMatrix({ entries, onChange }: { entries: VEntry[]; onChange: (entries: VEntry[]) => void }) {
+  const symbol = useCurrency();
   const update = (idx: number, field: 'price' | 'qty', val: string) => {
     const next = [...entries];
     next[idx] = { ...next[idx], [field]: val };
@@ -443,7 +445,7 @@ function VariantMatrix({ entries, onChange }: { entries: VEntry[]; onChange: (en
         <thead className="bg-secondary/40">
           <tr>
             <th className="text-left p-2.5 font-medium text-muted-foreground">Variant</th>
-            <th className="text-center p-2.5 font-medium text-muted-foreground">Price (USD)</th>
+            <th className="text-center p-2.5 font-medium text-muted-foreground">Price ({symbol})</th>
             <th className="text-center p-2.5 font-medium text-muted-foreground">Qty in Stock</th>
           </tr>
         </thead>

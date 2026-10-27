@@ -1127,9 +1127,7 @@ export function ProductDetailContent({
   // ── Supplier toolbar ──────────────────────────────────────────────────────
   const supplierToolbar = (
     <div className="flex items-center justify-between flex-wrap gap-2">
-      <h2 className={isModal ? `font-semibold text-base ${textPrimary}` : "font-semibold text-lg"}>
-        {supplierId != null ? "Depuis cette boutique" : "Disponible chez les fournisseurs"}
-      </h2>
+      
       <div className="flex items-center gap-2 flex-wrap">
         {/* Location filter */}
         {supplierId == null && locationFilter ? (
@@ -1143,7 +1141,7 @@ export function ProductDetailContent({
           </div>
         ) : supplierId == null ? (
           <Button variant="outline" size="sm" className={`gap-1.5 text-xs ${tbOutline}`} onClick={() => setLocationModalOpen(true)}>
-            <MapPin className="w-3.5 h-3.5" /> Filtrer par localisation
+            <MapPin className="w-3.5 h-3.5" /> Maps
           </Button>
         ) : null}
         {/* Nearest */}
@@ -1164,12 +1162,7 @@ export function ProductDetailContent({
         >
           <Tag className="w-3 h-3" /> Moins cher
         </button>}
-        {/* Write review */}
-        {isCafeOwner && storeListings.length > 0 && (
-          <Button variant="outline" size="sm" className={`gap-1.5 text-xs ${tbOutline}`} onClick={() => setReviewModalOpen(true)}>
-            <MessageSquarePlus className="w-3.5 h-3.5" /> Écrire un avis
-          </Button>
-        )}
+        
       </div>
     </div>
   );

@@ -184,7 +184,7 @@ function SupplierNameWithRating({ supplierId, supplierName, isDark }: { supplier
   const avgRating = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
   return (
     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-      <p className={`text-sm font-semibold ${t.textMuted}`}>{supplierName}</p>
+      <p className={`text-xl font-extrabold leading-tight min-w-0 ${t.textPrimary} ${t.textMuted}`}>{supplierName}</p>
       {reviews.length > 0 && (
         <div className="flex items-center gap-1">
           <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
@@ -888,9 +888,9 @@ export function PackQuickViewModal({ previewPack, previewOpen, onPreviewClose }:
                     >
                       {fmt(pack.price)}
                     </span>
-                    {individualTotal > pack.price && (
+                    {/* {individualTotal > pack.price && (
                       <span className={`text-2xl line-through ${t.textMuted}`}>{fmt(individualTotal)}</span>
-                    )}
+                    )} */}
                   </div>
 
                   {/* Distance */}
@@ -903,7 +903,7 @@ export function PackQuickViewModal({ previewPack, previewOpen, onPreviewClose }:
                   {/* Stock */}
                   <span className={`flex items-center gap-1 text-sm font-medium ${priceColor}`}>
                     <Package className="w-3.5 h-3.5 shrink-0" />
-                    {maxQty} Pack disponible{maxQty !== 1 ? "s" : ""}
+                    {maxQty} Pack{maxQty !== 1 ? "s" : ""}
                   </span>
 
                   {/* Expiry */}

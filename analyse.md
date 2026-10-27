@@ -15279,3 +15279,258 @@ donc non supprimé, conformément au plan.
   les 14 points d'entrée au total, thème clair/sombre réellement
   rendu) n'a été vérifié que par lecture de code et compilation, pas
   par observation directe à l'exécution.
+
+---
+
+## 37. Modal Disponibilité partagé — Supplier, Maintenance, Barista, Print, Academy, Marketing (6 points d'entrée)
+
+### Audit — 6 implémentations quasi-identiques déjà présentes, 2 autres hors périmètre
+
+Référence imposée par la tâche : **Marketing → Stores → Disponibilité**,
+`MarketingAvailabilityModal` exporté depuis
+`client/src/components/marketing/marketing-detail-modal.tsx` (appelé
+aussi depuis `marketing-store-detail-page.tsx`). Props :
+`{open, onClose, providerName, weeklyHours, isDark}`. Purement
+d'affichage (lecture seule) : liste des 7 jours (`WEEKLY_DAY_DEFS`,
+`client/src/lib/weekly-hours.ts`, labels français Lundi→Dimanche),
+surbrillance « Aujourd'hui », état « Fermé », état vide « Aucun
+horaire configuré ». Alimenté par `card.weeklyHours`
+(`OpeningHoursMap`, `shared/schema.ts`), jamais édité depuis ce modal
+(l'édition existe ailleurs, côté Compte Marketing lui-même, hors
+périmètre de cette tâche).
+
+Les 5 autres implémentations auditées par lecture directe :
+
+1. **Barista** — `BaristaAvailabilityModal`
+   (`client/src/components/barista/barista-detail-modal.tsx`), ouvert
+   depuis `BaristaDetailModal`. Code **quasi identique** à la
+   référence : même structure, mêmes classes, même `WEEKLY_DAY_DEFS`,
+   accent ambre identique. Seules différences réelles : padding du
+   header `pt-5` au lieu de `pt-1` (léger décalage vertical vs la
+   référence), texte d'état vide « Ce Barista n'a pas encore défini
+   ses disponibilités. ».
+2. **Maintenance** — `MaintenanceAvailabilityModal`
+   (`client/src/pages/cafe/maintenance/maintenance-page.tsx`), ouvert
+   depuis la page détail Maintenance. Quasi identique, accent ambre.
+   **Différence réelle notable** : le bouton de fermeture est à
+   **gauche** et le spacer vide à **droite** — inversé par rapport à
+   la référence (spacer à gauche, fermeture à droite). Texte d'état
+   vide « Ce professionnel n'a pas encore défini ses
+   disponibilités. ».
+3. **Print (Store Page)** — `PrintCompanyAvailabilityModal`
+   (`client/src/components/print/print-company-detail-modal.tsx`),
+   ouvert aussi depuis `print-store-detail-page.tsx` (le point
+   d'entrée demandé ici). Quasi identique, accent **bleu** au lieu
+   d'ambre (déjà la couleur distinctive de la section Print ailleurs
+   dans l'app). Texte d'état vide « Cette imprimerie n'a pas encore
+   défini ses disponibilités. ».
+4. **Academy (Store Page)** — `AcademyProfileAvailabilityModal`
+   (`client/src/components/academy/academy-profile-modal.tsx`), ouvert
+   aussi depuis `academy-store-detail-page.tsx` (le point d'entrée
+   demandé). Quasi identique, accent **indigo** (couleur distinctive
+   Academy). Texte d'état vide « Cette académie n'a pas encore défini
+   ses disponibilités. » (à confirmer caractère exact lors de
+   l'implémentation).
+5. **Supplier (Store)** — `InfoModal`
+   (`client/src/pages/cafe/store-detail-page.tsx`), seul modal
+   **entièrement en anglais** (« Opening Hours », jours
+   Monday→Sunday, « Today », « Closed », « No schedule set », « This
+   store hasn't configured opening hours yet. ») — toute la page
+   Supplier Store est en anglais (héritée d'avant l'unification
+   française des autres sections ; confirmé par les libellés
+   voisins « Supplier reviews », « Flash Mode », badge « Closed »,
+   etc., donc un choix de langage cohérent et pré-existant sur cette
+   page entière, pas une négligence isolée). Différences réelles
+   supplémentaires : alimenté par `openingHours` (prop nommée
+   différemment, même type `OpeningHoursMap`), utilise son propre
+   tableau `DAYS` local (mêmes clés, labels anglais) au lieu de
+   `WEEKLY_DAY_DEFS` ; header `pt-5` (comme Barista) ; **contient son
+   propre bouton de bascule clair/sombre** à gauche du titre (`toggle()`
+   via `useThemeStore`), alors que la référence a un simple spacer vide
+   à cet endroit ; **ne rend aucun `<DialogTitle>`** (même caché via
+   `VisuallyHidden`) contrairement aux 5 autres — lacune
+   d'accessibilité pré-existante.
+
+Non concerné par cette tâche (vérifié, à ne pas toucher) :
+`AcademyAvailabilityModal` (niveau Formation,
+`academy-detail-modal.tsx`) — modèle de données totalement différent
+(sessions de cours réelles via `useAcademyCourseSessions`, pas de
+concept `weeklyHours` pour une formation) ; `DeliveryCompanyAvailabilityModal`
+et `DriverAvailabilityModal` — mêmes motif/structure mais sections
+Delivery/Driver non listées dans les 6 points d'entrée demandés.
+
+Toutes les 5 variantes non-référence partagent déjà, sans exception :
+même grabber/swipe-to-dismiss (`useScrollDismiss`), même conteneur
+Dialog/DialogContent (`rounded-[2rem]`, `max-h-[88vh]`), même
+scrollbar fine, même logique de calcul du jour courant, même format
+d'heure (`day.open–day.close`), aucune mutation/édition (lecture
+seule partout), donc **aucune logique métier cible-spécifique à
+préserver au-delà des props déjà identifiées** (nom de l'entité,
+`weeklyHours`, accent couleur, libellés texte, jours FR/EN, et le
+bouton de bascule de thème propre à Supplier).
+
+### Plan — composant partagé générique, les 5 variantes deviennent de simples appels
+
+Nouveau composant : `AvailabilityModal` dans
+`client/src/components/shared/availability-modal.tsx`, extrait du
+corps de `MarketingAvailabilityModal` (la référence), avec des props
+génériques couvrant exactement les différences réelles identifiées
+ci-dessus — rien de plus :
+
+```ts
+interface AvailabilityModalProps {
+  open: boolean;
+  onClose: () => void;
+  targetName: string;        // providerName/baristaName/agentName/companyName/academyName/storeName
+  weeklyHours: OpeningHoursMap | null;
+  isDark: boolean;
+  accentColor?: "amber" | "blue" | "indigo"; // défaut "amber" (référence)
+  dayDefs?: { key: keyof OpeningHoursMap; label: string }[]; // défaut WEEKLY_DAY_DEFS (FR)
+  subtitleLabel?: string;    // défaut "Disponibilité"
+  todayLabel?: string;       // défaut "Aujourd'hui"
+  closedLabel?: string;      // défaut "Fermé"
+  noScheduleTitle?: string;  // défaut "Aucun horaire configuré"
+  noScheduleHint: string;    // requis — texte toujours cible-spécifique
+  onToggleTheme?: () => void; // optionnel — seul Supplier le fournit ; sinon spacer vide identique à la référence
+}
+```
+
+Toutes les props sauf `noScheduleHint` ont une valeur par défaut égale
+au comportement actuel de la référence Marketing, donc les 5 autres
+appelants ne fournissent que ce qui diffère réellement chez eux.
+`onToggleTheme` n'est fourni que par `store-detail-page.tsx` (Supplier)
+— c'est la seule capacité fonctionnelle (pas seulement visuelle) que
+ce modal possède aujourd'hui et que les 5 autres n'ont pas ; elle est
+préservée via un point d'extension explicite plutôt que supprimée,
+conformément à « preserve existing editing or display capabilities »
+et « do not change unrelated Supplier functionality ». Le
+`<DialogTitle>` caché (`Disponibilité — {targetName}` ou équivalent
+localisé) est ajouté uniformément par le composant partagé, ce qui
+comble au passage la lacune d'accessibilité de Supplier sans aucune
+décision de contenu supplémentaire (consequence naturelle du partage
+d'un seul composant, pas un redesign ciblé de Supplier).
+
+Le bug visuel réel de Maintenance (bouton fermeture à gauche) est
+corrigé en adoptant la structure du composant partagé (fermeture à
+droite, comme tous les autres) — c'est exactement l'« exact visual
+consistency » demandée par la tâche, pas un changement hors
+périmètre.
+
+Les 5 fichiers (`barista-detail-modal.tsx`, `maintenance-page.tsx`,
+`print-company-detail-modal.tsx`, `academy-profile-modal.tsx`,
+`store-detail-page.tsx`) remplacent leur fonction locale
+`XAvailabilityModal`/`InfoModal` par un import de `AvailabilityModal`
+et un simple passage de props à l'appel existant (aucun changement de
+state/trigger/bouton d'ouverture). `MarketingAvailabilityModal`
+elle-même devient un fin wrapper autour de `AvailabilityModal` (ou le
+fichier marketing réexporte l'import directement) pour que la
+référence reste disponible sous son nom existant sans code dupliqué.
+
+Aucun changement d'API, de route, de schéma, ou de logique de
+requête/mutation nulle part — ce modal n'a jamais été que de
+l'affichage dans les 6 cas.
+
+### Vérification prévue
+
+`npx tsc --noEmit` après chaque fichier puis sur l'ensemble ;
+`npm run build` final ; `git status --short`/`git diff --stat` pour
+confirmer le périmètre exact touché. Aucun test navigateur réel
+possible dans cet environnement (comme pour toutes les tâches
+précédentes de cette session) — à signaler explicitement dans le
+rapport final.
+
+### Implémentation réalisée
+
+Nouveau fichier `client/src/components/shared/availability-modal.tsx`
+exportant `AvailabilityModal`, extrait sans changement visuel du corps
+de la référence Marketing (même markup, mêmes classes, même hook
+`useScrollDismiss`, même conteneur `Dialog`/`DialogContent`
+`rounded-[2rem]`/`max-h-[88vh]`, même scrollbar fine). Props
+implémentées exactement comme planifié : `targetName`, `weeklyHours`,
+`isDark`, `accentColor` (amber/blue/indigo, calculé par fonction
+`accentClasses(accentColor, dk)` — pas de classes Tailwind `dark:`,
+cohérent avec le reste de l'app qui bascule toujours via un booléen
+`isDark` explicite, jamais via une classe ancêtre `.dark`), `dayDefs`
+(défaut `WEEKLY_DAY_DEFS`), `subtitleLabel`, `todayLabel`,
+`closedLabel`, `noScheduleTitle`, `noScheduleHint` (requis),
+`onToggleTheme` (optionnel).
+
+Les 6 points d'entrée :
+
+1. **Marketing (référence)** — `MarketingAvailabilityModal`
+   (`marketing-detail-modal.tsx`) devient un fin wrapper autour de
+   `AvailabilityModal` sous son nom existant ; aucun changement pour
+   les deux appelants (`marketing-detail-modal.tsx` lui-même et
+   `marketing-store-detail-page.tsx`).
+2. **Barista** — `BaristaAvailabilityModal`
+   (`barista-detail-modal.tsx`) même traitement ; corrige au passage
+   le padding `pt-5` → aligné sur la référence (`pt-1`), seule
+   différence visuelle réelle qui existait.
+3. **Maintenance** — `MaintenanceAvailabilityModal`
+   (`maintenance-page.tsx`) même traitement ; corrige le bouton de
+   fermeture qui était à gauche (inversé par rapport à la référence)
+   — maintenant à droite comme partout ailleurs, conformément à
+   l'« exact visual consistency » demandée.
+4. **Print (Store Page)** — `PrintCompanyAvailabilityModal`
+   (`print-company-detail-modal.tsx`) même traitement,
+   `accentColor="blue"` préservé ; aucun changement pour
+   `print-store-detail-page.tsx`.
+5. **Academy (Store Page)** — `AcademyProfileAvailabilityModal`
+   (`academy-profile-modal.tsx`) même traitement,
+   `accentColor="indigo"` préservé ; aucun changement pour
+   `academy-store-detail-page.tsx`.
+6. **Supplier (Store)** — `InfoModal`
+   (`store-detail-page.tsx`) même traitement, en conservant
+   explicitement son anglais existant (`dayDefs={DAYS}` local,
+   `subtitleLabel="Opening Hours"`, `todayLabel="Today"`,
+   `closedLabel="Closed"`, `noScheduleTitle="No schedule set"`,
+   `noScheduleHint="This store hasn't configured opening hours
+   yet."`) et son bouton de bascule clair/sombre propre
+   (`onToggleTheme={toggle}`) — seule capacité réellement
+   fonctionnelle (pas seulement visuelle) que ce modal avait et que
+   les 5 autres n'ont pas, donc préservée via le point d'extension
+   prévu plutôt que supprimée. Un `<DialogTitle>` caché est désormais
+   rendu ici aussi (absent avant), comblant une lacune d'accessibilité
+   pré-existante comme conséquence naturelle du partage du composant,
+   sans décision de contenu supplémentaire.
+
+Dans chaque fichier, après remplacement du corps de la fonction :
+imports désormais inutilisés supprimés après vérification qu'ils
+n'avaient plus d'autre usage dans le fichier — `WEEKLY_DAY_DEFS` dans
+les 5 fichiers concernés, et dans `store-detail-page.tsx`
+spécifiquement `ModalGrabber`, `useScrollDismiss`, `Sun`, `Moon`,
+`X`, `Clock`, ainsi que `Dialog`/`DialogContent`/`DialogHeader`/
+`DialogTitle` (plus aucun autre Dialog dans ce fichier une fois
+`InfoModal` converti). Aucun des 6 points d'appel (déclaration du
+state `[availabilityModalOpen]`, bouton déclencheur Horloge/
+Disponibilité, passage de `card.weeklyHours`) n'a été modifié — seule
+l'implémentation interne du composant appelé a changé.
+
+Aucune route, API, schéma, requête ou mutation modifiée — ce modal
+n'a jamais fait que de l'affichage en lecture seule dans les 6 cas,
+confirmé par l'audit.
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` exécuté après chaque fichier individuel (0
+  erreur à chaque étape), puis sur l'ensemble du projet une dernière
+  fois : **0 erreur** (hors l'erreur de base pré-existante non liée à
+  cette tâche dans `prospecting-page.tsx`).
+- `npm run build` exécuté sur l'ensemble du projet : **build
+  réussi** (client Vite + bundle serveur `dist/index.cjs`).
+- `git status --short` vérifié : exactement les 6 fichiers modifiés
+  (les 5 fichiers hébergeant une implémentation locale + la référence
+  Marketing) plus le nouveau fichier partagé
+  `availability-modal.tsx` et `analyse.md` — aucun fichier
+  inattendu touché, et en particulier aucun changement dans
+  `marketing-store-detail-page.tsx`, `print-store-detail-page.tsx`,
+  ni `academy-store-detail-page.tsx` (confirmé par lecture directe de
+  leurs appels, strictement inchangés).
+- **Non vérifiable cette session** : aucun test dans un navigateur
+  réel n'a été possible (pas d'outil d'automatisation navigateur
+  disponible dans cet environnement) — la cohérence visuelle exacte
+  entre les 6 points d'entrée (position du bouton de bascule de thème
+  chez Supplier, alignement pixel-perfect du grabber, rendu réel du
+  thème sombre, correction visible du bouton Maintenance) n'a été
+  vérifiée que par lecture de code et compilation, jamais par
+  observation directe à l'exécution dans un navigateur.

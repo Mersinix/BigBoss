@@ -9,17 +9,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ReviewModal } from "@/components/review-modal";
-import { ModalGrabber } from "@/components/shared/modal-grabber";
-import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
+import { AvailabilityModal } from "@/components/shared/availability-modal";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
   Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock,
-  ChevronLeft, MapPin, Plus, Info, Star, Music, Zap, Clock, Layers,
-  Sun, Moon, X, Search,
+  ChevronLeft, MapPin, Plus, Info, Star, Music, Zap, Layers,
+  Search,
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -215,144 +213,34 @@ export function InfoModal({ open, onClose, openingHours, storeName }: {
   openingHours: OpeningHoursMap | null;
   storeName: string;
 }) {
-  const todayKey = DAYS[new Date().getDay() === 0 ? 6 : new Date().getDay() - 1].key;
   const isDark = useThemeStore((s) => s.isDark);
   const toggle = useThemeStore((s) => s.toggle);
 
-  const dk = isDark;
-  const bg          = dk ? "bg-gray-900"                    : "bg-white";
-  const textPrimary = dk ? "text-white"                     : "text-gray-900";
-  const textMuted   = dk ? "text-gray-400"                  : "text-gray-500";
-  const divider     = dk ? "bg-gray-800"                    : "bg-gray-100";
-  const rowBg       = dk ? "bg-gray-800 border-gray-700/60" : "bg-gray-50 border-gray-100";
-  const rowToday    = dk ? "bg-amber-500/15 border-amber-500/30" : "bg-amber-50 border-amber-200";
-  const timeColor   = dk ? "text-gray-300"                  : "text-gray-700";
-  const closedColor = dk ? "text-red-400"                   : "text-red-500";
-  const iconBtn     = dk
-    ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white"
-    : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800";
-
-  // Swipe-to-dismiss on the grabber (task: "Standardize Grabber Design and
-  // Swipe-to-Dismiss Across Store Information and Service Modals") — same
-  // shared hook/parameters as the Product Detail Modal reference. The
-  // grabber previously rendered here was purely decorative; this wires it
-  // to the modal's own existing scroll container. Close button / backdrop
-  // / Escape still call onClose directly, unchanged.
-  const {
-    onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
-    dismissContentStyle, dismissOverlayStyle,
-  } = useScrollDismiss(open, onClose, undefined, true);
-
+  // Now the shared Disponibilité modal (reference: client/src/components/
+  // marketing/marketing-detail-modal.tsx's MarketingAvailabilityModal,
+  // extracted to client/src/components/shared/availability-modal.tsx), kept
+  // under this name/signature so the call site below needs no changes.
+  // This page is English throughout (unlike the other sections' French
+  // copy), so its existing English day list/labels are passed explicitly
+  // rather than the shared component's French defaults. The dark/light
+  // toggle previously built into this modal's header is preserved via
+  // onToggleTheme — the one functional (not just visual) capability this
+  // modal has that the other sections' availability modals don't.
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent
-        className="sm:max-w-sm p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden"
-        style={dismissContentStyle}
-        overlayStyle={dismissOverlayStyle}
-      >
-        <div className={`flex flex-col max-h-[88vh] overflow-hidden transition-colors duration-200 ${bg}`}>
-
-          {/* ── Fixed header ── */}
-          <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
-            <ModalGrabber isDark={dk} />
-            {/* Title row */}
-            <div className="flex items-center justify-between mb-4 mt-2">
-             {/* Dark / light toggle */}
-              <button
-                onClick={() => toggle()}
-                aria-label="Toggle theme"
-                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
-              >
-                {dk
-                  ? <Sun className="w-4 h-4 text-amber-400" />
-                  : <Moon className="w-4 h-4 text-gray-500" />
-                }
-              </button>
-
-              {/* Centered title */}
-              <div className="flex flex-col items-center gap-0.5">
-                <span className={`text-[13px] font-semibold tracking-tight leading-tight ${textPrimary}`}>
-                  {storeName}
-                </span>
-                <span className={`text-[11px] font-medium ${textMuted}`}>Opening Hours</span>
-              </div>
-
-              {/* Close */}
-              <button
-                onClick={onClose}
-                aria-label="Close"
-                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
-              >
-                <X className="w-4 h-4" />
-              </button>
-              
-            </div>
-
-            {/* Divider */}
-            <div className={`h-px w-full ${divider}`} />
-          </div>
-
-          {/* ── Scrollable content ── */}
-          <div
-            className="flex-1 min-h-0 overflow-y-auto px-5 pb-6
-              [&::-webkit-scrollbar]:w-1
-              [&::-webkit-scrollbar-track]:bg-transparent
-              [&::-webkit-scrollbar-thumb]:rounded-full
-              [&::-webkit-scrollbar-thumb]:bg-gray-700
-              hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
-            style={{ WebkitOverflowScrolling: "touch" }}
-            onWheel={onBodyWheel}
-            onTouchStart={onBodyTouchStart}
-            onTouchMove={onBodyTouchMove}
-            onTouchEnd={onBodyTouchEnd}
-          >
-            {openingHours ? (
-              <div className="space-y-2 pb-2">
-                {DAYS.map(({ key, label }) => {
-                  const day = openingHours[key];
-                  const isToday = key === todayKey;
-                  return (
-                    <div
-                      key={key}
-                      className={`flex items-center justify-between border rounded-2xl px-4 py-3 transition-colors ${isToday ? rowToday : rowBg}`}
-                    >
-                      {/* Day label + Today badge */}
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[13px] font-medium ${isToday ? (dk ? "text-amber-400" : "text-amber-600") : textPrimary}`}>
-                          {label}
-                        </span>
-                        {isToday && (
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${dk ? "bg-amber-500/30 text-amber-300" : "bg-amber-100 text-amber-700"}`}>
-                            Today
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Time or Closed */}
-                      {day?.closed ? (
-                        <span className={`text-[12px] font-semibold ${closedColor}`}>Closed</span>
-                      ) : day ? (
-                        <span className={`text-[13px] font-medium tabular-nums ${isToday ? (dk ? "text-amber-300" : "text-amber-700") : timeColor}`}>
-                          {day.open}&thinsp;–&thinsp;{day.close}
-                        </span>
-                      ) : (
-                        <span className={`text-[12px] ${textMuted}`}>—</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className={`text-center py-12 ${textMuted}`}>
-                <Clock className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                <p className={`text-sm font-medium ${textPrimary}`}>No schedule set</p>
-                <p className="text-xs mt-1 opacity-50">This store hasn't configured opening hours yet.</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <AvailabilityModal
+      open={open}
+      onClose={onClose}
+      targetName={storeName}
+      weeklyHours={openingHours}
+      isDark={isDark}
+      onToggleTheme={toggle}
+      dayDefs={DAYS}
+      subtitleLabel="Opening Hours"
+      todayLabel="Today"
+      closedLabel="Closed"
+      noScheduleTitle="No schedule set"
+      noScheduleHint="This store hasn't configured opening hours yet."
+    />
   );
 }
 

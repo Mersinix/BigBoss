@@ -26,9 +26,9 @@ import {
   Star, MapPin, Clock, Award, Image as ImageIcon, Briefcase, MessageCircle,
   Flag, Heart, Navigation, X,
 } from "lucide-react";
-import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { ModalGrabber } from "@/components/shared/modal-grabber";
+import { AvailabilityModal } from "@/components/shared/availability-modal";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
 import { ReviewModal } from "@/components/review-modal";
 import { BaristaJobTargetButton } from "@/components/barista/barista-job-target-button";
@@ -52,9 +52,11 @@ function levelColors(isDark: boolean): Record<string, string> {
     : { BEGINNER: "bg-green-100 text-green-700", ADVANCED: "bg-blue-100 text-blue-700", EXPERT: "bg-purple-100 text-purple-700" };
 }
 
-// Availability modal — same UX concept as the Maintenance one (own component,
-// Shop Opening Hours visual reference, no Shop business logic), reusing the
-// same WEEKLY_DAY_DEFS shared list and OpeningHoursMap data shape.
+// Availability modal — now the shared Disponibilité modal (reference:
+// client/src/components/marketing/marketing-detail-modal.tsx's
+// MarketingAvailabilityModal, extracted to client/src/components/shared/
+// availability-modal.tsx), kept under this name so the call site below
+// needs no changes.
 function BaristaAvailabilityModal({
   open, onClose, baristaName, weeklyHours, isDark,
 }: {
@@ -64,97 +66,15 @@ function BaristaAvailabilityModal({
   weeklyHours: OpeningHoursMap | null;
   isDark: boolean;
 }) {
-  const todayIndex = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
-  const todayKey = WEEKLY_DAY_DEFS[todayIndex].key;
-
-  const dk = isDark;
-  const bg = dk ? "bg-gray-900" : "bg-white";
-  const textPrimary = dk ? "text-white" : "text-gray-900";
-  const textMuted = dk ? "text-gray-400" : "text-gray-500";
-  const rowBg = dk ? "bg-gray-800 border-gray-700/60" : "bg-gray-50 border-gray-100";
-  const rowToday = dk ? "bg-amber-500/15 border-amber-500/30" : "bg-amber-50 border-amber-200";
-  const timeColor = dk ? "text-gray-300" : "text-gray-700";
-  const closedColor = dk ? "text-red-400" : "text-red-500";
-
-  // Swipe-to-dismiss on the grabber (task: "Standardize Grabber Design and
-  // Swipe-to-Dismiss Across Store Information and Service Modals") — same
-  // shared hook/parameters as the established reference.
-  const {
-    onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
-    dismissContentStyle, dismissOverlayStyle,
-  } = useScrollDismiss(open, onClose, undefined, true);
-
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent
-        className="sm:max-w-sm p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden"
-        style={dismissContentStyle}
-        overlayStyle={dismissOverlayStyle}
-      >
-        <VisuallyHidden><DialogTitle>Disponibilité — {baristaName}</DialogTitle></VisuallyHidden>
-        <div className={`flex flex-col max-h-[88vh] overflow-hidden transition-colors duration-200 ${bg}`}>
-          <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
-            <ModalGrabber isDark={dk} />
-            <div className="flex items-center justify-between mb-4 mt-2">
-              <div className="w-8 h-8" />
-              <div className="flex flex-col items-center gap-0.5">
-                <span className={`text-[13px] font-semibold tracking-tight leading-tight ${textPrimary}`}>{baristaName}</span>
-                <span className={`text-[11px] font-medium ${textMuted}`}>Disponibilité</span>
-              </div>
-              <button onClick={onClose} aria-label="Close" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}>
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <div className={`h-px w-full ${dk ? "bg-gray-800" : "bg-gray-100"}`} />
-          </div>
-          <div
-            className="flex-1 min-h-0 overflow-y-auto px-5 pb-6
-              [&::-webkit-scrollbar]:w-1
-              [&::-webkit-scrollbar-track]:bg-transparent
-              [&::-webkit-scrollbar-thumb]:rounded-full
-              [&::-webkit-scrollbar-thumb]:bg-gray-700
-              hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
-            style={{ WebkitOverflowScrolling: "touch" }}
-            onWheel={onBodyWheel}
-            onTouchStart={onBodyTouchStart}
-            onTouchMove={onBodyTouchMove}
-            onTouchEnd={onBodyTouchEnd}
-          >
-            {weeklyHours ? (
-              <div className="space-y-2 pb-2">
-                {WEEKLY_DAY_DEFS.map(({ key, label }) => {
-                  const day = weeklyHours[key];
-                  const isToday = key === todayKey;
-                  return (
-                    <div key={key} className={`flex items-center justify-between border rounded-2xl px-4 py-3 transition-colors ${isToday ? rowToday : rowBg}`}>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[13px] font-medium ${isToday ? (dk ? "text-amber-400" : "text-amber-600") : textPrimary}`}>{label}</span>
-                        {isToday && (
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${dk ? "bg-amber-500/30 text-amber-300" : "bg-amber-100 text-amber-700"}`}>Aujourd'hui</span>
-                        )}
-                      </div>
-                      {day?.closed ? (
-                        <span className={`text-[12px] font-semibold ${closedColor}`}>Fermé</span>
-                      ) : day ? (
-                        <span className={`text-[13px] font-medium tabular-nums ${isToday ? (dk ? "text-amber-300" : "text-amber-700") : timeColor}`}>{day.open}&thinsp;–&thinsp;{day.close}</span>
-                      ) : (
-                        <span className={`text-[12px] ${textMuted}`}>—</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className={`text-center py-12 ${textMuted}`}>
-                <Clock className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                <p className={`text-sm font-medium ${textPrimary}`}>Aucun horaire configuré</p>
-                <p className="text-xs mt-1 opacity-50">Ce Barista n'a pas encore défini ses disponibilités.</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <AvailabilityModal
+      open={open}
+      onClose={onClose}
+      targetName={baristaName}
+      weeklyHours={weeklyHours}
+      isDark={isDark}
+      noScheduleHint="Ce Barista n'a pas encore défini ses disponibilités."
+    />
   );
 }
 

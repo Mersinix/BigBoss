@@ -15,7 +15,7 @@ import {
   Plus, ShoppingBag, Layers, Star, MapPin, Zap, Search,
 } from "lucide-react";
 import type { ListingPromotion } from "@shared/schema";
-import { useCurrency } from "@/hooks/use-currency";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { calculateDistance, formatDistance } from "@/lib/distance";
@@ -555,9 +555,7 @@ export function PackCardTile({
   navIds?: number[];
 }) {
   const t = useTheme(isDark);
-  const symbol = useCurrency(); // use global currency symbol
-  // Format cents as "65.00 DT" (currency symbol on the right)
-  const fmtRight = (cents: number) => `${(cents / 100).toFixed(2)} ${symbol}`;
+  const fmtRight = useFormatCurrency();
 
   const faved = useFavorites((s) => !!s.pack[pack.id]);
   const togglePack = useFavorites((s) => s.togglePack);

@@ -4,7 +4,7 @@ import {
   useMarketingTaxonomy, useMarketingSubCategoryTaxonomy, useMyMarketingCategoryMapping, type MarketingService,
 } from "@/hooks/use-marketing";
 import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
-import { useFormatCurrency } from "@/hooks/use-currency";
+import { useFormatCurrency, useCurrency } from "@/hooks/use-currency";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ const EMPTY_FORM: ServiceFormState = { title: "", category: "", subCategories: [
 
 function ServiceFormDialog({ service, onClose }: { service: MarketingService | "new" | null; onClose: () => void }) {
   const { toast } = useToast();
+  const symbol = useCurrency();
   const { data: taxonomy = [] } = useMarketingTaxonomy();
   const { data: subcategoryTaxonomy = [] } = useMarketingSubCategoryTaxonomy();
   const create = useCreateMarketingService();
@@ -163,7 +164,7 @@ function ServiceFormDialog({ service, onClose }: { service: MarketingService | "
           )}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Prix de départ (د.ت)</label>
+              <label className="text-xs text-muted-foreground mb-1 block">Prix de départ ({symbol})</label>
               <Input type="number" min={0} value={form.startingPrice} onChange={(e) => setForm((f) => ({ ...f, startingPrice: e.target.value }))} data-testid="input-service-price" />
             </div>
             <div>

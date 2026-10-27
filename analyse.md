@@ -15534,3 +15534,188 @@ confirmé par l'audit.
   thème sombre, correction visible du bouton Maintenance) n'a été
   vérifiée que par lecture de code et compilation, jamais par
   observation directe à l'exécution dans un navigateur.
+
+---
+
+## 38. Standardisation de la position/précision de la devise globale (symbole à droite, 3 décimales)
+
+### Audit — un seul formateur central déjà largement adopté, quelques contournements isolés
+
+Source de vérité existante : `GET /api/system-currency` (table de
+config système, mutable via `PATCH /api/admin/system-currency`,
+`requireAdmin`), exposée côté client par
+`client/src/hooks/use-currency.ts` — `useCurrency()` (symbole brut),
+`useFormatCurrency()` (montant en **centimes**, le cas d'usage très
+majoritaire), `useFormatDecimalCurrency()` (montant déjà en unité
+d'affichage). Les deux formateurs délèguent à
+`client/src/lib/format.ts` (`formatCurrency`/`formatDecimalCurrency`),
+qui faisaient `${symbol}${amount.toFixed(2)}` (symbole à gauche, 2
+décimales) — **seul point de bascule nécessaire**, puisque
+`useFormatCurrency` est déjà appelé dans **103 fichiers** à travers
+tout le projet (Shop, Supplier, Barista, Maintenance, Marketing,
+Print, Academy, Admin) : une fois ce fichier corrigé, la quasi-
+totalité des prix affichés dans l'app suivent automatiquement la
+nouvelle règle sans toucher ces 103 fichiers un par un.
+
+Recherche exhaustive des contournements (tout `toFixed(2)`,
+`toLocaleString`, `Intl.NumberFormat`, et toute chaîne combinant
+manuellement un symbole et un montant) :
+
+- `client/src/pages/admin/maintenance-page.tsx:513` — « Tarif
+  journalier » construit `\`${...toFixed(2)} DT\`` **en dur**,
+  ignorant totalement la devise configurée (toujours « DT » même si
+  l'Admin choisit « € » ou « د.ت »). Seule occurrence de ce type dans
+  tout `client/src/pages/admin`.
+- `client/src/pages/admin/products-page.tsx:1504` et `:1928` — deux
+  colonnes/cartes de prix (prix unitaire d'un item de commande, prix
+  d'un pack) affichaient le montant **sans aucun symbole** du tout
+  (`\`${(.../100).toFixed(2)}\`), alors qu'une colonne adjacente du
+  même tableau (`fmt(item.packVariantPrice)`) utilise déjà le
+  formateur partagé — incohérence manifeste dans le même tableau.
+- `client/src/pages/cafe/browse-products.tsx:560` — fonction locale
+  `fmtRight` dupliquant *exactement* ce que le formateur partagé fait
+  désormais nativement (symbole à droite), avec seulement 2
+  décimales — doublon pur à consolider.
+- `client/src/pages/cafe/analytics-page.tsx` (lignes 121, 138, 161) —
+  page Analytics : `totalSpend` (vrai total basé sur les commandes,
+  en centimes) utilisait déjà `fmt()` correctement, mais les 3 blocs
+  de démonstration (`monthlySpend`, `categorySpend`,
+  `topProducts[].spend` — données factices câblées en dur, montants
+  en unité décimale déjà, pas en centimes) construisaient
+  manuellement `\`${symbol} ${v}\`` (symbole à gauche, aucune
+  précision décimale forcée).
+- `server/storage.ts` — `_promoLabel()` (ligne ~13527), **seul
+  endroit côté serveur** générant une chaîne de prix destinée à
+  l'affichage direct côté client (`ListingPromotion.label`, rendu tel
+  quel dans `product-detail-content.tsx` comme badge « X DT OFF ») :
+  le symbole « DT » y était codé en dur, ignorant la devise
+  configurée. Seule autre occurrence serveur de `toFixed` sur un
+  montant monétaire ; le reste des `toFixed` côté serveur concerne des
+  distances en km (hors périmètre).
+- `client/src/pages/marketing/services.tsx:166` — libellé de champ
+  « Prix de départ (د.ت) » codait en dur le symbole **arabe**, quelle
+  que soit la devise réellement configurée — incohérence de contenu
+  avec la règle « le symbole doit toujours provenir de la
+  configuration Devise Globale ».
+
+Délibérément laissés inchangés, avec justification :
+
+- `server/routes.ts:8770` (export CSV de l'inventaire) — reste en
+  `toFixed(2)` sans symbole : un export CSV est un artefact de
+  données brutes destiné à être réimporté/recalculé dans un tableur,
+  pas un « affichage » de prix dans l'app ; y ajouter un symbole
+  transformerait une colonne numérique en texte et casserait tout
+  usage tableur existant — hors du périmètre « displayed prices » et
+  risque réel non justifié par le bénéfice.
+- Les nombreux libellés de champ du type « (DT) » déjà présents dans
+  plusieurs formulaires Admin (`admin/barista-page.tsx`,
+  `admin/maintenance-page.tsx`, `admin/marketing-page.tsx`,
+  `admin/system-management-page.tsx`) : ce sont des étiquettes pures
+  à côté d'un champ de saisie, sans aucun montant formaté (zéro
+  chiffre décimal en jeu) — ils ne relèvent pas de la règle
+  « position + 3 décimales » qui est le cœur de cette tâche. Les
+  libellés déjà dynamiques (`Discount (${symbol})` dans
+  `discount-codes-page.tsx`/`promotions-page.tsx`) n'avaient de toute
+  façon rien à corriger. Les corriger tous aurait élargi la tâche
+  bien au-delà de « l'affichage des prix » vers un balayage général
+  non demandé ; seul `marketing/services.tsx` a été corrigé car son
+  cas était qualitativement différent (un script entièrement faux —
+  arabe — s'affichant même quand une autre devise est active, plutôt
+  qu'une simple étiquette informative).
+- Aucune conversion de devise, aucun schéma, aucune route modifiée —
+  confirmé qu'aucun des montants stockés ni calculs (totaux, remises,
+  commissions) n'a été touché, uniquement la présentation.
+
+### Implémentation réalisée
+
+1. **`client/src/lib/format.ts`** — `formatCurrency`/
+   `formatDecimalCurrency` réécrits : `\`${amount.toFixed(3)} ${symbol}\``
+   (montant d'abord, espace, symbole — 3 décimales partout, `.` comme
+   séparateur). Gère nativement zéro et les montants négatifs
+   (`toFixed` natif). C'est le seul changement qui propage
+   automatiquement aux 103 fichiers appelants.
+2. **`server/storage.ts`** — `getPromotionsForListings` récupère
+   désormais `const currencySymbol = await this.getCurrency();` une
+   seule fois avant la boucle, et le transmet à `_promoLabel(p,
+   currencySymbol)`, qui utilise ce symbole dynamique au lieu de
+   `"DT"` en dur (le format `${montant.toFixed(3)} ${symbole} OFF`
+   était déjà à 3 décimales par coïncidence — seul le symbole était
+   figé).
+3. **`client/src/pages/admin/maintenance-page.tsx`** — ajout de
+   `const fmt = useFormatCurrency();` dans `AccountDetail`, « Tarif
+   journalier » utilise désormais `fmt(account.dailyRateInCents ?? 0)`
+   au lieu du gabarit codé en dur.
+4. **`client/src/pages/admin/products-page.tsx`** — ajout de `const
+   fmt = useFormatCurrency();` dans `SupplierProductsSection`
+   (absent avant) ; les deux affichages de prix sans symbole
+   remplacés par `fmt(item.unitPrice)` et `fmt(pack.price)`
+   (`AdminPacksSection` avait déjà son propre `fmt` en portée).
+5. **`client/src/pages/cafe/browse-products.tsx`** — `fmtRight` local
+   et l'import `useCurrency` remplacés par `const fmtRight =
+   useFormatCurrency();` ; aucun autre usage de `symbol`/`fmtRight`
+   dans le fichier, import nettoyé.
+6. **`client/src/pages/cafe/analytics-page.tsx`** — ajout de `const
+   fmtDecimal = useFormatDecimalCurrency();` ; les 3 affichages de
+   démonstration (2 tooltips de graphique + liste "Top Ordered
+   Products") utilisent désormais `fmtDecimal(...)` : le symbole brut
+   `symbol` reste utilisé uniquement pour les 2 titres de carte
+   (« Monthly Spend (DT) ») qui n'affichent aucun montant formaté et
+   restent donc de simples libellés corrects.
+7. **`client/src/pages/marketing/services.tsx`** — ajout de `const
+   symbol = useCurrency();` dans `ServiceFormDialog`, libellé corrigé
+   en `Prix de départ ({symbol})`.
+
+Aucun changement de route, schéma, requête, mutation, ni logique de
+calcul de prix/remise/commission nulle part — uniquement la
+présentation.
+
+### Internationalisation / RTL — décision documentée
+
+Aucune marque Unicode d'isolation directionnelle (LRI/PDI) n'a été
+ajoutée autour des prix contenant le symbole arabe « د.ت ». Audit :
+la seule page de l'application utilisant `dir="rtl"` est
+`landing-page.tsx` (mode langue "tn"), qui n'affiche aucun prix
+formaté (confirmé : aucun appel à `useFormatCurrency`/`formatCurrency`
+dans ce fichier) ; partout ailleurs où des prix sont réellement
+affichés, le conteneur reste `dir="ltr"` (par défaut, aucune autre
+page ne positionne `dir="rtl"`), cas dans lequel l'algorithme Unicode
+bidi standard ne réordonne pas la séquence « montant LTR → symbole
+RTL » — l'ordre visuel « 230.000 د.ت » reste correct nativement sans
+protection supplémentaire. Ajouter des marques d'isolation aurait été
+une infrastructure nouvelle non justifiée par un cas réel actuellement
+présent dans le code (le projet n'a aucune marque bidi existante à
+réutiliser). À surveiller si un futur écran affiche un prix dans un
+conteneur `dir="rtl"`.
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` sur l'ensemble du projet : **0 erreur** (hors
+  l'erreur de base pré-existante non liée à cette tâche dans
+  `prospecting-page.tsx`).
+- `npm run build` : **build réussi** (client Vite + bundle serveur
+  `dist/index.cjs`), confirmant que les changements TypeScript côté
+  serveur (`storage.ts`) compilent également sans erreur.
+- Recherche de régression de double-formatage (`} DT` / motif de
+  symbole concaténé après un appel à un formateur) : **aucune
+  occurrence trouvée**.
+- `git status --short` vérifié : exactement 7 fichiers modifiés —
+  `client/src/lib/format.ts`, `client/src/pages/admin/maintenance-page.tsx`,
+  `client/src/pages/admin/products-page.tsx`,
+  `client/src/pages/cafe/analytics-page.tsx`,
+  `client/src/pages/cafe/browse-products.tsx`,
+  `client/src/pages/marketing/services.tsx`, `server/storage.ts` —
+  aucun fichier inattendu touché.
+- Vérification manuelle du calcul, par lecture de code : `(cents /
+  100).toFixed(3)` pour `230000` centimes → `"230.000"` ; pour `0` →
+  `"0.000"` ; pour `1250` → `"12.500"` — conforme au tableau attendu
+  par la tâche.
+- **Non vérifiable cette session** : aucun test dans un navigateur
+  réel n'a été possible (pas d'outil d'automatisation navigateur
+  disponible dans cet environnement), donc le rendu visuel effectif
+  (espacement, alignement dans les cartes/tableaux une fois les
+  montants plus longs de 3 décimales, affichage réel du symbole
+  arabe) n'a pas été observé à l'exécution — uniquement vérifié par
+  lecture de code, calcul manuel et compilation. Aucun framework de
+  test (Jest/Vitest) n'étant configuré dans le projet, aucun test
+  automatisé n'a été ajouté pour le formateur partagé, conformément à
+  « if the project's test setup supports them ».

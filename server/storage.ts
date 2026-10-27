@@ -13475,6 +13475,7 @@ export class DatabaseStorage implements IStorage {
       return true;
     });
 
+    const currencySymbol = await this.getCurrency();
     const result: import("@shared/schema").ListingPromotion[] = [];
     const supplierListings = new Map<number, number[]>(); // supplierId → listingIds
     for (const l of listingRows) {
@@ -13510,7 +13511,7 @@ export class DatabaseStorage implements IStorage {
           listingId,
           promotionId: p.id,
           type: p.type,
-          label: this._promoLabel(p),
+          label: this._promoLabel(p, currencySymbol),
           endDate: p.endDate,
           discountValue: p.discountValue,
         });
@@ -13519,12 +13520,12 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  private _promoLabel(p: import("@shared/schema").Promotion): string {
+  private _promoLabel(p: import("@shared/schema").Promotion, currencySymbol: string): string {
     switch (p.type) {
       case 'PERCENTAGE':
       case 'CATEGORY_DISCOUNT': return `${p.discountValue / 100}% OFF`;
       case 'FIXED_AMOUNT':
-      case 'MIN_ORDER_AMOUNT': return `${(p.discountValue / 1000).toFixed(3)} DT OFF`;
+      case 'MIN_ORDER_AMOUNT': return `${(p.discountValue / 1000).toFixed(3)} ${currencySymbol} OFF`;
       case 'BUY_X_GET_Y': return `Buy ${p.buyQuantity} Get ${p.getQuantity}`;
       case 'QUANTITY_TIER': return 'Tier Pricing';
       case 'FREE_SHIPPING': return 'Free Shipping';

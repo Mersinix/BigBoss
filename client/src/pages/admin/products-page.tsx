@@ -926,6 +926,7 @@ function SupplierProductsSection({
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const fmt = useFormatCurrency();
 
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [spFilters, setSpFilters] = useState<SpFilters>(EMPTY_SP_FILTERS);
@@ -1501,7 +1502,7 @@ function AdminPackPreviewModal({
                         </TableCell>
                         <TableCell className="py-2 text-right text-xs">×{item.quantity}</TableCell>
                         <TableCell className="py-2 text-right text-xs text-muted-foreground">
-                          {item.unitPrice != null ? `${(item.unitPrice / 100).toFixed(2)}` : "—"}
+                          {item.unitPrice != null ? fmt(item.unitPrice) : "—"}
                         </TableCell>
                         <TableCell className="py-2 text-right text-xs font-medium">
                           {item.packVariantPrice != null ? fmt(item.packVariantPrice) : "—"}
@@ -1925,7 +1926,7 @@ function AdminPacksSection({
                 <div className="flex items-center justify-between pt-0.5">
                   <PackStatusBadge pack={pack} />
                   <span className="text-xs font-medium text-amber-600">
-                    {pack.price != null ? `${(pack.price / 100).toFixed(2)}` : "—"}
+                    {pack.price != null ? fmt(pack.price) : "—"}
                   </span>
                 </div>
                 {/* Quick actions */}

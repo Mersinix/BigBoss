@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useFormatCurrency, useCurrency } from "@/hooks/use-currency";
+import { useFormatCurrency, useFormatDecimalCurrency, useCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -37,6 +37,7 @@ const topProducts = [
 
 export default function CafeAnalyticsPage() {
   const fmt = useFormatCurrency();
+  const fmtDecimal = useFormatDecimalCurrency();
   const symbol = useCurrency();
   const { data: orders = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/orders"] });
 
@@ -118,7 +119,7 @@ export default function CafeAnalyticsPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
                 <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip {...tooltipStyle} formatter={(v: any) => [`${symbol} ${v}`, "Spend"]} />
+                <Tooltip {...tooltipStyle} formatter={(v: any) => [fmtDecimal(Number(v)), "Spend"]} />
                 <Line type="monotone" dataKey="amount" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
@@ -135,7 +136,7 @@ export default function CafeAnalyticsPage() {
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis dataKey="category" tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }} />
                 <YAxis tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }} />
-                <Tooltip {...tooltipStyle} formatter={(v: any) => [`${symbol} ${v}`, "Spend"]} />
+                <Tooltip {...tooltipStyle} formatter={(v: any) => [fmtDecimal(Number(v)), "Spend"]} />
                 <Bar dataKey="total" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -158,7 +159,7 @@ export default function CafeAnalyticsPage() {
                     <p className="text-xs text-muted-foreground">{p.orders} orders</p>
                   </div>
                 </div>
-                <span className="text-sm font-semibold text-amber-500">{symbol} {p.spend}</span>
+                <span className="text-sm font-semibold text-amber-500">{fmtDecimal(p.spend)}</span>
               </div>
             ))}
           </div>

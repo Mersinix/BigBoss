@@ -12,6 +12,7 @@ import { getAvatarUrl } from "@/lib/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { useFormatCurrency } from "@/hooks/use-currency";
 import {
   Wrench, Users, Calendar, Clock, CheckCircle, XCircle, Star, Plus, Pencil,
   Trash2, Snowflake, Search, MapPin, Phone, Award, Briefcase, Timer, Image, Zap, Eye, X, Check,
@@ -379,6 +380,7 @@ function SubCompetencyManager({ competencies, subCompetencies, onRefresh }: {
 function AccountDetail({ account, onClose, onRefresh }: { account: any | null; onClose: () => void; onRefresh: () => void }) {
   const { toast } = useToast();
   const isDark = useThemeStore((s) => s.isDark);
+  const fmt = useFormatCurrency();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<any>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -510,7 +512,7 @@ function AccountDetail({ account, onClose, onRefresh }: { account: any | null; o
           <div><p className="text-xs text-muted-foreground mb-1">Certifications</p><p>{(account.certifications ?? []).join(", ") || "—"}</p></div>
           <div className="sm:col-span-2"><p className="text-xs text-muted-foreground mb-1">Description</p><p className="whitespace-pre-wrap">{account.description || "—"}</p></div>
           <Info icon={Calendar} label="Jours et horaires" value={`${(account.workingDays ?? []).join(", ") || "—"} · ${account.startTime}–${account.endTime}`} />
-          <Info icon={Wrench} label="Tarif journalier" value={`${((account.dailyRateInCents ?? 0) / 100).toFixed(2)} DT`} />
+          <Info icon={Wrench} label="Tarif journalier" value={fmt(account.dailyRateInCents ?? 0)} />
           <div className="sm:col-span-2">
             <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><Image className="h-3.5 w-3.5" />Portfolio</p>
             {(account.portfolioImages ?? []).length > 0

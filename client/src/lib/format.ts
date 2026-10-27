@@ -1,9 +1,14 @@
+// Global formatting rule for every monetary price in the app: amount first,
+// exactly 3 decimal digits, a space, then the configured currency symbol on
+// the right (e.g. "230.000 DT", "230.000 د.ت"). The symbol itself always
+// comes from the Global Currency setting (useCurrency/useFormatCurrency) —
+// never hardcoded — this function only controls position/precision.
 export function formatCurrency(cents: number, symbol = 'DT'): string {
-  return `${symbol}${(cents / 100).toFixed(2)}`;
+  return `${(cents / 100).toFixed(3)} ${symbol}`;
 }
 
 export function formatDecimalCurrency(amount: number, symbol = 'DT'): string {
-  return `${symbol}${amount.toFixed(2)}`;
+  return `${amount.toFixed(3)} ${symbol}`;
 }
 
 export function formatDate(dateString: string | Date): string {

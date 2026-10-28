@@ -49,10 +49,10 @@ export const NOTIFICATION_DATE_PRESETS: { value: DateRangePreset; label: string 
 ];
 
 export function NotificationDateFilter({
-  preset, onPresetChange, customDate, onCustomDateChange, isDark, testIdPrefix = "notification",
+  preset, onPresetChange, customDate, onCustomDateChange, isDark, testIdPrefix = "notification", hidePreset = false,
 }: {
-  preset: DateRangePreset | "";
-  onPresetChange: (p: DateRangePreset) => void;
+  preset?: DateRangePreset | "";
+  onPresetChange?: (p: DateRangePreset) => void;
   customDate: string;
   onCustomDateChange: (d: string) => void;
   // Only needed by callers that do NOT sit under a real Tailwind `.dark`
@@ -61,21 +61,29 @@ export function NotificationDateFilter({
   // class via DashboardLayout); the Coffee Owner notification modal passes it.
   isDark?: boolean;
   testIdPrefix?: string;
+  // Coffee Owner notification modal only (task: "Remove the Separate Date
+  // Filter from the Coffee Owner Notification Modal") — hides the preset
+  // Select, leaving the native date input as the sole date-filtering
+  // control. Defaults to false so the bell dropdown (the only other caller)
+  // renders exactly as before.
+  hidePreset?: boolean;
 }) {
   const hasFilter = !!preset || !!customDate;
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      <Select value={preset || undefined} onValueChange={(v) => onPresetChange(v as DateRangePreset)}>
-        <SelectTrigger
-          className={`h-8 text-xs w-[145px] shrink-0 ${isDark ? "bg-gray-800 border-gray-700 text-gray-200" : ""}`}
-          data-testid={`select-${testIdPrefix}-date-preset`}
-        >
-          <SelectValue placeholder="Personnalisé" />
-        </SelectTrigger>
-        <SelectContent className={isDark ? "bg-gray-800 border-gray-700 text-gray-100 [&_[data-highlighted]]:bg-gray-700 [&_[data-highlighted]]:text-white" : undefined}>
-          {NOTIFICATION_DATE_PRESETS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-        </SelectContent>
-      </Select>
+      {!hidePreset && (
+        <Select value={preset || undefined} onValueChange={(v) => onPresetChange?.(v as DateRangePreset)}>
+          <SelectTrigger
+            className={`h-8 text-xs w-[145px] shrink-0 ${isDark ? "bg-gray-800 border-gray-700 text-gray-200" : ""}`}
+            data-testid={`select-${testIdPrefix}-date-preset`}
+          >
+            <SelectValue placeholder="Personnalisé" />
+          </SelectTrigger>
+          <SelectContent className={isDark ? "bg-gray-800 border-gray-700 text-gray-100 [&_[data-highlighted]]:bg-gray-700 [&_[data-highlighted]]:text-white" : undefined}>
+            {NOTIFICATION_DATE_PRESETS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      )}
       <Input
         type="date"
         value={customDate}
@@ -85,7 +93,7 @@ export function NotificationDateFilter({
       />
       {hasFilter && (
         <button
-          onClick={() => { onCustomDateChange(""); onPresetChange("" as DateRangePreset); }}
+          onClick={() => { onCustomDateChange(""); onPresetChange?.("" as DateRangePreset); }}
           aria-label="Effacer le filtre de date"
           className={`p-1 rounded-full transition-colors shrink-0 ${isDark ? "hover:bg-gray-800 text-gray-400" : "hover:bg-gray-100 text-gray-500"}`}
           data-testid={`button-clear-${testIdPrefix}-date-filter`}

@@ -15820,3 +15820,210 @@ Un seul fichier modifié : `client/src/pages/supplier/manage-products.tsx`.
   configurée) dans les formulaires d'ajout/édition de produit n'a pas
   été observé à l'exécution, uniquement vérifié par lecture de code et
   compilation.
+
+---
+
+## 40. Suppression de l'onglet « Personnalisé » du modal Notifications (Coffee Owner)
+
+### Audit
+
+Trois fichiers mentionnent « Personnalisé » dans tout le projet ; deux
+sont hors sujet (`date-range-filter.tsx`, `notification-date-filter.tsx`
+— libellé d'un **filtre de plage de dates personnalisée**, fonctionnalité
+distincte et explicitement à préserver, rien à voir avec l'onglet de
+catégorie de notification visé par la tâche). Le seul fichier concerné
+est `client/src/components/cafe/notification-modal.tsx` — modal
+Notifications du Coffee Owner, entièrement autonome (aucun autre
+fichier ne référence son id d'onglet `"CUSTOM"` — confirmé par
+recherche exhaustive ; le seul autre hit pour la chaîne `"CUSTOM"`
+dans tout le projet est `data-pagination.tsx`, une valeur de sélecteur
+de taille de page totalement sans rapport).
+
+Code dédié exclusivement à cet onglet, identifié avant modification :
+- `type TabId = "ALL" | "CUSTOM" | NotificationService;` — le membre
+  `"CUSTOM"` du type.
+- Le commentaire de bloc (lignes 13-22) expliquant pourquoi « CUSTOM »
+  existe comme id séparé — devient obsolète avec la suppression.
+- `{ id: "CUSTOM", label: "Personnalisé" }` dans `SERVICE_TABS` (+ son
+  commentaire explicatif juste au-dessus).
+- Le test `tab === "CUSTOM"` dans `tabFiltered` (toujours combiné à
+  `tab === "ALL"` dans un OU — partagé avec "Tous", donc seule la
+  branche `"CUSTOM"` est retirée, `"ALL"` reste).
+- `map.CUSTOM = map.ALL;` (+ commentaire) dans `unreadByService`.
+- Le test `tab === "CUSTOM"` dans le gestionnaire « Tout marquer comme
+  lu » (même motif OU partagé avec `"ALL"`).
+
+Rien côté données/API : `"CUSTOM"` n'est, comme le confirme le
+commentaire d'origine, jamais une vraie valeur de
+`Notification.service` stockée ou renvoyée par le serveur — c'est un
+identifiant d'onglet purement côté client, aucune notification
+n'est donc affectée. Aucun changement nécessaire côté
+`use-notifications.ts`, routes, ou schéma.
+
+Plan : retirer uniquement les 6 points ci-dessus dans
+`notification-modal.tsx`, en gardant strictement chaque occurrence du
+test partagé `tab === "ALL"` qui reste utilisée par "Tous".
+
+### Implémentation réalisée
+
+Un seul fichier modifié : `client/src/components/cafe/notification-modal.tsx`.
+
+- `type TabId = "ALL" | NotificationService;` (membre `"CUSTOM"` retiré).
+- Commentaire de bloc obsolète (lignes 13-22 d'origine) supprimé.
+- `SERVICE_TABS` : entrée `{ id: "CUSTOM", label: "Personnalisé" }` et
+  son commentaire explicatif retirés — ne reste que `{ id: "ALL",
+  label: "Tous" }` suivi des 6 onglets de service triés.
+- `tabFiltered` : `tab === "ALL" || tab === "CUSTOM"` → `tab === "ALL"`.
+- `unreadByService` : ligne `map.CUSTOM = map.ALL;` et son commentaire
+  retirés.
+- Bouton « Tout marquer comme lu » : `(tab === "ALL" || tab ===
+  "CUSTOM") ? undefined : tab` → `tab === "ALL" ? undefined : tab`.
+
+Aucun autre changement — filtre de date, pagination, tri par service,
+navigation vers l'entité liée, design/dimensions du modal, et les 6
+autres onglets (Tous, SHOP, Barista, Maintenance, Marketing, Academy,
+PRINT) restent strictement identiques.
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` sur l'ensemble du projet : **0 erreur** (hors
+  l'erreur de base pré-existante non liée à cette tâche dans
+  `prospecting-page.tsx`).
+- `npm run build` : **build réussi** (client + serveur).
+- Recherche de régression : plus aucune occurrence de `"CUSTOM"` ni de
+  « Personnalisé » dans `notification-modal.tsx` ; les deux autres
+  fichiers (`date-range-filter.tsx`, `notification-date-filter.tsx`)
+  non touchés, confirmés toujours intacts (fonctionnalité de date
+  distincte, hors périmètre).
+- `git status --short` : un seul fichier modifié.
+- **Non vérifiable cette session** : aucun test dans un navigateur réel
+  n'a été possible (pas d'outil d'automatisation navigateur disponible
+  dans cet environnement) — le rendu visuel réel du modal (disparition
+  effective de l'onglet, bon fonctionnement du changement d'onglet et
+  de « Tout marquer comme lu » à l'exécution) n'a pas été observé,
+  uniquement vérifié par lecture de code et compilation.
+
+---
+
+## 41. Suppression du filtre de date « autonome » du modal Notifications (Coffee Owner) — ne garder que le calendrier
+
+### Audit
+
+`client/src/components/notifications/notification-date-filter.tsx`
+exporte `NotificationDateFilter`, un composant **partagé par 3
+appelants** : le modal Notifications du Coffee Owner
+(`client/src/components/cafe/notification-modal.tsx`) et le dropdown
+cloche Admin/Supplier/Marketing/Delivery
+(`client/src/components/notifications/notification-bell-dropdown.tsx`,
+appelé `testIdPrefix="bell"`) — ce dernier **hors périmètre** de cette
+tâche (« Do not modify notification modals belonging to other user
+roles »).
+
+Ce composant combine en réalité **deux contrôles distincts** côte à
+côte dans un même `<div>` :
+1. Un `<Select>` de préréglages (« Aujourd'hui », « 7 derniers
+   jours », « 30 derniers jours », « Ce mois », « Mois précédent »,
+   « Cette année ») — c'est le **filtre autonome** à supprimer pour le
+   Coffee Owner. Son placeholder textuel est littéralement
+   « Personnalisé » (ligne 73 du fichier) — mais il s'agit d'un texte
+   d'espace réservé de ce Select (« aucun préréglage choisi »),
+   totalement indépendant de l'onglet de catégorie « Personnalisé »
+   déjà supprimé à la tâche 40 ; aucun lien entre les deux, pas de
+   répétition de ce travail.
+2. Un `<Input type="date">` natif juste à côté — c'est **le filtre
+   calendrier existant** à conserver tel quel (ouvre le sélecteur de
+   date natif du navigateur), déjà fonctionnel et à préserver
+   intégralement (position, apparence, comportement, filtrage).
+
+Un bouton « Effacer » (X) n'apparaît que si l'un des deux est actif
+(`hasFilter = !!preset || !!customDate`).
+
+Dans `notification-modal.tsx`, l'état/logique dédiés exclusivement au
+préréglage (donc à retirer) :
+- `const [datePreset, setDatePreset] = useState<DateRangePreset | "">("");`
+- Le préréglage passé à `filterNotificationsByDate(tabFiltered,
+  datePreset, customDate)` (fonction partagée, signature à ne PAS
+  changer puisque le dropdown cloche l'utilise aussi — seul
+  l'argument passé depuis ce modal devient toujours `""`).
+- La dépendance `datePreset` dans l'effet de réinitialisation de
+  pagination.
+- `preset={datePreset}` / `onPresetChange={...}` sur l'appel à
+  `<NotificationDateFilter>`.
+- La référence `datePreset ||` dans le texte d'état vide.
+- L'import `DateRangePreset` (devient inutile une fois l'état retiré).
+
+Le composant partagé lui-même doit être étendu **de façon additive**
+(nouvelle prop optionnelle, défaut = comportement actuel inchangé)
+plutôt que dupliqué, pour que le dropdown cloche (seul autre
+appelant) reste strictement identique :
+- Nouvelle prop `hidePreset?: boolean` (défaut `false`) : masque le
+  `<Select>` de préréglages quand `true`, ne touche à rien d'autre.
+- `preset`/`onPresetChange` deviennent optionnels (le Coffee Owner ne
+  les fournira plus du tout).
+
+Plan : (1) étendre `NotificationDateFilter` avec `hidePreset` de façon
+rétrocompatible ; (2) dans `notification-modal.tsx`, retirer l'état
+`datePreset`/son import de type, passer `""` en dur à
+`filterNotificationsByDate`, retirer `preset`/`onPresetChange` de
+l'appel et ajouter `hidePreset`, simplifier `onCustomDateChange` (plus
+besoin de réinitialiser un préréglage qui n'existe plus côté Coffee
+Owner), et mettre à jour les deux autres références à `datePreset`
+(dépendance d'effet, texte d'état vide).
+
+### Implémentation réalisée
+
+**`client/src/components/notifications/notification-date-filter.tsx`** —
+`preset`/`onPresetChange` rendus optionnels dans le type des props,
+nouvelle prop `hidePreset?: boolean` (défaut `false`), le `<Select>`
+de préréglages est maintenant conditionné par `{!hidePreset && (...)}`
+; `onValueChange`/le bouton Effacer utilisent `onPresetChange?.(...)`
+(optional chaining) puisque le Coffee Owner ne fournit plus ce
+handler. Le dropdown cloche (seul autre appelant, `hidePreset` jamais
+passé) continue de fournir `preset`/`onPresetChange` comme avant —
+son rendu et son comportement restent identiques, vérifié par lecture
+de son call site (inchangé).
+
+**`client/src/components/cafe/notification-modal.tsx`** :
+- Import `DateRangePreset` retiré (plus aucun usage).
+- `const [datePreset, setDatePreset] = useState(...)` retiré.
+- `filterNotificationsByDate(tabFiltered, datePreset, customDate)` →
+  `filterNotificationsByDate(tabFiltered, "", customDate)`.
+- Dépendance `[tabFiltered, datePreset, customDate]` →
+  `[tabFiltered, customDate]`.
+- Effet de reset pagination : `[datePreset, customDate]` →
+  `[customDate]`.
+- Appel à `<NotificationDateFilter>` : `preset`/`onPresetChange`
+  retirés, `hidePreset` ajouté, `onCustomDateChange` simplifié en
+  `(d) => setCustomDate(d)` (ne réinitialise plus un préréglage qui
+  n'existe plus dans ce modal).
+- Texte d'état vide : `datePreset || customDate ? ... : ...` →
+  `customDate ? ... : ...`.
+
+Le filtre calendrier (`<Input type="date">`), son `onChange`, sa
+position, son style clair/sombre et son bouton Effacer restent
+exactement le composant partagé existant, rendu tel quel — aucune
+duplication.
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` sur l'ensemble du projet : **0 erreur** (hors
+  l'erreur de base pré-existante non liée à cette tâche dans
+  `prospecting-page.tsx`).
+- `npm run build` : **build réussi** (client + serveur).
+- Relecture du call site du dropdown cloche
+  (`notification-bell-dropdown.tsx`) après modification du composant
+  partagé : aucun changement requis ni effectué, `hidePreset` non
+  passé → comportement strictement identique à avant (confirmé par
+  lecture, la prop par défaut `false` préserve le rendu actuel).
+- Recherche de régression : plus aucune référence à `datePreset`/
+  `DateRangePreset` dans `notification-modal.tsx`.
+- `git status --short` : fichiers modifiés attendus uniquement
+  (`notification-date-filter.tsx`, `notification-modal.tsx`,
+  `analyse.md`).
+- **Non vérifiable cette session** : aucun test dans un navigateur réel
+  n'a été possible (pas d'outil d'automatisation navigateur disponible
+  dans cet environnement) — le rendu visuel réel (disparition du
+  Select de préréglages, calendrier seul restant visible et
+  fonctionnel, absence d'espace vide ou de mise en page cassée dans
+  les deux modes clair/sombre) n'a pas été observé à l'exécution,
+  uniquement vérifié par lecture de code et compilation.

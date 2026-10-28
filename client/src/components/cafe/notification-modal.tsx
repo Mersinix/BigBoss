@@ -8,19 +8,8 @@ import { useAccountOpenStore } from "@/store/account-open-store";
 import { sortShortServiceIds, useServiceOrder } from "@/hooks/use-service-order";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { NotificationDateFilter, filterNotificationsByDate } from "@/components/notifications/notification-date-filter";
-import type { DateRangePreset } from "@/lib/marketplace-analytics";
 
-// "CUSTOM" (task: "Coffee Owner Notifications: Filter & Pagination Fix") —
-// the new "Personnalisé" tab's own id. It is NOT a real NotificationService
-// (no notification is ever saved with this value), so it's tracked as its
-// own TabId member rather than overloading "ALL" — that would make two
-// visually distinct buttons share one highlight state, which would look
-// broken (clicking "Personnalisé" would light up "Tous" instead). Every
-// place that already treats `tab === "ALL"` as "no category filter" also
-// treats `tab === "CUSTOM"` the same way, below — reusing the exact existing
-// "no filter" convention/behavior, just making it reachable from a second,
-// independently-selectable button.
-type TabId = "ALL" | "CUSTOM" | NotificationService;
+type TabId = "ALL" | NotificationService;
 
 // "Admin" tab removed from this Coffee Owner-facing view
 // (docs/notification_date_filter_pagination_navigation_audit.md) — ADMIN-service
@@ -78,19 +67,14 @@ export function NotificationModal({ open, onOpenChange, isDark }: { open: boolea
   // and Messages Modals") — same source of truth as the navbar switcher/
   // Favorites/Reservations, via the shared useServiceOrder hook.
   const { order: serviceOrder } = useServiceOrder();
-  // "Personnalisé" is fixed right after "Tous" — it isn't a real service, so
-  // it never participates in the Admin service-order sort applied to the
-  // other 6 tabs.
   const SERVICE_TABS: { id: TabId; label: string }[] = [
     { id: "ALL", label: "Tous" },
-    { id: "CUSTOM", label: "Personnalisé" },
     ...sortShortServiceIds(SERVICE_TAB_SOURCE, serviceOrder),
   ];
   // No default custom period (task: "Fix Default Date Filtering, Persistent
   // Pagination, and Uppercase Notification Tabs") — opening the modal must
   // never silently apply an implicit "Aujourd'hui" constraint; "" = no
-  // preset active (custom date typed instead, also unset by default).
-  const [datePreset, setDatePreset] = useState<DateRangePreset | "">("");
+  // date active by default.
   const [customDate, setCustomDate] = useState("");
   // Server caps `limit` at 200 — fetch that full batch so every preset
   // (including "Cette année") has a real dataset to filter.
@@ -99,12 +83,12 @@ export function NotificationModal({ open, onOpenChange, isDark }: { open: boolea
   const markAllRead = useMarkAllNotificationsRead();
 
   const tabFiltered = useMemo(
-    () => (tab === "ALL" || tab === "CUSTOM" ? notifications : notifications.filter((n) => n.service === tab)),
+    () => (tab === "ALL" ? notifications : notifications.filter((n) => n.service === tab)),
     [notifications, tab],
   );
   const filtered = useMemo(
-    () => filterNotificationsByDate(tabFiltered, datePreset, customDate),
-    [tabFiltered, datePreset, customDate],
+    () => filterNotificationsByDate(tabFiltered, "", customDate),
+    [tabFiltered, customDate],
   );
   const unreadByService = useMemo(() => {
     const map: Partial<Record<TabId, number>> = { ALL: 0 };
@@ -113,10 +97,6 @@ export function NotificationModal({ open, onOpenChange, isDark }: { open: boolea
       map.ALL = (map.ALL ?? 0) + 1;
       map[n.service] = (map[n.service] ?? 0) + 1;
     }
-    // "Personnalisé" shows the same total unread count as "Tous" — it
-    // represents the identical "no category filter" set, just reachable
-    // from its own button.
-    map.CUSTOM = map.ALL;
     return map;
   }, [notifications]);
 
@@ -129,7 +109,7 @@ export function NotificationModal({ open, onOpenChange, isDark }: { open: boolea
   const pagination = usePagination(filtered.length);
   useEffect(() => { pagination.setPage(pageByTab[tab] ?? 1); }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setPageByTab((m) => ({ ...m, [tab]: pagination.page })); }, [pagination.page]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { setPageByTab({}); pagination.resetPage(); }, [datePreset, customDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setPageByTab({}); pagination.resetPage(); }, [customDate]); // eslint-disable-line react-hooks/exhaustive-deps
   const pageNotifications = filtered.slice(pagination.start, pagination.end);
 
   const handleNotificationClick = (n: Notification) => {
@@ -186,16 +166,15 @@ export function NotificationModal({ open, onOpenChange, isDark }: { open: boolea
 
         <div className="flex items-center justify-between gap-2 px-4 pt-2 flex-wrap">
           <NotificationDateFilter
-            preset={datePreset}
-            onPresetChange={(p) => { setDatePreset(p); setCustomDate(""); }}
             customDate={customDate}
-            onCustomDateChange={(d) => { setCustomDate(d); setDatePreset(""); }}
+            onCustomDateChange={(d) => setCustomDate(d)}
             isDark={isDark}
             testIdPrefix="modal"
+            hidePreset
           />
           {(unreadByService[tab] ?? 0) > 0 && (
             <button
-              onClick={() => markAllRead.mutate((tab === "ALL" || tab === "CUSTOM") ? undefined : tab)}
+              onClick={() => markAllRead.mutate(tab === "ALL" ? undefined : tab)}
               className={`flex items-center gap-1 text-xs font-medium ${isDark ? "text-amber-400 hover:text-amber-300" : "text-amber-600 hover:text-amber-700"}`}
               data-testid="button-mark-all-read"
             >
@@ -207,7 +186,7 @@ export function NotificationModal({ open, onOpenChange, isDark }: { open: boolea
         <div className="overflow-y-auto max-h-[60vh] px-2 py-2 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
           {!isLoading && filtered.length === 0 ? (
             <div className={`text-center py-14 text-sm ${isDark ? "text-gray-500" : "text-gray-400"}`}>
-              {datePreset || customDate ? "Aucune notification sur cette période" : "Aucune nouvelle notification"}
+              {customDate ? "Aucune notification sur cette période" : "Aucune nouvelle notification"}
             </div>
           ) : (
             pageNotifications.map((n) => (

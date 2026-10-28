@@ -781,11 +781,76 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
   // "Add to Pack" = true whenever the listing is NOT restricted to My Products only
   const [onlyForPack, setOnlyForPack] = useState(!(listing as any).onlyForMyProducts);
 
-  useEffect(() => {
-    if (!loaded && (existingVariants as any[]).length > 0) {
-      setGroups(variantsToGroups(existingVariants as any[], availableFlavors, availableSizes));
-      setLoaded(true);
+  // Real-time Inventory → Variant Builder sync while this modal stays open
+  // (task: "Fix Real-Time Stock Synchronization from Inventory to Supplier
+  // Variant Stock") — tracks which stock inputs the Supplier has actually
+  // typed into (by the same sizeId:flavorId "slot" key saveVariants already
+  // matches variants by, server/storage.ts), so a live refetch of
+  // existingVariants (triggered by the existing WebSocket invalidation) can
+  // update every OTHER, untouched stock field without ever clobbering price,
+  // group structure, flavor/size selection, or a stock value the Supplier is
+  // actively editing.
+  const dirtyStockSlotsRef = useRef<Set<string>>(new Set());
+  const lastSyncedVariantsRef = useRef<any[] | null>(null);
+
+  const handleGroupsChange = (next: VariantGroup[]) => {
+    for (const ng of next) {
+      const og = groups.find(g => g.id === ng.id);
+      if (!og || og.sizeId !== ng.sizeId) continue;
+      for (const fid of ng.flavorIds) {
+        if (og.flavorStocks[String(fid)] !== ng.flavorStocks[String(fid)]) {
+          dirtyStockSlotsRef.current.add(`${ng.sizeId || "none"}:${fid}`);
+        }
+      }
+      if (ng.flavorIds.length === 0 && og.qty !== ng.qty) {
+        dirtyStockSlotsRef.current.add(`${ng.sizeId || "none"}:none`);
+      }
     }
+    setGroups(next);
+  };
+
+  useEffect(() => {
+    const variants = existingVariants as any[];
+    if (!loaded) {
+      if (variants.length > 0) {
+        setGroups(variantsToGroups(variants, availableFlavors, availableSizes));
+        setLoaded(true);
+        lastSyncedVariantsRef.current = variants;
+      }
+      return;
+    }
+    if (lastSyncedVariantsRef.current === variants) return;
+    lastSyncedVariantsRef.current = variants;
+    const byVariantSlot = new Map(variants.map((v: any) => [`${v.sizeId ?? "none"}:${v.flavorId ?? "none"}`, v]));
+    setGroups(prevGroups => {
+      let anyChanged = false;
+      const next = prevGroups.map(g => {
+        if (g.flavorIds.length > 0) {
+          let groupChanged = false;
+          const newFlavorStocks = { ...g.flavorStocks };
+          for (const fid of g.flavorIds) {
+            const slotKey = `${g.sizeId || "none"}:${fid}`;
+            if (dirtyStockSlotsRef.current.has(slotKey)) continue;
+            const sv: any = byVariantSlot.get(slotKey);
+            if (sv && String(sv.quantity) !== newFlavorStocks[String(fid)]) {
+              newFlavorStocks[String(fid)] = String(sv.quantity);
+              groupChanged = true;
+            }
+          }
+          if (groupChanged) { anyChanged = true; return { ...g, flavorStocks: newFlavorStocks }; }
+          return g;
+        }
+        const slotKey = `${g.sizeId || "none"}:none`;
+        if (dirtyStockSlotsRef.current.has(slotKey)) return g;
+        const sv: any = byVariantSlot.get(slotKey);
+        if (sv && String(sv.quantity) !== g.qty) {
+          anyChanged = true;
+          return { ...g, qty: String(sv.quantity) };
+        }
+        return g;
+      });
+      return anyChanged ? next : prevGroups;
+    });
   }, [existingVariants, loaded, availableFlavors, availableSizes]);
 
   // Distinguishes an ACTUALLY incomplete/invalid listing (the query resolved
@@ -835,7 +900,7 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
               </div>
             )}
             <div>
-              <VariantGroupBuilder flavors={availableFlavors} sizes={availableSizes} groups={groups} onChange={setGroups} />
+              <VariantGroupBuilder flavors={availableFlavors} sizes={availableSizes} groups={groups} onChange={handleGroupsChange} />
               <p className="text-xs text-muted-foreground mt-1.5">Variants with qty 0 will be hidden from café customers.</p>
             </div>
 

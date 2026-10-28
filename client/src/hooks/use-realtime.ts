@@ -109,6 +109,16 @@ function invalidateProductQueries(qc: QueryClient) {
   // product_updated broadcast reaches them the same way.
   qc.invalidateQueries({ queryKey: ["/api/supplier/admin-products"] });
   qc.invalidateQueries({ queryKey: ["/api/supplier/listings"] });
+  // Task: "Implement Real-Time Synchronization Between Inventory and
+  // Supplier Variant Stock" — a stock/price save in the Variant Builder
+  // (PATCH /api/supplier/listings/:id) only ever broadcasts product_updated,
+  // never inventory_updated, so an already-open Inventory page/stats never
+  // refreshed until some unrelated inventory_updated event happened to fire.
+  // inventory_updated already invalidates "/api/supplier/listings" (which
+  // covers the Variant Builder's own variants query by prefix), so this is
+  // the one missing direction — added here, not a new event/transport.
+  qc.invalidateQueries({ queryKey: ["/api/supplier/inventory"] });
+  qc.invalidateQueries({ queryKey: ["/api/supplier/inventory/stats"] });
 }
 
 function invalidateStoreQueries(qc: QueryClient) {

@@ -10908,9 +10908,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async saveVariants(listingId: number, variants: { flavorId?: number | null; sizeId?: number | null; price: number; quantity: number }[], client: any = db): Promise<SupplierVariantWithLabels[]> {
-    // Variant rows are recreated on every save. Keep Pack references attached to
-    // the same flavor/size slot when it still exists, and remove references to
-    // slots that were actually removed.
+    // Reconciled by flavor/size "slot" instead of delete-all + recreate (task:
+    // "Synchronize Supplier Variant Stock Without Overwriting Inventory
+    // Settings") — a slot that still exists gets a targeted UPDATE of just
+    // price/quantity, which never touches minStock/maxStock (Inventory's own
+    // fields, set via updateVariantInventoryFields) and keeps the same row id
+    // (so Pack references to it never need reassigning). Only a slot that's
+    // genuinely gone gets deleted, and only a genuinely new slot gets inserted.
     const previousVariants = await client.select().from(supplierProductVariants)
       .where(eq(supplierProductVariants.listingId, listingId));
     const previousVariantIds = previousVariants.map((v: any) => v.id);
@@ -10918,30 +10922,58 @@ export class DatabaseStorage implements IStorage {
       ? await client.select().from(packItems).where(inArray(packItems.variantId, previousVariantIds))
       : [];
 
-    await client.delete(supplierProductVariants).where(eq(supplierProductVariants.listingId, listingId));
     if (!variants.length) {
+      // Supplier cleared the Variant Builder entirely — intentional full wipe.
+      await client.delete(supplierProductVariants).where(eq(supplierProductVariants.listingId, listingId));
       if (previousPackItems.length) {
         await client.delete(packItems).where(inArray(packItems.id, previousPackItems.map((item: any) => item.id)));
       }
       await client.update(supplierProductListings).set({ price: 0, stock: 0 }).where(eq(supplierProductListings.id, listingId));
       return [];
     }
-    const inserted = await client.insert(supplierProductVariants).values(variants.map((v) => ({ listingId, flavorId: v.flavorId ?? null, sizeId: v.sizeId ?? null, price: v.price, quantity: v.quantity }))).returning();
-    const aggPrice = Math.min(...inserted.map((v: any) => v.price));
-    const aggStock = inserted.reduce((s: number, v: any) => s + v.quantity, 0);
+
+    const previousBySlot = new Map(previousVariants.map((v: any) => [`${v.flavorId ?? "null"}:${v.sizeId ?? "null"}`, v]));
+    const matchedPreviousIds = new Set<number>();
+    const result: any[] = [];
+    for (const v of variants) {
+      const slot = `${v.flavorId ?? "null"}:${v.sizeId ?? "null"}`;
+      const prev = previousBySlot.get(slot) as any;
+      // Consume the match so a duplicate incoming slot (if the client ever
+      // sends one) falls through to a fresh insert instead of double-updating
+      // the same existing row — same tolerance for duplicates the old
+      // insert-everything approach had.
+      if (prev && !matchedPreviousIds.has(prev.id)) {
+        matchedPreviousIds.add(prev.id);
+        const [updated] = await client.update(supplierProductVariants)
+          .set({ price: v.price, quantity: v.quantity })
+          .where(eq(supplierProductVariants.id, prev.id))
+          .returning();
+        result.push(updated);
+      } else {
+        const [inserted] = await client.insert(supplierProductVariants)
+          .values({ listingId, flavorId: v.flavorId ?? null, sizeId: v.sizeId ?? null, price: v.price, quantity: v.quantity })
+          .returning();
+        result.push(inserted);
+      }
+    }
+    const removedVariants = previousVariants.filter((v: any) => !matchedPreviousIds.has(v.id));
+    if (removedVariants.length) {
+      await client.delete(supplierProductVariants).where(inArray(supplierProductVariants.id, removedVariants.map((v: any) => v.id)));
+    }
+
+    const aggPrice = Math.min(...result.map((v: any) => v.price));
+    const aggStock = result.reduce((s: number, v: any) => s + v.quantity, 0);
     await client.update(supplierProductListings).set({ price: aggPrice, stock: aggStock }).where(eq(supplierProductListings.id, listingId));
 
-    const insertedBySlot = new Map(inserted.map((v: any) => [`${v.flavorId ?? "null"}:${v.sizeId ?? "null"}`, v]));
-    const previousById = new Map(previousVariants.map((v: any) => [v.id, v]));
-    for (const item of previousPackItems) {
-      const previous = previousById.get(item.variantId!) as any;
-      const replacement: any = previous
-        ? insertedBySlot.get(`${previous.flavorId ?? "null"}:${previous.sizeId ?? "null"}`)
-        : undefined;
-      if (replacement) {
-        await client.update(packItems).set({ variantId: replacement.id }).where(eq(packItems.id, item.id));
-      } else {
-        await client.delete(packItems).where(eq(packItems.id, item.id));
+    // Pack references only need attention for variants that were actually
+    // removed — retained variants kept their id, so their Pack references
+    // are still valid as-is.
+    if (removedVariants.length) {
+      const removedIds = new Set(removedVariants.map((v: any) => v.id));
+      for (const item of previousPackItems) {
+        if (removedIds.has(item.variantId)) {
+          await client.delete(packItems).where(eq(packItems.id, item.id));
+        }
       }
     }
     // A listing that changes from a non-variant product to a variant product
@@ -10952,7 +10984,7 @@ export class DatabaseStorage implements IStorage {
     ));
 
     const tx = await buildTaxonomyCache();
-    return inserted.map((v: any) => ({
+    return result.map((v: any) => ({
       ...v,
       flavorName: v.flavorId ? (tx.flvMap.get(v.flavorId)?.name ?? null) : null,
       sizeName: v.sizeId ? (tx.szMap.get(v.sizeId)?.name ?? null) : null,

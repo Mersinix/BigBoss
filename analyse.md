@@ -16282,3 +16282,593 @@ listing-level ne se déclenche que si AUCUNE variante n'est flaggée
   catégories de cartes, avec les vraies données du fournisseur
   connecté, n'a pas été observé à l'exécution, uniquement vérifié par
   lecture de code et compilation.
+
+---
+
+## 44. Pack Detail Modal se ferme parfois en ouvrant un deuxième produit inclus
+
+### Audit — investigation des causes possibles avant toute modification
+
+Composants concernés, tous dans
+`client/src/components/pack-quick-view-modal.tsx` :
+- Modal parent : la grande fonction du fichier portant le
+  `<Dialog open={isPreview ? !!previewOpen : packId != null}
+  onOpenChange={(open) => { if (!open) close(); }}>` (ligne 708) —
+  c'est le Pack Detail Modal.
+- Section « Produits inclus » (ligne ~921) : chaque produit est un
+  `<button onClick={() => setPreviewProductId(item.productId)}>`
+  (ligne 931) à l'intérieur du `<DialogContent>` du modal parent.
+- Modal enfant : `ProductPreviewModal` (fonction séparée, ligne 278),
+  son propre `<Dialog open={productId != null} onOpenChange={(open)
+  => { if (!open) onClose(); }}>` (ligne 315), rendu APRÈS la
+  fermeture du `</DialogContent>` du parent (ligne 1046) mais
+  toujours À L'INTÉRIEUR du `<Dialog>` racine du parent (React-tree-
+  wise) — les deux `<Dialog>` (Radix) sont donc imbriqués dans l'arbre
+  React, bien que chacun porte son propre état ouvert/fermé
+  indépendant (`packId`/`previewOpen` pour le parent,
+  `previewProductId` pour l'enfant).
+
+Pistes d'investigation explorées et écartées (preuves à l'appui, pas
+une hypothèse non vérifiée) :
+- **État partagé entre modals** : `useScrollDismiss`
+  (`client/src/hooks/use-scroll-dismiss.ts`) utilise exclusivement des
+  `useRef`/`useState` internes à chaque appel — aucune variable
+  globale/module-level. Les deux appels (parent et
+  `ProductPreviewModal`) sont totalement indépendants. **Écarté.**
+- **Bug de logique déterministe** : `previewProductId` est un simple
+  état `number | null` local au parent, remis à `null` uniquement par
+  le bouton Close de `ProductPreviewModal`
+  (`onClick={onClose}`, direct, pas de passage par
+  `requestDismiss`/`useScrollDismiss`) ou par un clic sur un autre
+  item (qui le réassigne directement à un nouvel id). Aucun partage
+  d'id, aucune réinitialisation involontaire du `packId`/`previewOpen`
+  du parent trouvée dans ce chemin. **Écarté comme cause
+  déterministe.**
+- **`onOpenChange` du parent recevant un signal erroné** : confirmé
+  que `close()` (appelé si `onOpenChange(false)`) est bien ce qui
+  fait disparaître tout le Pack Detail Modal — donc le vrai
+  symptôme est : Radix appelle parfois `onOpenChange(false)` sur le
+  Dialog PARENT alors que l'utilisateur n'a interagi qu'avec l'enfant.
+- **Mécanisme Radix identifié comme cause probable** : les deux
+  `<Dialog>` (parent et `ProductPreviewModal`) utilisent tous deux le
+  wrapper standard `client/src/components/ui/dialog.tsx`
+  (shadcn/Radix), sans aucune personnalisation
+  `onPointerDownOutside`/`onInteractOutside`/`onEscapeKeyDown`
+  nulle part dans tout le projet (recherche exhaustive : zéro
+  occurrence). Les deux Dialogs sont donc en mode `modal` par défaut
+  (Radix `Dialog.Root`, prop `modal` non précisée = `true`). Radix
+  portale `DialogContent` de CHAQUE Dialog séparément vers
+  `document.body` (siblings DOM, pas imbriqués dans le DOM malgré
+  l'imbrication React) ; chaque Dialog `modal=true` gère lui-même son
+  propre focus-trap, son propre verrouillage du scroll du `<body>`,
+  et son propre `aria-hidden` sur le reste du document via
+  `DismissableLayer`/`FocusScope`. Fermer rapidement l'enfant puis
+  rouvrir un autre produit force Radix à démonter/remonter le
+  focus-trap et les effets de verrouillage de l'enfant alors que le
+  parent, LUI AUSSI `modal=true`, a ses propres effets concurrents en
+  cours sur les mêmes ressources partagées (le `<body>`, le focus
+  document-level) — c'est une course connue et documentée entre deux
+  Dialogs Radix imbriqués tous deux `modal=true`, dont la
+  manifestation (fermeture intermittente du Dialog parent lors de la
+  fermeture/réouverture rapide d'un Dialog enfant) correspond
+  exactement au symptôme rapporté (« sometimes »), sans qu'aucun code
+  applicatif ne déclenche explicitement cette fermeture.
+
+### Correction — pattern Radix standard pour Dialogs imbriqués
+
+La solution établie par Radix lui-même pour ce cas précis (un Dialog
+qui s'ouvre PENDANT qu'un autre Dialog modal est déjà ouvert) est de
+passer `modal={false}` sur le Dialog ENFANT : il reste un Dialog
+Radix à part entière (overlay, contenu, fermeture par clic sur
+l'overlay, Escape, bouton Close — tout inchangé, car ce sont des
+comportements de `DismissableLayer` indépendants du mode modal), mais
+il cesse de rivaliser avec le Dialog parent pour le focus-trap et le
+verrouillage du scroll du document — responsabilités déjà pleinement
+assurées par le Dialog parent, qui reste `modal=true` et continue de
+bloquer l'arrière-plan normalement. C'est un changement d'une seule
+prop sur un composant Radix existant — aucune nouvelle dépendance,
+aucun délai/timeout, aucune logique de détection de clic réinventée,
+conforme à « Use the existing modal architecture... Do not add
+arbitrary delays, timeouts ».
+
+### Implémentation réalisée
+
+Un seul fichier modifié : `client/src/components/pack-quick-view-modal.tsx`.
+Sur le `<Dialog>` racine de `ProductPreviewModal` (ligne 315) :
+`modal={false}` ajouté. Aucun autre changement — même `open`/
+`onOpenChange`, même `DialogContent`/grabber/bouton de bascule de
+thème/bouton Close/scroll/swipe-to-dismiss, même comportement de
+fermeture par overlay/Escape (ces chemins passent par
+`DismissableLayer`, pas par le flag `modal`).
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` sur l'ensemble du projet : **0 erreur** (hors
+  l'erreur de base pré-existante non liée à cette tâche dans
+  `prospecting-page.tsx`).
+- `npm run build` : **build réussi** (client + serveur).
+- `git status --short` : un seul fichier modifié.
+- Relecture du reste du fichier pour confirmer qu'aucune autre
+  fonctionnalité du Pack Detail Modal ou du Produits inclus n'est
+  affectée par ce changement d'une seule prop.
+- **Non vérifiable cette session, à signaler explicitement** : aucun
+  outil d'automatisation navigateur n'est disponible dans cet
+  environnement — le bug étant décrit comme intermittent et
+  nécessitant une interaction utilisateur réelle (clics rapides
+  successifs entre deux produits inclus), **la correction n'a pas pu
+  être reproduite ni confirmée en conditions réelles** ; elle repose
+  sur un mécanisme Radix documenté et une investigation qui a
+  activement écarté les autres causes plausibles (état partagé, bug
+  de logique déterministe), mais seul un test manuel réel dans un
+  navigateur peut confirmer que le symptôme a bien disparu. À
+  demander explicitement au prochain testeur humain/QA.
+
+---
+
+## 45. Variant Builder écrase Min/Max stock et recrée les variantes à chaque sauvegarde
+
+### Audit — cause racine trouvée dans `storage.saveVariants`
+
+Chemin complet tracé, frontend → API → storage → DB :
+
+1. **Frontend** — `EditListingModal` (« Edit Pricing & Stock — Variant
+   Builder », `client/src/pages/supplier/manage-products.tsx:720`) :
+   `save` (ligne 800) envoie `PATCH /api/supplier/listings/:id` avec
+   `variants: [{flavorId, sizeId, price, quantity}]` — **aucun `id`,
+   aucun `minStock`/`maxStock`** dans le payload. Le Variant Builder
+   n'a jamais connu/affiché ces deux champs (confirmé : absents de
+   `VariantGroup`/`VEntry`/`groupsToEntries` dans tout le fichier) —
+   c'est un comportement voulu et pré-existant : ces seuils sont
+   réservés au modal Inventory, pas dupliqués ici. Le bug n'est donc
+   pas que le frontend envoie de mauvaises valeurs, mais que le
+   serveur traite leur ABSENCE comme « remettre à vide ».
+2. **Route** — `PATCH /api/supplier/listings/:id`
+   (`server/routes.ts:8612`) : valide le body, puis, si `variants` est
+   fourni, appelle `storage.saveVariants(listingId, variants)` sans
+   jamais toucher `minStock`/`maxStock` lui-même (il ne les reçoit
+   même pas du client).
+3. **Storage — cause racine** : `saveVariants`
+   (`server/storage.ts:10910`) faisait, à CHAQUE sauvegarde :
+   ```ts
+   await client.delete(supplierProductVariants).where(eq(..., listingId));
+   // ...
+   const inserted = await client.insert(supplierProductVariants)
+     .values(variants.map(v => ({ listingId, flavorId: v.flavorId, sizeId: v.sizeId, price: v.price, quantity: v.quantity })))
+     .returning();
+   ```
+   **Suppression totale** de toutes les lignes `supplierProductVariants`
+   de l'annonce, suivie d'une **réinsertion** avec seulement
+   `{listingId, flavorId, sizeId, price, quantity}` — `minStock` et
+   `maxStock` (colonnes réelles de la table,
+   `shared/schema.ts:235-236`) ne sont **jamais repris dans l'INSERT**,
+   donc retombent à leur valeur par défaut (`null`) à chaque
+   sauvegarde, même un simple changement de prix. Conséquence
+   additionnelle confirmée : chaque variante reçoit un **nouvel `id`**
+   à chaque sauvegarde (ce n'est pas un UPDATE) — exactement la
+   « disparition »/recréation rapportée, pas seulement une perte de
+   valeurs.
+
+Le code gérait déjà, juste après, un problème adjacent dû à cette
+même recréation : les `packItems.variantId` pointant vers les
+anciennes lignes supprimées sont réattribués aux nouvelles lignes par
+correspondance **« slot »** `flavorId:sizeId` (lignes 10934-10946,
+déjà existant) — preuve que la recréation d'ID était déjà identifiée
+comme un problème pour les Packs, mais la même logique de
+correspondance par slot n'avait jamais été étendue à `minStock`/
+`maxStock`.
+
+Côté Inventory, pour comparaison : `updateVariantInventoryFields`
+(`server/storage.ts:11781`) et `adjustVariantStock`
+(`server/storage.ts:11743`) font tous deux un `UPDATE ... WHERE id =
+variantId` ciblé — jamais de delete/recreate. C'est le modèle à
+reproduire pour `saveVariants`. La synchronisation « dans l'autre
+sens » (Inventory → Variant Builder) fonctionne déjà nativement : les
+deux écrans lisent/écrivent la même colonne
+`supplierProductVariants.quantity` dans la même table — aucune copie
+séparée du stock n'existe, donc rien à corriger de ce côté.
+
+### Plan — réconciliation par slot (UPDATE ciblé + INSERT uniquement pour le nouveau + DELETE uniquement pour le réellement retiré)
+
+Remplacer le delete-tout/insert-tout par, pour chaque variante
+existante déjà présente (`previousVariants`, indexées par slot
+`flavorId:sizeId`) :
+- Si le payload contient une entrée pour ce même slot → **UPDATE**
+  ciblé par `id` de `price`/`quantity` uniquement (jamais
+  `minStock`/`maxStock`, qui ne figurent pas dans le `.set()` et
+  restent donc intacts — Drizzle ne touche que les colonnes
+  explicitement listées).
+- Si le slot n'existe plus dans le payload → **DELETE** de cette
+  seule ligne (variante réellement retirée par le Supplier).
+- Si une entrée du payload ne correspond à aucun slot existant →
+  **INSERT** d'une nouvelle ligne (nouvelle variante), comme avant.
+
+Un même slot n'est consommé qu'une seule fois (retiré de la table de
+correspondance après appariement), pour préserver la tolérance
+existante aux entrées en double envoyées par le client (le code
+original les acceptait déjà en les insérant séparément ; avec la
+réconciliation, un doublon de slot retombe naturellement sur la
+branche INSERT au lieu de réutiliser deux fois la même ligne).
+
+Conséquence positive supplémentaire : les `id` des variantes
+conservées ne changent plus du tout, donc la réattribution des
+`packItems.variantId` par correspondance de slot ne devient nécessaire
+que pour les variantes réellement supprimées (cas qui existait déjà
+et reste géré), et non plus pour l'immense majorité des sauvegardes
+(changement de prix/stock sur des variantes déjà existantes) — fixe
+aussi, en passant, l'exigence « Preserve existing inventory record
+IDs and relationships wherever possible ».
+
+Le cas `variants.length === 0` (le Supplier vide complètement le
+Variant Builder) reste un vidage volontaire intégral — comportement
+inchangé, ce n'est pas le bug rapporté.
+
+Toutes les requêtes continuent de passer par le paramètre `client`
+(jamais `db` en dur), pour rester compatible avec l'appel transactionnel
+existant (`createSupplierListingWithVariants`, `server/storage.ts:11451`,
+qui invoque `saveVariants(..., tx)`).
+
+### Implémentation réalisée
+
+Un seul fichier modifié : `server/storage.ts`, uniquement le corps de
+`saveVariants` (signature et usages chez les 3 appelants —
+`server/routes.ts:8665`, `server/routes.ts:9606`,
+`server/storage.ts:11451` — strictement inchangés, aucune route ni
+aucun appelant retouché).
+
+```ts
+async saveVariants(listingId, variants, client = db) {
+  const previousVariants = await client.select().from(supplierProductVariants).where(eq(..., listingId));
+  const previousVariantIds = previousVariants.map(v => v.id);
+  const previousPackItems = previousVariantIds.length ? await client.select().from(packItems).where(inArray(packItems.variantId, previousVariantIds)) : [];
+
+  if (!variants.length) {
+    // vidage volontaire intégral — inchangé
+    ...
+  }
+
+  const previousBySlot = new Map(previousVariants.map(v => [`${v.flavorId ?? "null"}:${v.sizeId ?? "null"}`, v]));
+  const matchedPreviousIds = new Set<number>();
+  const result = [];
+  for (const v of variants) {
+    const slot = `${v.flavorId ?? "null"}:${v.sizeId ?? "null"}`;
+    const prev = previousBySlot.get(slot);
+    if (prev && !matchedPreviousIds.has(prev.id)) {
+      matchedPreviousIds.add(prev.id);
+      const [updated] = await client.update(supplierProductVariants)
+        .set({ price: v.price, quantity: v.quantity })
+        .where(eq(supplierProductVariants.id, prev.id))
+        .returning();
+      result.push(updated);
+    } else {
+      const [inserted] = await client.insert(supplierProductVariants)
+        .values({ listingId, flavorId: v.flavorId ?? null, sizeId: v.sizeId ?? null, price: v.price, quantity: v.quantity })
+        .returning();
+      result.push(inserted);
+    }
+  }
+  const removedVariants = previousVariants.filter(v => !matchedPreviousIds.has(v.id));
+  if (removedVariants.length) {
+    await client.delete(supplierProductVariants).where(inArray(supplierProductVariants.id, removedVariants.map(v => v.id)));
+  }
+
+  const aggPrice = Math.min(...result.map(v => v.price));
+  const aggStock = result.reduce((s, v) => s + v.quantity, 0);
+  await client.update(supplierProductListings).set({ price: aggPrice, stock: aggStock }).where(eq(..., listingId));
+
+  // Pack items : seules les variantes réellement supprimées ont besoin
+  // d'une réattribution/suppression — celles conservées gardent leur id.
+  if (removedVariants.length) {
+    const removedIds = new Set(removedVariants.map(v => v.id));
+    for (const item of previousPackItems.filter(i => removedIds.has(i.variantId))) {
+      await client.delete(packItems).where(eq(packItems.id, item.id));
+    }
+  }
+  await client.delete(packItems).where(and(eq(packItems.listingId, listingId), isNull(packItems.variantId)));
+
+  const tx = await buildTaxonomyCache();
+  return result.map(v => ({ ...v, flavorName: ..., sizeName: ... }));
+}
+```
+
+`minStock`/`maxStock` ne sont mentionnés nulle part dans ce code — et
+c'est exactement le point : en ne les incluant jamais dans le
+`.set()` d'un `UPDATE` (au lieu d'un `INSERT` qui les aurait
+réinitialisés), Drizzle laisse ces colonnes totalement intactes pour
+toute variante déjà existante, quel que soit ce que le Variant
+Builder envoie ou omet.
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` sur l'ensemble du projet : **0 erreur** (hors
+  l'erreur de base pré-existante non liée à cette tâche dans
+  `prospecting-page.tsx`).
+- `npm run build` : **build réussi** (client + serveur).
+- Relecture des 3 points d'appel (`routes.ts:8665`, `routes.ts:9606`,
+  `storage.ts:11451`) : aucun ne dépend du comportement de recréation
+  d'ID ni de la forme exacte du tableau retourné au-delà de
+  `{id, flavorId, sizeId, price, quantity, minStock, maxStock,
+  flavorName, sizeName}` déjà garantie — compatibles sans changement.
+- Vérification manuelle par lecture de code du scénario exact de la
+  tâche : variante existante `Cinnamon · 6-Pack` (id=42, quantity=89,
+  minStock=10, maxStock=150) ; le Supplier change seulement la
+  quantité à 60 dans le Variant Builder → même slot trouvé → `UPDATE
+  ... SET price=?, quantity=60 WHERE id=42` → minStock/maxStock
+  jamais touchés en base, **id=42 inchangé** → Inventory, qui lit la
+  même ligne par cette même colonne, affiche quantity=60,
+  minStock=10, maxStock=150 inchangés.
+- **Non vérifiable cette session** : aucune base de données réelle ni
+  navigateur n'est accessible dans cet environnement pour exécuter
+  réellement une sauvegarde Variant Builder puis relire l'Inventory
+  en conditions réelles (scénarios de validation 1 à 10 de la tâche)
+  — la correction repose sur une lecture complète et tracée du flux
+  réel (frontend → route → storage → schéma de table), pas sur une
+  exécution observée. À confirmer manuellement avant mise en
+  production.
+
+---
+
+## 46. Synchronisation temps réel Inventory ↔ Variant Builder (sans refresh)
+
+### Audit — infrastructure temps réel déjà existante, un seul maillon manquant
+
+Infrastructure déjà en place, confirmée par lecture complète (aucune
+nouvelle à construire, conformément à « reuse existing WebSocket
+infrastructure ») :
+- `server/ws.ts` : serveur WebSocket authentifié via le cookie de
+  session (`sessionMiddleware`), `broadcast(event, data)` (envoi à
+  tous les clients connectés) et `broadcastToUsers(userIds, ...)`
+  (ciblé) déjà disponibles.
+- `client/src/hooks/use-realtime.ts` : hook déjà monté globalement,
+  gère la connexion/reconnexion (retry 3s), et route chaque event WS
+  vers des fonctions d'invalidation React Query dédiées — c'est le
+  mécanisme de synchro temps réel déjà utilisé par TOUT le reste de
+  l'application (Packs, Marketing, Barista, Maintenance, Print,
+  Academy, messagerie, notifications, etc.), jamais un refetch
+  pleine page.
+- Déjà diffusés et déjà câblés, confirmés par lecture :
+  - `PATCH /api/supplier/listings/:id` (save du Variant Builder,
+    `server/routes.ts:8674`, modifié à la tâche 45) → diffuse
+    `product_updated`.
+  - Les 4 routes Inventory (`PATCH /api/supplier/inventory/:listingId`,
+    `.../stock`, `.../variants/:variantId`, `.../variants/:variantId/stock`,
+    `server/routes.ts:8787-8845`) → diffusent toutes `inventory_updated`
+    **après** le commit DB réussi (confirmé : le `broadcast(...)` est
+    toujours la dernière ligne avant `res.json(...)`, jamais avant
+    l'écriture — « Do not broadcast an event before the database
+    transaction has successfully committed » déjà respecté
+    nativement, aucun changement requis sur ce point).
+
+Recherche du flux de données réel, pour chaque event, dans
+`use-realtime.ts` :
+- `inventory_updated` → `invalidateInventoryQueries(qc)` → invalide
+  `["/api/supplier/inventory"]`, `["/api/supplier/inventory/stats"]`,
+  **et `["/api/supplier/listings"]`**. React Query invalide par
+  préfixe par défaut (`exact: false`), donc `["/api/supplier/listings"]`
+  invalide AUSSI `["/api/supplier/listings", listingId, "variants"]`
+  — la query exacte que le Variant Builder utilise pour ses
+  `existingVariants`. **Conclusion : Inventory → Variant Builder
+  fonctionne déjà correctement aujourd'hui**, confirmant l'énoncé de
+  la tâche (« already working correctly »).
+- `product_updated` → `invalidateProductQueries(qc)` → invalide
+  `/api/products`, `/api/marketplace/promotions`, `/api/favorites`,
+  `/api/pack-favorites`, `/api/categories`, `/api/subcategories`,
+  `/api/flavors`, `/api/sizes`, `/api/brands`,
+  `/api/supplier/admin-products`, `/api/supplier/listings`, et les
+  invalidations groupées marketplace/pack/store — **jamais
+  `/api/supplier/inventory` ni `/api/supplier/inventory/stats`**.
+  **C'est le seul maillon manquant** : une sauvegarde de stock dans
+  le Variant Builder diffuse bien `product_updated`, mais ce handler
+  ne rafraîchit jamais la page Inventory déjà ouverte dans un autre
+  onglet — elle reste figée tant qu'aucun autre événement
+  (`inventory_updated`, qui ne se produit que si l'Inventory
+  elle-même écrit) ne survient entretemps.
+
+Vérification de la préservation des champs sensibles pour cette
+tâche (section 5) : le fix de la tâche 45 (`saveVariants`, réconcilié
+par slot) n'est pas modifié ici — seule l'invalidation de cache côté
+client est étendue ; aucune requête d'écriture, aucun schéma, aucune
+colonne touchée.
+
+Vérification de la sécurité (section 7) : `broadcast()` (pas
+`broadcastToUsers`) envoie à **tous** les clients connectés, pas
+seulement au Supplier propriétaire — c'est le modèle déjà utilisé de
+façon identique par chaque autre event de ce fichier (Packs,
+Marketing, Barista, etc., aucune exception). La sécurité réelle est
+assurée en aval, au niveau de la requête GET elle-même
+(`requireApprovedSupplier` + filtrage par `req.session.userId` dans
+`storage.getSupplierInventory`/`getSupplierListings`) : même si
+l'event atteint le navigateur d'un autre Supplier, son propre
+refetch de `/api/supplier/inventory` ne lui renverra jamais que SES
+PROPRES données, jamais celles d'un autre — aucune fuite possible.
+Introduire un ciblage par `broadcastToUsers` ici serait un écart
+par rapport au modèle existant pour un seul event, sans bénéfice de
+sécurité réel (incohérent avec « reuse the existing architecture »).
+
+Vérification de la non-écrasement des saisies non sauvegardées
+(section 6) : `EditListingModal` charge `existingVariants` dans son
+state local `groups` via un effet gardé par `loaded` (une seule fois,
+jamais resynchronisé après) — c'est déjà le comportement correct et
+volontaire : une fois le Variant Builder ouvert, un event externe
+n'écrase jamais une saisie en cours (exigence explicite de la tâche,
+test de validation n°11). Fermer puis rouvrir le modal relit
+toujours la donnée la plus récente (déjà vraie : la query invalidée
+se rafraîchit en arrière-plan même modal fermé, et une réouverture
+relit le cache à jour). Aucun changement nécessaire ni souhaitable
+sur ce point précis.
+
+### Plan — extension minimale d'une fonction d'invalidation déjà partagée
+
+Ajouter deux invalidations à `invalidateProductQueries` (dans
+`client/src/hooks/use-realtime.ts`, seule fonction appelée pour
+`product_updated`, donc aucun risque d'effet de bord sur un autre
+event) :
+```ts
+qc.invalidateQueries({ queryKey: ["/api/supplier/inventory"] });
+qc.invalidateQueries({ queryKey: ["/api/supplier/inventory/stats"] });
+```
+Aucun nouveau type d'event, aucune nouvelle route, aucun nouveau
+payload — réutilise exactement le mécanisme déjà utilisé pour les 15
+autres emplacements qui diffusent déjà `product_updated` dans
+`server/routes.ts` (y compris les sauvegardes Admin de produit,
+cohérent avec le niveau de granularité déjà existant partout
+ailleurs dans cette même fonction).
+
+### Implémentation réalisée
+
+Un seul fichier modifié : `client/src/hooks/use-realtime.ts`,
+fonction `invalidateProductQueries` (lignes ~83-112) — ajout des deux
+lignes ci-dessus. Aucun autre fichier touché : ni `server/ws.ts`, ni
+`server/routes.ts`, ni `server/storage.ts`, ni les composants
+Inventory/Variant Builder eux-mêmes.
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` sur l'ensemble du projet : exécuté directement
+  (sans filtre `grep`, pour éviter le faux-positif rencontré à la
+  tâche 45) — **0 erreur, exit code 0**.
+- `npm run build` : **build réussi** (client + serveur).
+- `git status --short` / `git diff --stat` : un seul fichier modifié
+  (`client/src/hooks/use-realtime.ts`), diff de 2 lignes ajoutées.
+- Relecture confirmée des 4 scénarios requis par la tâche :
+  - Scénario A (Variant Builder → Inventory) : corrigé par cette
+    tâche (le maillon manquant identifié).
+  - Scénario B (Inventory → Variant Builder) : déjà fonctionnel
+    avant cette tâche (confirmé par lecture du mécanisme de
+    préfixe de `invalidateQueries`), non modifié.
+  - Scénario C (deux onglets simultanés) : conséquence directe du
+    `broadcast()` WebSocket déjà global à toute connexion active du
+    même mécanisme existant.
+  - Scénario D (autre session/compte autorisé) : même mécanisme,
+    sécurité assurée en aval par le filtrage serveur déjà en place.
+- **Non vérifiable cette session** : aucun navigateur ni connexion
+  WebSocket réelle n'est accessible dans cet environnement — la
+  propagation effective en temps réel entre deux onglets ouverts
+  (et le délai réel perçu) n'a pas pu être observée à l'exécution,
+  uniquement vérifiée par lecture complète et tracée du code
+  WebSocket serveur, du hook client, et de la correspondance exacte
+  entre les clés de requête invalidées et celles réellement utilisées
+  par Inventory et le Variant Builder. À confirmer manuellement
+  (deux onglets ouverts côte à côte) avant mise en production.
+
+---
+
+## 47. Correction Inventory → Variant Builder quand le Builder reste ouvert
+
+### Audit — la cause racine est côté state local du formulaire, pas le cache/WS
+
+La tâche 46 a câblé l'invalidation `/api/supplier/inventory`/`stats`
+côté `product_updated` — déjà vérifié correct pour le sens
+Variant Builder → Inventory. Pour CE sens (Inventory → Variant
+Builder), la tâche 46 concluait déjà que `inventory_updated` →
+`invalidateInventoryQueries` invalide `["/api/supplier/listings"]`,
+ce qui correspond par préfixe à la query exacte du Variant Builder
+(`["/api/supplier/listings", listing.id, "variants"]`) — **le cache
+React Query se rafraîchit donc déjà correctement en arrière-plan**.
+Le vrai problème, identifié précisément par relecture de
+`EditListingModal` (`client/src/pages/supplier/manage-products.tsx:720`) :
+
+```ts
+const [groups, setGroups] = useState<VariantGroup[]>([...]);
+const [loaded, setLoaded] = useState(false);
+useEffect(() => {
+  if (!loaded && (existingVariants as any[]).length > 0) {
+    setGroups(variantsToGroups(existingVariants as any[], availableFlavors, availableSizes));
+    setLoaded(true);
+  }
+}, [existingVariants, loaded, availableFlavors, availableSizes]);
+```
+
+`loaded` passe à `true` lors du PREMIER chargement et bloque
+ensuite, pour toujours, toute resynchronisation — même si
+`existingVariants` reçoit bel et bien de nouvelles données après un
+refetch déclenché par l'invalidation WS. **Le cache est à jour, mais
+le state local du formulaire (`groups`), lui, ne l'a jamais lu une
+deuxième fois.** C'est exactement le scénario rapporté : « le
+Variant Builder déjà ouvert dans un autre onglet n'affiche jamais
+60/25 ».
+
+Confirmé que ce blocage est actuellement VOULU pour une bonne raison
+(ne jamais écraser une saisie non sauvegardée) — donc la correction
+ne doit pas simplement retirer la garde `loaded`, ce qui écraserait
+toute édition de prix/groupe en cours à chaque frappe de
+l'utilisateur ailleurs. Il faut une fusion sélective : ne resynchroniser
+que les champs de stock que le Supplier n'a PAS touchés localement
+depuis le dernier chargement, en gardant intacts prix, structure de
+groupes, sélection parfum/taille.
+
+Stratégie de correspondance réutilisée (pas une nouvelle) : la même
+clé « slot » `sizeId:flavorId` déjà établie à la tâche 45
+(`saveVariants`) — le Variant Builder n'envoie ni ne reçoit jamais
+d'`id` de variante stable (confirmé : `VEntry`/`groupsToEntries` n'en
+contiennent pas), donc le slot flavorId+sizeId reste la seule clé
+fiable disponible côté client, cohérent avec « use the existing
+variant matching strategy ».
+
+### Plan — suivi de « dirtiness » par slot de stock + fusion sélective
+
+1. `dirtyStockSlotsRef` (`useRef<Set<string>>`) dans
+   `EditListingModal` : marque un slot `sizeId:flavorId` (ou
+   `sizeId:none` pour le groupe sans parfum) comme modifié localement
+   dès que l'utilisateur tape dans SON champ de stock — jamais pour
+   un changement de prix, de taille, ou de sélection de parfum.
+2. Remplacer `onChange={setGroups}` par un wrapper
+   `handleGroupsChange` qui détecte, en comparant l'ancien et le
+   nouveau `groups` (déjà alignés par `g.id`, cf. `update()`), quelles
+   valeurs de `flavorStocks`/`qty` ont réellement changé, et peuple
+   `dirtyStockSlotsRef` en conséquence, avant d'appeler `setGroups`.
+3. L'effet de chargement devient : premier chargement inchangé
+   (`!loaded`) ; ensuite, à chaque nouvelle référence
+   `existingVariants` (donc à chaque refetch réel), fusionner dans
+   `groups` UNIQUEMENT la quantité des slots absents de
+   `dirtyStockSlotsRef`, par correspondance `sizeId:flavorId` — prix,
+   groupes ajoutés/retirés localement, et sélection parfum/taille ne
+   sont jamais touchés par cette fusion.
+
+### Implémentation réalisée
+
+Un seul fichier modifié : `client/src/pages/supplier/manage-products.tsx`,
+dans `EditListingModal` uniquement (le `VariantGroupBuilder` utilisé
+par `AddListingModal` pour une NOUVELLE annonce, ligne 668, reste
+inchangé — pas de variantes serveur existantes à synchroniser tant
+que l'annonce n'est pas créée).
+
+- Ajout de `dirtyStockSlotsRef`/`lastSyncedVariantsRef` (refs).
+- `handleGroupsChange` ajouté, branché sur `<VariantGroupBuilder
+  onChange={handleGroupsChange}>` (au lieu de `setGroups` direct).
+- Effet de chargement étendu : branche `!loaded` strictement
+  identique à avant ; nouvelle branche de fusion sélective pour les
+  rafraîchissements suivants, utilisant une mise à jour fonctionnelle
+  de `setGroups` (lit le `groups` le plus récent, jamais une
+  fermeture obsolète) et ne retouchant que `flavorStocks`/`qty` des
+  slots non « dirty ».
+
+Aucun changement à `saveVariants`/aux routes serveur (déjà corrigés
+tâches 45/46), à `AddListingModal`, à `VariantGroupBuilder` lui-même
+(sa signature `onChange` reste `(groups) => void`, inchangée), ni à
+`ListingLivePreview`.
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` exécuté directement (sans filtre) : **0 erreur,
+  exit code 0**.
+- `npm run build` : **build réussi** (client + serveur).
+- `git diff --stat` : un seul fichier modifié.
+- Vérification manuelle par lecture de code du scénario exact de la
+  tâche : Variant Builder déjà ouvert avec Cinnamon=89 (groupe A,
+  slot `6-pack:cinnamonId`) et Almond=1 (groupe B) ; le Supplier n'a
+  rien tapé → `dirtyStockSlotsRef` vide → un refetch
+  `existingVariants` après un changement Inventory (89→60, 1→25)
+  déclenche la fusion → `flavorStocks` mis à jour à 60 et 25
+  respectivement, `price` et structure des groupes inchangés.
+  Scénario complémentaire vérifié par lecture : si le Supplier a
+  déjà tapé une nouvelle valeur dans le champ Stock de Cinnamon
+  (slot marqué dirty) pendant qu'Almond change ailleurs, Almond se
+  met à jour normalement tandis que la saisie en cours sur Cinnamon
+  reste intacte (slot dirty exclu de la fusion).
+- **Non vérifiable cette session** : aucun navigateur réel
+  n'est accessible dans cet environnement — la propagation effective
+  vers un Variant Builder réellement ouvert dans un second onglet
+  n'a pas pu être observée à l'exécution, uniquement vérifiée par
+  lecture complète et tracée du code (query cache, effet de
+  synchronisation, fusion sélective). À confirmer manuellement avant
+  mise en production.

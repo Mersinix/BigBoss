@@ -1683,30 +1683,36 @@ export default function LandingPage() {
                   the toggle shown in the header. */}
               <div className={`flex flex-col max-h-[95vh] overflow-hidden transition-colors duration-200 ${modalBg} ${dk ? "dark" : ""}`}>
 
-                {/* Fixed header */}
-                <div className={`shrink-0 px-5 pt-5 pb-4 ${modalBg}`}>
-                  <div className="flex items-center justify-between mb-4">
-                    <button
-                      type="button"
-                      onClick={() => { setAuthModalOpen(false); }}
-                      aria-label="Close"
-                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                    <div className="flex items-center gap-2">
-                      <div className="bg-amber-500 p-1.5 rounded-xl shrink-0"><Coffee className="w-3.5 h-3.5 text-white" /></div>
-                      <span className={`text-[13px] font-semibold ${textPri}`}>BigBossCoffee</span>
-                    </div>
-                    {/* No independent theme toggle here — Connexion/Inscription/password
-                        recovery/registration steps all inherit `dk`/`isDark` from the same
-                        global useThemeStore the main Navbar writes to (theme-store.ts), so
-                        the Navbar remains the single place to switch themes. Spacer div
-                        keeps the title centered where the toggle button used to be. */}
-                    <div className="w-8" />
-                  </div>
-                  <div className={`h-px w-full ${divider}`} />
-                </div>
+              
+{/* Fixed header */}
+<div className={`shrink-0 px-5 pt-5 pb-4 ${modalBg}`}>
+  <div className="relative flex items-center justify-center mb-4">
+    {/* Centered BigBossCoffee branding */}
+    <div className="flex items-center gap-2">
+      <div className="bg-amber-500 p-1.5 rounded-xl shrink-0">
+        <Coffee className="w-3.5 h-3.5 text-white" />
+      </div>
+      <span className={`text-[13px] font-semibold ${textPri}`}>
+        BigBossCoffee
+      </span>
+    </div>
+
+    {/* Close button positioned on the right */}
+    <button
+      type="button"
+      onClick={() => {
+        setAuthModalOpen(false);
+      }}
+      aria-label="Close"
+      className={`absolute right-0 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center transition-colors ${iconBtn}`}
+    >
+      <X className="w-4 h-4" />
+    </button>
+  </div>
+
+  <div className={`h-px w-full ${divider}`} />
+</div>
+
 
                 {/* Scrollable content */}
                 <div

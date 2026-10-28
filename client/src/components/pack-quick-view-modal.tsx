@@ -311,8 +311,17 @@ function ProductPreviewModal({ productId, onClose }: { productId: number | null;
     ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white"
     : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800";
 
+  // modal={false} — this Dialog opens while the parent Pack Detail Modal's
+  // own Dialog is already open/modal. Two nested Radix Dialogs both left at
+  // the default modal=true race for the same document-level focus-trap and
+  // body-scroll-lock resources, which could intermittently close the parent
+  // when this one closed/reopened in quick succession (task: "Fix Pack
+  // Detail Modal Closing Unexpectedly When Opening Included Product
+  // Modals"). The parent stays modal=true and keeps blocking the
+  // background; overlay-click/Escape/Close-button dismissal here are
+  // unaffected (DismissableLayer behavior, not the modal flag).
   return (
-    <Dialog open={productId != null} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <Dialog open={productId != null} onOpenChange={(open) => { if (!open) onClose(); }} modal={false}>
       <DialogContent
         className="max-w-md w-[calc(100%-2rem)] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden"
         style={dismissContentStyle}

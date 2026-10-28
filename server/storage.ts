@@ -337,10 +337,40 @@ export interface IStorage {
   getAuthProviderSettings(): Promise<{ googleEnabled: boolean; facebookEnabled: boolean }>;
   updateAuthProviderSettings(updates: Partial<{ googleEnabled: boolean; facebookEnabled: boolean }>): Promise<{ googleEnabled: boolean; facebookEnabled: boolean }>;
 
-  // Per-account login-attempt cooldown duration (the counters themselves are
-  // in-memory, see server/login-attempts.ts — this is just the configured duration).
-  getLoginSecuritySettings(): Promise<{ cooldownSeconds: number }>;
-  updateLoginSecuritySettings(updates: Partial<{ cooldownSeconds: number }>): Promise<{ cooldownSeconds: number }>;
+  // Authentication & Security Settings (task: "Expand Global Authentication &
+  // Security Settings") — the per-account failed-login counters/cooldown
+  // timestamps themselves stay in-memory (server/login-attempts.ts); this is
+  // the configured policy, read fresh on every login/registration/rate-limit
+  // check.
+  getLoginSecuritySettings(): Promise<{
+    lockoutEnabled: boolean;
+    maxFailedAttempts: number;
+    cooldownSeconds: number;
+    rateLimitEnabled: boolean;
+    rateLimitMaxRequests: number;
+    rateLimitWindowSeconds: number;
+    passwordMinLength: number;
+    sessionInactivityTimeoutSeconds: number | null;
+  }>;
+  updateLoginSecuritySettings(updates: Partial<{
+    lockoutEnabled: boolean;
+    maxFailedAttempts: number;
+    cooldownSeconds: number;
+    rateLimitEnabled: boolean;
+    rateLimitMaxRequests: number;
+    rateLimitWindowSeconds: number;
+    passwordMinLength: number;
+    sessionInactivityTimeoutSeconds: number | null;
+  }>): Promise<{
+    lockoutEnabled: boolean;
+    maxFailedAttempts: number;
+    cooldownSeconds: number;
+    rateLimitEnabled: boolean;
+    rateLimitMaxRequests: number;
+    rateLimitWindowSeconds: number;
+    passwordMinLength: number;
+    sessionInactivityTimeoutSeconds: number | null;
+  }>;
 
   // Maintenance marketplace
   getMaintenanceProfiles(filters?: { search?: string; category?: string; profileType?: string; available?: boolean; location?: string }): Promise<MaintenanceMarketplaceCard[]>;
@@ -12462,14 +12492,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Same getOrCreate-singleton pattern as getAuthProviderSettings/updateAuthProviderSettings.
-  async getLoginSecuritySettings() {
-    const [row] = await db.select().from(loginSecuritySettings).limit(1);
-    if (row) return { cooldownSeconds: row.cooldownSeconds };
-    const [created] = await db.insert(loginSecuritySettings).values({}).returning();
-    return { cooldownSeconds: created.cooldownSeconds };
+  private toLoginSecuritySettingsShape(row: typeof loginSecuritySettings.$inferSelect) {
+    return {
+      lockoutEnabled: row.lockoutEnabled,
+      maxFailedAttempts: row.maxFailedAttempts,
+      cooldownSeconds: row.cooldownSeconds,
+      rateLimitEnabled: row.rateLimitEnabled,
+      rateLimitMaxRequests: row.rateLimitMaxRequests,
+      rateLimitWindowSeconds: row.rateLimitWindowSeconds,
+      passwordMinLength: row.passwordMinLength,
+      sessionInactivityTimeoutSeconds: row.sessionInactivityTimeoutSeconds ?? null,
+    };
   }
 
-  async updateLoginSecuritySettings(updates: Partial<{ cooldownSeconds: number }>) {
+  async getLoginSecuritySettings() {
+    const [row] = await db.select().from(loginSecuritySettings).limit(1);
+    if (row) return this.toLoginSecuritySettingsShape(row);
+    const [created] = await db.insert(loginSecuritySettings).values({}).returning();
+    return this.toLoginSecuritySettingsShape(created);
+  }
+
+  async updateLoginSecuritySettings(updates: Partial<{
+    lockoutEnabled: boolean; maxFailedAttempts: number; cooldownSeconds: number;
+    rateLimitEnabled: boolean; rateLimitMaxRequests: number; rateLimitWindowSeconds: number;
+    passwordMinLength: number; sessionInactivityTimeoutSeconds: number | null;
+  }>) {
     const current = await this.getLoginSecuritySettings();
     const next = { ...current, ...updates };
     const [row] = await db.select({ id: loginSecuritySettings.id }).from(loginSecuritySettings).limit(1);

@@ -3,19 +3,20 @@
  * IP-scoped `loginRateLimiter` (express-rate-limit) in routes.ts, which stays exactly
  * as it was: a much looser, longer-window backstop against distributed abuse (many
  * accounts guessed from one IP). This module is the tight, short, per-ACCOUNT layer:
- * 3 consecutive failures for the SAME account trigger a short, admin-configurable
- * cooldown for THAT account only — an unrelated account's attempts never touch this
- * one's counter (task's core complaint: attempts were previously only tracked at the
- * IP level, so different accounts "shared" the same budget).
+ * a configurable number of consecutive failures (admin-configurable, task: "Expand
+ * Global Authentication & Security Settings" — previously hardcoded at 3) for the
+ * SAME account trigger a short, admin-configurable cooldown for THAT account only —
+ * an unrelated account's attempts never touch this one's counter (task's core
+ * complaint: attempts were previously only tracked at the IP level, so different
+ * accounts "shared" the same budget). The caller may also skip this layer entirely
+ * (lockoutEnabled = false) while the IP-scoped limiter above keeps running regardless.
  *
  * In-memory (a Map, same tradeoff already accepted for sessions — see
  * server/session.ts's MemoryStore): ephemeral, resets on server restart. That's fine
- * for a short security cooldown; the CONFIGURED duration itself is the only part that
- * needs to survive a restart, and that lives in the DB (shared/schema.ts
+ * for a short security cooldown; the CONFIGURED duration/threshold are the only parts
+ * that need to survive a restart, and those live in the DB (shared/schema.ts
  * loginSecuritySettings), read fresh from storage every time a cooldown is triggered.
  */
-
-const MAX_CONSECUTIVE_ATTEMPTS = 3;
 
 type AttemptState = { count: number; cooldownUntil: number | null };
 
@@ -40,12 +41,13 @@ export function getCooldownRemainingSeconds(identifier: string): number {
   return Math.ceil(remainingMs / 1000);
 }
 
-/** Records one failed attempt for this identifier. If this is the 3rd consecutive
- *  failure, starts a new cooldown of `cooldownSeconds` (the admin's CURRENTLY
- *  configured duration, read by the caller right before this call) and resets the
- *  counter for the next cycle. Returns the resulting cooldown (0 if not yet
- *  triggered) so the route can decide whether to respond 429 or a normal 401. */
-export function recordFailedAttempt(identifier: string, cooldownSeconds: number): { cooldownRemainingSeconds: number } {
+/** Records one failed attempt for this identifier. If this is the `maxAttempts`th
+ *  consecutive failure (the admin's CURRENTLY configured threshold, read by the
+ *  caller right before this call — task: "Expand Global Authentication & Security
+ *  Settings"), starts a new cooldown of `cooldownSeconds` and resets the counter
+ *  for the next cycle. Returns the resulting cooldown (0 if not yet triggered) so
+ *  the route can decide whether to respond 429 or a normal 401. */
+export function recordFailedAttempt(identifier: string, cooldownSeconds: number, maxAttempts: number): { cooldownRemainingSeconds: number } {
   const key = normalizeLoginIdentifier(identifier);
   const existing = attempts.get(key) ?? { count: 0, cooldownUntil: null };
   // A previous cooldown already ran out — this failure starts a fresh cycle rather
@@ -55,7 +57,7 @@ export function recordFailedAttempt(identifier: string, cooldownSeconds: number)
     existing.cooldownUntil = null;
   }
   existing.count += 1;
-  if (existing.count >= MAX_CONSECUTIVE_ATTEMPTS) {
+  if (existing.count >= maxAttempts) {
     existing.cooldownUntil = Date.now() + cooldownSeconds * 1000;
     existing.count = 0;
   }

@@ -6,6 +6,7 @@ import { storage } from "./storage";
 import { sendPasswordResetEmail, EmailDeliveryError } from "./email";
 import { registerOAuthRoutes, isGoogleConfigured, isFacebookConfigured } from "./oauth";
 import { getCooldownRemainingSeconds, recordFailedAttempt, resetLoginAttempts } from "./login-attempts";
+import { checkAndRecordLoginRateLimit } from "./login-rate-limit";
 import {
   geocodeAddress,
   generateGrid,
@@ -44,17 +45,25 @@ declare module "express-session" {
   interface SessionData { userId: number; }
 }
 
-// Registration/reset password rule — 8+ characters, at least one uppercase letter, one
-// number, and one symbol. Enforced here (not just client-side in landing-page.tsx) so a
-// request sent directly to these endpoints can't bypass it.
-const REGISTRATION_PASSWORD_MESSAGE = "Le mot de passe doit contenir au moins 8 caractères, une majuscule, un chiffre et un symbole.";
-const registrationPasswordSchema = z.string()
-  .min(8, REGISTRATION_PASSWORD_MESSAGE)
-  .regex(/[A-Z]/, REGISTRATION_PASSWORD_MESSAGE)
-  .regex(/[0-9]/, REGISTRATION_PASSWORD_MESSAGE)
-  .regex(/[!@#$%^&*(),.?":{}|<>[\]\\/~`_+=;'-]/, REGISTRATION_PASSWORD_MESSAGE);
-function isValidRegistrationPassword(pw: string): boolean {
-  return pw.length >= 8 && /[A-Z]/.test(pw) && /[0-9]/.test(pw) && /[!@#$%^&*(),.?":{}|<>[\]\\/~`_+=;'-]/.test(pw);
+// Registration/reset password rule — admin-configurable minimum length (default
+// 8, preserving the previous hardcoded behavior — task: "Expand Global
+// Authentication & Security Settings"), at least one uppercase letter, one
+// number, and one symbol (complexity rules stay fixed, not configurable).
+// Enforced here (not just client-side in landing-page.tsx) so a request sent
+// directly to these endpoints can't bypass it.
+function registrationPasswordMessage(minLength: number): string {
+  return `Le mot de passe doit contenir au moins ${minLength} caractères, une majuscule, un chiffre et un symbole.`;
+}
+function buildRegistrationPasswordSchema(minLength: number) {
+  const message = registrationPasswordMessage(minLength);
+  return z.string()
+    .min(minLength, message)
+    .regex(/[A-Z]/, message)
+    .regex(/[0-9]/, message)
+    .regex(/[!@#$%^&*(),.?":{}|<>[\]\\/~`_+=;'-]/, message);
+}
+function isValidRegistrationPassword(pw: string, minLength: number): boolean {
+  return pw.length >= minLength && /[A-Z]/.test(pw) && /[0-9]/.test(pw) && /[!@#$%^&*(),.?":{}|<>[\]\\/~`_+=;'-]/.test(pw);
 }
 
 // Rate limiting for the authentication endpoints — generous, rolling (never permanent)
@@ -69,6 +78,33 @@ const resetPasswordRateLimiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 10
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   app.use(sessionMiddleware);
+
+  // Session inactivity timeout (task: "Expand Global Authentication & Security
+  // Settings") — only applied to already-authenticated requests, and only when
+  // the admin has configured a value (null/unset preserves today's exact
+  // behavior: no maxAge at all, i.e. a browser-session cookie). Setting
+  // req.session.cookie.maxAge on every authenticated request keeps extending
+  // the cookie's expiry forward from "now" (rolling), so the session actually
+  // expires N seconds after the user's LAST request, not a fixed absolute time
+  // — enforced server-side, dynamically reconfigurable without a restart since
+  // it's read fresh from the DB on every request. Never confused with a
+  // separate "remember me"/refresh token — this app has none; it only ever
+  // controls this one session cookie's lifetime.
+  app.use(async (req: any, _res, next) => {
+    if (req.session?.userId) {
+      try {
+        const { sessionInactivityTimeoutSeconds } = await storage.getLoginSecuritySettings();
+        if (sessionInactivityTimeoutSeconds != null) {
+          req.session.cookie.maxAge = sessionInactivityTimeoutSeconds * 1000;
+        }
+      } catch {
+        // Fail open — never break an authenticated request over a settings-read
+        // hiccup; the session simply keeps whatever maxAge it already had.
+      }
+    }
+    next();
+  });
+
   registerOAuthRoutes(app);
 
   const requireAuth = (req: any, res: any, next: any) => {
@@ -172,7 +208,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   const registerBodySchema = z.object({
     name: z.string().min(1, "Name is required"),
     email: z.string().email("Valid email required"),
-    password: registrationPasswordSchema,
+    // Complexity/length validated separately below with the currently
+    // configured passwordMinLength — see buildRegistrationPasswordSchema.
+    password: z.string().min(1, "Password required"),
     role: z.enum(['CAFE_OWNER', 'SUPPLIER', 'DELIVERY_COMPANY', 'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE']).optional(),
     phone: z.string().optional().nullable(),
     isWhatsapp: z.boolean().optional(),
@@ -210,6 +248,9 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const parsed = registerBodySchema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ message: parsed.error.errors[0].message });
       const body = parsed.data;
+      const { passwordMinLength } = await storage.getLoginSecuritySettings();
+      const passwordCheck = buildRegistrationPasswordSchema(passwordMinLength).safeParse(body.password);
+      if (!passwordCheck.success) return res.status(400).json({ message: passwordCheck.error.errors[0].message });
       // All new registrations (non-admin-created) start as pending
       const PENDING_ROLES = ['CAFE_OWNER', 'SUPPLIER', 'DELIVERY_COMPANY', 'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE'];
       const LOCATION_REQUIRED_ROLES = ['CAFE_OWNER', 'SUPPLIER', 'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE'];
@@ -298,6 +339,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.post(api.auth.login.path, loginRateLimiter, async (req, res) => {
     try {
+      const settings = await storage.getLoginSecuritySettings();
+
+      // Admin-configurable login rate limiting (task: "Expand Global
+      // Authentication & Security Settings") — independent, additional layer;
+      // the IP-scoped loginRateLimiter middleware above is the mandatory
+      // baseline and keeps running unconditionally regardless of this toggle.
+      if (settings.rateLimitEnabled) {
+        const ip = req.ip ?? "unknown";
+        const { limited, retryAfterSeconds } = checkAndRecordLoginRateLimit(ip, settings.rateLimitMaxRequests, settings.rateLimitWindowSeconds);
+        if (limited) {
+          res.set("Retry-After", String(retryAfterSeconds));
+          console.warn(`[security] Login rate limit triggered ip=${ip}`);
+          return res.status(429).json(authRateLimitMessage);
+        }
+      }
+
       const { email, password } = req.body;
       if (!email || !password) return res.status(400).json({ message: "Email/phone and password required" });
       // Try email first, then phone
@@ -313,27 +370,37 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       // across many different accounts from one IP.
       const identifier = user ? user.email : email;
 
-      const activeCooldown = getCooldownRemainingSeconds(identifier);
-      if (activeCooldown > 0) {
-        return res.status(429).json({
-          message: `Trop de tentatives. Veuillez patienter ${activeCooldown} secondes avant de réessayer.`,
-          retryAfterSeconds: activeCooldown,
-        });
+      // Per-account failed-login lockout — admin-toggleable; when disabled, no
+      // account is ever locked out by this layer, but the baseline IP rate
+      // limiter and the optional rate-limit layer above keep running.
+      if (settings.lockoutEnabled) {
+        const activeCooldown = getCooldownRemainingSeconds(identifier);
+        if (activeCooldown > 0) {
+          res.set("Retry-After", String(activeCooldown));
+          return res.status(429).json({
+            message: `Trop de tentatives. Veuillez patienter ${activeCooldown} secondes avant de réessayer.`,
+            retryAfterSeconds: activeCooldown,
+          });
+        }
       }
 
       if (!user || !(await storage.verifyPassword(user.id, password, user.password))) {
-        const { cooldownSeconds } = await storage.getLoginSecuritySettings();
-        const { cooldownRemainingSeconds } = recordFailedAttempt(identifier, cooldownSeconds);
-        if (cooldownRemainingSeconds > 0) {
-          return res.status(429).json({
-            message: `Trop de tentatives. Veuillez patienter ${cooldownRemainingSeconds} secondes avant de réessayer.`,
-            retryAfterSeconds: cooldownRemainingSeconds,
-          });
+        console.warn(`[security] Failed login attempt identifier=${identifier}`);
+        if (settings.lockoutEnabled) {
+          const { cooldownRemainingSeconds } = recordFailedAttempt(identifier, settings.cooldownSeconds, settings.maxFailedAttempts);
+          if (cooldownRemainingSeconds > 0) {
+            console.warn(`[security] Account lockout triggered identifier=${identifier} durationSeconds=${settings.cooldownSeconds}`);
+            res.set("Retry-After", String(cooldownRemainingSeconds));
+            return res.status(429).json({
+              message: `Trop de tentatives. Veuillez patienter ${cooldownRemainingSeconds} secondes avant de réessayer.`,
+              retryAfterSeconds: cooldownRemainingSeconds,
+            });
+          }
         }
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      resetLoginAttempts(identifier);
+      if (settings.lockoutEnabled) resetLoginAttempts(identifier);
       req.session.userId = user.id;
       res.json(user);
     } catch (err) {
@@ -417,12 +484,17 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     try {
       const { resetToken, newPassword, confirmPassword } = z.object({
         resetToken: z.string().min(1),
-        newPassword: registrationPasswordSchema,
+        // Complexity/length validated separately below with the currently
+        // configured passwordMinLength — see buildRegistrationPasswordSchema.
+        newPassword: z.string().min(1),
         confirmPassword: z.string().min(1),
       }).parse(req.body);
       if (newPassword !== confirmPassword) {
         return res.status(400).json({ message: "Les mots de passe ne correspondent pas." });
       }
+      const { passwordMinLength } = await storage.getLoginSecuritySettings();
+      const passwordCheck = buildRegistrationPasswordSchema(passwordMinLength).safeParse(newPassword);
+      if (!passwordCheck.success) return res.status(400).json({ message: passwordCheck.error.errors[0].message });
       const success = await storage.resetPasswordWithToken(resetToken, newPassword);
       if (!success) {
         return res.status(400).json({ message: "Ce lien de réinitialisation a expiré ou a déjà été utilisé. Veuillez recommencer." });
@@ -652,11 +724,14 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     }
   });
 
-  // ── Login-attempt cooldown duration ────────────────────────────────────────
-  // Admin-only: the login route itself (below) reads storage.getLoginSecuritySettings()
-  // directly server-side every time a cooldown is triggered — the pre-login public
-  // Connexion modal never needs to know the configured duration in advance, only the
-  // actual remaining seconds a real 429 response already carries (retryAfterSeconds).
+  // ── Authentication & Security Settings ──────────────────────────────────────
+  // Admin-only (task: "Expand Global Authentication & Security Settings" —
+  // expands the original cooldown-only setting into a centralized panel: failed-
+  // login lockout, login rate limiting, password policy, session timeout). The
+  // login route itself reads storage.getLoginSecuritySettings() fresh on every
+  // request — the pre-login public Connexion modal never needs to know the
+  // configured policy in advance, only the actual remaining seconds a real 429
+  // response already carries (retryAfterSeconds).
   app.get("/api/admin/login-security-settings", requireAdmin, async (_req, res) => {
     try {
       res.json(await storage.getLoginSecuritySettings());
@@ -667,13 +742,23 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   app.patch("/api/admin/login-security-settings", requireAdmin, async (req, res) => {
     try {
-      // 1–3600s (1 hour cap) — rejects 0/negative/absurd values that would effectively
-      // disable or misuse the protection, per the task's explicit validation requirement.
+      // Every field optional (partial update — omitted fields keep their current
+      // persisted value, enforced by storage.updateLoginSecuritySettings's
+      // existing {...current, ...updates} merge). Explicit, reasonable ranges
+      // per field per the task's validation requirement.
       const body = z.object({
+        lockoutEnabled: z.boolean(),
+        maxFailedAttempts: z.number().int().min(1, "Doit être un entier positif").max(20, "Maximum 20 tentatives"),
         cooldownSeconds: z.number().int().min(1, "Doit être un entier positif").max(3600, "Maximum 3600 secondes"),
-      }).strict().parse(req.body);
+        rateLimitEnabled: z.boolean(),
+        rateLimitMaxRequests: z.number().int().min(1, "Doit être un entier positif").max(1000, "Maximum 1000 requêtes"),
+        rateLimitWindowSeconds: z.number().int().min(1, "Doit être un entier positif").max(86400, "Maximum 86400 secondes (24h)"),
+        passwordMinLength: z.number().int().min(6, "Minimum 6 caractères").max(64, "Maximum 64 caractères"),
+        sessionInactivityTimeoutSeconds: z.number().int().min(60, "Minimum 60 secondes").max(2592000, "Maximum 2592000 secondes (30 jours)").nullable(),
+      }).partial().strict().parse(req.body);
       const settings = await storage.updateLoginSecuritySettings(body);
       broadcast("login_security_settings_updated", settings);
+      console.info(`[security] Admin ${req.session.userId} updated login security settings: ${JSON.stringify(body)}`);
       res.json(settings);
     } catch (err) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -753,7 +838,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         if (!existing || !(await storage.verifyPassword(existing.id, currentPassword, existing.password))) {
           return res.status(400).json({ message: "Current password is incorrect" });
         }
-        if (!isValidRegistrationPassword(password)) return res.status(400).json({ message: REGISTRATION_PASSWORD_MESSAGE });
+        const { passwordMinLength } = await storage.getLoginSecuritySettings();
+        if (!isValidRegistrationPassword(password, passwordMinLength)) return res.status(400).json({ message: registrationPasswordMessage(passwordMinLength) });
         updates.password = await storage.hashPassword(password);
       }
       const user = await storage.updateUserProfile(req.session.userId!, updates);
@@ -7659,7 +7745,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
         locationAddress, locationLat, locationLng, locationPlaceId, locationDetails,
       } = req.body;
       if (!name || !email || !password || !role) return res.status(400).json({ message: "name, email, password and role are required" });
-      if (!isValidRegistrationPassword(password)) return res.status(400).json({ message: REGISTRATION_PASSWORD_MESSAGE });
+      const { passwordMinLength: adminCreatePasswordMinLength } = await storage.getLoginSecuritySettings();
+      if (!isValidRegistrationPassword(password, adminCreatePasswordMinLength)) return res.status(400).json({ message: registrationPasswordMessage(adminCreatePasswordMinLength) });
       const existing = await storage.getUserByEmail(email);
       if (existing) return res.status(400).json({ message: "Email already exists" });
       if (phone) {

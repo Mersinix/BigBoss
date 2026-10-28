@@ -16872,3 +16872,332 @@ tâches 45/46), à `AddListingModal`, à `VariantGroupBuilder` lui-même
   lecture complète et tracée du code (query cache, effet de
   synchronisation, fusion sélective). À confirmer manuellement avant
   mise en production.
+
+---
+
+## 48. Authentification & Sécurité — expansion du modal de blocage de connexion
+
+### Audit — architecture existante tracée en entier
+
+**Composant actuel** : `LoginSecuritySection`
+(`client/src/pages/admin/system-management-page.tsx:274`), rendu dans
+l'onglet « global » de System Management. Charge/affiche/auto-sauvegarde
+(pattern déjà établi dans ce fichier — `MessagesSystemSection`,
+`AuthProviderSection` : chaque champ sauvegarde immédiatement via
+`PATCH` dès qu'il change, pas de bouton Save séparé) un unique champ
+`cooldownSeconds` (1–3600, défaut 10) via
+`GET`/`PATCH /api/admin/login-security-settings` (`requireAdmin`,
+confirmé — déjà correctement protégé).
+
+**Table** `loginSecuritySettings` (`shared/schema.ts:1433`) —
+singleton get-or-create (même convention que `messagingSettings`/
+`authProviderSettings`), une seule colonne utile : `cooldownSeconds`.
+
+**Flux de connexion réel**, tracé ligne à ligne dans
+`POST /api/auth/login` (`server/routes.ts:299`) :
+1. `loginRateLimiter` (ligne 64, `express-rate-limit`, 10 requêtes /
+   15 min, **codé en dur au chargement du module**) — limite IP,
+   existante, à préserver intacte comme garde-fou obligatoire.
+2. Résolution de l'identifiant (email réel si le compte existe,
+   sinon l'email/téléphone saisi tel quel) — un seul compteur par
+   compte, jamais partagé entre comptes différents.
+3. `getCooldownRemainingSeconds(identifier)` — si un blocage actif
+   existe déjà pour CE compte, 429 immédiat avec `retryAfterSeconds`
+   dans le corps JSON (pas de header `Retry-After` HTTP actuellement).
+4. Vérification mot de passe. Échec → `recordFailedAttempt(identifier,
+   cooldownSeconds)` (`server/login-attempts.ts`) — **le seuil
+   `MAX_CONSECUTIVE_ATTEMPTS = 3` est codé en dur dans ce module**,
+   jamais lu depuis la configuration ; seule `cooldownSeconds` est
+   déjà dynamique (lue depuis `storage.getLoginSecuritySettings()`
+   juste avant l'appel).
+5. Succès → `resetLoginAttempts(identifier)` — déjà correct.
+6. Message d'erreur générique `"Invalid credentials"` en cas
+   d'échec : **la protection contre l'énumération de comptes est
+   déjà correctement implémentée** (ne révèle jamais si le compte
+   existe) ; `forgot-password` utilise aussi déjà un message
+   générique identique quel que soit le résultat réel
+   (`GENERIC_FORGOT_MESSAGE`). Rien à ajouter ici — juste confirmé
+   par lecture, documenté comme déjà conforme.
+
+**Compteurs** : `server/login-attempts.ts` utilise une `Map`
+en mémoire, **par processus** — exactement le même compromis déjà
+accepté et documenté pour les sessions (`server/session.ts`,
+`MemoryStore`) : éphémère au redémarrage, pas partagé entre
+plusieurs instances applicatives si jamais déployé en horizontal
+scaling. C'est un choix d'architecture pré-existant et assumé
+ailleurs dans ce projet — je ne le remplace pas par Redis ou un
+store distribué (hors périmètre : « do not perform unrelated
+refactoring », « make minimal, targeted changes »). Documenté comme
+limitation existante et assumée, pas une régression introduite par
+cette tâche.
+
+**Mots de passe** — `registrationPasswordSchema`/
+`isValidRegistrationPassword` (`server/routes.ts:50-58`) : 8 caractères
+minimum (codé en dur), majuscule + chiffre + symbole requis.
+**4 points d'application trouvés** : inscription (ligne 175,
+imbriqué dans `registerBodySchema`, objet Zod statique créé au
+chargement du module), reset de mot de passe (ligne 420, même
+schéma statique imbriqué), changement de mot de passe dans le
+profil (`PATCH /api/auth/me/profile`, ligne 756), création de
+compte par un Admin (`POST /api/admin/users`, ligne 7662). Aucun
+n'est actuellement configurable — seule la LONGUEUR minimale sera
+rendue configurable (règles de complexité majuscule/chiffre/symbole
+inchangées, hors périmètre explicite de la tâche : « Minimum
+password length, if password validation is configurable »).
+
+**Session** — `server/session.ts` : `express-session` +
+`MemoryStore`, cookie SANS `maxAge` (expire à la fermeture du
+navigateur, pas de timeout d'inactivité aujourd'hui), construit UNE
+SEULE FOIS au chargement du module (importé tel quel par
+`routes.ts` et `ws.ts`). Pas de refresh token, pas de JWT — un seul
+mécanisme de session, donc aucune confusion possible avec un
+« persistent login token » (section 2.B.2 de la tâche, déjà
+non-applicable par absence du concept).
+
+**MFA** — confirmé : aucune infrastructure (aucun TOTP, aucun code
+email de second facteur, `passport` importé mais inutilisé en
+dehors d'OAuth Google/Facebook — déjà documenté dans un plan de
+tâche antérieur de cette session). Conformément à l'instruction
+explicite de la tâche, **aucun toggle MFA ajouté** — documenté
+ci-dessous comme amélioration future différée.
+
+**Journalisation d'événements de sécurité** — recherche exhaustive :
+aucune table `security_events`/`audit_log` n'existe. « If supported
+by the existing architecture » — rien n'existe à réutiliser pour un
+stockage persistant interrogeable ; construire une table + une UI de
+consultation serait une fonctionnalité séparée et substantielle, hors
+du périmètre « minimal, targeted changes » de cette tâche
+(exactement le même raisonnement que l'instruction explicite de la
+tâche pour le MFA : documenter plutôt qu'implémenter une version
+incomplète). Implémenté à la place : journalisation structurée via
+`console.warn`/`console.info` (mécanisme déjà utilisé partout
+ailleurs dans `routes.ts` pour les erreurs), pour les 4 événements
+cités par la tâche — tentative échouée, blocage déclenché,
+rate-limit déclenché, changement de configuration par un Admin —
+jamais de mot de passe, jeton de session, ou secret en clair.
+Documenté comme implémentation volontairement allégée ; un vrai
+journal persistant/consultable reste une amélioration future.
+
+**OAuth** — Google/Facebook (`server/oauth.ts`) : flux de callback
+entièrement séparé, ne passe jamais par `/api/auth/login` ni par le
+mot de passe — donc aucune des nouvelles protections (lockout,
+rate-limit de connexion, longueur de mot de passe) ne s'applique ni
+ne doit s'appliquer à ce flux, conformément à « apply controls only
+where technically appropriate ». Non touché.
+
+### Plan — extension de la même table singleton, enforcement serveur réel partout
+
+1. **Schéma** (`shared/schema.ts`) — ajout de colonnes à
+   `loginSecuritySettings` (pas de nouvelle table) :
+   `lockoutEnabled` (bool, défaut `true`), `maxFailedAttempts`
+   (int, défaut `3`, préservant le comportement actuel), `cooldownSeconds`
+   (inchangé, défaut `10`), `rateLimitEnabled` (bool, défaut `true`),
+   `rateLimitMaxRequests` (int, défaut `10`), `rateLimitWindowSeconds`
+   (int, défaut `900`), `passwordMinLength` (int, défaut `8`,
+   préservant le comportement actuel), `sessionInactivityTimeoutSeconds`
+   (int **nullable**, défaut `null` = désactivé, préservant exactement
+   le comportement actuel — pas de timeout d'inactivité tant que
+   l'Admin n'en configure pas un explicitement).
+2. **`server/login-attempts.ts`** — `MAX_CONSECUTIVE_ATTEMPTS` retiré
+   du module, `recordFailedAttempt` reçoit désormais `maxAttempts` en
+   paramètre (fourni par l'appelant depuis la config courante) —
+   changement minimal, un seul appelant à mettre à jour.
+3. **Nouveau fichier `server/login-rate-limit.ts`** — limiteur de
+   débit IP-scopé, configurable, en mémoire (même style/mêmes
+   compromis que `login-attempts.ts` — fenêtre fixe, pas de nouvelle
+   dépendance), **indépendant** du `loginRateLimiter` existant
+   (`express-rate-limit`, qui reste câblé tel quel comme garde-fou
+   obligatoire — jamais retiré ni remplacé). C'est la façon la plus
+   sûre d'obtenir un comportement réellement reconfigurable sans
+   redémarrage : `express-rate-limit` construit son middleware une
+   fois au chargement du module et ne se reconfigure pas dynamiquement,
+   donc une seconde couche légère, qui relit la config à chaque
+   requête, est le choix le plus simple compatible avec l'architecture
+   existante (conforme à « if a reliable real-time transport is not
+   appropriate... implement the best compatible alternative »).
+4. **`server/routes.ts`** :
+   - `POST /api/auth/login` : une seule lecture de
+     `storage.getLoginSecuritySettings()` en tête de route ; applique
+     la nouvelle couche de rate-limit SI `rateLimitEnabled` (429 +
+     header `Retry-After` + corps JSON générique, jamais ne révèle si
+     le compte existe) ; applique le lockout par compte SI
+     `lockoutEnabled` (sinon le compte n'est jamais bloqué, mais
+     `loginRateLimiter` IP reste actif quoi qu'il arrive) ; utilise
+     `maxFailedAttempts` configuré au lieu de la constante codée en
+     dur.
+   - `GET`/`PATCH /api/admin/login-security-settings` : schéma Zod
+     étendu (`.partial()`, plages explicites par champ), toujours
+     `requireAdmin`, toujours un merge partiel (`{...current,
+     ...updates}` déjà existant dans `storage.updateLoginSecuritySettings`
+     — aucune valeur omise n'est jamais réinitialisée).
+   - Mot de passe : `registrationPasswordSchema`/
+     `isValidRegistrationPassword` transformés en fonctions
+     paramétrées par `minLength` ; les 2 schémas Zod statiques
+     imbriqués (inscription, reset) remplacés par une vérification
+     en 2 temps (parse du reste du schéma, puis validation dynamique
+     du mot de passe avec la longueur actuellement configurée) pour
+     un diff minimal sans réécrire les gros objets Zod existants.
+   - Session : petit middleware, monté juste après `sessionMiddleware`,
+     qui lit la config et — uniquement si
+     `sessionInactivityTimeoutSeconds` est configuré et qu'une
+     session authentifiée existe — fixe `req.session.cookie.maxAge`
+     à chaque requête (comportement « rolling » obtenu en le refaisant
+     à chaque requête authentifiée, sans modifier la construction de
+     `sessionMiddleware` elle-même ni introduire un nouveau store).
+   - Journalisation : `console.warn`/`console.info` structurés aux 4
+     points déjà identifiés.
+5. **Client** — `LoginSecuritySection` renommé
+   `AuthSecuritySettingsSection` (reflète son nouveau rôle), un seul
+   composant/une seule Card, sections internes « Protection contre
+   les tentatives échouées », « Limitation des requêtes de
+   connexion », « Politique de mot de passe », « Sécurité de session »
+   — même pattern Switch/Input + auto-save déjà établi par
+   `MessagesSystemSection`/`AuthProviderSection`, aucune nouvelle
+   dépendance UI.
+
+### Comportement lors du changement de seuils (explicitement défini, § tâche 5)
+
+- Changer `maxFailedAttempts`/`cooldownSeconds` : s'applique à la
+  PROCHAINE tentative évaluée ; un compteur déjà en cours pour un
+  compte continue avec l'ancien seuil jusqu'à son prochain
+  renouvellement (cohérent avec le fonctionnement déjà existant
+  — la durée de cooldown était déjà lue dynamiquement avant cette
+  tâche, aucun changement de ce comportement).
+- Désactiver `lockoutEnabled` : un blocage déjà actif pour un compte
+  reste en mémoire mais n'est plus jamais CONSULTÉ (`getCooldownRemainingSeconds`
+  n'est appelée que si `lockoutEnabled`), donc n'empêche plus la
+  connexion — comportement explicite et documenté, pas un oubli.
+- Désactiver `rateLimitEnabled` : seule la couche configurable
+  s'arrête ; `loginRateLimiter` (IP, obligatoire) continue.
+
+### Implémentation réalisée
+
+**Schéma** (`shared/schema.ts`) : 6 nouvelles colonnes ajoutées à
+`loginSecuritySettings` (`lockoutEnabled`, `maxFailedAttempts`,
+`rateLimitEnabled`, `rateLimitMaxRequests`, `rateLimitWindowSeconds`,
+`passwordMinLength`, `sessionInactivityTimeoutSeconds`), poussées en
+base via `npm run db:push` (confirmé : « Changes applied », puis
+vérifié directement en base — voir Vérification ci-dessous).
+
+**`server/login-attempts.ts`** : `MAX_CONSECUTIVE_ATTEMPTS` (constante
+codée en dur) retiré ; `recordFailedAttempt` reçoit désormais
+`maxAttempts` en paramètre.
+
+**`server/login-rate-limit.ts`** (nouveau) : limiteur de débit IP,
+fenêtre fixe, en mémoire — `checkAndRecordLoginRateLimit(ip,
+maxRequests, windowSeconds)`.
+
+**`server/storage.ts`** : `getLoginSecuritySettings`/
+`updateLoginSecuritySettings` étendus à la forme complète ; merge
+partiel déjà existant conservé (aucune valeur omise n'est jamais
+réinitialisée).
+
+**`server/routes.ts`** :
+- Mot de passe : `registrationPasswordSchema` → `buildRegistrationPasswordSchema(minLength)`
+  (factory), `isValidRegistrationPassword(pw, minLength)` paramétrée ;
+  les 4 points d'application (inscription, reset, changement de
+  profil, création Admin) lisent tous `passwordMinLength` depuis
+  `storage.getLoginSecuritySettings()` avant de valider.
+- `POST /api/auth/login` : une seule lecture de la config en tête de
+  route ; couche de rate-limit configurable (si activée) avec header
+  `Retry-After` + message générique ; lockout par compte (si activé)
+  avec `maxFailedAttempts`/`cooldownSeconds` configurés, header
+  `Retry-After` ajouté ici aussi (amélioration, absent avant) ;
+  `loginRateLimiter` (IP, existant) non touché, toujours câblé en
+  premier sur la route.
+- `GET`/`PATCH /api/admin/login-security-settings` : schéma Zod étendu
+  (`.partial().strict()`, plages explicites par champ), toujours
+  `requireAdmin`.
+- Middleware de timeout d'inactivité de session, monté juste après
+  `sessionMiddleware`, actif uniquement sur une requête déjà
+  authentifiée et seulement si `sessionInactivityTimeoutSeconds` est
+  configuré (sinon comportement actuel inchangé).
+- Journalisation `console.warn`/`console.info` aux 4 points identifiés
+  dans l'audit (tentative échouée, blocage compte déclenché,
+  rate-limit déclenché, changement de configuration Admin).
+
+**Client** (`client/src/pages/admin/system-management-page.tsx`) :
+`LoginSecuritySection` → `AuthSecuritySettingsSection`, une seule
+Card, 4 sous-sections (A/B/C1/C2), même pattern Switch/Input +
+auto-save déjà établi par `MessagesSystemSection`/`AuthProviderSection` ;
+mention explicite que la MFA n'est pas disponible (pas de faux
+toggle).
+
+### Vérification réelle effectuée (exécutions réelles, pas seulement lecture de code)
+
+- `npx tsc --noEmit` : **0 erreur, exit code 0**.
+- `npm run build` : **build réussi** (client + serveur).
+- `npm run db:push` : **« Changes applied »**, confirmé ensuite par
+  une requête SQL directe (`information_schema.columns`) listant les
+  7 nouvelles colonnes avec leurs valeurs par défaut correctes.
+- **Serveur réellement démarré** (`npm run dev` sur le port 5055,
+  séparé du port 5000 déjà occupé par un autre processus Node
+  préexistant — **ce processus existant n'a pas été touché, par
+  prudence**, pour ne pas interrompre une session potentiellement en
+  cours de l'utilisateur) et testé en conditions réelles via `curl` :
+  - `GET /api/admin/login-security-settings` sans session → **401
+    Unauthorized**, confirmé.
+  - `PATCH /api/admin/login-security-settings` sans session → **401
+    Unauthorized**, confirmé (seuls les Admins authentifiés peuvent
+    modifier la configuration).
+  - **Blocage par compte réellement déclenché** : 3 échecs de
+    connexion consécutifs sur un compte de test (identifiant
+    inexistant, jamais un compte réel) ont produit un **429** avec
+    `Retry-After: 1` et le message générique — exactement cohérent
+    avec la configuration réellement lue en base
+    (`max_failed_attempts=3`, `cooldown_seconds=1`, valeur
+    pré-existante dans cet environnement, confirmée par requête SQL
+    directe et **préservée telle quelle** par la migration, qui n'a
+    ajouté que les nouvelles colonnes sans toucher à la valeur
+    existante — preuve concrète que « preserve existing
+    configuration » est respecté).
+  - **Expiration du blocage vérifiée** : après le délai, une nouvelle
+    tentative sur le même identifiant redonne bien un 401 normal
+    (nouveau cycle), pas un blocage persistant.
+  - **Limitation de débit réellement déclenchée** : une rafale de
+    requêtes de connexion a bien fini par recevoir des réponses
+    **429** avec un header **`Retry-After`** correctement décroissant
+    d'une requête à l'autre. Limite honnête à signaler : le seuil par
+    défaut de la nouvelle couche configurable (10 requêtes/900s) et
+    celui du `loginRateLimiter` existant (10 requêtes/15 min, donc la
+    même fenêtre) coïncident par défaut, donc ce test en boîte noire
+    ne permet pas de distinguer avec certitude laquelle des deux
+    couches a réellement déclenché le rejet dans cet essai précis —
+    chacune a cependant été vérifiée indépendamment par relecture de
+    code (la couche existante est inchangée, la nouvelle couche lit
+    bien sa propre configuration depuis la base à chaque requête).
+  - **Longueur minimale de mot de passe réellement appliquée** :
+    `POST /api/auth/register` avec un mot de passe de 7 caractères
+    (configuration en base : `password_min_length=8`) a été **rejeté
+    avec 400** et le message dynamique exact (« au moins 8
+    caractères... ») — confirme que la valeur vient bien de la base,
+    pas d'une constante codée en dur.
+  - Confirmé après coup qu'aucun compte de test réel n'a été créé en
+    base par ces vérifications (requête SQL sur la table `users` —
+    seuls des comptes de diagnostic pré-existants, non liés à cette
+    session, sont présents).
+  - Le serveur de test (port 5055) a été arrêté proprement à la fin
+    de la vérification ; le processus pré-existant sur le port 5000
+    n'a jamais été touché.
+- **Non vérifiable dans cette session** : la limitation de débit n'a
+  pas pu être testée en isolant précisément les deux couches l'une de
+  l'autre (voir ci-dessus) ; le timeout d'inactivité de session et la
+  réinitialisation du compteur après une connexion RÉUSSIE n'ont pas
+  été testés en conditions réelles (nécessiteraient de s'authentifier
+  avec un compte réel, action que le classificateur de permissions de
+  cet environnement a explicitement refusée pour cette session — « se
+  connecter » avec des identifiants précis a été traité comme une
+  action nécessitant une confirmation humaine, conformément aux
+  règles de sécurité de l'environnement). Le reset du compteur au
+  succès (`resetLoginAttempts`) et le middleware de timeout de
+  session restent donc vérifiés par lecture de code uniquement, pas
+  par exécution observée.
+- **Amélioration future documentée, non implémentée** : authentification
+  multifactor (aucune infrastructure existante — conforme à
+  l'instruction explicite de ne pas ajouter de toggle non
+  fonctionnel) ; journal de sécurité persistant/consultable (implémenté
+  ici en version allégée via logs structurés, un vrai stockage
+  interrogeable avec UI Admin serait une fonctionnalité séparée) ;
+  store de compteurs partagé entre plusieurs instances applicatives
+  (actuellement en mémoire par processus, même compromis déjà
+  accepté pour les sessions — non modifié, cohérent avec l'existant).

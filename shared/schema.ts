@@ -1432,7 +1432,24 @@ export type AccountDarkModeSettingsMap = Record<DarkModeAccount, AccountThemeMod
 // restart, which is fine for a short security cooldown and needs no schema/migration.
 export const loginSecuritySettings = pgTable("login_security_settings", {
   id: serial("id").primaryKey(),
+  // Failed-login (per-account) lockout — lockoutEnabled/maxFailedAttempts added
+  // alongside the original cooldownSeconds (task: "Expand Global Authentication
+  // & Security Settings"). Defaults preserve the exact pre-existing behavior
+  // (3 consecutive failures, 10s cooldown, always enabled).
+  lockoutEnabled: boolean("lockout_enabled").notNull().default(true),
+  maxFailedAttempts: integer("max_failed_attempts").notNull().default(3),
   cooldownSeconds: integer("cooldown_seconds").notNull().default(10),
+  // Configurable login-endpoint rate limiting — independent of, and additional
+  // to, the existing hardcoded IP rate limiter in routes.ts (never replaced).
+  rateLimitEnabled: boolean("rate_limit_enabled").notNull().default(true),
+  rateLimitMaxRequests: integer("rate_limit_max_requests").notNull().default(10),
+  rateLimitWindowSeconds: integer("rate_limit_window_seconds").notNull().default(900),
+  // Password policy — minimum length only (complexity rules unchanged/not
+  // configurable). Default 8 preserves today's hardcoded minimum.
+  passwordMinLength: integer("password_min_length").notNull().default(8),
+  // Session inactivity timeout, in seconds — nullable; null = disabled, which
+  // preserves today's exact behavior (session cookie has no maxAge at all).
+  sessionInactivityTimeoutSeconds: integer("session_inactivity_timeout_seconds"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 

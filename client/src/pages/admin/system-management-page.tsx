@@ -263,46 +263,101 @@ function AuthProviderSection() {
   );
 }
 
-// ── Login-attempt cooldown duration ────────────────────────────────────────────
-// Same immediate-save-on-valid-input numeric-field pattern already used by
-// MessagesSystemSection's "Post-closure conversation window" (gracePeriodMinutes) —
-// no separate Save button, matching that existing convention. This only configures
-// the DURATION; the per-account failed-attempt counters themselves are enforced
-// server-side in server/login-attempts.ts and are never exposed/editable here.
-type LoginSecuritySettings = { cooldownSeconds: number };
+// ── Authentication & Security Settings ─────────────────────────────────────────
+// Upgraded from the original cooldown-only "Durée du blocage" card into a
+// centralized panel (task: "Expand Global Authentication & Security Settings").
+// Same immediate-save-on-valid-input pattern already used throughout this file
+// (MessagesSystemSection, AuthProviderSection) — no separate Save button, each
+// field persists the instant it's a valid value. Every field here is actually
+// read and enforced server-side on every login/registration/password-change
+// request (server/routes.ts, server/login-attempts.ts, server/login-rate-limit.ts)
+// — never a frontend-only toggle.
+type LoginSecuritySettings = {
+  lockoutEnabled: boolean;
+  maxFailedAttempts: number;
+  cooldownSeconds: number;
+  rateLimitEnabled: boolean;
+  rateLimitMaxRequests: number;
+  rateLimitWindowSeconds: number;
+  passwordMinLength: number;
+  sessionInactivityTimeoutSeconds: number | null;
+};
 
-function LoginSecuritySection() {
+function AuthSecuritySettingsSection() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: settings } = useQuery<LoginSecuritySettings>({ queryKey: ["/api/admin/login-security-settings"] });
   const [local, setLocal] = useState<LoginSecuritySettings | null>(null);
-  const [inputValue, setInputValue] = useState("");
+  // Separate text-input mirrors for numeric fields — lets the admin clear a
+  // field or type a transient out-of-range value without it being force-reset
+  // on every keystroke; only a value that actually validates gets saved.
+  const [inputs, setInputs] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    if (settings) { setLocal(settings); setInputValue(String(settings.cooldownSeconds)); }
+    if (settings) {
+      setLocal(settings);
+      setInputs({
+        maxFailedAttempts: String(settings.maxFailedAttempts),
+        cooldownSeconds: String(settings.cooldownSeconds),
+        rateLimitMaxRequests: String(settings.rateLimitMaxRequests),
+        rateLimitWindowSeconds: String(settings.rateLimitWindowSeconds),
+        passwordMinLength: String(settings.passwordMinLength),
+        sessionInactivityTimeoutSeconds: settings.sessionInactivityTimeoutSeconds != null ? String(settings.sessionInactivityTimeoutSeconds) : "",
+      });
+    }
   }, [settings]);
 
   const saveMutation = useMutation({
-    mutationFn: (cooldownSeconds: number) => apiRequest("PATCH", "/api/admin/login-security-settings", { cooldownSeconds }),
+    mutationFn: (updates: Partial<LoginSecuritySettings>) => apiRequest("PATCH", "/api/admin/login-security-settings", updates),
     onSuccess: async (response) => {
-      const saved = await response.json();
+      const saved: LoginSecuritySettings = await response.json();
       setLocal(saved);
       queryClient.setQueryData(["/api/admin/login-security-settings"], saved);
-      toast({ title: "Durée de blocage mise à jour" });
+      toast({ title: "Paramètres de sécurité mis à jour" });
     },
     onError: (error: any) => {
       toast({ variant: "destructive", title: "Échec de la mise à jour", description: error?.message });
-      // Revert the input to the last known-good saved value so an invalid entry
-      // doesn't linger looking "saved" when it wasn't.
-      if (local) setInputValue(String(local.cooldownSeconds));
+      // Revert the affected input to the last known-good saved value so an
+      // invalid entry doesn't linger looking "saved" when it wasn't.
+      if (local) {
+        setInputs((prev) => ({
+          ...prev,
+          maxFailedAttempts: String(local.maxFailedAttempts),
+          cooldownSeconds: String(local.cooldownSeconds),
+          rateLimitMaxRequests: String(local.rateLimitMaxRequests),
+          rateLimitWindowSeconds: String(local.rateLimitWindowSeconds),
+          passwordMinLength: String(local.passwordMinLength),
+          sessionInactivityTimeoutSeconds: local.sessionInactivityTimeoutSeconds != null ? String(local.sessionInactivityTimeoutSeconds) : "",
+        }));
+      }
     },
   });
 
-  const handleChange = (raw: string) => {
-    setInputValue(raw);
+  const updateBool = (field: "lockoutEnabled" | "rateLimitEnabled", next: boolean) => {
+    if (!local) return;
+    setLocal({ ...local, [field]: next });
+    saveMutation.mutate({ [field]: next });
+  };
+
+  const updateNumber = (field: keyof LoginSecuritySettings, raw: string, min: number, max: number) => {
+    setInputs((prev) => ({ ...prev, [field]: raw }));
     const next = Number(raw);
-    if (raw.trim() !== "" && Number.isInteger(next) && next >= 1 && next <= 3600) {
-      saveMutation.mutate(next);
+    if (raw.trim() !== "" && Number.isInteger(next) && next >= min && next <= max) {
+      saveMutation.mutate({ [field]: next } as Partial<LoginSecuritySettings>);
+    }
+  };
+
+  // Session timeout is nullable — an empty field means "disabled", a real
+  // number enables it. Both are valid, deliberate states, not an error.
+  const updateSessionTimeout = (raw: string) => {
+    setInputs((prev) => ({ ...prev, sessionInactivityTimeoutSeconds: raw }));
+    if (raw.trim() === "") {
+      saveMutation.mutate({ sessionInactivityTimeoutSeconds: null });
+      return;
+    }
+    const next = Number(raw);
+    if (Number.isInteger(next) && next >= 60 && next <= 2592000) {
+      saveMutation.mutate({ sessionInactivityTimeoutSeconds: next });
     }
   };
 
@@ -310,32 +365,166 @@ function LoginSecuritySection() {
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center gap-3">
-          <div className="bg-red-500/10 rounded-xl p-3"><Clock className="w-5 h-5 text-red-600" /></div>
+          <div className="bg-red-500/10 rounded-xl p-3"><ShieldCheck className="w-5 h-5 text-red-600" /></div>
           <div>
-            <CardTitle className="text-base">Durée du blocage après plusieurs tentatives de connexion</CardTitle>
-            <CardDescription className="pt-1">Nombre de secondes pendant lesquelles un compte doit attendre après plusieurs tentatives de connexion échouées.</CardDescription>
+            <CardTitle className="text-base">Authentification &amp; Sécurité</CardTitle>
+            <CardDescription className="pt-1">Protection contre les tentatives de connexion échouées, limitation du débit de connexion, politique de mot de passe et sécurité de session.</CardDescription>
           </div>
         </div>
       </CardHeader>
-      <CardContent>
-        {!local ? <Skeleton className="h-14 w-full" /> : (
-          <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
-            <div>
-              <p className="text-sm font-medium">Durée du blocage (secondes)</p>
-              <p className="text-xs text-muted-foreground mt-0.5">3 tentatives échouées consécutives déclenchent ce blocage, par compte.</p>
+      <CardContent className="space-y-6">
+        {!local ? <Skeleton className="h-64 w-full" /> : (
+          <>
+            {/* ── A. Failed Login Protection ── */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Protection contre les tentatives échouées</p>
+              <div className="rounded-xl border border-border/50 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium">Activer le blocage après échecs de connexion</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {local.lockoutEnabled
+                        ? "Un compte est temporairement bloqué après plusieurs échecs consécutifs."
+                        : "Désactivé : aucun compte n'est bloqué par cette règle. La limitation du débit ci-dessous reste une protection indépendante."}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={local.lockoutEnabled}
+                    onCheckedChange={(checked) => updateBool("lockoutEnabled", checked)}
+                    disabled={saveMutation.isPending}
+                    aria-label="Activer le blocage après échecs de connexion"
+                    data-testid="switch-lockout-enabled"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium">Tentatives échouées consécutives maximum</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Nombre d'échecs, pour un même compte, avant déclenchement du blocage.</p>
+                  </div>
+                  <Input
+                    type="number" min={1} max={20} className="w-24"
+                    value={inputs.maxFailedAttempts ?? ""}
+                    onChange={(e) => updateNumber("maxFailedAttempts", e.target.value, 1, 20)}
+                    disabled={saveMutation.isPending || !local.lockoutEnabled}
+                    aria-label="Tentatives échouées consécutives maximum"
+                    data-testid="input-max-failed-attempts"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium">Durée du blocage (secondes)</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Temps d'attente, par compte, une fois le seuil atteint.</p>
+                  </div>
+                  <Input
+                    type="number" min={1} max={3600} className="w-24"
+                    value={inputs.cooldownSeconds ?? ""}
+                    onChange={(e) => updateNumber("cooldownSeconds", e.target.value, 1, 3600)}
+                    disabled={saveMutation.isPending || !local.lockoutEnabled}
+                    aria-label="Durée du blocage en secondes"
+                    data-testid="input-login-cooldown-seconds"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Une connexion réussie réinitialise immédiatement le compteur du compte.</p>
+              </div>
             </div>
-            <Input
-              type="number"
-              min={1}
-              max={3600}
-              className="w-24"
-              value={inputValue}
-              onChange={(event) => handleChange(event.target.value)}
-              disabled={saveMutation.isPending}
-              aria-label="Durée du blocage en secondes"
-              data-testid="input-login-cooldown-seconds"
-            />
-          </div>
+
+            {/* ── B. Login Request Rate Limiting ── */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Limitation des requêtes de connexion</p>
+              <div className="rounded-xl border border-border/50 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium">Activer la limitation de débit</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {local.rateLimitEnabled
+                        ? "Les requêtes de connexion excessives depuis une même adresse IP sont temporairement rejetées (429)."
+                        : "Désactivé : seule cette règle configurable est désactivée — la protection de base contre les abus reste active."}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={local.rateLimitEnabled}
+                    onCheckedChange={(checked) => updateBool("rateLimitEnabled", checked)}
+                    disabled={saveMutation.isPending}
+                    aria-label="Activer la limitation de débit"
+                    data-testid="switch-ratelimit-enabled"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium">Requêtes de connexion maximum</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Nombre de requêtes autorisées, par adresse IP, pendant la fenêtre ci-dessous.</p>
+                  </div>
+                  <Input
+                    type="number" min={1} max={1000} className="w-24"
+                    value={inputs.rateLimitMaxRequests ?? ""}
+                    onChange={(e) => updateNumber("rateLimitMaxRequests", e.target.value, 1, 1000)}
+                    disabled={saveMutation.isPending || !local.rateLimitEnabled}
+                    aria-label="Requêtes de connexion maximum"
+                    data-testid="input-ratelimit-max-requests"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium">Fenêtre de temps (secondes)</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Durée de la fenêtre glissante pendant laquelle les requêtes sont comptées.</p>
+                  </div>
+                  <Input
+                    type="number" min={1} max={86400} className="w-24"
+                    value={inputs.rateLimitWindowSeconds ?? ""}
+                    onChange={(e) => updateNumber("rateLimitWindowSeconds", e.target.value, 1, 86400)}
+                    disabled={saveMutation.isPending || !local.rateLimitEnabled}
+                    aria-label="Fenêtre de limitation de débit en secondes"
+                    data-testid="input-ratelimit-window-seconds"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">Au-delà du seuil, la requête reçoit une réponse 429 générique (sans jamais révéler si le compte existe) avec un en-tête Retry-After.</p>
+              </div>
+            </div>
+
+            {/* ── C1. Password policy ── */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Politique de mot de passe</p>
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+                <div>
+                  <p className="text-sm font-medium">Longueur minimale du mot de passe</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">S'applique à l'inscription, la réinitialisation et le changement de mot de passe. Une majuscule, un chiffre et un symbole restent toujours requis.</p>
+                </div>
+                <Input
+                  type="number" min={6} max={64} className="w-24"
+                  value={inputs.passwordMinLength ?? ""}
+                  onChange={(e) => updateNumber("passwordMinLength", e.target.value, 6, 64)}
+                  disabled={saveMutation.isPending}
+                  aria-label="Longueur minimale du mot de passe"
+                  data-testid="input-password-min-length"
+                />
+              </div>
+            </div>
+
+            {/* ── C2. Session security ── */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sécurité de session</p>
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+                <div>
+                  <p className="text-sm font-medium">Délai d'inactivité de session (secondes)</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Déconnecte automatiquement après cette durée d'inactivité. Laisser vide pour désactiver (comportement actuel : la session expire à la fermeture du navigateur).</p>
+                </div>
+                <Input
+                  type="number" min={60} max={2592000} className="w-28"
+                  placeholder="Désactivé"
+                  value={inputs.sessionInactivityTimeoutSeconds ?? ""}
+                  onChange={(e) => updateSessionTimeout(e.target.value)}
+                  disabled={saveMutation.isPending}
+                  aria-label="Délai d'inactivité de session en secondes"
+                  data-testid="input-session-inactivity-timeout"
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              L'authentification multifacteur n'est pas disponible actuellement — aucune option n'est affichée ici tant que le flux d'authentification correspondant n'existe pas.
+            </p>
+          </>
         )}
       </CardContent>
     </Card>
@@ -2675,7 +2864,7 @@ export default function SystemManagementPage() {
           <GlobalCurrencySection />
           <AccountDarkModeSection />
           <AuthProviderSection />
-          <LoginSecuritySection />
+          <AuthSecuritySettingsSection />
         </>
       )}
     </div>

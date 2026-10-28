@@ -33,7 +33,6 @@ import {
 } from "lucide-react";
 import { AcademyProfileModal } from "@/components/academy/academy-profile-modal";
 import { ReviewModal } from "@/components/review-modal";
-import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
 
 const LEVEL_LABELS: Record<AcademyCourseLevel, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
 // This app's dark mode is NOT Tailwind's `dark:` class strategy on the Coffee
@@ -243,7 +242,6 @@ export function AcademyDetailModal({
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   // Star (Phase 7) and Flash (Phase 3/5E) — alongside Signaler/Disponibilité.
   const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
-  const [flashModalOpen, setFlashModalOpen] = useState(false);
   const [messaging, setMessaging] = useState(false);
 
   // Review eligibility mirrors the existing server rule exactly: one review
@@ -274,7 +272,6 @@ export function AcademyDetailModal({
     setReviewRegistrationId(null);
     setReportModalOpen(false);
     setReviewsModalOpen(false);
-    setFlashModalOpen(false);
     setReportReason("");
     setNavCourseId(null);
     setAcademyProfileOpen(false);
@@ -384,9 +381,7 @@ export function AcademyDetailModal({
                 <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-academy-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
                 <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-academy-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
                 <button onClick={() => setReviewsModalOpen(true)} title="Avis" data-testid="button-open-academy-reviews" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Star className="w-4 h-4 text-white" /></button>
-                {!readOnly && course.flashImageUrl && (
-                  <button onClick={() => setFlashModalOpen(true)} title="Flash" data-testid="button-open-academy-flash" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Zap className="w-4 h-4 text-white" /></button>
-                )}
+                
               </div>
               {course.hasCertification && (
                 <span className="absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm bg-amber-400/90 text-amber-900">
@@ -585,17 +580,7 @@ export function AcademyDetailModal({
       ) : undefined}
     />
 
-    {/* Flash (Phase 3/5E) — the academy's Flash URL (Settings → Compte), real
-        Coffee Owner-facing mode (not preview). */}
-    <FlashPreviewModal
-      open={flashModalOpen}
-      onClose={() => setFlashModalOpen(false)}
-      name={course?.academyName ?? ""}
-      typeLabel="Académie"
-      flashImageUrl={course?.flashImageUrl}
-      profileImageUrl={course?.academyProfileImageUrl}
-      accentBgClass="bg-indigo-600"
-    />
+  
 
     <AcademyProfileModal
       academyUserId={course?.academyUserId ?? null}

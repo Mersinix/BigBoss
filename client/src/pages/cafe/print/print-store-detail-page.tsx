@@ -313,6 +313,14 @@ export default function PrintStoreDetailPage() {
           )}
           <button
             className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
+            onClick={() => setReportModalOpen(true)}
+            data-testid="button-print-store-report"
+            title="Signaler"
+          >
+            <Flag className="w-4 h-4 text-white/80" />
+          </button>
+          <button
+            className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
             onClick={() => setInfoOpen(true)}
             data-testid="button-print-store-availability"
             title="Disponibilité"
@@ -327,14 +335,7 @@ export default function PrintStoreDetailPage() {
           >
             <Star className="w-4 h-4 text-white/80" />
           </button>
-          <button
-            className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
-            onClick={() => setReportModalOpen(true)}
-            data-testid="button-print-store-report"
-            title="Signaler"
-          >
-            <Flag className="w-4 h-4 text-white/80" />
-          </button>
+          
         </div>
 
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">

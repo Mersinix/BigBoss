@@ -16027,3 +16027,258 @@ duplication.
   fonctionnel, absence d'espace vide ou de mise en page cassée dans
   les deux modes clair/sombre) n'a pas été observé à l'exécution,
   uniquement vérifié par lecture de code et compilation.
+
+---
+
+## 42. Dashboard Supplier → Alertes stock faible : inclure les produits en rupture
+
+### Audit
+
+Composant visé : `client/src/pages/supplier/dashboard.tsx`, section
+`Alertes stock faible` (`SectionCard` + lien « Gérer » vers
+`/supplier/inventory`, déjà correct et non touché), alimentée par le
+`useMemo` `lowStock` (lignes ~59-75), lui-même nourri par
+`useQuery(["/api/supplier/listings"])` — une requête **déjà
+non paginée** (route `GET /api/supplier/listings`,
+`server/routes.ts:8535`, aucun `page`/`pageSize` — elle renvoie
+TOUJOURS l'intégralité des annonces du fournisseur). Cette même
+requête `listings` alimente aussi la StatCard « Produits actifs »
+(`listings.length`) — donc conservée telle quelle, aucune nouvelle
+requête nécessaire.
+
+Référence d'autorité trouvée : la page Inventory
+(`client/src/pages/supplier/inventory-page.tsx`, via
+`GET /api/supplier/inventory`) classe chaque annonce/variante avec un
+`stockStatus` (`IN_STOCK | LOW_STOCK | OUT_OF_STOCK`, type partagé
+`shared/schema.ts:3904`) calculé côté serveur par
+`server/storage.ts` :
+- `computeStockStatus(stock, minStock)` (listing sans variantes,
+  ligne 11508) : `stock <= 0` → `OUT_OF_STOCK` ; `stock < minStock` →
+  `LOW_STOCK` ; sinon `IN_STOCK`.
+- `computeVariantStockStatus(stock, minStock)` (par variante, ligne
+  11515) : `stock <= 0` → `OUT_OF_STOCK` (**inconditionnel, même si
+  minStock n'est pas configuré**) ; `minStock != null && stock <=
+  minStock` → `LOW_STOCK` ; sinon `IN_STOCK`.
+- `aggregateStockStatus` (ligne 11522) : priorité
+  `OUT_OF_STOCK > LOW_STOCK > IN_STOCK` au niveau de l'annonce quand
+  elle a des variantes.
+
+**Bug réel identifié** : l'ancien calcul du Dashboard ne cherchait une
+variante "flaggée" que si `v.minStock != null && v.quantity <=
+v.minStock` — **aucun test indépendant de `quantity <= 0`**. Résultat :
+une variante dont le stock est tombé à 0 mais dont le supplier n'a
+jamais configuré de `minStock` (champ optionnel, souvent `null` —
+confirmé par le commentaire existant du fichier) n'était **jamais
+incluse**, alors que `computeVariantStockStatus` la classerait sans
+ambiguïté `OUT_OF_STOCK`. C'est exactement l'écart décrit par la
+tâche. Au niveau listing (sans variantes), l'ancien test
+`listing.stock <= listing.minStock` incluait déjà mathématiquement le
+cas `stock = 0`, mais utilisait `<=` au lieu du `<` strict de
+`computeStockStatus` pour le seuil LOW_STOCK (écart mineur,
+corrigé par cohérence).
+
+Le rendu JSX, lui, gère **déjà** le style rouge : `<AlertRow
+tag={r.qty === 0 ? "Rupture" : "Faible"} tone={r.qty === 0 ? "red" :
+"amber"} />`, et `AlertRow`
+(`client/src/components/dashboard/dashboard-kit.tsx:241-264`) a
+toujours supporté `tone="red"` (bordure + badge rouges) — la demande
+n°3 de la tâche (« Add a Red Style for Out-of-Stock Products ») est
+donc **déjà satisfaite par le code existant** ; aucune modification de
+`AlertRow` ni de la ligne de rendu n'est nécessaire, seule l'inclusion
+des lignes dans le tableau `rows` était en cause.
+
+### Plan — correction ciblée du seul `useMemo`, zéro nouvelle requête
+
+Remplacer le prédicat de recherche de variante flaggée pour
+reproduire exactement `computeVariantStockStatus` (priorité
+OUT_OF_STOCK, puis repli sur LOW_STOCK) et corriger le seuil
+listing-level pour reproduire exactement `computeStockStatus`. Décision
+explicitement documentée : plutôt que d'ajouter une requête réseau
+vers `/api/supplier/inventory` (qui duplique le même calcul côté
+serveur), on réutilise les données déjà complètes et déjà chargées de
+`/api/supplier/listings` en reproduisant fidèlement la même formule —
+`listings` contient déjà tous les champs nécessaires
+(`stock`/`minStock` par annonce, `quantity`/`minStock` par variante),
+donc aucune information ne manque et aucun appel réseau
+supplémentaire n'est requis (« Avoid unnecessary API calls, duplicate
+queries, and redundant stock calculations »). Conserver le
+comportement « une ligne par annonce » existant (pas d'explosion en
+plusieurs lignes par variante flaggée) pour ne rien changer à la
+mise en page/au nombre de lignes au-delà de la correction demandée.
+Petit ajustement nécessaire côté affichage : `r.min` peut désormais
+être `null` (variante flaggée uniquement via `quantity <= 0`, sans
+`minStock` configuré) — `AlertRow`'s `value` doit donc omettre
+« / min X » dans ce cas, exactement comme `inventory-table.tsx` le
+fait déjà pour les variantes sans `minStock` configuré (`variant.minStock
+!= null && <p>min {variant.minStock}</p>`) — ajustement minimal de
+cohérence avec la page Inventory, pas une redesign.
+
+### Implémentation réalisée
+
+Un seul fichier modifié : `client/src/pages/supplier/dashboard.tsx`.
+
+- Type de ligne : `min: number` → `min: number | null`.
+- Recherche de variante flaggée :
+  `variants.find(v => v.quantity <= 0) ?? variants.find(v => v.minStock != null && v.quantity <= v.minStock)`
+  (priorité rupture, repli sur stock faible configuré — reproduit
+  `aggregateStockStatus`/`computeVariantStockStatus`).
+- Condition listing-level (sans variantes) :
+  `listing.stock <= 0 || listing.stock < listing.minStock` (reproduit
+  `computeStockStatus` exactement, y compris le seuil strict `<`).
+- Rendu : `value={r.min != null ? \`${r.qty} / min ${r.min}\` : \`${r.qty}\`}`
+  — seul changement dans le JSX, pour éviter d'afficher « / min null »
+  pour les nouvelles lignes sans seuil configuré.
+- Commentaire mis à jour référençant explicitement
+  `computeStockStatus`/`computeVariantStockStatus`/`aggregateStockStatus`
+  (`server/storage.ts`) comme source d'autorité à garder synchronisée.
+
+Effet de bord attendu et accepté (pas une modification séparée) : la
+StatCard « Stock faible » (`value={lowStock.length}`, affichée deux
+fois dans le fichier pour les variantes desktop/mobile) reflète
+désormais aussi ce compte corrigé — cohérent avec l'intitulé
+« Stock faible » qui, dans ce tableau de bord, a toujours englobé
+tout ce qui nécessite une action (y compris rupture), et c'est la
+même donnée `lowStock` déjà partagée avant cette tâche.
+
+Aucun changement à : `AlertRow`, `SectionCard`, le lien « Gérer », la
+requête `/api/supplier/listings` elle-même, les routes/schémas
+serveur, ou tout autre composant du Dashboard.
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` sur l'ensemble du projet : **0 erreur** (hors
+  l'erreur de base pré-existante non liée à cette tâche dans
+  `prospecting-page.tsx`).
+- `npm run build` : **build réussi** (client + serveur).
+- Vérification manuelle par lecture de code : pour une variante
+  `{quantity: 0, minStock: null}`, l'ancien code ne la détectait pas
+  (gap confirmé), le nouveau code la détecte via
+  `variants.find(v => v.quantity <= 0)` → ligne poussée avec
+  `qty: 0`, `min: null` → rendu `tone="red"`, `tag="Rupture"`,
+  `value="0"` (sans « / min »factuellement correct).
+- `git status --short` : un seul fichier modifié
+  (`client/src/pages/supplier/dashboard.tsx`), plus `analyse.md`.
+- **Non vérifiable cette session** : aucun test dans un navigateur réel
+  n'a été possible (pas d'outil d'automatisation navigateur disponible
+  dans cet environnement) — le rendu visuel réel de la bordure/badge
+  rouges, la synchronisation en direct avec une modification de stock
+  depuis la page Inventory, et le comportement responsive/clair-sombre
+  n'ont pas été observés à l'exécution, uniquement vérifiés par
+  lecture de code et compilation.
+
+---
+
+## 43. Correction de régression — tâche 42 faisait disparaître les cartes Low Stock
+
+### Audit — cause réelle identifiée par relecture ligne à ligne du diff de la tâche 42
+
+Signalé : après la tâche 42, les cartes « Rupture » (Out of Stock)
+s'affichent bien, mais les cartes « Faible » (Low Stock) ont disparu
+— alors que l'objectif était d'ajouter Rupture SANS retirer Faible.
+
+Relecture précise de `client/src/pages/supplier/dashboard.tsx`, le
+`useMemo` `lowStock` introduit à la tâche 42 :
+```ts
+const flaggedVariant = variants.find((v) => v.quantity <= 0)
+  ?? variants.find((v) => v.minStock != null && v.quantity <= v.minStock);
+```
+Le bug : `??` (nullish coalescing) court-circuite — dès qu'une
+PREMIÈRE variante en rupture (`quantity <= 0`) est trouvée dans
+l'annonce, la recherche s'arrête net et retourne CETTE SEULE variante.
+Si la même annonce (même produit) a **une autre variante,
+différente, simplement en stock faible** (ex. Variante A : qty=0,
+minStock=null → rupture ; Variante B : qty=3, minStock=5 → stock
+faible), seule la ligne de la Variante A (Rupture, rouge) est
+poussée dans `rows` — **la Variante B, qui aurait normalement eu sa
+propre ligne « Faible », n'est jamais même recherchée/ajoutée**,
+puisque `.find()` ne renvoie qu'UNE seule variante par annonce et que
+le `??` empêche toute vérification de la seconde condition une fois
+la première satisfaite.
+
+Avant la tâche 42, seule la seconde condition (`minStock != null && ...`)
+existait : une annonce avec une Variante A (qty=0, minStock=null) et
+une Variante B (qty=3, minStock=5) faisait déjà trouver la Variante
+B (Faible) — la Variante A (rupture, minStock non configuré) n'était
+simplement jamais vue, d'où le bug initial corrigé à la tâche 42.
+Mais la correction de la tâche 42, en donnant la PRIORITÉ absolue à
+la détection de rupture via `??`, a remplacé l'affichage de la
+Variante B (Faible) par celui de la Variante A (Rupture) pour cette
+même annonce — exactement le symptôme rapporté : chaque annonce qui
+avait à la fois une variante en rupture ET une variante distincte en
+stock faible voit désormais sa ligne « Faible » totalement
+remplacée par une ligne « Rupture », au lieu d'afficher les deux.
+
+Les annonces SANS variantes (`listing.stock <= 0 || listing.stock <
+listing.minStock`) ne sont pas concernées par ce bug précis (un seul
+nombre de stock, un seul statut possible par construction) — seule
+la branche multi-variantes avait cette régression.
+
+### Correction — la plus petite possible
+
+Remplacer la recherche `.find()` avec priorité (`??`, une seule
+variante retenue par annonce) par un `.filter()` qui **collecte
+TOUTES les variantes flaggées** (rupture ET stock faible confondus)
+de l'annonce, et pousse **une ligne par variante flaggée** —
+chaque variante garde son propre statut exact (déterminé par son
+propre `qty`, sans ambiguïté, donc jamais « low stock et out of stock
+simultanément » pour UNE MÊME variante — l'exigence de non-double-
+classification reste respectée au niveau variante ; une annonce à
+plusieurs variantes peut désormais légitimement produire plusieurs
+lignes distinctes, exactement comme le ferait la page Inventory qui
+liste aussi chaque variante séparément).
+
+La structure `if (variantes flaggées) {...} else if (stock annonce
+...) {...}` — déjà en place avant ET après la tâche 42 — est
+conservée à l'identique : seule la détection « quelles variantes sont
+flaggées » change (de « une seule, par priorité » à « toutes »).
+Aucun changement au rendu JSX (`AlertRow`, couleurs, `Gérer`,
+pagination/slice à 6, états vide/chargement) — la correction de la
+tâche 42 sur l'affichage conditionnel de `r.min` (omettre « / min »
+si `null`) reste également inchangée et continue de s'appliquer
+correctement aux deux catégories.
+
+### Implémentation réalisée
+
+Un seul fichier modifié : `client/src/pages/supplier/dashboard.tsx`,
+uniquement le corps du `useMemo` `lowStock` :
+
+```ts
+const variants = listing.variants ?? [];
+const flaggedVariants = variants.filter((v: any) => v.quantity <= 0 || (v.minStock != null && v.quantity <= v.minStock));
+if (flaggedVariants.length > 0) {
+  for (const v of flaggedVariants) {
+    rows.push({ id: v.id, name: `${listing.product?.name ?? "Produit"} — ${[v.flavorName, v.sizeName].filter(Boolean).join(" · ")}`, qty: v.quantity, min: v.minStock });
+  }
+} else if (listing.stock <= 0 || listing.stock < listing.minStock) {
+  rows.push({ id: listing.id, name: listing.product?.name ?? "Produit", qty: listing.stock, min: listing.minStock });
+}
+```
+
+Chaque variante flaggée produit sa propre ligne, correctement
+colorée par le rendu existant (`tag={r.qty === 0 ? "Rupture" :
+"Faible"}`, `tone={r.qty === 0 ? "red" : "amber"}`, déjà en place,
+non modifié). Aucun doublon possible : chaque variante n'apparaît
+qu'une fois (filtrée une fois, poussée une fois), et le repli
+listing-level ne se déclenche que si AUCUNE variante n'est flaggée
+(mutuellement exclusif, comme avant).
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` sur l'ensemble du projet : **0 erreur** (hors
+  l'erreur de base pré-existante non liée à cette tâche dans
+  `prospecting-page.tsx`).
+- `npm run build` : **build réussi** (client + serveur).
+- Vérification manuelle par lecture de code du scénario exact
+  rapporté : annonce avec Variante A `{quantity: 0, minStock: null}`
+  et Variante B `{quantity: 3, minStock: 5}` → `flaggedVariants`
+  contient maintenant A **et** B → deux lignes poussées : A (`qty:0`
+  → rouge/« Rupture »), B (`qty:3, min:5` → ambre/« Faible ») —
+  les deux coexistent, aucune ne remplace l'autre.
+- `git status --short` : un seul fichier modifié
+  (`client/src/pages/supplier/dashboard.tsx`), plus `analyse.md`.
+- **Non vérifiable cette session** : aucun test dans un navigateur réel
+  n'a été possible (pas d'outil d'automatisation navigateur disponible
+  dans cet environnement) — l'affichage simultané réel des deux
+  catégories de cartes, avec les vraies données du fournisseur
+  connecté, n'a pas été observé à l'exécution, uniquement vérifié par
+  lecture de code et compilation.

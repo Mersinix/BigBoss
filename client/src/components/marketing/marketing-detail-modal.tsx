@@ -33,7 +33,7 @@ import type { OpeningHoursMap } from "@shared/schema";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
 import { ReviewModal } from "@/components/review-modal";
 import { AvailabilityModal } from "@/components/shared/availability-modal";
-import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
+// import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
 
 const PROVIDER_TYPE_LABELS: Record<string, string> = { Agency: "Agence", Freelancer: "Freelancer", Studio: "Studio" };
 const PROVIDER_TYPE_COLORS: Record<string, string> = {
@@ -133,7 +133,6 @@ export function MarketingDetailModal({
   const [albumIndex, setAlbumIndex] = useState(0);
   const [messaging, setMessaging] = useState(false);
   const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
-  const [flashModalOpen, setFlashModalOpen] = useState(false);
   const services = card?.services ?? [];
 
   // Review eligibility mirrors the existing server rule exactly (POST /api/marketing/reviews):
@@ -281,9 +280,7 @@ export function MarketingDetailModal({
                 <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-marketing-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
                 <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-marketing-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
                 <button onClick={() => setReviewsModalOpen(true)} title="Avis" data-testid="button-open-marketing-reviews" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Star className="w-4 h-4 text-white" /></button>
-                {!readOnly && card.flashImageUrl && (
-                  <button onClick={() => setFlashModalOpen(true)} title="Flash" data-testid="button-open-marketing-flash" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Zap className="w-4 h-4 text-white" /></button>
-                )}
+               
               </div>
               <span
                 className={`absolute bottom-3 left-3 flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full backdrop-blur-sm ${card.isAvailable ? "bg-green-500/90 text-white" : "bg-black/50 text-white/80"}`}
@@ -475,18 +472,7 @@ export function MarketingDetailModal({
       ) : undefined}
     />
 
-    {/* Flash — the real Coffee Owner-facing destination for the Flash URL
-        configured in Settings → Compte (not preview mode here). */}
-    <FlashPreviewModal
-      open={flashModalOpen}
-      onClose={() => setFlashModalOpen(false)}
-      name={card?.name ?? ""}
-      typeLabel="Marketing"
-      flashImageUrl={card?.flashImageUrl}
-      coverImageUrl={card?.coverImageUrl}
-      profileImageUrl={card?.profileImageUrl}
-      accentBgClass="bg-purple-600"
-    />
+   
     </>
   );
 }

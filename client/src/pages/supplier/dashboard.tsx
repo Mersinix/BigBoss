@@ -62,12 +62,24 @@ export default function SupplierDashboard() {
     // populated for every product. Per-variant minStock (shared/schema.ts) is optional/
     // supplier-configured and often null, so it's used only as an extra, more granular
     // flag when a supplier has actually set it — never relied on as the sole signal.
-    const rows: { id: number; name: string; qty: number; min: number }[] = [];
+    // Mirrors server/storage.ts's computeStockStatus/computeVariantStockStatus
+    // (same thresholds) so this list agrees with the Inventory page's own
+    // classification — a variant or listing at zero/negative stock is always
+    // flagged, even when no minStock has been configured for it (task:
+    // "Supplier Performance Dashboard: Include Out-of-Stock Products in
+    // Low-Stock Alerts"). Every flagged variant gets its OWN row — a listing
+    // with one out-of-stock variant and a separate, merely low-stock variant
+    // must show both, not let one suppress the other (task: "Fix Supplier
+    // Dashboard Stock Alerts").
+    const rows: { id: number; name: string; qty: number; min: number | null }[] = [];
     for (const listing of listings) {
-      const flaggedVariant = (listing.variants ?? []).find((v: any) => v.minStock != null && v.quantity <= v.minStock);
-      if (flaggedVariant) {
-        rows.push({ id: flaggedVariant.id, name: `${listing.product?.name ?? "Produit"} — ${[flaggedVariant.flavorName, flaggedVariant.sizeName].filter(Boolean).join(" · ")}`, qty: flaggedVariant.quantity, min: flaggedVariant.minStock });
-      } else if (listing.stock <= listing.minStock) {
+      const variants = listing.variants ?? [];
+      const flaggedVariants = variants.filter((v: any) => v.quantity <= 0 || (v.minStock != null && v.quantity <= v.minStock));
+      if (flaggedVariants.length > 0) {
+        for (const v of flaggedVariants) {
+          rows.push({ id: v.id, name: `${listing.product?.name ?? "Produit"} — ${[v.flavorName, v.sizeName].filter(Boolean).join(" · ")}`, qty: v.quantity, min: v.minStock });
+        }
+      } else if (listing.stock <= 0 || listing.stock < listing.minStock) {
         rows.push({ id: listing.id, name: listing.product?.name ?? "Produit", qty: listing.stock, min: listing.minStock });
       }
     }
@@ -243,7 +255,7 @@ export default function SupplierDashboard() {
           ) : (
             <div className="space-y-2">
               {lowStock.slice(0, 6).map((r) => (
-                <AlertRow key={r.id} title={r.name} value={`${r.qty} / min ${r.min}`} tag={r.qty === 0 ? "Rupture" : "Faible"} tone={r.qty === 0 ? "red" : "amber"} />
+                <AlertRow key={r.id} title={r.name} value={r.min != null ? `${r.qty} / min ${r.min}` : `${r.qty}`} tag={r.qty === 0 ? "Rupture" : "Faible"} tone={r.qty === 0 ? "red" : "amber"} />
               ))}
             </div>
           )}

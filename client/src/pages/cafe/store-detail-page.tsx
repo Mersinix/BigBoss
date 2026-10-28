@@ -917,20 +917,21 @@ export default function StoreDetailPage() {
           )}
           <button
             className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
-            onClick={() => setSupplierReviewsOpen(true)}
-            data-testid="button-store-reviews"
-            title="Supplier reviews"
-          >
-            <Star className="w-4 h-4 text-white/80" />
-          </button>
-          <button
-            className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
             onClick={() => setInfoOpen(true)}
             data-testid="button-store-info"
             title="Store information & opening hours"
           >
             <Info className="w-4 h-4 text-white/80" />
           </button>
+          <button
+            className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
+            onClick={() => setSupplierReviewsOpen(true)}
+            data-testid="button-store-reviews"
+            title="Supplier reviews"
+          >
+            <Star className="w-4 h-4 text-white/80" />
+          </button>
+          
         </div>
 
         {/* Closed badge */}

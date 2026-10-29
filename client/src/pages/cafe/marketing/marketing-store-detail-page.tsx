@@ -17,7 +17,7 @@ import { ModalGrabber } from "@/components/shared/modal-grabber";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { QuoteRequestDialog } from "@/pages/cafe/marketing/marketing-page";
 import { useMarketingStoreNav } from "@/hooks/use-marketing-store-nav";
-import { useItemNav } from "@/hooks/use-item-nav";
+import { useCircularItemNav } from "@/hooks/use-circular-item-nav";
 import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -87,7 +87,7 @@ export default function MarketingStoreDetailPage() {
   // buttons simply stay hidden rather than guessing, same convention as
   // the Coffee Owner Store Page's own Previous/Next Store buttons.
   const marketingStoreNavIds = useMarketingStoreNav((s) => s.navIds);
-  const { prevId: prevAgencyId, nextId: nextAgencyId, hasNav: hasAgencyNav } = useItemNav(
+  const { prevId: prevAgencyId, nextId: nextAgencyId, hasNav: hasAgencyNav } = useCircularItemNav(
     agencyId,
     marketingStoreNavIds ?? [],
   );
@@ -229,7 +229,7 @@ export default function MarketingStoreDetailPage() {
   // filters/search/sort, exactly like the main /marketing listing page's
   // own navigation.
   const storeServiceNavIds = useMemo(() => filtered.map((s) => s.id), [filtered]);
-  const { prevId: prevStoreServiceId, nextId: nextStoreServiceId, hasNav: hasStoreServiceNav } = useItemNav(previewServiceId, storeServiceNavIds);
+  const { prevId: prevStoreServiceId, nextId: nextStoreServiceId, hasNav: hasStoreServiceNav } = useCircularItemNav(previewServiceId, storeServiceNavIds);
   const resetFilters = () => { setCategoryId(""); setFilterSubCategories([]); setFilterType(""); setFilterRating(""); setFilterLocation(""); setSearch(""); setSortBy(""); };
 
   // A Coffee Owner must not be able to reach a Store the marketplace itself

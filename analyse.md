@@ -17201,3 +17201,277 @@ toggle).
   store de compteurs partagé entre plusieurs instances applicatives
   (actuellement en mémoire par processus, même compromis déjà
   accepté pour les sessions — non modifié, cohérent avec l'existant).
+
+---
+
+## 49. Navigation Store précédent/suivant en boucle continue (Coffee Owner → Shop)
+
+### Audit — cause racine identifiée dans le hook partagé non-circulaire
+
+Composant concerné : `client/src/pages/cafe/store-detail-page.tsx`
+(Store Page — route `/stores/:storeId`). La liste ordonnée des
+magasins à parcourir (`storeNavIds`) vient déjà d'un store Zustand
+dédié, `useStoreNav` (`client/src/hooks/use-store-nav.ts`) — alimenté
+par la page Shop elle-même avec sa propre liste COURANTE, déjà
+filtrée (confirmé par le commentaire existant : « the Shop page's own
+currently-filtered Stores section list ») ; cette partie est déjà
+correcte et n'a pas besoin d'être modifiée (satisfait déjà « If the
+Coffee Owner applies filters and selects a filtered store, navigation
+must use the correct store ordering... continue through all
+available stores »).
+
+Le calcul de l'index précédent/suivant, lui, passe par
+`useItemNav` (`client/src/hooks/use-item-nav.ts`), **partagé** par de
+nombreux autres appelants (Barista, Maintenance, Marketing Service,
+Academy Formation, Print Service, et les autres Store Pages Print/
+Marketing/Academy via leurs propres `use-X-store-nav.ts`). Ce hook est
+**explicitement documenté comme non-circulaire par conception** —
+son propre commentaire cite une tâche antérieure demandant
+littéralement « Do not introduce circular navigation » pour ces
+usages au niveau item. C'est la cause racine exacte : `prevId`/
+`nextId` valent `null` dès que l'index courant atteint une extrémité
+(`idx > 0 ? ... : null` / `idx < navIds.length - 1 ? ... : null`),
+désactivant alors les boutons `ItemNavButtons` (`canPrev`/`canNext`
+basés sur `!= null`) au lieu de boucler.
+
+**Important** : `useItemNav` ne doit pas être rendu circulaire
+globalement — cela changerait le comportement de tous ses autres
+appelants (Produits/Services/Formations), qui ont explicitement la
+règle opposée demandée par une tâche différente. Le périmètre de
+cette tâche est strictement « Coffee Owner → Shop → Mapped Stores →
+Store Page » — ni les autres Store Pages (Print/Marketing/Academy),
+ni la navigation Produit/Pack, ne sont concernés ni touchés.
+
+`ItemNavButtons` (`client/src/components/shared/item-nav-buttons.tsx`)
+lui-même n'a besoin d'aucune modification : il se contente de
+désactiver un bouton selon `canPrev`/`canNext`, déjà calculés en
+amont — une fois ce calcul rendu circulaire, les boutons ne seront
+simplement (et correctement) plus jamais désactivés tant qu'il y a ≥2
+magasins.
+
+### Plan — nouveau hook dédié, circulaire, isolé du hook partagé existant
+
+Créer `client/src/hooks/use-circular-item-nav.ts`, exportant
+`useCircularItemNav(currentId, navIds)`, même forme de retour que
+`useItemNav` (`{prevId, nextId, hasNav}`) pour un remplacement
+immédiat à l'appel, mais avec repli circulaire :
+`(idx - 1 + n) % n` / `(idx + 1) % n`. Cas limites gérés explicitement
+(repris du comportement déjà existant de `useItemNav`, inchangé) :
+- Liste vide ou id courant introuvable (`idx === -1`) → `prevId`/
+  `nextId` null, `hasNav` false — ne navigue jamais sur une
+  correspondance incertaine.
+- Un seul magasin dans la liste (`n === 1`) → `hasNav` reste `false`
+  (boutons masqués), exactement le même choix que `useItemNav`
+  aujourd'hui — pas de « boucle vers soi-même » inventée.
+- `n >= 2` → boucle véritablement continue dans les deux sens, plus
+  jamais de `null` aux extrémités.
+
+Seul `store-detail-page.tsx` change d'import (`useItemNav` →
+`useCircularItemNav` pour l'appel de navigation Store) ; aucun autre
+fichier n'est modifié, `useItemNav` reste strictement inchangé pour
+tous ses autres usages.
+
+### Implémentation réalisée
+
+- **Nouveau fichier** `client/src/hooks/use-circular-item-nav.ts`.
+- **`client/src/pages/cafe/store-detail-page.tsx`** : import ajouté,
+  l'appel `useItemNav(storeId ? Number(storeId) : null, storeNavIds ?? [])`
+  remplacé par `useCircularItemNav(...)` avec les mêmes arguments —
+  aucun autre changement dans ce fichier (le bloc de rendu
+  `ItemNavButtons` à la ligne ~964 reste identique, il reçoit
+  simplement des `prevStoreId`/`nextStoreId`/`hasStoreNav` désormais
+  circulaires).
+
+Aucun changement à `useStoreNav`, à la façon dont le Shop alimente
+`navIds`, aux filtres, à la recherche, aux modales Produit/Pack, aux
+informations du magasin (horaires/avis/favoris), ou à toute autre
+Store Page (Print/Marketing/Academy) ou au rôle Supplier/Admin.
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` : **0 erreur, exit code 0**.
+- `npm run build` : **build réussi** (client + serveur).
+- `git diff --stat` : 2 fichiers touchés (le nouveau hook +
+  `store-detail-page.tsx`), confirmé minimal.
+- Vérification manuelle par lecture de code des scénarios de la
+  tâche : liste de 10 ids, courant = id à l'index 1 (2ᵉ magasin) →
+  `nextId` suit 2→3→...→10→1→2→... et `prevId` suit 2→1→10→9→...,
+  exactement la boucle attendue par l'exemple de l'énoncé ; liste à 1
+  élément → `hasNav=false`, boutons masqués comme avant ; liste vide
+  ou id courant absent de la liste → `prevId`/`nextId` null,
+  `hasNav=false`, aucune navigation déclenchée.
+- **Non vérifiable cette session** : aucun navigateur réel n'est
+  accessible pour cliquer réellement les boutons Store précédent/
+  suivant sur une liste réelle de 10 magasins et confirmer visuellement
+  le bouclage ; vérifié uniquement par lecture de code et par calcul
+  manuel des index pour le scénario exact de l'énoncé.
+
+---
+
+## 50. Navigation circulaire étendue — Produits, Packs, Barista, Maintenance, Marketing, Academy, Print
+
+### Audit — deux familles d'implémentation, 13 points de navigation au total
+
+**Famille 1 — hook partagé `useItemNav`** (`client/src/hooks/use-item-nav.ts`,
+non-circulaire par conception, tâche 49 confirmée). Recherche
+exhaustive de tous les appels réels (pas seulement les imports) :
+
+| Fichier | Appel(s) | Zone |
+|---|---|---|
+| `barista-page.tsx:496` | `prevBaristaId`/`nextBaristaId` | `/barista` → modal détail Barista |
+| `maintenance-page.tsx:1011` | `prevAgentId`/`nextAgentId` | `/maintenance` → modal détail |
+| `marketing-page.tsx:587` | `prevMarketingServiceId`/`nextMarketingServiceId` | `/marketing` → modal détail service |
+| `marketing-store-detail-page.tsx:90` | `prevAgencyId`/`nextAgencyId` | `/marketing/stores` → navigation entre agences |
+| `marketing-store-detail-page.tsx:232` | `prevStoreServiceId`/`nextStoreServiceId` | navigation entre services DANS une page Store Marketing |
+| `barista-academy-page.tsx:305` | `prevCourseId`/`nextCourseId` | `/academy` → modal détail formation |
+| `academy-store-detail-page.tsx:87` | `prevAcademyUserId`/`nextAcademyUserId` | `/academy/stores` → navigation entre académies |
+| `academy-store-detail-page.tsx:181` | `prevStoreCourseId`/`nextStoreCourseId` | navigation entre formations DANS une page Store Academy |
+| `print-page.tsx:657` | `prevPrintServiceId`/`nextPrintServiceId` | `/print` → modal détail service |
+| `print-store-detail-page.tsx:93` | `prevPrinterId`/`nextPrinterId` | `/print/stores` → navigation entre imprimeries |
+| `print-store-detail-page.tsx:239` | `prevStoreServiceId`/`nextStoreServiceId` | navigation entre services DANS une page Store Print |
+
+11 appels au total, répartis sur 8 fichiers — **couvrent exactement**
+toutes les zones demandées par la tâche (Barista, Maintenance,
+Marketing × 2 contextes, Academy × 2 contextes + le niveau formation
+dans le store, Print × 2 contextes + le niveau service dans le
+store). Confirmé par recherche exhaustive : **aucun autre appelant de
+`useItemNav` n'existe ailleurs dans le projet** — une fois ces 11
+convertis, le hook `useItemNav` lui-même n'a plus aucun consommateur
+(signalé ci-dessous, non supprimé — voir Décision).
+
+**Famille 2 — logique en ligne (Shop Produits/Packs)**, confirmée
+architecturalement différente par le commentaire déjà existant de
+`use-item-nav.ts` lui-même (« The Shop's Pack/Product navigation
+(global Zustand stores, cross-page) is architecturally different and
+intentionally left untouched ») :
+- `client/src/components/product-quick-view-modal.tsx` (lignes
+  19-24) : `navIds` vient du store Zustand `useQuickView`, calcul de
+  `prevProductId`/`nextProductId`/`hasProductNav` dupliqué en ligne
+  (même formule non-circulaire que `useItemNav`, pas le hook
+  lui-même).
+- `client/src/components/pack-quick-view-modal.tsx` (lignes 460-465) :
+  même motif via `usePackQuickView`, avec une garde additionnelle
+  `!isPreview` (le mode aperçu local du Supplier — construit depuis
+  un brouillon sans contexte Shop réel — n'a jamais de navigation ;
+  comportement à préserver à l'identique).
+
+### Décision — réutiliser `useCircularItemNav` tel quel (tâche 49), ne pas toucher `useItemNav`
+
+`useCircularItemNav` (`client/src/hooks/use-circular-item-nav.ts`,
+créé à la tâche 49 pour la Store Page du Shop) a exactement la même
+signature/forme de retour que `useItemNav`
+(`{prevId, nextId, hasNav}`), ce qui permet un remplacement direct,
+appel par appel, sans toucher à la forme des données ni aux listes
+`navIds` existantes (déjà correctement alimentées/filtrées par
+chaque page — confirmé, aucune de ces listes n'a besoin d'être
+recalculée). C'est la tâche elle-même qui demande explicitement de
+« reuse the established Store page implementation pattern wherever
+appropriate » — j'applique donc exactement ce hook, sans en créer un
+second.
+
+`useItemNav` n'est PAS modifié ni supprimé, bien qu'il devienne sans
+consommateur après cette tâche : le remplacer ou le supprimer n'est
+pas demandé explicitement, et le supprimer maintenant ajouterait un
+risque (fichier partagé) pour un bénéfice purement cosmétique, à
+l'encontre de « do not perform unrelated cleanup or refactoring ».
+Signalé ici comme candidat de nettoyage pour une tâche future, pas
+traité dans celle-ci.
+
+Pour le Shop (Produits/Packs), la logique en ligne est remplacée par
+un appel à `useCircularItemNav` avec les mêmes arguments
+(`navIds`/`productId` ou `packId`), en conservant la garde
+`!isPreview` pour les Packs en passant `null` comme id courant
+quand `isPreview` est vrai (le hook renvoie alors naturellement
+`hasNav: false` sans qu'aucune logique de garde spécifique ne soit
+dupliquée).
+
+### Plan
+
+Pour chacun des 11 appels `useItemNav(...)`, remplacer l'import et
+l'appel par `useCircularItemNav(...)` avec les MÊMES arguments — zéro
+changement aux listes `navIds` sources, aux boutons de rendu
+(`ItemNavButtons` ou équivalent en ligne), ou à toute autre logique
+de filtre/recherche/pagination. Pour les 2 points Shop, remplacer le
+calcul en ligne de 3 lignes par un seul appel au hook, en conservant
+les noms de variables existants (`prevProductId`, `hasPackNav`, etc.)
+pour un diff minimal sur le reste de chaque fichier.
+
+### Implémentation réalisée
+
+**Nouveau fichier** : aucun nouveau hook créé — réutilisation
+directe de `client/src/hooks/use-circular-item-nav.ts` (tâche 49).
+
+**11 appels `useItemNav` convertis**, un import + un appel changés
+par fichier, zéro autre ligne touchée :
+- `client/src/pages/cafe/barista/barista-page.tsx`
+- `client/src/pages/cafe/maintenance/maintenance-page.tsx`
+- `client/src/pages/cafe/marketing/marketing-page.tsx`
+- `client/src/pages/cafe/marketing/marketing-store-detail-page.tsx`
+  (2 appels : agences + services dans la page Store)
+- `client/src/pages/cafe/barista/barista-academy-page.tsx`
+- `client/src/pages/cafe/barista/academy-store-detail-page.tsx`
+  (2 appels : académies + formations dans la page Store)
+- `client/src/pages/cafe/print/print-page.tsx`
+- `client/src/pages/cafe/print/print-store-detail-page.tsx`
+  (2 appels : imprimeries + services dans la page Store)
+
+**2 implémentations en ligne converties** (Shop) :
+- `client/src/components/product-quick-view-modal.tsx` — calcul en
+  ligne de 3 lignes remplacé par un seul appel
+  `useCircularItemNav(productId, navIds ?? [])`, mêmes noms de
+  variables déstructurées (`prevProductId`/`nextProductId`/
+  `hasProductNav`) pour ne rien changer au reste du fichier
+  (callbacks `onNavPrev`/`onNavNext` vers `ProductDetailContent`
+  inchangés).
+- `client/src/components/pack-quick-view-modal.tsx` — même
+  remplacement, avec la garde `isPreview` préservée en passant `null`
+  comme id courant en mode aperçu (le hook traite alors nativement
+  l'absence de correspondance comme « pas de navigation », sans
+  dupliquer la condition `!isPreview` dans une logique séparée).
+
+`client/src/pages/cafe/store-detail-page.tsx` (Store Page du Shop,
+tâche 49) : confirmé non retouché dans cette tâche — seule la
+référence en commentaire à `useItemNav` y subsiste, le diff de ce
+fichier reste strictement celui de la tâche précédente.
+
+Aucun changement à `ItemNavButtons`, aux boutons en ligne de
+`pack-quick-view-modal.tsx`, à `ProductDetailContent`, aux stores
+Zustand (`useQuickView`, `usePackQuickView`, `useStoreNav` et les
+`use-X-store-nav.ts`), aux filtres/recherche/pagination, ni à
+`useItemNav` lui-même (conservé tel quel, désormais sans
+consommateur — voir Décision ci-dessus).
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` sur l'ensemble du projet : **0 erreur, exit
+  code 0**.
+- `npm run build` : **build réussi** (client + serveur).
+- Recherche de régression : `grep` exhaustif confirmant qu'aucun
+  appel réel à `useItemNav` ne subsiste nulle part dans le projet
+  (seule une mention en commentaire dans `store-detail-page.tsx`).
+- **Serveur réellement démarré** (port 5055, séparé du processus
+  préexistant sur le port 5000, non touché) : les 6 routes
+  concernées (`/`, `/barista`, `/maintenance`, `/marketing`,
+  `/academy`, `/print`) répondent toutes **HTTP 200**, aucune erreur
+  serveur dans les logs après ces requêtes — confirme que le build
+  réel ne plante pas au chargement de ces pages. Serveur de test
+  arrêté proprement ensuite.
+- `git status`/`git diff --stat` : exactement 11 fichiers modifiés
+  (les 10 de cette tâche + le fichier déjà modifié par la tâche 49,
+  confirmé inchangé ici) plus le hook déjà existant, aucun fichier
+  inattendu.
+- Vérification manuelle par lecture de code des scénarios de la
+  tâche (liste de 10 ids) : mêmes garanties que pour la Store Page
+  (tâche 49), reproduites à l'identique pour chacun des 13 points de
+  navigation puisqu'ils utilisent tous la même formule
+  `(idx ± 1 + n) % n`.
+- **Non vérifiable cette session** : aucun navigateur réel n'est
+  disponible pour cliquer effectivement les boutons Précédent/
+  Suivant sur chaque modal/page réelle (Produit, Pack, Barista,
+  Maintenance, Marketing, Academy, Print — y compris avec filtres/
+  recherche actifs, et le cas à un seul élément) et confirmer
+  visuellement le bouclage ainsi que l'absence de régression sur les
+  actions existantes (favoris, avis, ajout au panier, etc.) ; vérifié
+  uniquement par lecture de code, recherche de régression, et par le
+  fait que les 13 points de navigation partagent tous désormais la
+  même implémentation déjà revue à la tâche 49.

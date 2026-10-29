@@ -29,7 +29,7 @@ import type { PrintCatalogCard, PrintOrderWithParties } from "@shared/schema";
 import { PrintMappedServiceCard } from "@/components/print/print-mapped-service-card";
 import { formatDistance } from "@/lib/distance";
 import { usePrintStoreNav } from "@/hooks/use-print-store-nav";
-import { useItemNav } from "@/hooks/use-item-nav";
+import { useCircularItemNav } from "@/hooks/use-circular-item-nav";
 import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 
 // "Livraisons" — same fixed production-time buckets as /print's own main
@@ -90,7 +90,7 @@ export default function PrintStoreDetailPage() {
   // buttons simply stay hidden rather than guessing, same convention as
   // the Coffee Owner Store Page's own Previous/Next Store buttons.
   const printStoreNavIds = usePrintStoreNav((s) => s.navIds);
-  const { prevId: prevPrinterId, nextId: nextPrinterId, hasNav: hasPrinterNav } = useItemNav(
+  const { prevId: prevPrinterId, nextId: nextPrinterId, hasNav: hasPrinterNav } = useCircularItemNav(
     printerId,
     printStoreNavIds ?? [],
   );
@@ -236,7 +236,7 @@ export default function PrintStoreDetailPage() {
   // the active filters/search/sort, exactly like the main /print listing
   // page's own navigation.
   const storeServiceNavIds = useMemo(() => filtered.map((s) => s.id), [filtered]);
-  const { prevId: prevStoreServiceId, nextId: nextStoreServiceId, hasNav: hasStoreServiceNav } = useItemNav(previewServiceId, storeServiceNavIds);
+  const { prevId: prevStoreServiceId, nextId: nextStoreServiceId, hasNav: hasStoreServiceNav } = useCircularItemNav(previewServiceId, storeServiceNavIds);
   const resetFilters = () => { setCategoryId(""); setSubCategoryId(""); setBrandId(""); setMaterial(""); setDeliveryTime(""); setSearch(""); setSortBy(""); };
 
   // A Coffee Owner must not be able to reach a Store that the marketplace

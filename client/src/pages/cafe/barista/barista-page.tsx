@@ -56,7 +56,7 @@ import {
 } from "@/hooks/use-barista-marketplace";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
-import { useItemNav } from "@/hooks/use-item-nav";
+import { useCircularItemNav } from "@/hooks/use-circular-item-nav";
 import { BaristaFastSearch } from "@/components/barista/barista-fast-search";
 import { BaristaBlacklistModal } from "@/components/barista/barista-blacklist-modal";
 import { JobManagementModal } from "@/components/barista/job-management-modal";
@@ -493,7 +493,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
   // filteredBaristas, the same list already shown in the grid above,
   // so navigation always respects the currently active filters.
   const baristaNavIds = useMemo(() => filteredBaristas.map((b) => b.userId), [filteredBaristas]);
-  const { prevId: prevBaristaId, nextId: nextBaristaId, hasNav: hasBaristaNav } = useItemNav(detailBaristaId, baristaNavIds);
+  const { prevId: prevBaristaId, nextId: nextBaristaId, hasNav: hasBaristaNav } = useCircularItemNav(detailBaristaId, baristaNavIds);
 
   // ── Data-driven, cross-filter-aware option derivation ───────────────────────
   // (task: "Synchronize All Filters and Display Only Options With Matching

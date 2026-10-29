@@ -22,7 +22,7 @@ import { ServiceHeroShell, H_ALIGN_ICON_MX, H_ALIGN_ROW_JUSTIFY, getHeroSubtitle
 import type { PrintCatalogCard, PrintCompanyListCard } from "@shared/schema";
 import { printCategoryIcon } from "@/lib/print-category-icons";
 import { useFallbackImage } from "@/hooks/use-fallback-image";
-import { useItemNav } from "@/hooks/use-item-nav";
+import { useCircularItemNav } from "@/hooks/use-circular-item-nav";
 import { usePrintStoreNav } from "@/hooks/use-print-store-nav";
 import { PrintFastSearch } from "@/components/print/print-fast-search";
 import { PrintBlacklistModal } from "@/components/print/print-blacklist-modal";
@@ -654,7 +654,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
   }, [facetFiltered, searchQuery, filters.sortBy]);
 
   const printServiceNavIds = useMemo(() => filtered.map((c) => c.id), [filtered]);
-  const { prevId: prevPrintServiceId, nextId: nextPrintServiceId, hasNav: hasPrintServiceNav } = useItemNav(previewServiceId, printServiceNavIds);
+  const { prevId: prevPrintServiceId, nextId: nextPrintServiceId, hasNav: hasPrintServiceNav } = useCircularItemNav(previewServiceId, printServiceNavIds);
 
   // ── Filtered printing companies — same filter logic PrintStoresSection
   // used to compute internally, lifted up verbatim (not duplicated) so this

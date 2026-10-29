@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { ProductDetailContent } from "@/components/product-detail-content";
 import { useQuickView } from "@/hooks/use-quick-view";
+import { useCircularItemNav } from "@/hooks/use-circular-item-nav";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 
 export function ProductQuickViewModal() {
@@ -16,12 +17,12 @@ export function ProductQuickViewModal() {
   // replaying the modal's open/close animation or touching supplierId. If
   // the current product isn't found in navIds (e.g. opened from a page that
   // provides no navigation context), both are null and the buttons hide.
+  // Circular (task: "Apply Continuous Next/Previous Navigation Across
+  // Products, Packs, and Service Details") — same hook as the Store Page's
+  // own Previous/Next Store navigation.
   const navIds = useQuickView((s) => s.navIds);
   const navigateTo = useQuickView((s) => s.navigateTo);
-  const navCurrentIndex = navIds ? navIds.indexOf(productId as number) : -1;
-  const prevProductId = navCurrentIndex > 0 ? navIds![navCurrentIndex - 1] : null;
-  const nextProductId = navCurrentIndex !== -1 && navIds && navCurrentIndex < navIds.length - 1 ? navIds[navCurrentIndex + 1] : null;
-  const hasProductNav = navCurrentIndex !== -1 && !!navIds && navIds.length > 1;
+  const { prevId: prevProductId, nextId: nextProductId, hasNav: hasProductNav } = useCircularItemNav(productId, navIds ?? []);
 
   // Scroll-direction dismissal (scroll down, back up, then up again past the
   // top closes the modal with a slide-down + fade) — same behavior as the

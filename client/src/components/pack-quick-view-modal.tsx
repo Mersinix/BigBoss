@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
+import { useCircularItemNav } from "@/hooks/use-circular-item-nav";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { useCart } from "@/hooks/use-cart";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -456,13 +457,17 @@ export function PackQuickViewModal({ previewPack, previewOpen, onPreviewClose }:
   // dismissal state isn't disturbed. If the current pack isn't found in
   // navIds (e.g. opened from a different page's context), both buttons are
   // simply hidden rather than guessing — task: "Navigate Between Mapped
-  // Products and Packs Without Closing the Detail Modal".
+  // Products and Packs Without Closing the Detail Modal". Circular (task:
+  // "Apply Continuous Next/Previous Navigation Across Products, Packs, and
+  // Service Details") — same hook as the Store Page's own Previous/Next
+  // Store navigation; preview mode is kept nav-less by passing null as the
+  // current id, which the hook already treats as "no match, no nav".
   const navIds = usePackQuickView((s) => s.navIds);
   const navigateToPack = usePackQuickView((s) => s.navigateTo);
-  const navCurrentIndex = !isPreview && navIds ? navIds.indexOf(packId as number) : -1;
-  const prevPackId = navCurrentIndex > 0 ? navIds![navCurrentIndex - 1] : null;
-  const nextPackId = navCurrentIndex !== -1 && navIds && navCurrentIndex < navIds.length - 1 ? navIds[navCurrentIndex + 1] : null;
-  const hasPackNav = !isPreview && navCurrentIndex !== -1 && !!navIds && navIds.length > 1;
+  const { prevId: prevPackId, nextId: nextPackId, hasNav: hasPackNav } = useCircularItemNav(
+    isPreview ? null : (packId as number | null),
+    navIds ?? [],
+  );
 
   const [qty, setQty]           = useState(1);
   const [previewProductId, setPreviewProductId] = useState<number | null>(null);

@@ -14,7 +14,7 @@ import { ModalGrabber } from "@/components/shared/modal-grabber";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { EnrollDialog } from "@/pages/cafe/barista/barista-academy-page";
 import { useAcademyStoreNav } from "@/hooks/use-academy-store-nav";
-import { useItemNav } from "@/hooks/use-item-nav";
+import { useCircularItemNav } from "@/hooks/use-circular-item-nav";
 import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -84,7 +84,7 @@ export default function AcademyStoreDetailPage() {
   // than guessing, same convention as the Coffee Owner Store Page's own
   // Previous/Next Store buttons.
   const academyStoreNavIds = useAcademyStoreNav((s) => s.navIds);
-  const { prevId: prevAcademyUserId, nextId: nextAcademyUserId, hasNav: hasAcademyNav } = useItemNav(
+  const { prevId: prevAcademyUserId, nextId: nextAcademyUserId, hasNav: hasAcademyNav } = useCircularItemNav(
     academyUserId,
     academyStoreNavIds ?? [],
   );
@@ -178,7 +178,7 @@ export default function AcademyStoreDetailPage() {
   // the active filters/search/sort, exactly like the main /academy
   // listing page's own navigation.
   const storeCourseNavIds = useMemo(() => filtered.map((c) => c.id), [filtered]);
-  const { prevId: prevStoreCourseId, nextId: nextStoreCourseId, hasNav: hasStoreCourseNav } = useItemNav(previewCourseId, storeCourseNavIds);
+  const { prevId: prevStoreCourseId, nextId: nextStoreCourseId, hasNav: hasStoreCourseNav } = useCircularItemNav(previewCourseId, storeCourseNavIds);
   const resetFilters = () => { setLevelId(""); setCertFilter(""); setSearch(""); setSortBy(""); };
 
   // A Coffee Owner must not be able to reach a Store the marketplace itself

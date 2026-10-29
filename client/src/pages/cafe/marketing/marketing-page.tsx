@@ -52,7 +52,7 @@ import {
 import type { MarketingCompanyListCard } from "@shared/schema";
 import { MarketingDetailModal } from "@/components/marketing/marketing-detail-modal";
 import { MarketingServiceDetailModal } from "@/components/marketing/marketing-service-detail-modal";
-import { useItemNav } from "@/hooks/use-item-nav";
+import { useCircularItemNav } from "@/hooks/use-circular-item-nav";
 import { useMarketingStoreNav } from "@/hooks/use-marketing-store-nav";
 import { MarketingMappedServiceCard } from "@/components/marketing/marketing-mapped-service-card";
 import { MarketingFastSearch } from "@/components/marketing/marketing-fast-search";
@@ -584,7 +584,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   // browses filteredServices, the same list already shown in the grid, so
   // navigation always respects the currently active filters/search/sort.
   const marketingServiceNavIds = useMemo(() => filteredServices.map((s) => s.id), [filteredServices]);
-  const { prevId: prevMarketingServiceId, nextId: nextMarketingServiceId, hasNav: hasMarketingServiceNav } = useItemNav(detailServiceId, marketingServiceNavIds);
+  const { prevId: prevMarketingServiceId, nextId: nextMarketingServiceId, hasNav: hasMarketingServiceNav } = useCircularItemNav(detailServiceId, marketingServiceNavIds);
 
   // ── Filtered agencies — same filter logic MarketingStoresSection used to
   // compute internally, lifted up verbatim (not duplicated) so this page can

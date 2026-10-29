@@ -18,7 +18,7 @@ import type { MaintenanceMarketplaceCard, OpeningHoursMap } from "@shared/schema
 import { encodeMaintenanceSubSkillKey, decodeMaintenanceSubSkillKey } from "@shared/maintenance-sub-skill-key";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { ModalGrabber } from "@/components/shared/modal-grabber";
-import { useItemNav } from "@/hooks/use-item-nav";
+import { useCircularItemNav } from "@/hooks/use-circular-item-nav";
 import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -1008,7 +1008,7 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
   // browses `filtered`, the same list already shown above, so navigation
   // always respects the currently active filters.
   const maintenanceNavIds = useMemo(() => filtered.map((a) => a.userId), [filtered]);
-  const { prevId: prevAgentId, nextId: nextAgentId, hasNav: hasAgentNav } = useItemNav(selectedAgent?.userId ?? null, maintenanceNavIds);
+  const { prevId: prevAgentId, nextId: nextAgentId, hasNav: hasAgentNav } = useCircularItemNav(selectedAgent?.userId ?? null, maintenanceNavIds);
   const navToAgent = (id: number | null) => {
     if (id == null) return;
     const agent = filtered.find((a) => a.userId === id);

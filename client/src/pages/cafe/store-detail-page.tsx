@@ -28,7 +28,7 @@ import { useSearchLocationStore } from "@/store/search-location-store";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import { useStoreNav } from "@/hooks/use-store-nav";
-import { useItemNav } from "@/hooks/use-item-nav";
+import { useCircularItemNav } from "@/hooks/use-circular-item-nav";
 import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 import { FlashMode } from "@/components/flash-mode";
 import { PackCardTile } from "@/pages/cafe/browse-products";
@@ -548,9 +548,12 @@ export default function StoreDetailPage() {
   // same convention as the Pack/Product nav buttons. Navigating to another
   // store is a real route change (this page is a real route, not a global
   // singleton modal), using the exact same navigate() the Shop's own Store
-  // card click already uses.
+  // card click already uses. Circular (task: "Make Store Navigation Loop
+  // Continuously") — useCircularItemNav wraps Previous/Next around both
+  // ends instead of stopping, unlike the shared non-circular useItemNav
+  // used by Product/Pack/service item navigation.
   const storeNavIds = useStoreNav((s) => s.navIds);
-  const { prevId: prevStoreId, nextId: nextStoreId, hasNav: hasStoreNav } = useItemNav(
+  const { prevId: prevStoreId, nextId: nextStoreId, hasNav: hasStoreNav } = useCircularItemNav(
     storeId ? Number(storeId) : null,
     storeNavIds ?? [],
   );

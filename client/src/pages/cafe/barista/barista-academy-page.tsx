@@ -39,7 +39,7 @@ import {
   type AcademyCourseCard, type AcademyCourseLevel,
 } from "@/hooks/use-barista-academy";
 import { AcademyDetailModal } from "@/components/academy/academy-detail-modal";
-import { useItemNav } from "@/hooks/use-item-nav";
+import { useCircularItemNav } from "@/hooks/use-circular-item-nav";
 import { useAcademyStoreNav } from "@/hooks/use-academy-store-nav";
 import { AcademyFastSearch } from "@/components/academy/academy-fast-search";
 import { AcademyBlacklistModal } from "@/components/academy/academy-blacklist-modal";
@@ -302,7 +302,7 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
   // filteredTraining, the same list already shown above, so navigation
   // always respects the currently active filters/search/sort.
   const academyCourseNavIds = useMemo(() => filteredTraining.map((c) => c.id), [filteredTraining]);
-  const { prevId: prevCourseId, nextId: nextCourseId, hasNav: hasCourseNav } = useItemNav(detailCourseId, academyCourseNavIds);
+  const { prevId: prevCourseId, nextId: nextCourseId, hasNav: hasCourseNav } = useCircularItemNav(detailCourseId, academyCourseNavIds);
 
   const canAct = !!user && user.role === "CAFE_OWNER" && accessLevel === "approved";
 

@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Star, Loader2, Package, Store, Wrench, Flag, Trash2, CheckCircle2, AlertTriangle, Layers, Coffee, GraduationCap, Truck, Printer, Megaphone } from "lucide-react";
+import { Star, Loader2, Flag, Trash2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
@@ -13,6 +13,7 @@ import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AdminCommunicationSwitcher } from "@/components/admin/admin-communication-switcher";
+import { ServiceCategorySwitcher, type ServiceCategoryKey } from "@/components/admin/service-category-switcher";
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -35,18 +36,12 @@ function formatDate(d: Date | string | null | undefined) {
 // deleteReview/resolveReviewReport) — no per-domain moderation system. Barista/Academy/
 // Print/Delivery target names are resolved server-side onto `targetName` (see
 // storage.getAllReviews) so this page never needs a second per-domain lookup.
-const TABS = [
-  { key: "PRODUCT", label: "Product", icon: Package },
-  { key: "PACK", label: "Pack", icon: Layers },
-  { key: "SUPPLIER", label: "Supplier", icon: Store },
-  { key: "MAINTENANCE", label: "Maintenance", icon: Wrench },
-  { key: "BARISTA_MARKETPLACE", label: "Barista", icon: Coffee },
-  { key: "ACADEMY", label: "Academy", icon: GraduationCap },
-  { key: "DRIVER", label: "Delivery", icon: Truck },
-  { key: "PRINT", label: "Print", icon: Printer },
-  { key: "MARKETING", label: "Marketing", icon: Megaphone },
-] as const;
-type ReviewType = (typeof TABS)[number]["key"];
+//
+// The TABS array/switcher itself now lives in service-category-switcher.tsx (task:
+// "Centralize Report Moderation in Admin Communication and Fix Real-Time
+// Publication") — extracted verbatim so the new Admin Signalements page can
+// reuse the exact same canonical service list instead of duplicating it.
+type ReviewType = ServiceCategoryKey;
 
 const TARGET_LABEL: Record<ReviewType, string> = {
   PRODUCT: "Product", PACK: "Pack", SUPPLIER: "Supplier", MAINTENANCE: "Maintenance",
@@ -190,22 +185,11 @@ export default function AdminReviewsPage() {
       {/* Switcher — same visual/scrolling design as the Admin System Management switcher:
           hidden-scrollbar horizontal scroll on mobile, pill container, active tab in a
           bg-background/shadow-sm chip. */}
-      <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
-        <div className="flex gap-1 bg-secondary/40 rounded-xl p-1 w-max min-w-full sm:w-fit">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => { setActiveTab(tab.key); setShowReportedOnly(false); }}
-              className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all shrink-0 whitespace-nowrap ${
-                activeTab === tab.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-              }`}
-              data-testid={`tab-admin-reviews-${tab.key.toLowerCase()}`}
-            >
-              <tab.icon className="w-4 h-4" /> {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <ServiceCategorySwitcher
+        active={activeTab}
+        onChange={(key) => { setActiveTab(key); setShowReportedOnly(false); }}
+        testIdPrefix="admin-reviews"
+      />
 
       {/* Filter bar */}
       <div className="flex items-center gap-3">

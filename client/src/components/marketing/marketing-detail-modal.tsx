@@ -10,10 +10,11 @@ import {
   useMarketingReviews,
   useMarketingProjects,
   useCreateMarketingReview,
-  useReportMarketingProvider,
   startMarketingConversation,
   type MarketingMarketplaceCard,
 } from "@/hooks/use-marketing";
+import { useSubmitMarketingReport } from "@/hooks/use-marketing-reports";
+import { ReportModal } from "@/components/report-modal";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { ModalGrabber } from "@/components/shared/modal-grabber";
@@ -23,7 +24,6 @@ import { getAvatarUrl } from "@/lib/avatar";
 import { useFallbackImage } from "@/hooks/use-fallback-image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Star, MapPin, Clock, Image as ImageIcon, Globe, MessageCircle,
@@ -120,14 +120,13 @@ export function MarketingDetailModal({
   const { data: reviews = [] } = useMarketingReviews(marketingUserId);
   const { data: projects = [] } = useMarketingProjects();
   const createReview = useCreateMarketingReview();
-  const reportProvider = useReportMarketingProvider();
+  const submitReportMutation = useSubmitMarketingReport();
 
   const faved = useFavorites((s) => (marketingUserId ? !!s.marketingAgencies[marketingUserId] : false));
   const toggleMarketing = useFavorites((s) => s.toggleMarketingAgency);
 
   const [reviewProjectId, setReviewProjectId] = useState<number | null>(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [reportReason, setReportReason] = useState("");
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   const [albumOpen, setAlbumOpen] = useState(false);
   const [albumIndex, setAlbumIndex] = useState(0);
@@ -158,7 +157,6 @@ export function MarketingDetailModal({
   const handleClose = () => {
     setReviewProjectId(null);
     setReportModalOpen(false);
-    setReportReason("");
     onClose();
   };
 
@@ -172,17 +170,6 @@ export function MarketingDetailModal({
     onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
     dismissContentStyle, dismissOverlayStyle,
   } = useScrollDismiss(open, handleClose, undefined, true);
-
-  // Same swipe-to-dismiss, independently, for the nested Signaler dialog
-  // (task: "Standardize Grabber Design and Swipe-to-Dismiss Across Store
-  // Information and Service Modals") — a separate Dialog/open state, so a
-  // separate hook instance; safe since this dialog is already rendered as a
-  // sibling of the main modal's own gesture container, never a descendant.
-  const {
-    onBodyWheel: reportOnBodyWheel, onBodyTouchStart: reportOnBodyTouchStart,
-    onBodyTouchMove: reportOnBodyTouchMove, onBodyTouchEnd: reportOnBodyTouchEnd,
-    dismissContentStyle: reportDismissContentStyle, dismissOverlayStyle: reportDismissOverlayStyle,
-  } = useScrollDismiss(reportModalOpen, () => { setReportModalOpen(false); setReportReason(""); }, undefined, true);
 
   const handleMessage = async () => {
     if (!card || readOnly) return;
@@ -203,15 +190,9 @@ export function MarketingDetailModal({
     await createReview.mutateAsync({ marketingUserId: card.userId, projectId: activeProjectId, rating, comment: comment.trim() || undefined });
   };
 
-  const submitReport = () => {
-    if (!card || !reportReason.trim() || readOnly) return;
-    reportProvider.mutate(
-      { marketingUserId: card.userId, reason: reportReason.trim() },
-      {
-        onSuccess: () => { toast({ title: "Signalement envoyé", description: "L'équipe Admin va l'examiner." }); setReportModalOpen(false); setReportReason(""); },
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      }
-    );
+  const submitReport = async (rating: number, reason: string) => {
+    if (!card || readOnly) throw new Error("Aperçu en lecture seule");
+    await submitReportMutation.mutateAsync({ targetUserId: card.userId, reason, rating });
   };
 
   return (
@@ -391,42 +372,17 @@ export function MarketingDetailModal({
       </DialogContent>
     </Dialog>
 
-    {/* Signaler — same modal chrome as the Disponibilité modal above (rounded-[2rem]
-        container, circular close button), close button on the right
-        (docs/print_marketing_ui_synchronization_audit.md Section 14-17). Content/
-        functionality unchanged. */}
-    <Dialog open={reportModalOpen} onOpenChange={(v) => { if (!v) { setReportModalOpen(false); setReportReason(""); } }}>
-      <DialogContent
-        className={`sm:max-w-md p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden ${t.modalBg}`}
-        style={reportDismissContentStyle}
-        overlayStyle={reportDismissOverlayStyle}
-      >
-        <VisuallyHidden><DialogTitle>Signaler {card?.name ?? ""}</DialogTitle></VisuallyHidden>
-        <div
-          className="px-5 pt-1 pb-5 space-y-3"
-          onWheel={reportOnBodyWheel}
-          onTouchStart={reportOnBodyTouchStart}
-          onTouchMove={reportOnBodyTouchMove}
-          onTouchEnd={reportOnBodyTouchEnd}
-        >
-          <ModalGrabber isDark={isDark} />
-          <div className="flex items-center justify-between">
-            <div className="w-8 h-8" />
-            <span className={`text-[13px] font-semibold tracking-tight leading-tight ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler {card?.name}</span>
-            <button onClick={() => { setReportModalOpen(false); setReportReason(""); }} aria-label="Close" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}>
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <Textarea placeholder="Décrivez le problème…" rows={3} value={reportReason} onChange={(e) => setReportReason(e.target.value)} className={t.inputBg} data-testid="input-report-reason" />
-          <div className="flex gap-2 justify-end pt-1">
-            <Button size="sm" variant="outline" className={t.textPrimary} onClick={() => { setReportModalOpen(false); setReportReason(""); }}>Annuler</Button>
-            <Button size="sm" variant="destructive" onClick={submitReport} disabled={!reportReason.trim() || reportProvider.isPending} data-testid="button-submit-report">
-              {reportProvider.isPending ? "Envoi…" : "Envoyer le signalement"}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+    {/* Signaler — redesigned on the Avis modal pattern (task: "Extend the
+        Shared Reporting System to Print, Academy, and Marketing"), same
+        shared ReportModal Maintenance/Barista/Print use. */}
+    <ReportModal
+      open={reportModalOpen}
+      onClose={() => setReportModalOpen(false)}
+      targetName={card?.name ?? ""}
+      onSubmit={submitReport}
+      isSubmitting={submitReportMutation.isPending}
+      accentClassName={isDark ? "text-purple-400" : "text-purple-600"}
+    />
 
     <MarketingAvailabilityModal
       open={availabilityModalOpen}

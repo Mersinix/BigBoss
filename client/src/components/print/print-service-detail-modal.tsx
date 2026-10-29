@@ -7,8 +7,10 @@ import { useFavorites } from "@/hooks/use-favorites";
 import { useThemeStore } from "@/store/theme-store";
 import { useQuery } from "@tanstack/react-query";
 import {
-  usePrintServiceDetail, usePrintReviews, useCreatePrintReview, useReportPrinter, startPrintConversation,
+  usePrintServiceDetail, usePrintReviews, useCreatePrintReview, startPrintConversation,
 } from "@/hooks/use-print-marketplace";
+import { useSubmitPrintReport } from "@/hooks/use-print-reports";
+import { ReportModal } from "@/components/report-modal";
 import type { PrintOrderWithParties } from "@shared/schema";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
@@ -18,7 +20,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Star, MapPin, Clock, Flag, Heart, MessageCircle, X, Printer, Package, Layers, ShoppingCart, ListChecks,
@@ -85,14 +86,13 @@ export function PrintServiceDetailModal({
     enabled: !readOnly && user?.role === "CAFE_OWNER",
   });
   const createReview = useCreatePrintReview();
-  const reportPrinter = useReportPrinter();
+  const submitReportMutation = useSubmitPrintReport();
 
   const faved = useFavorites((s) => (service ? !!s.printProducts[String(service.id)] : false));
   const togglePrint = useFavorites((s) => s.togglePrintProduct);
 
   const [reviewOrderId, setReviewOrderId] = useState<number | null>(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [reportReason, setReportReason] = useState("");
   const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
   const [messaging, setMessaging] = useState(false);
 
@@ -113,7 +113,6 @@ export function PrintServiceDetailModal({
   const handleClose = () => {
     setReviewOrderId(null);
     setReportModalOpen(false);
-    setReportReason("");
     onClose();
   };
 
@@ -127,17 +126,6 @@ export function PrintServiceDetailModal({
     onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
     dismissContentStyle, dismissOverlayStyle,
   } = useScrollDismiss(open, handleClose, undefined, true);
-
-  // Same swipe-to-dismiss, independently, for the nested Signaler dialog
-  // (task: "Standardize Grabber Design and Swipe-to-Dismiss Across Store
-  // Information and Service Modals") — a separate Dialog/open state, so a
-  // separate hook instance; safe since this dialog is already rendered as a
-  // sibling of the main modal's own gesture container, never a descendant.
-  const {
-    onBodyWheel: reportOnBodyWheel, onBodyTouchStart: reportOnBodyTouchStart,
-    onBodyTouchMove: reportOnBodyTouchMove, onBodyTouchEnd: reportOnBodyTouchEnd,
-    dismissContentStyle: reportDismissContentStyle, dismissOverlayStyle: reportDismissOverlayStyle,
-  } = useScrollDismiss(reportModalOpen, () => { setReportModalOpen(false); setReportReason(""); }, undefined, true);
 
   const handleMessage = async () => {
     if (!service || readOnly) return;
@@ -158,15 +146,9 @@ export function PrintServiceDetailModal({
     await createReview.mutateAsync({ printerId: service.printerId, printOrderId: activeOrderId, rating, comment: comment.trim() || undefined });
   };
 
-  const submitReport = () => {
-    if (!service || !reportReason.trim() || readOnly) return;
-    reportPrinter.mutate(
-      { printerId: service.printerId, reason: reportReason.trim() },
-      {
-        onSuccess: () => { toast({ title: "Signalement envoyé", description: "L'équipe Admin va l'examiner." }); setReportModalOpen(false); setReportReason(""); },
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      }
-    );
+  const submitReport = async (rating: number, reason: string) => {
+    if (!service || readOnly) throw new Error("Aperçu en lecture seule");
+    await submitReportMutation.mutateAsync({ targetUserId: service.printerId, reason, rating });
   };
 
   return (
@@ -339,42 +321,18 @@ export function PrintServiceDetailModal({
       </DialogContent>
     </Dialog>
 
-    {/* Signaler — same modal chrome as the Disponibilité modals (rounded-[2rem]
-        container, circular close button), close button on the right
-        (docs/print_marketing_ui_synchronization_audit.md Section 14-17). Content/
-        functionality unchanged. */}
-    <Dialog open={reportModalOpen} onOpenChange={(v) => { if (!v) { setReportModalOpen(false); setReportReason(""); } }}>
-      <DialogContent
-        className={`sm:max-w-md p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden ${t.modalBg}`}
-        style={reportDismissContentStyle}
-        overlayStyle={reportDismissOverlayStyle}
-      >
-        <VisuallyHidden><DialogTitle>Signaler {service?.printerName ?? ""}</DialogTitle></VisuallyHidden>
-        <div
-          className="px-5 pt-1 pb-5 space-y-3"
-          onWheel={reportOnBodyWheel}
-          onTouchStart={reportOnBodyTouchStart}
-          onTouchMove={reportOnBodyTouchMove}
-          onTouchEnd={reportOnBodyTouchEnd}
-        >
-          <ModalGrabber isDark={isDark} />
-          <div className="flex items-center justify-between">
-            <div className="w-8 h-8" />
-            <span className={`text-[13px] font-semibold tracking-tight leading-tight ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler {service?.printerName}</span>
-            <button onClick={() => { setReportModalOpen(false); setReportReason(""); }} aria-label="Close" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}>
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <Textarea placeholder="Décrivez le problème…" rows={3} value={reportReason} onChange={(e) => setReportReason(e.target.value)} className={t.inputBg} data-testid="input-report-reason" />
-          <div className="flex gap-2 justify-end pt-1">
-            <Button size="sm" variant="outline" className={t.textPrimary} onClick={() => { setReportModalOpen(false); setReportReason(""); }}>Annuler</Button>
-            <Button size="sm" variant="destructive" onClick={submitReport} disabled={!reportReason.trim() || reportPrinter.isPending} data-testid="button-submit-report">
-              {reportPrinter.isPending ? "Envoi…" : "Envoyer le signalement"}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+    {/* Signaler — redesigned on the Avis modal pattern (task: "Standardize
+        the Remaining Report Modals Using the New Academy Design"), same
+        shared ReportModal used by PrintCompanyDetailModal and every other
+        migrated report entry point. */}
+    <ReportModal
+      open={reportModalOpen}
+      onClose={() => setReportModalOpen(false)}
+      targetName={service?.printerName ?? ""}
+      onSubmit={submitReport}
+      isSubmitting={submitReportMutation.isPending}
+      accentClassName={isDark ? "text-blue-400" : "text-blue-600"}
+    />
 
     {/* Avis — dedicated modal, opened via the Star icon. Same real order-based
         reviews (usePrintReviews) and the same review form/mutation (submitReview)

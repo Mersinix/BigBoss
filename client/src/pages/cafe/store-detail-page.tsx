@@ -10,6 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReviewModal } from "@/components/review-modal";
+import { ReportModal } from "@/components/report-modal";
+import { useSubmitSupplierReport } from "@/hooks/use-supplier-reports";
 import { AvailabilityModal } from "@/components/shared/availability-modal";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
@@ -17,7 +19,7 @@ import {
 import {
   Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock,
   ChevronLeft, MapPin, Plus, Info, Star, Music, Zap, Layers,
-  Search,
+  Search, Flag,
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -530,6 +532,7 @@ interface FilterState { subCategoryId: string; brandId: string; flavorId: string
 export default function StoreDetailPage() {
   const [, params] = useRoute("/stores/:storeId");
   const [, navigate] = useLocation();
+  const { user } = useAuth();
   const hasCommercialAccess = useCommercialAccess();
   const searchLocation = useSearchLocationStore((s) => s.searchLocation);
   const searchLat = searchLocation?.lat ? parseFloat(searchLocation.lat) : null;
@@ -575,6 +578,17 @@ export default function StoreDetailPage() {
   const [supplierReviewsOpen, setSupplierReviewsOpen] = useState(false);
   const [flashOpen, setFlashOpen] = useState(false);
   const [isMusicPlaying, setIsMusicPlaying] = useState(true);
+  // Signaler (task: "Extend the Shared Reporting System to Supplier
+  // Stores") — same shared ReportModal every other service uses; the
+  // report always targets the supplier account (store.supplierId), never
+  // a Product or Pack, regardless of what the Coffee Owner is currently
+  // browsing on this page.
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const submitSupplierReportMutation = useSubmitSupplierReport();
+  const submitSupplierReport = async (rating: number, reason: string) => {
+    if (!store) throw new Error("Magasin introuvable");
+    await submitSupplierReportMutation.mutateAsync({ targetUserId: store.supplierId, reason, rating });
+  };
 
   // Scroll to top whenever a store is opened
   useEffect(() => { window.scrollTo(0, 0); }, [storeId]);
@@ -934,7 +948,16 @@ export default function StoreDetailPage() {
           >
             <Star className="w-4 h-4 text-white/80" />
           </button>
-          
+          {user?.role === "CAFE_OWNER" && (
+            <button
+              className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
+              onClick={() => setReportModalOpen(true)}
+              data-testid="button-open-store-report"
+              title="Signaler"
+            >
+              <Flag className="w-4 h-4 text-white/80" />
+            </button>
+          )}
         </div>
 
         {/* Closed badge */}
@@ -1240,6 +1263,17 @@ export default function StoreDetailPage() {
         supplierId={store.supplierId}
         supplierName={store.name}
         isDark={isDark}
+      />
+
+      {/* Signaler — same shared ReportModal every other service uses (task:
+          "Extend the Shared Reporting System to Supplier Stores"). */}
+      <ReportModal
+        open={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        targetName={store.name}
+        onSubmit={submitSupplierReport}
+        isSubmitting={submitSupplierReportMutation.isPending}
+        accentClassName={isDark ? "text-amber-400" : "text-amber-600"}
       />
 
       {/* ── Flash mode ─────────────────────────────────────────────────────── */}

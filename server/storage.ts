@@ -8,7 +8,7 @@ import {
   users, products, orders, orderItems, subOrders, supplierProductVariants,
   categories, subCategories, flavors, sizes, brands,
   supplierCategories, supplierSubCategories, supplierProductListings, favorites,
-  platformServices, supplierStores, storeFavorites, supplierProductReviews,
+  platformServices, supplierStores, storeFavorites, supplierProductReviews, supplierReports, type SupplierReport,
   landingConfig, messagingSettings, authProviderSettings, loginSecuritySettings, packs, packItems, packFavorites, inventoryAdjustments, prospects,
   prospectCustomTypes, PROSPECT_TYPES,
   maintenanceProfiles, maintenanceFavorites, maintenanceReservations,
@@ -542,10 +542,12 @@ export interface IStorage {
   getAcademyOrganisationFavoritesByUser(userId: number): Promise<number[]>;
   addAcademyOrganisationFavorite(userId: number, academyUserId: number): Promise<void>;
   removeAcademyOrganisationFavorite(userId: number, academyUserId: number): Promise<void>;
-  createAcademyReport(cafeOwnerId: number, academyUserId: number, reason: string): Promise<AcademyReport>;
-  getAcademyReports(status?: "PENDING" | "RESOLVED" | "DISMISSED"): Promise<(AcademyReport & { cafeOwnerName: string; academyName: string })[]>;
+  createAcademyReport(cafeOwnerId: number, academyUserId: number, reason: string, rating?: number): Promise<AcademyReport>;
+  getAcademyReportById(id: number): Promise<AcademyReport | undefined>;
+  getAcademyReports(status?: "PENDING" | "RESOLVED" | "DISMISSED" | "PUBLISHED" | "REJECTED"): Promise<(AcademyReport & { cafeOwnerName: string; academyName: string })[]>;
   getAcademyReportsByOwner(cafeOwnerId: number): Promise<(AcademyReport & { academyName: string; academyProfileImageUrl: string | null; academyLocation: string | null })[]>;
-  resolveAcademyReport(id: number, status: "RESOLVED" | "DISMISSED", resolutionNote?: string): Promise<AcademyReport | undefined>;
+  getPublishedAcademyReports(page?: number, limit?: number): Promise<{ reports: any[]; total: number; page: number; limit: number }>;
+  resolveAcademyReport(id: number, status: "RESOLVED" | "DISMISSED" | "PUBLISHED" | "REJECTED", resolutionNote?: string, moderatedByAdminId?: number): Promise<AcademyReport | undefined>;
   getAcademySessionsForCourse(courseId: number): Promise<AcademyCourseSession[]>;
   getAcademySessionsForAcademy(academyUserId: number): Promise<AcademyCourseSessionWithCourse[]>;
   createAcademySession(academyUserId: number, data: { courseId: number; startDate: string; endDate?: string | null; capacity?: number | null }): Promise<AcademyCourseSession>;
@@ -6939,12 +6941,12 @@ export class DatabaseStorage implements IStorage {
   // own table (maintenanceReports), own service scope, mirrors baristaReports
   // exactly (Part 23: service data must never cross). ──────────────────────
 
-  async createMaintenanceReport(cafeOwnerId: number, maintenanceUserId: number, reason: string): Promise<MaintenanceReport> {
-    const [created] = await db.insert(maintenanceReports).values({ cafeOwnerId, maintenanceUserId, reason }).returning();
+  async createMaintenanceReport(cafeOwnerId: number, maintenanceUserId: number, reason: string, rating?: number): Promise<MaintenanceReport> {
+    const [created] = await db.insert(maintenanceReports).values({ cafeOwnerId, maintenanceUserId, reason, rating: rating ?? null }).returning();
     return created;
   }
 
-  async getMaintenanceReports(status?: "PENDING" | "RESOLVED" | "DISMISSED"): Promise<(MaintenanceReport & { cafeOwnerName: string; maintenanceName: string })[]> {
+  async getMaintenanceReports(status?: "PENDING" | "RESOLVED" | "DISMISSED" | "PUBLISHED" | "REJECTED"): Promise<(MaintenanceReport & { cafeOwnerName: string; maintenanceName: string })[]> {
     const rows = await db.select().from(maintenanceReports)
       .where(status ? eq(maintenanceReports.status, status) : undefined)
       .orderBy(desc(maintenanceReports.createdAt));
@@ -6952,6 +6954,11 @@ export class DatabaseStorage implements IStorage {
     const userIds = Array.from(new Set(rows.flatMap((r) => [r.cafeOwnerId, r.maintenanceUserId])));
     const userMap = new Map((await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds))).map((u) => [u.id, u.name]));
     return rows.map((r) => ({ ...r, cafeOwnerName: userMap.get(r.cafeOwnerId) ?? "—", maintenanceName: userMap.get(r.maintenanceUserId) ?? "—" }));
+  }
+
+  async getMaintenanceReportById(id: number): Promise<MaintenanceReport | undefined> {
+    const [row] = await db.select().from(maintenanceReports).where(eq(maintenanceReports.id, id));
+    return row;
   }
 
   async getMaintenanceReportsByOwner(cafeOwnerId: number): Promise<(MaintenanceReport & {
@@ -6971,9 +6978,39 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async resolveMaintenanceReport(id: number, status: "RESOLVED" | "DISMISSED", resolutionNote?: string): Promise<MaintenanceReport | undefined> {
+  // Public read (task: "Redesign Maintenance Reports Using the Avis Modal
+  // Pattern and Add Admin Moderation") — strictly status = PUBLISHED, never
+  // the reporting cafeOwnerId/name (privacy requirement), paginated same
+  // convention as getDeliveryFinancialLedger ({ data, total, page, limit }).
+  async getPublishedMaintenanceReports(page = 1, limit = 10): Promise<{ reports: (Pick<MaintenanceReport, "id" | "maintenanceUserId" | "reason" | "rating" | "createdAt" | "resolvedAt"> & { maintenanceName: string; maintenanceProfileImageUrl: string | null })[]; total: number; page: number; limit: number }> {
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), 50);
+    const where = eq(maintenanceReports.status, "PUBLISHED");
+    const [rows, [{ count }]] = await Promise.all([
+      db.select({
+        id: maintenanceReports.id, maintenanceUserId: maintenanceReports.maintenanceUserId,
+        reason: maintenanceReports.reason, rating: maintenanceReports.rating,
+        createdAt: maintenanceReports.createdAt, resolvedAt: maintenanceReports.resolvedAt,
+      }).from(maintenanceReports).where(where)
+        .orderBy(desc(maintenanceReports.resolvedAt))
+        .limit(safeLimit).offset((safePage - 1) * safeLimit),
+      db.select({ count: sql<number>`count(*)::int` }).from(maintenanceReports).where(where),
+    ]);
+    if (rows.length === 0) return { reports: [], total: count, page: safePage, limit: safeLimit };
+    const maintenanceIds = Array.from(new Set(rows.map((r) => r.maintenanceUserId)));
+    const rowsUsers = await db.select({ id: users.id, name: users.name, profileImageUrl: users.profileImageUrl })
+      .from(users).where(inArray(users.id, maintenanceIds));
+    const map = new Map(rowsUsers.map((u) => [u.id, u]));
+    const reports = rows.map((r) => {
+      const m = map.get(r.maintenanceUserId);
+      return { ...r, maintenanceName: m?.name ?? "—", maintenanceProfileImageUrl: m?.profileImageUrl ?? null };
+    });
+    return { reports, total: count, page: safePage, limit: safeLimit };
+  }
+
+  async resolveMaintenanceReport(id: number, status: "RESOLVED" | "DISMISSED" | "PUBLISHED" | "REJECTED", resolutionNote?: string, moderatedByAdminId?: number): Promise<MaintenanceReport | undefined> {
     const [updated] = await db.update(maintenanceReports)
-      .set({ status, resolvedAt: new Date(), resolutionNote: resolutionNote ?? null })
+      .set({ status, resolvedAt: new Date(), resolutionNote: resolutionNote ?? null, moderatedByAdminId: moderatedByAdminId ?? null })
       .where(eq(maintenanceReports.id, id))
       .returning();
     return updated;
@@ -8070,12 +8107,17 @@ export class DatabaseStorage implements IStorage {
   // ── Entity-level Marketing reports (Coffee Owner "Blacklist") — own table
   // (marketingReports), own service scope, mirrors maintenanceReports exactly. ──
 
-  async createMarketingReport(cafeOwnerId: number, marketingUserId: number, reason: string): Promise<MarketingReport> {
-    const [created] = await db.insert(marketingReports).values({ cafeOwnerId, marketingUserId, reason }).returning();
+  async createMarketingReport(cafeOwnerId: number, marketingUserId: number, reason: string, rating?: number): Promise<MarketingReport> {
+    const [created] = await db.insert(marketingReports).values({ cafeOwnerId, marketingUserId, reason, rating: rating ?? null }).returning();
     return created;
   }
 
-  async getMarketingReports(status?: "PENDING" | "RESOLVED" | "DISMISSED"): Promise<(MarketingReport & { cafeOwnerName: string; marketingName: string })[]> {
+  async getMarketingReportById(id: number): Promise<MarketingReport | undefined> {
+    const [row] = await db.select().from(marketingReports).where(eq(marketingReports.id, id));
+    return row;
+  }
+
+  async getMarketingReports(status?: "PENDING" | "RESOLVED" | "DISMISSED" | "PUBLISHED" | "REJECTED"): Promise<(MarketingReport & { cafeOwnerName: string; marketingName: string })[]> {
     const rows = await db.select().from(marketingReports)
       .where(status ? eq(marketingReports.status, status) : undefined)
       .orderBy(desc(marketingReports.createdAt));
@@ -8102,9 +8144,35 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async resolveMarketingReport(id: number, status: "RESOLVED" | "DISMISSED", resolutionNote?: string): Promise<MarketingReport | undefined> {
+  async getPublishedMarketingReports(page = 1, limit = 10): Promise<{ reports: (Pick<MarketingReport, "id" | "marketingUserId" | "reason" | "rating" | "createdAt" | "resolvedAt"> & { marketingName: string; marketingProfileImageUrl: string | null })[]; total: number; page: number; limit: number }> {
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), 50);
+    const where = eq(marketingReports.status, "PUBLISHED");
+    const [rows, [{ count }]] = await Promise.all([
+      db.select({
+        id: marketingReports.id, marketingUserId: marketingReports.marketingUserId,
+        reason: marketingReports.reason, rating: marketingReports.rating,
+        createdAt: marketingReports.createdAt, resolvedAt: marketingReports.resolvedAt,
+      }).from(marketingReports).where(where)
+        .orderBy(desc(marketingReports.resolvedAt))
+        .limit(safeLimit).offset((safePage - 1) * safeLimit),
+      db.select({ count: sql<number>`count(*)::int` }).from(marketingReports).where(where),
+    ]);
+    if (rows.length === 0) return { reports: [], total: count, page: safePage, limit: safeLimit };
+    const marketingIds = Array.from(new Set(rows.map((r) => r.marketingUserId)));
+    const rowsUsers = await db.select({ id: users.id, name: users.name, profileImageUrl: users.profileImageUrl })
+      .from(users).where(inArray(users.id, marketingIds));
+    const map = new Map(rowsUsers.map((u) => [u.id, u]));
+    const reports = rows.map((r) => {
+      const m = map.get(r.marketingUserId);
+      return { ...r, marketingName: m?.name ?? "—", marketingProfileImageUrl: m?.profileImageUrl ?? null };
+    });
+    return { reports, total: count, page: safePage, limit: safeLimit };
+  }
+
+  async resolveMarketingReport(id: number, status: "RESOLVED" | "DISMISSED" | "PUBLISHED" | "REJECTED", resolutionNote?: string, moderatedByAdminId?: number): Promise<MarketingReport | undefined> {
     const [updated] = await db.update(marketingReports)
-      .set({ status, resolvedAt: new Date(), resolutionNote: resolutionNote ?? null })
+      .set({ status, resolvedAt: new Date(), resolutionNote: resolutionNote ?? null, moderatedByAdminId: moderatedByAdminId ?? null })
       .where(eq(marketingReports.id, id))
       .returning();
     return updated;
@@ -8525,12 +8593,17 @@ export class DatabaseStorage implements IStorage {
 
   // Entity-level Print reports ("Blacklist") — mirrors createMarketingReport/
   // getMarketingReportsByOwner/resolveMarketingReport exactly, keyed by printerId.
-  async createPrintReport(cafeOwnerId: number, printerId: number, reason: string): Promise<PrintReport> {
-    const [created] = await db.insert(printReports).values({ cafeOwnerId, printerId, reason }).returning();
+  async createPrintReport(cafeOwnerId: number, printerId: number, reason: string, rating?: number): Promise<PrintReport> {
+    const [created] = await db.insert(printReports).values({ cafeOwnerId, printerId, reason, rating: rating ?? null }).returning();
     return created;
   }
 
-  async getPrintReports(status?: "PENDING" | "RESOLVED" | "DISMISSED"): Promise<(PrintReport & { cafeOwnerName: string; printerName: string })[]> {
+  async getPrintReportById(id: number): Promise<PrintReport | undefined> {
+    const [row] = await db.select().from(printReports).where(eq(printReports.id, id));
+    return row;
+  }
+
+  async getPrintReports(status?: "PENDING" | "RESOLVED" | "DISMISSED" | "PUBLISHED" | "REJECTED"): Promise<(PrintReport & { cafeOwnerName: string; printerName: string })[]> {
     const rows = await db.select().from(printReports)
       .where(status ? eq(printReports.status, status) : undefined)
       .orderBy(desc(printReports.createdAt));
@@ -8557,9 +8630,35 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async resolvePrintReport(id: number, status: "RESOLVED" | "DISMISSED", resolutionNote?: string): Promise<PrintReport | undefined> {
+  async getPublishedPrintReports(page = 1, limit = 10): Promise<{ reports: (Pick<PrintReport, "id" | "printerId" | "reason" | "rating" | "createdAt" | "resolvedAt"> & { printerName: string; printerProfileImageUrl: string | null })[]; total: number; page: number; limit: number }> {
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), 50);
+    const where = eq(printReports.status, "PUBLISHED");
+    const [rows, [{ count }]] = await Promise.all([
+      db.select({
+        id: printReports.id, printerId: printReports.printerId,
+        reason: printReports.reason, rating: printReports.rating,
+        createdAt: printReports.createdAt, resolvedAt: printReports.resolvedAt,
+      }).from(printReports).where(where)
+        .orderBy(desc(printReports.resolvedAt))
+        .limit(safeLimit).offset((safePage - 1) * safeLimit),
+      db.select({ count: sql<number>`count(*)::int` }).from(printReports).where(where),
+    ]);
+    if (rows.length === 0) return { reports: [], total: count, page: safePage, limit: safeLimit };
+    const printerIds = Array.from(new Set(rows.map((r) => r.printerId)));
+    const rowsUsers = await db.select({ id: users.id, name: users.name, profileImageUrl: users.profileImageUrl })
+      .from(users).where(inArray(users.id, printerIds));
+    const map = new Map(rowsUsers.map((u) => [u.id, u]));
+    const reports = rows.map((r) => {
+      const p = map.get(r.printerId);
+      return { ...r, printerName: p?.name ?? "—", printerProfileImageUrl: p?.profileImageUrl ?? null };
+    });
+    return { reports, total: count, page: safePage, limit: safeLimit };
+  }
+
+  async resolvePrintReport(id: number, status: "RESOLVED" | "DISMISSED" | "PUBLISHED" | "REJECTED", resolutionNote?: string, moderatedByAdminId?: number): Promise<PrintReport | undefined> {
     const [updated] = await db.update(printReports)
-      .set({ status, resolvedAt: new Date(), resolutionNote: resolutionNote ?? null })
+      .set({ status, resolvedAt: new Date(), resolutionNote: resolutionNote ?? null, moderatedByAdminId: moderatedByAdminId ?? null })
       .where(eq(printReports.id, id))
       .returning();
     return updated;
@@ -9219,12 +9318,17 @@ export class DatabaseStorage implements IStorage {
   // ── Entity-level Barista reports (Coffee Owner reporting a Barista account) —
   // distinct from review-reporting; resolved centrally by Admin. ─────────────────
 
-  async createBaristaReport(cafeOwnerId: number, baristaUserId: number, reason: string): Promise<BaristaReport> {
-    const [created] = await db.insert(baristaReports).values({ cafeOwnerId, baristaUserId, reason }).returning();
+  async createBaristaReport(cafeOwnerId: number, baristaUserId: number, reason: string, rating?: number): Promise<BaristaReport> {
+    const [created] = await db.insert(baristaReports).values({ cafeOwnerId, baristaUserId, reason, rating: rating ?? null }).returning();
     return created;
   }
 
-  async getBaristaReports(status?: "PENDING" | "RESOLVED" | "DISMISSED"): Promise<(BaristaReport & { cafeOwnerName: string; baristaName: string })[]> {
+  async getBaristaReportById(id: number): Promise<BaristaReport | undefined> {
+    const [row] = await db.select().from(baristaReports).where(eq(baristaReports.id, id));
+    return row;
+  }
+
+  async getBaristaReports(status?: "PENDING" | "RESOLVED" | "DISMISSED" | "PUBLISHED" | "REJECTED"): Promise<(BaristaReport & { cafeOwnerName: string; baristaName: string })[]> {
     const rows = await db.select().from(baristaReports)
       .where(status ? eq(baristaReports.status, status) : undefined)
       .orderBy(desc(baristaReports.createdAt));
@@ -9232,6 +9336,36 @@ export class DatabaseStorage implements IStorage {
     const userIds = Array.from(new Set(rows.flatMap((r) => [r.cafeOwnerId, r.baristaUserId])));
     const userMap = new Map((await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds))).map((u) => [u.id, u.name]));
     return rows.map((r) => ({ ...r, cafeOwnerName: userMap.get(r.cafeOwnerId) ?? "—", baristaName: userMap.get(r.baristaUserId) ?? "—" }));
+  }
+
+  // Public read (task: "Add a Grabber to the Maintenance Reports Modal and
+  // Extend the Reporting System to Barista") — mirrors
+  // getPublishedMaintenanceReports exactly: strictly status = PUBLISHED,
+  // never the reporting cafeOwnerId/name, paginated.
+  async getPublishedBaristaReports(page = 1, limit = 10): Promise<{ reports: (Pick<BaristaReport, "id" | "baristaUserId" | "reason" | "rating" | "createdAt" | "resolvedAt"> & { baristaName: string; baristaProfileImageUrl: string | null })[]; total: number; page: number; limit: number }> {
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), 50);
+    const where = eq(baristaReports.status, "PUBLISHED");
+    const [rows, [{ count }]] = await Promise.all([
+      db.select({
+        id: baristaReports.id, baristaUserId: baristaReports.baristaUserId,
+        reason: baristaReports.reason, rating: baristaReports.rating,
+        createdAt: baristaReports.createdAt, resolvedAt: baristaReports.resolvedAt,
+      }).from(baristaReports).where(where)
+        .orderBy(desc(baristaReports.resolvedAt))
+        .limit(safeLimit).offset((safePage - 1) * safeLimit),
+      db.select({ count: sql<number>`count(*)::int` }).from(baristaReports).where(where),
+    ]);
+    if (rows.length === 0) return { reports: [], total: count, page: safePage, limit: safeLimit };
+    const baristaIds = Array.from(new Set(rows.map((r) => r.baristaUserId)));
+    const rowsUsers = await db.select({ id: users.id, name: users.name, profileImageUrl: users.profileImageUrl })
+      .from(users).where(inArray(users.id, baristaIds));
+    const map = new Map(rowsUsers.map((u) => [u.id, u]));
+    const reports = rows.map((r) => {
+      const b = map.get(r.baristaUserId);
+      return { ...r, baristaName: b?.name ?? "—", baristaProfileImageUrl: b?.profileImageUrl ?? null };
+    });
+    return { reports, total: count, page: safePage, limit: safeLimit };
   }
 
   // Coffee Owner's own "Blacklist" view (Part 18-21) — a scoped read of the same
@@ -9255,9 +9389,9 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async resolveBaristaReport(id: number, status: "RESOLVED" | "DISMISSED", resolutionNote?: string): Promise<BaristaReport | undefined> {
+  async resolveBaristaReport(id: number, status: "RESOLVED" | "DISMISSED" | "PUBLISHED" | "REJECTED", resolutionNote?: string, moderatedByAdminId?: number): Promise<BaristaReport | undefined> {
     const [updated] = await db.update(baristaReports)
-      .set({ status, resolvedAt: new Date(), resolutionNote: resolutionNote ?? null })
+      .set({ status, resolvedAt: new Date(), resolutionNote: resolutionNote ?? null, moderatedByAdminId: moderatedByAdminId ?? null })
       .where(eq(baristaReports.id, id))
       .returning();
     return updated;
@@ -10381,12 +10515,17 @@ export class DatabaseStorage implements IStorage {
 
   // Entity-level Academy reports ("Blacklist") — mirrors createMarketingReport/
   // getMarketingReportsByOwner/resolveMarketingReport exactly.
-  async createAcademyReport(cafeOwnerId: number, academyUserId: number, reason: string): Promise<AcademyReport> {
-    const [created] = await db.insert(academyReports).values({ cafeOwnerId, academyUserId, reason }).returning();
+  async createAcademyReport(cafeOwnerId: number, academyUserId: number, reason: string, rating?: number): Promise<AcademyReport> {
+    const [created] = await db.insert(academyReports).values({ cafeOwnerId, academyUserId, reason, rating: rating ?? null }).returning();
     return created;
   }
 
-  async getAcademyReports(status?: "PENDING" | "RESOLVED" | "DISMISSED"): Promise<(AcademyReport & { cafeOwnerName: string; academyName: string })[]> {
+  async getAcademyReportById(id: number): Promise<AcademyReport | undefined> {
+    const [row] = await db.select().from(academyReports).where(eq(academyReports.id, id));
+    return row;
+  }
+
+  async getAcademyReports(status?: "PENDING" | "RESOLVED" | "DISMISSED" | "PUBLISHED" | "REJECTED"): Promise<(AcademyReport & { cafeOwnerName: string; academyName: string })[]> {
     const rows = await db.select().from(academyReports)
       .where(status ? eq(academyReports.status, status) : undefined)
       .orderBy(desc(academyReports.createdAt));
@@ -10413,9 +10552,35 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async resolveAcademyReport(id: number, status: "RESOLVED" | "DISMISSED", resolutionNote?: string): Promise<AcademyReport | undefined> {
+  async getPublishedAcademyReports(page = 1, limit = 10): Promise<{ reports: (Pick<AcademyReport, "id" | "academyUserId" | "reason" | "rating" | "createdAt" | "resolvedAt"> & { academyName: string; academyProfileImageUrl: string | null })[]; total: number; page: number; limit: number }> {
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), 50);
+    const where = eq(academyReports.status, "PUBLISHED");
+    const [rows, [{ count }]] = await Promise.all([
+      db.select({
+        id: academyReports.id, academyUserId: academyReports.academyUserId,
+        reason: academyReports.reason, rating: academyReports.rating,
+        createdAt: academyReports.createdAt, resolvedAt: academyReports.resolvedAt,
+      }).from(academyReports).where(where)
+        .orderBy(desc(academyReports.resolvedAt))
+        .limit(safeLimit).offset((safePage - 1) * safeLimit),
+      db.select({ count: sql<number>`count(*)::int` }).from(academyReports).where(where),
+    ]);
+    if (rows.length === 0) return { reports: [], total: count, page: safePage, limit: safeLimit };
+    const academyIds = Array.from(new Set(rows.map((r) => r.academyUserId)));
+    const rowsUsers = await db.select({ id: users.id, name: users.name, profileImageUrl: users.profileImageUrl })
+      .from(users).where(inArray(users.id, academyIds));
+    const map = new Map(rowsUsers.map((u) => [u.id, u]));
+    const reports = rows.map((r) => {
+      const a = map.get(r.academyUserId);
+      return { ...r, academyName: a?.name ?? "—", academyProfileImageUrl: a?.profileImageUrl ?? null };
+    });
+    return { reports, total: count, page: safePage, limit: safeLimit };
+  }
+
+  async resolveAcademyReport(id: number, status: "RESOLVED" | "DISMISSED" | "PUBLISHED" | "REJECTED", resolutionNote?: string, moderatedByAdminId?: number): Promise<AcademyReport | undefined> {
     const [updated] = await db.update(academyReports)
-      .set({ status, resolvedAt: new Date(), resolutionNote: resolutionNote ?? null })
+      .set({ status, resolvedAt: new Date(), resolutionNote: resolutionNote ?? null, moderatedByAdminId: moderatedByAdminId ?? null })
       .where(eq(academyReports.id, id))
       .returning();
     return updated;
@@ -12727,6 +12892,80 @@ export class DatabaseStorage implements IStorage {
     const cards = await this.buildStoreCards(stores);
     // Only return stores that have at least one available product
     return cards.filter((c) => c.productCount > 0);
+  }
+
+  // ── Entity-level Supplier reports (Coffee Owner "Blacklist", task: "Extend
+  // the Shared Reporting System to Supplier Stores") — mirrors
+  // maintenanceReports/etc exactly; targets the supplier ACCOUNT (supplierId,
+  // same key supplierProductReviews already uses for its 'SUPPLIER'
+  // reviewType), never a separate store id — supplierStores.supplierId is
+  // unique (one store per supplier). ────────────────────────────────────────
+
+  async createSupplierReport(cafeOwnerId: number, supplierId: number, reason: string, rating?: number): Promise<SupplierReport> {
+    const [created] = await db.insert(supplierReports).values({ cafeOwnerId, supplierId, reason, rating: rating ?? null }).returning();
+    return created;
+  }
+
+  async getSupplierReportById(id: number): Promise<SupplierReport | undefined> {
+    const [row] = await db.select().from(supplierReports).where(eq(supplierReports.id, id));
+    return row;
+  }
+
+  async getSupplierReports(status?: "PENDING" | "PUBLISHED" | "REJECTED"): Promise<(SupplierReport & { cafeOwnerName: string; supplierName: string })[]> {
+    const rows = await db.select().from(supplierReports)
+      .where(status ? eq(supplierReports.status, status) : undefined)
+      .orderBy(desc(supplierReports.createdAt));
+    if (rows.length === 0) return [];
+    const userIds = Array.from(new Set(rows.flatMap((r) => [r.cafeOwnerId, r.supplierId])));
+    const userMap = new Map((await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, userIds))).map((u) => [u.id, u.name]));
+    const storeRows = await db.select({ supplierId: supplierStores.supplierId, name: supplierStores.name }).from(supplierStores).where(inArray(supplierStores.supplierId, userIds));
+    const storeNameMap = new Map(storeRows.map((s) => [s.supplierId, s.name]));
+    return rows.map((r) => ({
+      ...r,
+      cafeOwnerName: userMap.get(r.cafeOwnerId) ?? "—",
+      supplierName: storeNameMap.get(r.supplierId) || userMap.get(r.supplierId) || "—",
+    }));
+  }
+
+  // Public read — strictly status = PUBLISHED, never cafeOwnerId/name,
+  // paginated; joins supplierStores for the store-facing name/logo (never
+  // product or pack data).
+  async getPublishedSupplierReports(page = 1, limit = 10): Promise<{ reports: (Pick<SupplierReport, "id" | "supplierId" | "reason" | "rating" | "createdAt" | "resolvedAt"> & { supplierName: string; supplierProfileImageUrl: string | null })[]; total: number; page: number; limit: number }> {
+    const safePage = Math.max(1, page);
+    const safeLimit = Math.min(Math.max(1, limit), 50);
+    const where = eq(supplierReports.status, "PUBLISHED");
+    const [rows, [{ count }]] = await Promise.all([
+      db.select({
+        id: supplierReports.id, supplierId: supplierReports.supplierId,
+        reason: supplierReports.reason, rating: supplierReports.rating,
+        createdAt: supplierReports.createdAt, resolvedAt: supplierReports.resolvedAt,
+      }).from(supplierReports).where(where)
+        .orderBy(desc(supplierReports.resolvedAt))
+        .limit(safeLimit).offset((safePage - 1) * safeLimit),
+      db.select({ count: sql<number>`count(*)::int` }).from(supplierReports).where(where),
+    ]);
+    if (rows.length === 0) return { reports: [], total: count, page: safePage, limit: safeLimit };
+    const supplierIds = Array.from(new Set(rows.map((r) => r.supplierId)));
+    const [storeRows, userRows] = await Promise.all([
+      db.select({ supplierId: supplierStores.supplierId, name: supplierStores.name, logoUrl: supplierStores.logoUrl, coverUrl: supplierStores.coverUrl })
+        .from(supplierStores).where(inArray(supplierStores.supplierId, supplierIds)),
+      db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, supplierIds)),
+    ]);
+    const storeMap = new Map(storeRows.map((s) => [s.supplierId, s]));
+    const userMap = new Map(userRows.map((u) => [u.id, u.name]));
+    const reports = rows.map((r) => {
+      const store = storeMap.get(r.supplierId);
+      return { ...r, supplierName: store?.name || userMap.get(r.supplierId) || "—", supplierProfileImageUrl: store?.logoUrl ?? store?.coverUrl ?? null };
+    });
+    return { reports, total: count, page: safePage, limit: safeLimit };
+  }
+
+  async resolveSupplierReport(id: number, status: "PUBLISHED" | "REJECTED", resolutionNote?: string, moderatedByAdminId?: number): Promise<SupplierReport | undefined> {
+    const [updated] = await db.update(supplierReports)
+      .set({ status, resolvedAt: new Date(), resolutionNote: resolutionNote ?? null, moderatedByAdminId: moderatedByAdminId ?? null })
+      .where(eq(supplierReports.id, id))
+      .returning();
+    return updated;
   }
 
   async getStoreDetail(id: number, opts?: { requireVisible?: boolean }): Promise<StoreDetail | undefined> {

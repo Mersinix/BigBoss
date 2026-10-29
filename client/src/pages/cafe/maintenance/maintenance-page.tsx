@@ -13,6 +13,8 @@ import { MaintenanceFastSearch } from "@/components/maintenance/maintenance-fast
 import { MaintenanceBlacklistModal } from "@/components/maintenance/maintenance-blacklist-modal";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
 import { ReviewModal } from "@/components/review-modal";
+import { ReportModal } from "@/components/report-modal";
+import { useSubmitMaintenanceReport, useMaintenancePublishedReports } from "@/hooks/use-maintenance-reports";
 import { AvailabilityModal } from "@/components/shared/availability-modal";
 import type { MaintenanceMarketplaceCard, OpeningHoursMap } from "@shared/schema";
 import { encodeMaintenanceSubSkillKey, decodeMaintenanceSubSkillKey } from "@shared/maintenance-sub-skill-key";
@@ -23,7 +25,6 @@ import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
 import { useFallbackImage } from "@/hooks/use-fallback-image";
@@ -428,26 +429,22 @@ export function AgentDetailModal({
   // Cover is the detail modal's primary hero image; Photo de profil then Flash
   // are tried in order if it's missing or fails to load (analyse.md image-mapping task).
   const coverImage = useFallbackImage([agent?.coverImageUrl, agent?.profileImageUrl, agent?.flashImageUrl], agent?.userId);
-  // Signaler (Part 11) now opens its own separate Dialog instead of an inline
-  // collapsible panel inside the main modal — same mutation/validation/
-  // success-error behavior, just presented in its own modal.
+  // Signaler — now the shared ReportModal (task: "Redesign Maintenance
+  // Reports Using the Avis Modal Pattern and Add Admin Moderation"), same
+  // open/close state as before, the rating+comment form and its own
+  // scroll-dismiss now live inside ReportModal itself.
   const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [reportReason, setReportReason] = useState("");
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   // Star (Phase 7) — new icon alongside the existing Signaler/Disponibilité
   // pair; opens its own dedicated modal instead of expanding inline, same
   // pattern as Signaler/Disponibilité already do. (The former Flash icon here
   // was replaced by MaintenanceJobTargetButton — see the icon row below.)
   const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
-  const { toast } = useToast();
-  const submitReport = useMutation({
-    mutationFn: () => {
-      if (readOnly) throw new Error("Aperçu en lecture seule");
-      return apiRequest("POST", `/api/maintenance/${agent!.userId}/report`, { reason: reportReason.trim() });
-    },
-    onSuccess: () => { toast({ title: "Signalement envoyé", description: "L'équipe Admin va l'examiner." }); setReportModalOpen(false); setReportReason(""); },
-    onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-  });
+  const submitReportMutation = useSubmitMaintenanceReport();
+  const submitReport = async (rating: number, reason: string) => {
+    if (readOnly) throw new Error("Aperçu en lecture seule");
+    await submitReportMutation.mutateAsync({ targetUserId: agent!.userId, reason, rating });
+  };
 
   // Scroll-direction dismissal (scroll down, back up, then up again past the
   // top closes the modal with a slide-down + fade) — same behavior and
@@ -460,17 +457,6 @@ export function AgentDetailModal({
     onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
     dismissContentStyle, dismissOverlayStyle,
   } = useScrollDismiss(open, onClose, undefined, true);
-
-  // Same swipe-to-dismiss, independently, for the nested Signaler dialog
-  // (task: "Standardize Grabber Design and Swipe-to-Dismiss Across Store
-  // Information and Service Modals") — a separate Dialog/open state, so a
-  // separate hook instance; safe since this dialog is already rendered as a
-  // sibling of the main modal's own gesture container, never a descendant.
-  const {
-    onBodyWheel: reportOnBodyWheel, onBodyTouchStart: reportOnBodyTouchStart,
-    onBodyTouchMove: reportOnBodyTouchMove, onBodyTouchEnd: reportOnBodyTouchEnd,
-    dismissContentStyle: reportDismissContentStyle, dismissOverlayStyle: reportDismissOverlayStyle,
-  } = useScrollDismiss(reportModalOpen, () => { setReportModalOpen(false); setReportReason(""); }, undefined, true);
 
   if (!agent) return null;
 
@@ -692,42 +678,20 @@ export function AgentDetailModal({
       </DialogContent>
     </Dialog>
 
-    {/* Signaler — same modal chrome as the Disponibilité modal below
-        (rounded-[2rem] container, circular close button), close button on the
-        right (docs/coffee_owner_favorites_reporting_nested_modal_audit.md
-        Section 9). Content/functionality unchanged. */}
-    <Dialog open={reportModalOpen} onOpenChange={(v) => { if (!v) { setReportModalOpen(false); setReportReason(""); } }}>
-      <DialogContent
-        className={`sm:max-w-md p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden ${isDark ? "bg-gray-900" : "bg-white"}`}
-        style={reportDismissContentStyle}
-        overlayStyle={reportDismissOverlayStyle}
-      >
-        <VisuallyHidden><DialogTitle>Signaler {agent.name}</DialogTitle></VisuallyHidden>
-        <div
-          className="px-5 pt-1 pb-5 space-y-3"
-          onWheel={reportOnBodyWheel}
-          onTouchStart={reportOnBodyTouchStart}
-          onTouchMove={reportOnBodyTouchMove}
-          onTouchEnd={reportOnBodyTouchEnd}
-        >
-          <ModalGrabber isDark={isDark} />
-          <div className="flex items-center justify-between">
-            <div className="w-8 h-8" />
-            <span className={`text-[13px] font-semibold tracking-tight leading-tight ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler {agent.name}</span>
-            <button onClick={() => { setReportModalOpen(false); setReportReason(""); }} aria-label="Close" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}>
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <Textarea placeholder="Décrivez le problème…" rows={3} value={reportReason} onChange={(e) => setReportReason(e.target.value)} className={t.inputBg} data-testid="input-maintenance-report-reason" />
-          <div className="flex gap-2 justify-end pt-1">
-            <Button size="sm" variant="outline" className={t.textPrimary} onClick={() => { setReportModalOpen(false); setReportReason(""); }}>Annuler</Button>
-            <Button size="sm" variant="destructive" onClick={() => submitReport.mutate()} disabled={!reportReason.trim() || submitReport.isPending} data-testid="button-submit-maintenance-report">
-              {submitReport.isPending ? "Envoi…" : "Envoyer le signalement"}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+    {/* Signaler — redesigned on the Avis modal pattern (task: "Redesign
+        Maintenance Reports Using the Avis Modal Pattern and Add Admin
+        Moderation"): 5-level sadness rating + comment, same shared
+        ReportModal every future module (Print/Barista/Academy/Marketing/
+        Shop) will reuse. Submitted reports are never shown anywhere until
+        an Admin explicitly publishes them (see MaintenanceBlacklistModal). */}
+    <ReportModal
+      open={reportModalOpen}
+      onClose={() => setReportModalOpen(false)}
+      targetName={agent.name}
+      onSubmit={submitReport}
+      isSubmitting={submitReportMutation.isPending}
+      accentClassName={isDark ? "text-amber-400" : "text-orange-500"}
+    />
 
     {/* Disponibilité (Part 12-14) — weekly schedule, Shop Opening Hours
         visual reference, real saved Maintenance data only. */}
@@ -795,6 +759,17 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
   const [selectedAgent, setSelectedAgent] = useState<MaintenanceMarketplaceCard | null>(null);
   const [fastSearchOpen, setFastSearchOpen] = useState(false);
   const [blacklistOpen, setBlacklistOpen] = useState(false);
+  // Hero report icon visibility (task: "Centralize Report Moderation in
+  // Admin Communication and Fix Real-Time Publication", Phase 8) — same
+  // query/cache key MaintenanceBlacklistModal itself reads (page 1, limit
+  // 10), so this never fires a second network request; React Query shares
+  // the one cached result between both call sites. Fails OPEN (icon stays
+  // visible) while loading or on error — only a confirmed total of 0 hides
+  // it, per spec ("never permanently hide just because data hasn't loaded").
+  const { data: publishedReportsPreview, isLoading: publishedReportsLoading, error: publishedReportsError } = useMaintenancePublishedReports(1, 10);
+  const hasPublishedMaintenanceReports = publishedReportsLoading || publishedReportsError
+    ? true
+    : (publishedReportsPreview?.total ?? 0) > 0;
   const [detailOpen, setDetailOpen] = useState(false);
   const [jobManagementOpen, setJobManagementOpen] = useState(false);
   const [jobManagementJobId, setJobManagementJobId] = useState<number | null>(null);
@@ -1066,7 +1041,7 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
              now, so the duplicated hero one is gone; Fast Search/Report stay
              Admin-toggleable per service (see /api/hero-actions). */
           <div className="relative flex justify-end items-center gap-2 mb-9">
-            {accessLevel === "approved" && heroActions.MAINTENANCE.reportEnabled && (
+            {accessLevel === "approved" && heroActions.MAINTENANCE.reportEnabled && hasPublishedMaintenanceReports && (
               <button onClick={() => setBlacklistOpen(true)} aria-label="Professionnels signalés" title="Professionnels signalés" data-testid="button-open-maintenance-blacklist" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-red-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
                 <Ban className="w-4 h-4" />
               </button>

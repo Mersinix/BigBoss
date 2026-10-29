@@ -17475,3 +17475,1327 @@ consommateur — voir Décision ci-dessus).
   uniquement par lecture de code, recherche de régression, et par le
   fait que les 13 points de navigation partagent tous désormais la
   même implémentation déjà revue à la tâche 49.
+
+---
+
+## 51. Refonte des signalements Maintenance sur le modèle du modal Avis + modération Admin
+
+### Audit
+
+**Modal Avis de référence** — `client/src/components/review-modal.tsx`
+(`ReviewModal`), composant déjà partagé Shop (Produit/Pack) et repris tel
+quel par Maintenance/Barista/Marketing/Academy/Print/Delivery/Driver pour
+leur propre bouton Étoile. Structure : header fixe (grabber, toggle
+thème, titre centré + sous-titre nom de la cible, bouton fermer rond),
+divider, badge type d'avis, carte formulaire (slot `extraFormContent`,
+`StarPicker` 5 étoiles, Textarea, bouton pleine largeur), écran de
+confirmation "Avis publié !", puis liste des avis existants
+(`StarDisplay`, nom, date, commentaire). C'est la référence visuelle et
+structurelle demandée par la tâche — je réutilise son squelette (header/
+divider/carte/confirmation/liste) sans copier ses couleurs ambre, qui
+restent spécifiques aux étoiles.
+
+**Signaler actuel (Maintenance detail modal)** —
+`client/src/pages/cafe/maintenance/maintenance-page.tsx`
+`AgentDetailModal`, lignes 431-473 (state `reportModalOpen`/
+`reportReason`, mutation `submitReport` → `POST /api/maintenance/:userId/
+report` avec `{ reason }`) et lignes 695-730 (Dialog inline, titre
+"Signaler {agent.name}", Textarea seule, boutons Annuler/Envoyer). Aucune
+note, texte libre uniquement.
+
+**Signaler actuel (modal Hero)** —
+`client/src/components/maintenance/maintenance-blacklist-modal.tsx`
+(`MaintenanceBlacklistModal`, ouvert depuis le bouton Ban "Professionnels
+signalés" du Hero `/maintenance`). Aujourd'hui ce modal affiche en fait
+**mes propres signalements** (`GET /api/maintenance/reports/mine`, scopé
+`cafeOwnerId`), avec un panneau `formOpen` contenant exactement les
+éléments que la tâche demande de supprimer : `Select` "Choisir un
+professionnel" (`targetUserId`), `Textarea`, boutons Annuler/"Envoyer le
+signalement", et le bouton "Signaler" (Flag) qui bascule `formOpen`. Ce
+panneau soumet au même endpoint que le modal de détail (pas un second
+système). La tâche demande de transformer ce modal en liste **publique**
+des signalements **publiés par un Admin** (pas "les miens") — changement
+de source de données, pas juste de présentation.
+
+**Modèle de données** — `shared/schema.ts:2535-2558` :
+`maintenanceReportStatusEnum` = `PENDING | RESOLVED | DISMISSED`,
+table `maintenanceReports(id, cafeOwnerId, maintenanceUserId, reason,
+status, createdAt, resolvedAt, resolutionNote)`. Aucune colonne de note
+(rating) : ce système n'a jamais eu de notation, contrairement aux avis
+(étoiles). `baristaReports`/`marketingReports` suivent exactement le
+même schéma (c'est un pattern répété, pas une spécificité Maintenance).
+
+**API existante** (`server/routes.ts:3435-3487`) :
+- `POST /api/maintenance/:userId/report` (requireAuth, CAFE_OWNER) —
+  vérifie que la cible existe et a le rôle MAINTENANCE, body
+  `{ reason: string(1..500) }`, notifie les admins (URGENT).
+- `GET /api/maintenance/reports/mine` (requireAuth) — mes signalements,
+  scopé `cafeOwnerId`.
+- `GET /api/admin/maintenance/reports?status=` (requireAdmin) — liste
+  complète avec noms résolus, filtrable par statut.
+- `PATCH /api/admin/maintenance/reports/:id/resolve` (requireAdmin) —
+  `{ status: "RESOLVED"|"DISMISSED", resolutionNote? }`.
+
+**Modération Admin existante** — recherche exhaustive : **aucune page
+Admin ne consomme `/api/admin/maintenance/reports`** (confirmé par
+`grep` sur `client/src/pages/admin/maintenance-page.tsx` : aucune
+occurrence). L'équivalent Barista (`admin/barista-page.tsx:858-889`,
+hooks `useAdminBaristaReports`/`useResolveBaristaReport` dans
+`client/src/hooks/use-barista-marketplace.ts:300-321`) EST câblé : carte
+"Signalements en attente" avec boutons Ignorer/Marquer résolu. C'est le
+pattern de référence pour construire l'écran de modération Maintenance
+manquant, adapté au nouveau cycle de vie (Publier/Rejeter au lieu de
+Résoudre/Ignorer) — aucun écran Admin existant à réutiliser tel quel
+pour un usage "publication publique", donc un point d'entrée minimal est
+ajouté dans l'onglet "Comptes Maintenance" déjà existant
+(`admin/maintenance-page.tsx`, même emplacement que Barista : avant la
+liste des comptes), pas un nouvel écran de gestion séparé.
+
+**Icônes de tristesse à 5 niveaux** — `lucide-react` (seule bibliothèque
+d'icônes utilisée partout ailleurs dans l'app) n'a que 4 visages
+distincts utilisables (`meh`, `annoyed`, `frown`, `angry`), insuffisant
+pour 5 niveaux clairement distincts. `react-icons` est déjà une
+dépendance du projet (`package.json`) mais n'est utilisé nulle part
+côté client actuellement. Son module `fa` (Font Awesome) fournit
+exactement 5 visages en progression de tristesse croissante :
+`FaMeh → FaFrown → FaSadTear → FaSadCry → FaAngry` — correspondance
+directe avec les 5 niveaux de l'énoncé (légèrement préoccupé → déçu →
+mécontent → très mécontent → extrêmement mécontent). Décision : utiliser
+`react-icons/fa` uniquement pour ce composant de notation (dépendance
+déjà présente, pas une nouvelle dépendance), documenté ici pour que les
+futurs modules (Print/Barista/Academy/Marketing/Shop) réutilisent le
+même composant au lieu de re-choisir des icônes différentes.
+
+**Confidentialité** — la table ne stocke aucune donnée superflue sur le
+signalant au-delà de `cafeOwnerId` (déjà minimal) ; l'endpoint public
+"publiés" ne devra renvoyer ni `cafeOwnerId` ni le nom du signalant
+(exigence Phase 6 : ne pas exposer l'identité du signalant).
+
+### Plan
+
+1. **Schéma** (`shared/schema.ts`) — ajout additif uniquement,
+   aucune donnée existante supprimée :
+   - `maintenanceReportStatusEnum` : ajouter les valeurs `PUBLISHED` et
+     `REJECTED` (les valeurs historiques `RESOLVED`/`DISMISSED` restent
+     dans l'enum pour la compatibilité des lignes existantes — aucune
+     UI ne les produira plus pour les nouveaux signalements, mais
+     rien ne les supprime).
+   - `maintenanceReports` : ajouter `rating integer` (nullable — les
+     lignes historiques n'ont jamais eu de note, donc NULL = signalement
+     hérité, jamais réinterprété comme une note) et
+     `moderatedByAdminId integer` (nullable, référence souple, même
+     convention que le reste du fichier — traçabilité de l'admin
+     responsable). `resolvedAt`/`resolutionNote` existants sont
+     réutilisés tels quels comme horodatage de modération / note de
+     modération (aucun nouveau champ dupliqué).
+   - Migration via `npm run db:push` (déjà la méthode utilisée dans ce
+     projet pour les évolutions de schéma de cette session, additive
+     et non destructive).
+
+2. **Backend** (`server/storage.ts`, `server/routes.ts`) :
+   - `createMaintenanceReport` : accepte un `rating` (1-5) en plus de
+     `reason`, validé côté route avec Zod — jamais de statut fourni par
+     le client (toujours `PENDING` par défaut, déjà le comportement
+     actuel ; aucune régression possible via manipulation du body).
+   - `getMaintenanceReports`/`resolveMaintenanceReport` : élargir les
+     types de statut acceptés à `PUBLISHED`/`REJECTED`, ajouter le
+     paramètre `moderatedByAdminId`.
+   - Nouvelle méthode `getPublishedMaintenanceReports({page, limit})` —
+     filtre strict `status = 'PUBLISHED'`, jointure nom/photo du
+     professionnel uniquement, **jamais** `cafeOwnerId`/nom du
+     signalant, pagination `{reports, total, page, limit}` (même
+     convention que `getDeliveryFinancialLedger` etc.).
+   - Nouvelle route `GET /api/maintenance/reports/published`
+     (requireAuth) — filtrage **serveur**, jamais côté client.
+   - Route `PATCH /.../resolve` élargie pour accepter
+     `PUBLISHED`/`REJECTED` (même route, pas de doublon) ; refuse de
+     publier un signalement sans note valide 1-5 pour tout nouveau flux
+     (les lignes héritées sans note ne peuvent être que rejetées/
+     ignorées, jamais publiées avec une fausse note).
+
+3. **Composants réutilisables** (Phase 5, un seul jeu pour les 6
+   modules futurs) :
+   - `client/src/components/shared/sadness-rating.tsx` — sélecteur
+     5 niveaux (`react-icons/fa`), accessible (`radiogroup`/`radio`,
+     navigation clavier), et un affichage lecture-seule.
+   - `client/src/components/report-modal.tsx` — `ReportModal`,
+     calqué sur `ReviewModal` (même squelette visuel), formulaire note +
+     commentaire + soumission, thème configurable par prop (couleur
+     d'accent), sans toucher à `review-modal.tsx`.
+   - `client/src/components/published-reports-list.tsx` —
+     `PublishedReportsList`, cartes signalement (photo/nom pro, note,
+     commentaire, date), pagination "Charger plus", états
+     chargement/vide/erreur.
+   - `client/src/hooks/use-entity-reports.ts` — fabrique
+     `createEntityReportHooks(service)` générant les 4 hooks
+     (soumission, liste publique, liste admin, modération) à partir
+     du préfixe de route, puisque les 6 modules futurs partagent
+     exactement la même convention de table/route (déjà le cas
+     aujourd'hui pour `maintenanceReports`/`baristaReports`/
+     `marketingReports`). Instancié pour Maintenance uniquement dans ce
+     ticket (`client/src/hooks/use-maintenance-reports.ts`).
+
+4. **Intégration Maintenance uniquement** :
+   - `AgentDetailModal` (detail modal) : remplace le Dialog Signaler
+     inline par `<ReportModal>`.
+   - `MaintenanceBlacklistModal` (modal Hero) : retire le panneau de
+     soumission (`formOpen`/`targetUserId`/`Select`/boutons), bascule la
+     source de données de "mes signalements" vers
+     `GET /api/maintenance/reports/published`, affiche via
+     `PublishedReportsList`.
+   - `admin/maintenance-page.tsx` : nouvelle carte de modération
+     (file d'attente + action Publier/Rejeter, liste publiée + action
+     Retirer), dans l'onglet "Comptes Maintenance" existant.
+
+Aucun autre module (Print/Barista/Academy/Marketing/Shop) n'est modifié
+dans ce ticket — seuls les composants/hooks partagés sont créés pour
+qu'ils puissent les adopter plus tard sans dupliquer ce travail.
+
+### Implémentation réalisée
+
+**Schéma** (`shared/schema.ts`) — additif uniquement : enum
+`maintenance_report_status` étendu à `PENDING|RESOLVED|DISMISSED|
+PUBLISHED|REJECTED` ; table `maintenanceReports` : ajout `rating integer`
+(nullable) et `moderatedByAdminId integer` (nullable) ; `resolvedAt`/
+`resolutionNote` réutilisés tels quels comme horodatage/note de
+modération. Migration appliquée via `npm run db:push` (base réelle du
+projet) — confirmé par requête directe : les 2 colonnes et les 2
+nouvelles valeurs d'enum existent, et les 3 lignes historiques
+(`PENDING`, `rating NULL`) sont intactes.
+
+**Backend** (`server/storage.ts`, `server/routes.ts`) :
+- `createMaintenanceReport` accepte désormais `rating` (optionnel côté
+  signature, mais requis et validé 1-5 par le Zod schema de la route —
+  jamais de statut fourni par le client, toujours `PENDING`).
+- `getMaintenanceReportById` (nouveau, lecture unitaire) ;
+  `getMaintenanceReports`/`resolveMaintenanceReport` élargis aux statuts
+  `PUBLISHED`/`REJECTED`, `resolveMaintenanceReport` accepte désormais
+  `moderatedByAdminId`.
+- `getPublishedMaintenanceReports(page, limit)` (nouveau) — filtre
+  strict `status = 'PUBLISHED'`, pagination `{reports, total, page,
+  limit}`, ne renvoie jamais `cafeOwnerId` ni le nom du signalant.
+- `POST /api/maintenance/:userId/report` — body étendu à
+  `{ reason, rating: 1-5 requis }` (Zod).
+- `GET /api/maintenance/reports/published` (nouveau, requireAuth) —
+  pagination `?page=&limit=`.
+- `PATCH /.../resolve` — accepte désormais `PUBLISHED`/`REJECTED` en
+  plus de `RESOLVED`/`DISMISSED` ; refuse explicitement de publier
+  (400) un signalement dont `rating` est `null` (lignes historiques) ;
+  passe `req.session.userId` comme `moderatedByAdminId`.
+
+**Composants/hooks partagés** (nouveaux fichiers, Phase 5) :
+- `client/src/components/shared/sadness-rating.tsx` —
+  `SadnessRatingPicker` (5 niveaux, `react-icons/fa` : Meh → Frown →
+  SadTear → SadCry → Angry, `radiogroup`/`radio`, navigation flèches) et
+  `SadnessRatingDisplay` (lecture seule, gère `rating=null` → "Note non
+  disponible" sans jamais réinterpréter une absence de note).
+- `client/src/components/report-modal.tsx` — `ReportModal`, calqué sur
+  la structure de `review-modal.tsx` (header grabber/thème/titre/close,
+  divider, badge, carte formulaire, écran "Signalement envoyé !"),
+  couleur d'accent configurable (`accentClassName`), aucune modification
+  de `review-modal.tsx`.
+- `client/src/components/published-reports-list.tsx` —
+  `PublishedReportsList`, cartes + pagination "Charger plus" + états
+  chargement/vide/erreur.
+- `client/src/hooks/use-entity-reports.ts` (fabrique générique) +
+  `client/src/hooks/use-maintenance-reports.ts` (instanciation
+  Maintenance : `useSubmitMaintenanceReport`,
+  `useMaintenancePublishedReports`, `useAdminMaintenanceReports`,
+  `useModerateMaintenanceReport`).
+
+**Intégration Maintenance** :
+- `client/src/pages/cafe/maintenance/maintenance-page.tsx`
+  (`AgentDetailModal`) : Dialog Signaler inline (state `reportReason`,
+  mutation ad hoc, scroll-dismiss dédié) remplacé par `<ReportModal>` +
+  `useSubmitMaintenanceReport`. Import `Textarea` retiré (devenu
+  inutilisé) ; `X`/`ModalGrabber` conservés (encore utilisés ailleurs
+  dans le fichier).
+- `client/src/components/maintenance/maintenance-blacklist-modal.tsx`
+  (modal Hero) : réécrit entièrement — source de données passée de
+  "mes signalements" (`/mine`) à "signalements publiés"
+  (`useMaintenancePublishedReports`, pagination accumulée page par
+  page) ; `Select`/`Textarea`/boutons Annuler-Envoyer/bouton "Signaler"
+  (Flag) entièrement supprimés, avec tout leur state associé
+  (`formOpen`, `targetUserId`, `reason`, mutation `submitReport`) ;
+  rendu via `<PublishedReportsList>` ; clic sur une carte résout
+  toujours vers le même `AgentDetailModal` via le nouveau champ
+  `professionalId` de `PublishedReportRow`.
+- `client/src/pages/admin/maintenance-page.tsx` — nouveau point
+  d'entrée de modération dans l'onglet "Comptes Maintenance" existant
+  (même emplacement que le pattern Barista) : carte "Signalements en
+  attente" (Publier — désactivé si `rating == null` — / Rejeter) +
+  carte "Signalements publiés" (Retirer), via
+  `useAdminMaintenanceReports`/`useModerateMaintenanceReport`.
+
+Aucun fichier de Print/Barista/Academy/Marketing/Shop modifié.
+`review-modal.tsx` (Avis) non modifié — seulement utilisé comme
+référence de design.
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` : 0 erreur après une correction (type de retour
+  de `submitReport` dans `maintenance-page.tsx`, `Promise<unknown>` →
+  `Promise<void>`).
+- `npm run build` : réussi (client + serveur).
+- **Migration appliquée sur la vraie base** (`npm run db:push`),
+  vérifiée par requête SQL directe (colonnes, valeurs d'enum, et
+  conservation des 3 lignes historiques `PENDING`/`rating NULL`).
+- **Exercice réel du nouveau code de stockage contre la vraie base**
+  (script `tsx` temporaire, supprimé après exécution, nettoyé la ligne
+  de test créée) : création d'un signalement avec note 3 sur un vrai
+  couple CAFE_OWNER/MAINTENANCE existant → absent de la liste publique
+  avant publication → publication (`moderatedByAdminId` renseigné) →
+  présent dans la liste publique, confirmé **sans fuite de
+  `cafeOwnerId`** → rejet → de nouveau absent de la liste publique.
+  Confirmé aussi que les 3 signalements hérités (`rating NULL`)
+  préexistants sont correctement identifiés comme tels.
+- **Serveur réellement démarré** (port 5055, process distinct du
+  port 5000 déjà utilisé par l'utilisateur, jamais touché) : `/`,
+  `/maintenance`, `/admin` répondent `HTTP 200` (aucun crash serveur
+  au chargement) ; `GET /api/maintenance/reports/published` sans
+  cookie de session répond correctement `401` (confirme
+  `requireAuth`). Serveur de test arrêté proprement, port libéré
+  (vérifié par un second contrôle PowerShell).
+- **Non vérifiable cette session** : impossible de se connecter via
+  `curl` avec un identifiant réel (`owner@cafe.com`,
+  `admin@bigbosscoffee.com`) — le classifieur Auto Mode a de nouveau
+  refusé cette action (`[Identity Not Given]`), comme lors de la tâche
+  48. Conséquence : les endpoints `POST /api/maintenance/:userId/
+  report` et `PATCH /.../resolve` n'ont pas pu être exercés par une
+  vraie requête HTTP authentifiée de bout en bout (session de
+  connexion réelle) — contournement choisi : exercice direct des
+  fonctions `storage` concernées contre la vraie base de données
+  (ci-dessus), qui couvre la même logique métier sans passer par la
+  couche session/HTTP. Également non vérifiable : un clic réel sur les
+  5 visages (survol, focus clavier, sélection), l'ouverture/fermeture
+  réelle des modals (grabber, swipe-to-dismiss), et le rendu visuel
+  des icônes `react-icons/fa` dans un vrai navigateur — vérifié
+  uniquement par lecture de code et par le fait que le build/typecheck
+  compile ces imports sans erreur.
+
+---
+
+## 52. Centralisation de la modération des signalements dans Communication + correction du temps réel
+
+### Audit
+
+**Admin Communication existant** — `client/src/components/admin/admin-communication-switcher.tsx`
+(`AdminCommunicationSwitcher`) : switcher d'onglets Notifications/
+Messages/Reviews, utilisé en haut de `client/src/pages/admin/
+reviews-page.tsx` (route `/admin/reviews`, enregistrée dans
+`client/src/App.tsx:821-823`). La Sidebar Admin
+(`client/src/components/layout/app-sidebar.tsx:122`) a une seule entrée
+"Communication" (`url: "/admin/messages"`) dont `activeUrls` inclut déjà
+`/admin/messages`, `/admin/notifications`, `/admin/reviews`.
+
+**Switcher de service existant (Reviews)** — `reviews-page.tsx:38-48`
+définit en local (non exporté) un tableau `TABS` =
+`PRODUCT, PACK, SUPPLIER, MAINTENANCE, BARISTA_MARKETPLACE, ACADEMY,
+DRIVER, PRINT, MARKETING` (icône + libellé chacun), rendu par un bloc
+JSX inline (lignes 193-208) — **pas un composant partagé** aujourd'hui.
+C'est la source de vérité canonique des catégories de service que la
+tâche demande de réutiliser pour Signalements.
+
+**Modération Maintenance existante (tâche 51)** — déplacée depuis
+`Admin → Maintenance → Comptes Maintenance`
+(`client/src/pages/admin/maintenance-page.tsx`), deux `Card` ("Signalements
+en attente" / "Signalements publiés") utilisant
+`useAdminMaintenanceReports`/`useModerateMaintenanceReport`
+(`client/src/hooks/use-maintenance-reports.ts`, eux-mêmes une
+instanciation de la fabrique générique
+`client/src/hooks/use-entity-reports.ts` — déjà conçue pour être
+réutilisée par service, seul un jeu de hooks liés au préfixe de route
+diffère).
+
+**Modèle de données par service** — seule Maintenance a été migrée
+vers le nouveau modèle (note 1-5, statuts `PUBLISHED`/`REJECTED`,
+endpoints `/api/maintenance/reports/published` et
+`/api/admin/maintenance/reports`). `baristaReports`/`marketingReports`
+existent mais restent sur l'**ancien** modèle (`PENDING/RESOLVED/
+DISMISSED`, aucune colonne `rating`) — un système de signalement
+d'entité distinct, non migré, hors du périmètre de cette tâche (la
+tâche 51 l'a documenté explicitement : "implémenter Maintenance
+uniquement"). Print/Academy/Shop (Product/Pack/Supplier)/Driver n'ont
+aucune table de signalement d'entité du tout — seul le signalement
+d'avis (review-reporting, différent) existe pour eux. Conséquence :
+le nouveau switcher Signalements doit afficher les 9 catégories de
+Reviews pour respecter "ne pas coder en dur une liste incomplète", mais
+seul l'onglet Maintenance aura de vraies données ; les 8 autres doivent
+afficher un état vide sûr, sans inventer de données ni brancher
+l'ancien modèle incompatible dans la nouvelle UI notée.
+
+**Cause racine confirmée — pourquoi un signalement publié reste invisible
+côté Coffee Owner** : deux bugs distincts, tous deux côté frontend
+(le backend — vérifié à la tâche 51 par exercice direct de `storage.*`
+contre la vraie base — fonctionne correctement : publier range bien la
+ligne dans `getPublishedMaintenanceReports`).
+
+1. **Invalidation temps réel incomplète** — `client/src/hooks/
+   use-realtime.ts:430-448`, le bloc `if (MAINTENANCE_EVENTS.includes(event))`
+   invalide déjà `["/api/admin/maintenance/reports"]` et
+   `["/api/maintenance/reports/mine"]`, mais **jamais**
+   `["/api/maintenance/reports/published"]` — la clé que
+   `useMaintenancePublishedReports` utilise réellement. Le serveur
+   diffuse pourtant bien `admin_maintenance_report_created` à la
+   publication (`server/routes.ts`, route `PATCH /.../resolve`), donc
+   l'événement arrive côté client mais ne déclenche aucun refetch de la
+   bonne clé.
+2. **Bug d'accumulation de pagination** (introduit à la tâche 51) —
+   `client/src/components/maintenance/maintenance-blacklist-modal.tsx`,
+   le `useEffect` qui alimente l'état local `pages` ne remplace JAMAIS
+   une page déjà mémorisée : `setPages((prev) => (prev[data.page] ? prev
+   : { ...prev, [data.page]: mapped }))`. Une fois la page 1 chargée une
+   première fois (ex. liste vide avant toute publication), **toute
+   nouvelle réponse pour la page 1 est silencieusement ignorée**, même
+   si l'invalidation ci-dessus était corrigée. C'est un second bug
+   indépendant qui, à lui seul, empêcherait déjà la mise à jour même
+   avec un rafraîchissement manuel de la query (tant que le composant
+   reste monté).
+
+Les deux doivent être corrigés pour que la Scénario B de la tâche
+("publier → apparaît sans rechargement") fonctionne réellement.
+
+**Icône Hero actuelle** — `maintenance-page.tsx` (composant
+`MaintenancePage`, ligne ~1033) : le bouton "Professionnels signalés"
+est conditionné uniquement à `accessLevel === "approved" &&
+heroActions.MAINTENANCE.reportEnabled` (un réglage Admin global
+"fonctionnalité activée", pas un compteur de signalements publiés) —
+aujourd'hui il s'affiche même quand la liste publique est vide. Il faut
+ajouter une condition sur le compte réel de signalements publiés,
+sans dépendre d'un drapeau en dur.
+
+### Plan
+
+1. **Extraire le switcher de service** en composant partagé
+   `client/src/components/admin/service-category-switcher.tsx`
+   (tableau `SERVICE_CATEGORY_TABS` exporté + composant
+   `ServiceCategorySwitcher`, `testIdPrefix` paramétrable pour préserver
+   exactement les `data-testid` historiques de Reviews
+   `tab-admin-reviews-*`). `reviews-page.tsx` bascule sur ce composant
+   sans changement visuel ni de comportement (switcher Reviews
+   inchangé à l'identique).
+2. **Nouveau composant partagé de modération**
+   `client/src/components/admin/report-moderation-panel.tsx`
+   (`ReportModerationPanel`), paramétré par `service` (préfixe de route)
+   et `entityNameKey` (nom du champ portant le nom de l'entité, différent
+   par service futur), réutilisant `createEntityReportHooks` et
+   `SadnessRatingDisplay`. Remplace à l'identique les deux `Card` de la
+   tâche 51, désormais utilisables par n'importe quel service déjà migré.
+3. **Nouvelle page** `client/src/pages/admin/reports-page.tsx`
+   (`AdminReportsPage`), route `/admin/reports` (libre, vérifié par
+   recherche), avec `AdminCommunicationSwitcher` (nouvel onglet
+   "Signalements") + `ServiceCategorySwitcher` (les 9 catégories
+   canoniques) + `ReportModerationPanel` pour Maintenance uniquement ;
+   état vide explicite ("signalements non disponibles pour ce service")
+   pour les 8 autres catégories, sans brancher l'ancien modèle
+   barista/marketing non compatible.
+4. **Suppression du doublon** — retrait des deux `Card` de modération et
+   de leurs hooks/imports dans `admin/maintenance-page.tsx` (aucune autre
+   fonctionnalité Comptes Maintenance touchée).
+5. **Correction temps réel** :
+   - Ajouter `["/api/maintenance/reports/published"]` à la liste
+     d'invalidation du bloc `MAINTENANCE_EVENTS` dans `use-realtime.ts`.
+   - Corriger le bug d'accumulation de pages dans
+     `MaintenanceBlacklistModal` (toujours écraser la page concernée par
+     la donnée fraîche, jamais la figer après le premier chargement).
+6. **Icône Hero conditionnelle** — dans `MaintenancePage`, lire
+   `useMaintenancePublishedReports(1, 10)` (même clé/cache que la modale,
+   donc aucune requête réseau supplémentaire) et n'afficher le bouton que
+   si `total > 0` ; pendant le chargement initial ou en cas d'erreur, le
+   bouton reste affiché (ne jamais le masquer durablement pour une raison
+   qui n'est pas "liste confirmée vide").
+
+Aucune modification de la base de données dans cette tâche (aucun champ
+supplémentaire requis). Aucune route API existante supprimée —
+uniquement une invalidation de cache ajoutée et une page Admin
+déplacée.
+
+### Implémentation réalisée
+
+**Composants partagés (nouveaux)** :
+- `client/src/components/admin/service-category-switcher.tsx` —
+  `SERVICE_CATEGORY_TABS` (les 9 catégories, extraites à l'identique de
+  `reviews-page.tsx`) + `ServiceCategorySwitcher` (`testIdPrefix`
+  paramétrable pour préserver exactement les anciens `data-testid`
+  `tab-admin-reviews-*`).
+- `client/src/components/admin/report-moderation-panel.tsx` —
+  `ReportModerationPanel({ service, entityNameKey })`, extrait des deux
+  `Card` construites à la tâche 51, paramétré pour être réutilisable par
+  tout service déjà migré au modèle noté.
+
+**Admin Communication** :
+- `client/src/components/admin/admin-communication-switcher.tsx` —
+  nouvel onglet "Signalements" → `/admin/reports`.
+- `client/src/pages/admin/reports-page.tsx` (nouveau) — Hero +
+  `AdminCommunicationSwitcher` + `ServiceCategorySwitcher` (9 catégories)
+  + `ReportModerationPanel` pour Maintenance uniquement ; état vide
+  explicite pour les 8 autres catégories (`REPORT_SERVICE_SLUG`, carte de
+  correspondance service → préfixe de route, volontairement non
+  exhaustive — voir Audit).
+- `client/src/App.tsx` — route `/admin/reports` enregistrée (même
+  pattern que `/admin/reviews`, `ADMIN_ROLES`).
+- `client/src/components/layout/app-sidebar.tsx` — `activeUrls` de
+  l'entrée "Communication" étendu à `/admin/reports`.
+- `client/src/pages/admin/reviews-page.tsx` — bascule sur
+  `ServiceCategorySwitcher` à la place de son switcher inline ; aucun
+  changement visuel ni de comportement (mêmes `data-testid`, même
+  tableau de catégories).
+- `client/src/pages/admin/maintenance-page.tsx` — les deux `Card` de
+  modération (Signalements en attente / publiés) et leurs hooks/imports
+  (`useAdminMaintenanceReports`, `useModerateMaintenanceReport`,
+  `SadnessRatingDisplay`, `AlertTriangle`, `Ban`) retirés ; aucune autre
+  fonctionnalité Comptes Maintenance touchée.
+
+**Correction du temps réel (cause racine)** :
+- `client/src/hooks/use-realtime.ts` — ajout de
+  `qc.invalidateQueries({ queryKey: ["/api/maintenance/reports/published"] })`
+  dans le bloc `MAINTENANCE_EVENTS` (clé manquante, confirmée comme la
+  cause racine n°1 lors de l'audit).
+- `client/src/components/maintenance/maintenance-blacklist-modal.tsx` —
+  bug n°2 corrigé : le `useEffect` d'accumulation de pages écrase
+  désormais toujours la page reçue (`setPages((prev) => ({ ...prev,
+  [data.page]: mapped }))`) au lieu de l'ignorer si déjà présente.
+- `client/src/pages/cafe/maintenance/maintenance-page.tsx`
+  (`MaintenancePage`) — icône Hero "Professionnels signalés" conditionnée
+  à `hasPublishedMaintenanceReports` (dérivé de
+  `useMaintenancePublishedReports(1, 10)`, même clé de cache que la
+  modale — aucune requête réseau supplémentaire) ; reste affichée pendant
+  le chargement initial ou en cas d'erreur, masquée seulement une fois un
+  total confirmé à 0.
+
+**Limite connue documentée** : la correction du temps réel garantit
+qu'un signalement publié/retiré apparaît/disparaît sans rechargement
+**sur la page actuellement affichée** (la page 1 en particulier, celle
+que l'icône Hero et la première ouverture de la modale utilisent). Si
+un administrateur retire un signalement publié qui se trouvait sur une
+page 2+ déjà chargée via "Charger plus" dans une session où plusieurs
+pages ont été accumulées, le décalage d'un retrait peut désynchroniser
+légèrement les pages suivantes déjà en cache tant que la modale n'est
+pas rouverte — limite acceptée pour cette tâche (le volume réel actuel
+de signalements Maintenance tient largement sur une seule page de 10).
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` : 0 erreur.
+- `npm run build` : réussi (client + serveur).
+- **Serveur de test isolé** (port 5055, process distinct du port 5000
+  déjà utilisé par l'utilisateur, jamais touché, arrêté proprement en
+  fin de vérification) : `/`, `/maintenance`, `/admin`, `/admin/reports`,
+  `/admin/reviews`, `/admin/maintenance` répondent toutes `HTTP 200`
+  (aucun crash serveur, la nouvelle route/page se charge) ;
+  `GET /api/maintenance/reports/published` et
+  `GET /api/admin/maintenance/reports` répondent `401` sans cookie de
+  session (confirme que l'authentification reste intacte).
+- **Exercice réel du cycle complet contre la vraie base** (script `tsx`
+  temporaire, supprimé après exécution, ligne de test nettoyée) :
+  création d'un signalement noté → apparaît dans la liste Admin PENDING
+  → publication → apparaît dans la liste Admin PUBLISHED **et** dans la
+  liste publique (`getPublishedMaintenanceReports`, total incrémenté) →
+  rejet (retrait) → disparaît à la fois de la liste Admin PUBLISHED et
+  de la liste publique. Au passage, confirmé que la base contient déjà
+  2 signalements publiés réels (préexistants, non créés par ce test) —
+  l'icône Hero devrait donc déjà être visible pour un vrai Coffee Owner
+  dès ce jour.
+- **Non vérifiable cette session** : comme pour la tâche 51, impossible
+  de se connecter via `curl` avec un identifiant réel — le classifieur
+  Auto Mode bloque toute tentative de connexion automatisée
+  (`[Identity Not Given]`). Conséquence : les scénarios temps réel A/B/C/D
+  de la tâche (ouvrir deux sessions navigateur, publier dans l'une,
+  observer la mise à jour automatique dans l'autre sans recharger) n'ont
+  pas pu être observés de bout en bout dans un vrai navigateur. La
+  correction a été vérifiée par lecture de code (confirmation que la clé
+  de cache manquante est désormais invalidée par le même événement
+  WebSocket déjà diffusé après chaque commit DB, et que le bug
+  d'accumulation de pages qui aurait de toute façon bloqué l'affichage
+  est corrigé) et par l'exercice direct de la même logique métier contre
+  la vraie base de données (ci-dessus). Également non vérifiable :
+  rendu visuel réel du nouveau switcher de service et de la page
+  Signalements dans un navigateur, et le comportement exact de l'icône
+  Hero pendant un chargement réseau lent.
+
+---
+
+## 53. Correction du bug persistant — signalements publiés absents du modal Coffee Owner
+
+### Audit — cause racine confirmée avec les vraies données de production
+
+Requête directe sur `maintenance_reports` (base réelle) au moment du
+rapport utilisateur : **3 lignes `PUBLISHED`** existent bel et bien
+(id 5 : TECHPRO, note 4 ; id 7 : TECHFIX PRO, note 2 ; id 9 : TECHPRO,
+note 5), toutes avec `moderated_by_admin_id` renseigné — confirmant que
+la publication Admin fonctionne et persiste correctement.
+
+Exécution directe de `storage.getPublishedMaintenanceReports(1, 10)`
+contre cette même base : retourne exactement ces **3** lignes, avec
+tous les champs attendus (`maintenanceName`, `maintenanceProfileImageUrl`,
+`rating`, `reason`, `createdAt`, `resolvedAt`). La route
+`GET /api/maintenance/reports/published` (`server/routes.ts`) ne fait
+que renvoyer ce résultat tel quel, sans filtre supplémentaire, derrière
+`requireAuth` (aucune restriction de rôle). **Le backend est donc
+entièrement innocent** — la tâche 52 l'avait déjà vérifié et rien n'a
+changé côté serveur depuis.
+
+Cause racine isolée dans `client/src/components/maintenance/
+maintenance-blacklist-modal.tsx` : le `useEffect` ajouté à la tâche 52
+pour "ne jamais montrer un décalage de page obsolète à la réouverture"
+exécutait `setPages({})` à **chaque** passage de `open` à `true`. Or ce
+composant (et donc son hook `useMaintenancePublishedReports`) reste
+monté en permanence sur `/maintenance`, qu'on ait déjà ouvert la modale
+ou non — la requête réseau a donc déjà abouti et `data` est déjà en
+cache **avant** que l'utilisateur ne clique sur l'icône Hero. Le second
+`useEffect` (celui qui alimente `pages` à partir de `data`) ne se
+redéclenche que lorsque `data` change de référence (un vrai fetch ou
+refetch) — pas simplement parce que `open` passe à `true`. Résultat :
+`setPages({})` vide l'état local affiché, mais rien ne le repeuple tant
+qu'aucune nouvelle réponse réseau n'arrive — alors même que
+`data` contenait déjà correctement les 3 signalements. C'est un bug
+purement local au composant, introduit par ma propre correction de la
+tâche 52 (qui visait un problème différent — l'accumulation figée des
+pages — et a involontairement réintroduit celui-ci).
+
+Confirmation indirecte : l'icône Hero elle-même (qui lit `total` à
+partir du **même** cache React Query, mais directement, sans passer par
+l'état local `pages`) n'est pas affectée par ce bug — cohérent avec le
+fait que l'utilisateur a pu voir l'icône et cliquer dessus, pour
+découvrir ensuite une modale vide.
+
+### Correction apportée
+
+`maintenance-blacklist-modal.tsx` — le `useEffect` sur `open` :
+- ne vide plus `pages` en bloc ; il ne retire que les pages au-delà de
+  la page 1 (`setPages((prev) => (prev[1] ? { 1: prev[1] } : prev))`),
+  pour continuer à écarter un décalage "Charger plus" obsolète d'une
+  session précédente sans jamais perdre le contenu déjà chargé de la
+  page 1 ;
+- appelle désormais `refetch()` (destructuré depuis
+  `useMaintenancePublishedReports`) à chaque ouverture, en complément de
+  l'invalidation WebSocket déjà en place (tâche 52) — filet de sécurité
+  garantissant un contenu à jour même si l'événement temps réel a été
+  manqué pendant que la modale était fermée.
+
+Aucun autre fichier modifié. Aucun changement côté backend, schéma, ou
+route — confirmé inutile par l'audit (`storage`/route déjà corrects).
+
+### Vérification réelle effectuée
+
+- Requête SQL directe sur la vraie base : confirmé 3 lignes `PUBLISHED`
+  existantes (TECHPRO ×2, TECHFIX PRO ×1), toutes avec note et
+  `moderated_by_admin_id` renseignés.
+- Exécution directe de `storage.getPublishedMaintenanceReports(1, 10)`
+  contre cette même base (script `tsx` temporaire, supprimé après
+  exécution, aucune écriture) : confirme que les 3 lignes exactes
+  (id 5, 7, 9) sont retournées avec tous les champs attendus — élimine
+  complètement le backend comme cause.
+- `npx tsc --noEmit` : 0 erreur.
+- `npm run build` : réussi (client + serveur).
+- **Non vérifiable cette session** : le bug corrigé est un bug de cycle
+  de vie React (effets locaux, état `pages`) qui ne peut être observé
+  qu'en cliquant réellement l'icône Hero puis en ouvrant la modale dans
+  un navigateur — aucun navigateur n'est disponible dans cet
+  environnement. La correction est étayée par une relecture précise du
+  code (traçage exact de l'ordre des effets et de leurs dépendances) et
+  par la confirmation, ci-dessus, que les données elles-mêmes sont
+  intactes et correctement récupérables à chaque couche backend — ce
+  qui isole le problème au seul composant modifié. Comme pour les
+  tâches 51/52, aucune connexion `curl` authentifiée n'a été possible
+  (classifieur Auto Mode), donc aucun test HTTP de bout en bout
+  supplémentaire n'a été exécuté au-delà de ce qui avait déjà été fait.
+
+---
+
+## 54. Grabber sur le modal Maintenance + extension du système de signalement à Barista
+
+### Audit
+
+**Grabber** — `client/src/components/shared/modal-grabber.tsx`
+(`ModalGrabber`), composant purement visuel (pilule `w-9 h-1`, centrée,
+couleur thème-aware), déjà posé en haut de `ReviewModal`/`ReportModal`
+avant le header. `MaintenanceBlacklistModal` ne l'a jamais eu (il
+utilise déjà `useScrollDismiss` pour le swipe-to-dismiss, donc ajouter
+le grabber ne fait qu'exposer visuellement un geste déjà actif).
+
+**Système de signalement Maintenance (référence)** — complet depuis les
+tâches 51-53 : schéma noté (`rating`, `PUBLISHED/REJECTED`,
+`moderatedByAdminId`), `storage.*MaintenanceReport*`, routes
+`/api/maintenance/:userId/report` (note requise), `/reports/published`
+(public), `/api/admin/maintenance/reports` (+ `/resolve` élargi),
+composants partagés (`SadnessRatingPicker/Display`, `ReportModal`,
+`PublishedReportsList`, `ReportModerationPanel`,
+`createEntityReportHooks`), invalidation temps réel
+(`MAINTENANCE_EVENTS` → `/api/maintenance/reports/published`), icône
+Hero conditionnelle.
+
+**Barista — état actuel, confirmé un système pré-redesign identique à
+l'ancien Maintenance** :
+- `shared/schema.ts:1754-1771` — `baristaReportStatusEnum` =
+  `PENDING|RESOLVED|DISMISSED` (pas de `rating`), table `baristaReports`
+  structurellement identique à `maintenanceReports` d'avant la tâche 51.
+- `server/storage.ts:9257-9299` — `createBaristaReport`,
+  `getBaristaReports`, `getBaristaReportsByOwner`,
+  `resolveBaristaReport` : mêmes signatures que les anciennes fonctions
+  Maintenance (pas de note, pas de `PUBLISHED`).
+- `server/routes.ts:4184-4239` — `POST /api/barista/:userId/report`
+  (`{reason}` seul), `GET /api/barista/reports/mine`,
+  `GET /api/admin/barista/reports`,
+  `PATCH /api/admin/barista/reports/:id/resolve` (`RESOLVED|DISMISSED`
+  seulement) : mêmes routes que l'ancien Maintenance.
+- `client/src/components/barista/barista-detail-modal.tsx:150-508` —
+  Signaler inline (Textarea seule, `useReportBarista`), même pattern
+  que l'ancien `AgentDetailModal` Maintenance avant la tâche 51.
+- `client/src/components/barista/barista-blacklist-modal.tsx` —
+  affiche "mes signalements" (`useMyBaristaReports`,
+  `/api/barista/reports/mine`), avec badges de statut RESOLVED/
+  DISMISSED, pas de note, pas de grabber — copie conforme de l'ancien
+  `MaintenanceBlacklistModal`.
+- `client/src/pages/cafe/barista/barista-page.tsx:626-632` — icône
+  Hero "Baristas signalés" conditionnée uniquement à
+  `canAct && heroActions.BARISTA.reportEnabled` (pas de compte réel de
+  signalements publiés).
+- `client/src/pages/admin/barista-page.tsx:858-889` — carte
+  "Signalements en attente" (Résoudre/Ignorer), doublon à retirer une
+  fois Signalements → Barista opérationnel, exactement comme pour
+  Maintenance à la tâche 52.
+- Thème Barista : vert (`from-green-600/700`/`emerald-700`), à utiliser
+  comme couleur d'accent au lieu de l'orange Maintenance.
+
+**Conclusion** : la quasi-totalité de l'infrastructure requise existe
+déjà et est conçue pour être réutilisée telle quelle
+(`createEntityReportHooks`, `ReportModal`, `PublishedReportsList`,
+`SadnessRatingPicker/Display`, `ReportModerationPanel`,
+`REPORT_SERVICE_SLUG` dans `reports-page.tsx`). Il manque uniquement :
+(1) l'extension additive du schéma/API Barista au même modèle que
+Maintenance, à l'identique ; (2) le câblage des composants partagés
+existants sur Barista ; (3) un nouveau composant partagé pour la coquille
+de modal "liste publique" (jusqu'ici dupliquée dans
+`MaintenanceBlacklistModal` sans être généralisée), extrait maintenant
+puisqu'un deuxième service en a besoin — c'est aussi l'occasion
+d'ajouter le grabber en un seul endroit plutôt que dans chaque copie.
+
+### Plan
+
+1. **Schéma** (additif) : `baristaReportStatusEnum` +
+   `PUBLISHED`/`REJECTED` ; `baristaReports` + colonnes `rating`
+   (nullable) et `moderatedByAdminId` (nullable) — migration `db:push`.
+2. **Backend** : mirroring exact des fonctions/route Maintenance pour
+   Barista (`createBaristaReport(+rating)`, `getBaristaReportById`,
+   `getPublishedBaristaReports`, `resolveBaristaReport(+moderatedByAdminId,
+   statuts élargis)`, route POST avec `rating` requis, nouvelle route
+   `GET /api/barista/reports/published`, route `/resolve` élargie avec
+   le même garde-fou "pas de note = pas de publication".
+3. **Nouveau composant partagé**
+   `client/src/components/shared/entity-published-reports-modal.tsx`
+   (`EntityPublishedReportsModal`) — extrait de la logique de
+   `MaintenanceBlacklistModal` (pagination/accumulation déjà corrigée
+   aux tâches 52-53), avec le grabber ajouté une seule fois ici.
+   `MaintenanceBlacklistModal` et le nouveau `BaristaBlacklistModal`
+   deviennent de fines enveloppes autour de ce composant (chacune garde
+   sa propre résolution de profil pour le clic → Detail Modal, car ce
+   point reste spécifique à chaque service).
+4. **Barista detail modal** : Signaler inline remplacé par
+   `<ReportModal>` + `useSubmitBaristaReport`, accent vert.
+5. **Barista hero** : icône conditionnée à
+   `useBaristaPublishedReports(1, 10).data.total > 0` (même pattern que
+   Maintenance).
+6. **Admin Signalements** : `REPORT_SERVICE_SLUG` étendu avec
+   `BARISTA_MARKETPLACE`. Carte dupliquée retirée de
+   `admin/barista-page.tsx` (Comptes), comme pour Maintenance.
+7. **Temps réel** : ajout de
+   `/api/barista/reports/published` à l'invalidation du bloc
+   `BARISTA_EVENTS` (`use-realtime.ts`) — même correction que pour
+   Maintenance (tâche 52), l'événement `admin_barista_report_created`
+   étant déjà diffusé après chaque commit (création ET modération).
+
+Aucune modification de `review-modal.tsx`, des avis/étoiles, ni d'autres
+services (Print/Academy/Marketing/Shop) dans cette tâche.
+
+### Implémentation réalisée
+
+**Schéma** (additif, migré via `npm run db:push`, vérifié par requête
+directe) : `baristaReportStatusEnum` étendu à `PENDING|RESOLVED|
+DISMISSED|PUBLISHED|REJECTED` ; `baristaReports` + `rating integer`
+(nullable) + `moderatedByAdminId integer` (nullable).
+
+**Backend** (`server/storage.ts`, `server/routes.ts`) — mirroring exact
+des fonctions/routes Maintenance : `createBaristaReport(+rating)`,
+`getBaristaReportById` (nouveau), `getBaristaReports`/
+`resolveBaristaReport` élargis, `getPublishedBaristaReports` (nouveau,
+jamais `cafeOwnerId`) ; `POST /api/barista/:userId/report` (note 1-5
+requise), `GET /api/barista/reports/published` (nouveau),
+`GET /api/admin/barista/reports` élargi,
+`PATCH /api/admin/barista/reports/:id/resolve` élargi avec le même
+garde-fou "pas de note = pas de publication".
+
+**Nouveau composant partagé**
+`client/src/components/shared/entity-published-reports-modal.tsx`
+(`EntityPublishedReportsModal`) — extrait de `MaintenanceBlacklistModal`
+(pagination/refetch-on-open déjà corrigés aux tâches 52-53), **grabber
+ajouté ici** (`ModalGrabber`, un seul point d'implémentation pour les
+deux modals). `MaintenanceBlacklistModal` réécrit en fine enveloppe
+autour de ce composant (comportement/visuel identique + grabber en
+plus) ; `BaristaBlacklistModal` entièrement réécrit sur le même modèle
+(accent vert/émeraude, icône Ban, `BaristaDetailModal` pour le
+clic-vers-profil — plus simple que Maintenance car `BaristaDetailModal`
+résout déjà son propre profil à partir du seul `baristaUserId`, sans
+nécessiter de requête `providers` séparée).
+
+**Barista detail modal**
+(`client/src/components/barista/barista-detail-modal.tsx`) — Signaler
+inline remplacé par `<ReportModal>` + nouveau hook
+`useSubmitBaristaReport` (`client/src/hooks/use-barista-reports.ts`,
+instanciation de `createEntityReportHooks("barista")`), accent vert.
+Import `Textarea` retiré (devenu inutilisé), `useReportBarista` (ancien
+hook) laissé intact dans `use-barista-marketplace.ts` mais plus appelé
+nulle part (orphelin inoffensif, cohérent avec la pratique déjà adoptée
+pour Maintenance).
+
+**Hero Barista**
+(`client/src/pages/cafe/barista/barista-page.tsx`) — icône
+"Baristas signalés" conditionnée à `useBaristaPublishedReports(1,
+10).total > 0` (même pattern "fail open" que Maintenance : reste
+visible pendant le chargement/en cas d'erreur, masquée seulement une
+fois un total confirmé à 0).
+
+**Admin Signalements**
+(`client/src/pages/admin/reports-page.tsx`) — `REPORT_SERVICE_SLUG`
+étendu avec `BARISTA_MARKETPLACE: { service: "barista", entityNameKey:
+"baristaName" }` ; l'onglet Barista du switcher utilise désormais le
+même `ReportModerationPanel` partagé que Maintenance, sans code
+dupliqué.
+
+**Suppression du doublon Admin** — carte "Signalements en attente" et
+ses hooks (`useAdminBaristaReports`, `useResolveBaristaReport`,
+`AlertTriangle`) retirés de `admin/barista-page.tsx` (onglet "Baristas"),
+aucune autre fonctionnalité Comptes Barista touchée.
+
+**Temps réel** — `client/src/hooks/use-realtime.ts`, bloc
+`BARISTA_EVENTS` : ajout de la clé manquante
+`/api/barista/reports/published` (même cause racine que la tâche 52
+pour Maintenance). `admin_barista_report_created` était déjà diffusé
+après chaque commit (création et modération), seule la clé
+d'invalidation manquait.
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` : 0 erreur.
+- `npm run build` : réussi (client + serveur).
+- **Migration appliquée sur la vraie base**, vérifiée par requête SQL
+  directe (colonnes `rating`/`moderated_by_admin_id` et valeurs d'enum
+  `PUBLISHED`/`REJECTED` confirmées sur `barista_reports`).
+- **Exercice réel du cycle complet contre la vraie base** (script `tsx`
+  temporaire, supprimé après exécution, ligne de test nettoyée) : sur un
+  vrai couple CAFE_OWNER/BARISTA_MARKETPLACE existant — création notée
+  3 → apparaît dans la liste Admin PENDING → publication → apparaît
+  dans la liste publique (`getPublishedBaristaReports`, confirmé
+  **sans fuite de `cafeOwnerId`**) → rejet → disparaît de la liste
+  publique.
+- **Serveur réellement démarré** (port 5055, process distinct du port
+  5000 déjà utilisé par l'utilisateur, jamais touché, arrêté proprement
+  en fin de vérification, port libéré confirmé) : `/`, `/maintenance`,
+  `/barista`, `/admin`, `/admin/reports`, `/admin/barista`,
+  `/admin/maintenance` répondent toutes `HTTP 200` (aucun crash serveur
+  — confirme que le build réel charge correctement les fichiers
+  réécrits/nouveaux) ; `GET /api/barista/reports/published` et
+  `GET /api/admin/barista/reports` répondent `401` sans cookie de
+  session.
+- **Non vérifiable cette session** : comme pour les tâches précédentes,
+  aucune connexion `curl` authentifiée n'a été possible (classifieur
+  Auto Mode), donc aucune interaction navigateur réelle (clic sur
+  l'icône Hero Barista, ouverture du modal avec le nouveau grabber,
+  glisser-déposer tactile, scénarios temps réel A-J de bout en bout
+  avec deux sessions ouvertes simultanément). Le rendu visuel du
+  grabber sur le modal Maintenance et le fonctionnement identique du
+  nouveau modal Barista ont été vérifiés par lecture de code (le
+  composant partagé `EntityPublishedReportsModal` est structurellement
+  identique à ce qui fonctionnait déjà pour Maintenance, avec le
+  grabber ajouté au même endroit que dans `ReviewModal`/`ReportModal`)
+  et par l'exercice direct de la logique métier contre la vraie base
+  de données (ci-dessus).
+
+---
+
+## 55. Extension du système de signalement partagé à Print, Academy, Marketing
+
+### Audit
+
+Les trois services ont exactement le même système de signalement
+"ancien modèle" que Maintenance/Barista avant leur migration : table
+dédiée (`printReports` keyé `printerId`, `academyReports` keyé
+`academyUserId`, `marketingReports` keyé `marketingUserId`), statuts
+`PENDING|RESOLVED|DISMISSED` sans note, routes
+`POST /api/<service>/:id/report` + `GET /api/<service>/reports/mine` +
+`GET/PATCH /api/admin/<service>/reports[/resolve]` strictement
+mirrorées sur l'ancien Maintenance. Point notable : `academyReports`
+est le seul des trois dont les méthodes storage sont déclarées dans
+l'interface `IStorage` (lignes 545-548) — à mettre à jour en plus de
+l'implémentation.
+
+**Entrée du Signaler existante** (modal détail compte, pas modal de
+service) :
+- Print → `print-company-detail-modal.tsx` (clé `printerUserId`).
+- Marketing → `marketing-detail-modal.tsx` (clé `marketingUserId`,
+  `onRequestQuote` requis — déjà fourni par l'appelant).
+- Academy → `academy-detail-modal.tsx` (orienté formation, mais le
+  signalement cible bien `course.academyUserId`, le compte Academy).
+
+**Modal Hero "Blacklist"** : les trois affichaient "mes propres
+signalements" avec badges de statut, sans note, sans grabber — même
+schéma que l'ancien `MaintenanceBlacklistModal`. Particularité
+`PrintBlacklistModal` : contenait EN PLUS son propre formulaire de
+soumission (Select imprimeur + Textarea), retiré ici au profit du seul
+point d'entrée du modal détail, comme pour les autres services.
+`MarketingBlacklistModal` avait déjà un clic-vers-profil fonctionnel
+(`MarketingDetailModal`) — conservé tel quel. Academy et Print n'avaient
+pas de clic-vers-profil (Academy : décision déjà documentée dans le
+code source, "une Académie n'est pas un profil unique navigable" ;
+Print : aucun modal partagé par ligne, la navigation se fait par page
+dédiée) — **non ajouté** dans cette tâche pour rester au périmètre
+strict demandé et ne pas réintroduire une incertitude de conception déjà
+tranchée.
+
+**Thèmes** : Print bleu/indigo (`text-blue-600`/`400`), Marketing
+violet (`text-purple-600`/`400`, déjà confirmé par le code existant),
+Academy indigo (`text-indigo-600`/`400`).
+
+**Admin** : aucune page Admin ne consomme ces trois endpoints
+aujourd'hui (recherche exhaustive, aucune carte à retirer, contrairement
+à Barista à la tâche 54).
+
+### Plan
+
+Mirroring exact de la tâche 54 pour les trois services simultanément :
+schéma additif (`rating`, `moderatedByAdminId`, `PUBLISHED`/`REJECTED`),
+storage (`create*Report(+rating)`, `get*ReportById`,
+`getPublished*Reports`, `resolve*Report` élargi), routes (POST avec
+note requise, nouvelle route `/reports/published`, PATCH `/resolve`
+élargi avec le garde-fou légataire), nouveaux hooks
+`use-print-reports.ts`/`use-academy-reports.ts`/
+`use-marketing-reports.ts` (instanciations de `createEntityReportHooks`),
+détail modals basculés sur `<ReportModal>`, modals Hero basculés sur le
+composant partagé `EntityPublishedReportsModal` (déjà extrait à la
+tâche 54 — inclut déjà le grabber), icônes Hero conditionnées au total
+publié réel, `REPORT_SERVICE_SLUG` de `admin/reports-page.tsx` étendu
+aux 3 services, invalidation temps réel ajoutée dans
+`PRINT_EVENTS`/`ACADEMY_EVENTS`/`MARKETING_EVENTS`.
+
+### Implémentation réalisée
+
+**Schéma** (additif, migré via `npm run db:push`, vérifié par requête
+directe) : `printReportStatusEnum`/`academyReportStatusEnum`/
+`marketingReportStatusEnum` étendus à `...PUBLISHED|REJECTED` ;
+`printReports`/`academyReports`/`marketingReports` + `rating integer`
+(nullable) + `moderatedByAdminId integer` (nullable). Interface
+`IStorage` mise à jour pour les 4 méthodes Academy concernées.
+
+**Backend** : mirroring exact des fonctions/routes Maintenance/Barista
+pour les trois services (`create*Report(+rating)`, `get*ReportById`
+nouveau, `get*Reports`/`resolve*Report` élargis +
+`moderatedByAdminId`, `getPublished*Reports` nouveau — jamais
+`cafeOwnerId` — ; `POST /api/<service>/:id/report` avec note 1-5
+requise, `GET /api/<service>/reports/published` nouveau,
+`GET /api/admin/<service>/reports` élargi, `PATCH .../resolve` élargi
+avec le garde-fou "pas de note = pas de publication").
+
+**Composants** : aucun nouveau composant partagé requis — réutilisation
+intégrale de `ReportModal`, `SadnessRatingPicker/Display`,
+`PublishedReportsList`, `EntityPublishedReportsModal`,
+`ReportModerationPanel`, `createEntityReportHooks` (tous déjà
+construits aux tâches 51-54, confirmant que l'architecture partagée
+tient sa promesse de réutilisation sans modification).
+
+**Detail modals** — Signaler inline remplacé par `<ReportModal>` dans
+`print-company-detail-modal.tsx` (accent bleu),
+`marketing-detail-modal.tsx` (accent violet),
+`academy-detail-modal.tsx` (accent indigo). Imports `Textarea` retirés
+(devenus inutilisés) dans les trois. Anciens hooks `useReportPrinter`/
+`useReportMarketingProvider`/`useReportAcademy` laissés intacts mais
+orphelins (cohérent avec la pratique déjà adoptée pour Maintenance/
+Barista).
+
+**Modals Hero** — `print-blacklist-modal.tsx`,
+`marketing-blacklist-modal.tsx`, `academy-blacklist-modal.tsx`
+entièrement réécrits en fines enveloppes autour de
+`EntityPublishedReportsModal` (grabber inclus automatiquement) ;
+`PrintBlacklistModal` perd sa prop `printers` (et son formulaire de
+soumission) — `print-page.tsx` mis à jour en conséquence (prop retirée
+à l'appel, `distinctPrinters` devenu mort retiré) ; `MarketingBlacklistModal`
+conserve son clic-vers-profil existant ; `AcademyBlacklistModal` reste
+volontairement sans clic-vers-profil (décision préexistante préservée).
+
+**Icônes Hero** — conditionnées au total publié réel
+(`use*PublishedReports(1, 10).total > 0`, même clé de cache que la
+modale respective, aucune requête réseau supplémentaire ; "fail open"
+pendant chargement/erreur) dans `print-page.tsx`, `marketing-page.tsx`,
+`barista-academy-page.tsx`.
+
+**Admin Signalements** — `REPORT_SERVICE_SLUG` dans
+`admin/reports-page.tsx` étendu avec `PRINT`/`ACADEMY`/`MARKETING`,
+chacun pointant vers `ReportModerationPanel` avec son propre
+`entityNameKey`. Aucune page Admin dédiée créée (confirmé par l'audit
+qu'aucune n'existait pour ces trois services).
+
+**Temps réel** — `use-realtime.ts` : ajout de
+`/api/print/reports/published`, `/api/academy/reports/published`,
+`/api/marketing/reports/published` dans leurs blocs d'événements
+respectifs (même correction que la tâche 52/53 pour Maintenance/Barista
+— les événements `admin_<service>_report_created` étaient déjà
+diffusés après chaque commit, seule la clé d'invalidation manquait).
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` : 0 erreur.
+- `npm run build` : réussi (client + serveur).
+- **Migration appliquée sur la vraie base**, vérifiée par requête SQL
+  directe sur les 3 tables (colonnes + valeurs d'enum confirmées).
+- **Exercice réel du cycle complet contre la vraie base** pour les
+  trois services (script `tsx` temporaire, supprimé après exécution,
+  lignes de test nettoyées) : sur de vrais comptes PRINTER/
+  BARISTA_ACADEMY/MARKETING existants — création notée 4 → publication
+  → apparition dans la liste publique respective (confirmé **sans
+  fuite de `cafeOwnerId`** pour les trois) → rejet → disparition de la
+  liste publique, pour Print, Academy et Marketing individuellement.
+- **Serveur réellement démarré** (port 5055, process distinct du port
+  5000 déjà utilisé par l'utilisateur, jamais touché, arrêté proprement
+  en fin de vérification, port libéré confirmé) : `/`, `/print`,
+  `/academy`, `/marketing`, `/admin/reports` répondent toutes
+  `HTTP 200` ; les 6 nouvelles routes `GET /api/<service>/reports/
+  published` et `GET /api/admin/<service>/reports` (Print/Academy/
+  Marketing) répondent correctement `401` sans cookie de session.
+- **Non vérifiable cette session** : comme pour les tâches précédentes,
+  aucune session authentifiée via `curl` n'a été possible (classifieur
+  Auto Mode), donc aucune interaction navigateur réelle (soumission
+  depuis les 3 modals détail, ouverture des 3 modals Hero avec grabber,
+  bascule du switcher Admin Signalements vers chacun des 3 nouveaux
+  onglets, scénarios temps réel de bout en bout). Vérifié uniquement
+  par lecture de code (réutilisation stricte des composants déjà
+  fonctionnels pour Maintenance/Barista) et par l'exercice direct de la
+  logique métier contre la vraie base de données (ci-dessus).
+
+### Récapitulatif de fin de tâche
+
+- **Fichiers modifiés/créés** : voir ci-dessus — aucun nouveau
+  composant partagé requis, seuls `shared/schema.ts`, `server/
+  storage.ts`, `server/routes.ts`, 3 nouveaux fichiers de hooks, les 3
+  detail modals, les 3 blacklist modals, les 3 pages Hero,
+  `admin/reports-page.tsx`, `use-realtime.ts` et `print-page.tsx`
+  (retrait de `printers`/`distinctPrinters`) ont été touchés.
+- **Schéma/API** : additif uniquement sur les 3 tables déjà
+  existantes ; aucune route supprimée ; aucune donnée historique
+  modifiée ou réinterprétée.
+- **Temps réel** : réutilise l'infrastructure WebSocket + invalidation
+  React Query déjà en place pour Maintenance/Barista, corrigée de la
+  même clé manquante.
+- **Limitation** : aucune vérification navigateur réelle possible dans
+  cet environnement (accès `curl` authentifié bloqué par le
+  classifieur Auto Mode) — tout a été vérifié par lecture de code et
+  exercice direct de la base de données.
+
+---
+
+## 56. Uniformisation des modals de signalement restants sur le design Academy
+
+### Audit
+
+La tâche 55 n'a mis à jour que les modals de détail **compte/agence**
+(`print-company-detail-modal.tsx`, `marketing-detail-modal.tsx`,
+`academy-detail-modal.tsx`). Or chaque service Print/Marketing/Academy
+a **plusieurs** points d'entrée Signaler indépendants, chacun avec son
+propre Dialog inline dupliqué (même pattern historique que l'ancien
+Maintenance) :
+
+- `client/src/components/print/print-service-detail-modal.tsx` — modal
+  de détail PAR SERVICE (pas par imprimeur), distinct du company modal
+  déjà migré. Signaler inline intact (Textarea, `useReportPrinter`,
+  cible `service.printerId`/`service.printerName`).
+- `client/src/components/marketing/marketing-service-detail-modal.tsx`
+  — même chose côté Marketing, cible `service.marketingUserId`/
+  `service.agencyName`.
+- `client/src/pages/cafe/print/print-store-detail-page.tsx`,
+  `client/src/pages/cafe/marketing/marketing-store-detail-page.tsx`,
+  `client/src/pages/cafe/barista/academy-store-detail-page.tsx` — les
+  3 pages "Store" (Shop → Mapped Stores → Store Page, pattern des
+  tâches 49-50), chacune avec son **propre** Signaler inline
+  indépendant (jamais migré, aucun rapport avec les modals détail —
+  confirmé par recherche exhaustive de `reportModalOpen`/`Textarea`
+  dans ces 3 fichiers).
+
+Les 5 fichiers ci-dessus correspondent exactement aux 5 emplacements
+listés par la tâche. Tous utilisent déjà les hooks de soumission
+existants (`useReportPrinter`/`useReportMarketingProvider`/
+`useReportAcademy`), que je remplace par les hooks notés déjà construits
+à la tâche 55 (`useSubmitPrintReport`/`useSubmitMarketingReport`/
+`useSubmitAcademyReport`), exactement comme pour les modals déjà migrés.
+`academy-detail-modal.tsx` (la référence) n'est pas touché.
+
+### Plan
+
+Pour chacun des 5 fichiers : remplacer le Dialog Signaler inline
+(state `reportReason`, mutation ad hoc, scroll-dismiss dédié) par
+`<ReportModal>` (déjà utilisé par les 3 modals compte/agence),
+connecté au hook `useSubmit<Service>Report` approprié, couleur d'accent
+du thème du service (bleu Print, violet Marketing, indigo Academy —
+mêmes valeurs que la tâche 55), retrait des imports devenus inutiles
+(`Textarea`), aucune autre fonctionnalité de ces fichiers touchée
+(favoris, avis, navigation, commande, etc.).
+
+Aucun changement backend, schéma, ou composant de modération — ces 5
+points utilisent déjà les bons endpoints `/api/<service>/:id/report`
+déjà étendus à la tâche 55 (note 1-5 requise).
+
+### Implémentation réalisée
+
+Les 5 fichiers identifiés par l'audit ont été migrés, chacun suivant
+exactement le même schéma que les modals déjà faits à la tâche 55/51 :
+retrait du state `reportReason`/du scroll-dismiss dédié/de la mutation
+ad hoc, remplacement du `Dialog` inline par `<ReportModal>` branché sur
+le hook `useSubmit<Service>Report` approprié, retrait des imports
+devenus inutilisés.
+
+- `client/src/components/print/print-service-detail-modal.tsx` —
+  accent bleu, cible `service.printerId`/`service.printerName`.
+- `client/src/components/marketing/marketing-service-detail-modal.tsx`
+  — accent violet, cible `service.marketingUserId`/`service.agencyName`.
+- `client/src/pages/cafe/print/print-store-detail-page.tsx` — accent
+  bleu, cible `card.userId`/`card.name` ; imports désormais inutilisés
+  retirés en plus de `Textarea` (`Dialog`/`DialogContent`/`DialogTitle`,
+  `VisuallyHidden`, `ModalGrabber`, `useScrollDismiss`, l'icône `X` —
+  aucun n'était plus utilisé ailleurs dans le fichier une fois le
+  Dialog Signaler retiré).
+- `client/src/pages/cafe/marketing/marketing-store-detail-page.tsx` —
+  même nettoyage, accent violet, cible `card.userId`/`card.name`.
+- `client/src/pages/cafe/barista/academy-store-detail-page.tsx` — même
+  nettoyage, accent indigo, cible `card.userId`/`card.name`.
+
+`academy-detail-modal.tsx` (la référence) et `academy-profile-modal.tsx`
+(modal de profil compte, hors périmètre — non listé parmi les 5
+emplacements demandés, conserve volontairement son ancien Signaler)
+confirmés non modifiés (vérifié via `git diff --stat`).
+
+Aucun changement backend, schéma, composant de modération, ou carte de
+signalement publié — uniquement les 5 points de soumission.
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` : 0 erreur après chaque fichier migré.
+- `npm run build` : réussi (client + serveur).
+- `git diff --stat` sur `academy-detail-modal.tsx`/
+  `academy-profile-modal.tsx` : confirme qu'aucun des deux n'a été
+  modifié dans cette tâche.
+- **Serveur réellement démarré** (port 5055, process distinct du port
+  5000 déjà utilisé par l'utilisateur, jamais touché, arrêté proprement
+  en fin de vérification, port libéré confirmé) : `/print`,
+  `/marketing`, `/academy`, et les 3 pages Store concernées
+  (`/print/stores/53`, `/marketing/stores/19`, `/academy/stores/55`,
+  avec de vrais identifiants existants) répondent toutes `HTTP 200`,
+  aucune erreur serveur dans les logs — confirme que les fichiers
+  réécrits se chargent correctement.
+- **Non vérifiable cette session** : comme pour toutes les tâches de
+  signalement précédentes, aucune session authentifiée via `curl` n'a
+  été possible (classifieur Auto Mode), donc aucune interaction
+  navigateur réelle (ouverture effective des 5 modals, sélection de la
+  note à 5 niveaux, soumission réelle, apparition dans Admin
+  Signalements). Vérifié uniquement par lecture de code — chaque
+  fichier migré réutilise à l'identique le même composant `ReportModal`
+  déjà vérifié fonctionnel pour les modals de détail compte/agence à la
+  tâche 55 — et par le chargement sans erreur serveur des pages
+  concernées ci-dessus.
+
+---
+
+## 57. Extension du système de signalement aux magasins Fournisseur (Shop)
+
+### Audit
+
+**Relation Supplier ↔ Store** — `shared/schema.ts:1516-1535`,
+`supplierStores.supplierId` est **unique** : un fournisseur = exactement
+un magasin (1:1), contrairement à Maintenance/Barista/etc où le compte
+EST l'entité. Le système d'avis existant (`supplierProductReviews`,
+`reviewType: 'SUPPLIER'`) clé déjà sur `supplierId` pour ce même
+niveau "fournisseur" (`SupplierReviewsModal` dans
+`client/src/pages/cafe/store-detail-page.tsx`). Décision : le nouveau
+signalement cible **`supplierId`** (le compte), exactement le même
+pattern que tous les autres services (`maintenanceUserId`,
+`marketingUserId`, etc.) — la page Store n'est que le point d'entrée
+UI, pas une entité distincte en base.
+
+**Aucun système de signalement préexistant pour Supplier** —
+contrairement à Maintenance/Barista/Print/Academy/Marketing (qui avaient
+tous une table "ancien modèle" avant migration), il n'existe **aucune**
+`supplierReports` ni route associée. Table entièrement nouvelle, créée
+directement avec le modèle noté final (pas de colonnes legacy à gérer).
+
+**Shop — Hero principal** (`client/src/pages/cafe/browse-products.tsx`)
+— aucune icône de signalement existante, mais
+`client/src/hooks/use-hero-actions.ts` a déjà une entrée `SHOP:
+{ fastSearchEnabled: true, reportEnabled: true }` dans
+`DEFAULT_HERO_ACTIONS` — le réglage Admin existe déjà, simplement jamais
+lu par cette page. `controlsRow` du Hero ne contient actuellement que
+le bouton Flash Mode.
+
+**Store Detail Page** (`client/src/pages/cafe/store-detail-page.tsx`)
+— cluster d'icônes bas-droite existant (Info, Avis/Star) sans aucun
+Signaler. `store.supplierId`/`store.name`/`store.logoUrl` déjà
+disponibles (type `StoreDetail extends StoreCard`).
+
+**Switcher Signalements vs Reviews** — `SERVICE_CATEGORY_TABS`
+(`service-category-switcher.tsx`, tâche 52) est un tableau **unique**
+partagé par `reviews-page.tsx` ET `reports-page.tsx`. Cette tâche
+demande de retirer Product/Pack **uniquement** du switcher
+Signalements, en préservant Reviews intact (qui a toujours besoin de
+Product/Pack) — nécessite une **seconde** liste dédiée aux
+Signalements, pas une modification du tableau canonique partagé.
+
+**Temps réel** — `STORE_EVENTS = ["store_updated",
+"store_approval_changed"]` (`use-realtime.ts`) est déjà le bloc
+d'invalidation que `browse-products.tsx`/`store-detail-page.tsx`
+écoutent pour `/api/stores*`. Nouvel évènement
+`admin_supplier_report_created` à y ajouter, avec la même correction
+"clé d'invalidation présente dès le départ" apprise aux tâches 52-53
+(éviter de réintroduire ce bug).
+
+### Plan
+
+1. **Schéma** (nouvelle table, additive) : `supplierReportStatusEnum`
+   (`PENDING|PUBLISHED|REJECTED` — pas de valeurs legacy, aucune donnée
+   existante), `supplierReports` (`cafeOwnerId`, `supplierId`, `reason`,
+   `rating`, `status`, `createdAt`, `resolvedAt`, `resolutionNote`,
+   `moderatedByAdminId`), mêmes conventions que les 5 tables déjà
+   migrées.
+2. **Backend** : `createSupplierReport(+rating)`,
+   `getSupplierReportById`, `getSupplierReports(status?)`,
+   `getPublishedSupplierReports(page,limit)` (jointure
+   `supplierStores` pour nom/logo, jamais `cafeOwnerId`),
+   `resolveSupplierReport` ; routes `POST /api/supplier/:userId/report`,
+   `GET /api/supplier/reports/published`,
+   `GET/PATCH /api/admin/supplier/reports[/resolve]` — mirroring exact
+   des autres services.
+3. **Hook client** `use-supplier-reports.ts`
+   (`createEntityReportHooks("supplier")`).
+4. **Store Detail Page** : bouton Signaler dans le cluster d'icônes
+   existant → `<ReportModal>` (accent ambre/orange, thème Shop).
+5. **Shop Hero** : icône conditionnée au total publié réel (même
+   pattern "fail open" que les autres services) + nouveau composant
+   fin `ShopBlacklistModal` autour de `EntityPublishedReportsModal`
+   (grabber inclus).
+6. **Switcher Signalements** : nouvel export
+   `REPORT_SERVICE_TABS` dans `service-category-switcher.tsx`
+   (Supplier → Delivery → Maintenance → Barista → Academy → Print →
+   Marketing, réutilisant les mêmes entrées `{key,label,icon}` que
+   `SERVICE_CATEGORY_TABS`, filtrées/réordonnées — jamais dupliquées) ;
+   `ServiceCategorySwitcher` accepte une prop `tabs` optionnelle
+   (défaut `SERVICE_CATEGORY_TABS`, donc `reviews-page.tsx` ne change
+   pas) ; `reports-page.tsx` passe `tabs={REPORT_SERVICE_TABS}` et
+   ajoute `SUPPLIER` à `REPORT_SERVICE_SLUG`. `DRIVER` ("Delivery")
+   reste présent dans le switcher Signalements mais **sans** entrée
+   dans `REPORT_SERVICE_SLUG` — comportement déjà existant (état vide
+   "non supporté"), aucune construction nécessaire pour Delivery dans
+   cette tâche (préservé tel quel, jamais implémenté pour Coffee Owner
+   → Driver).
+7. **Temps réel** : `admin_supplier_report_created` ajouté à
+   `STORE_EVENTS`, avec `/api/supplier/reports/published` et
+   `/api/admin/supplier/reports` invalidés dès ce commit (pas de bug
+   à corriger après coup cette fois).
+
+Aucune suppression de Product/Pack du catalogue, de la gestion Shop, ou
+des avis existants — uniquement du switcher de signalements.
+
+### Implémentation réalisée
+
+**Schéma** (nouvelle table, migrée via `npm run db:push`, vérifiée par
+requête directe) : `supplierReportStatusEnum`
+(`PENDING|PUBLISHED|REJECTED`, pas de valeurs legacy) + table
+`supplierReports` (`cafeOwnerId`, `supplierId`, `reason`, `rating`,
+`status`, `createdAt`, `resolvedAt`, `resolutionNote`,
+`moderatedByAdminId`).
+
+**Backend** (`server/storage.ts`, `server/routes.ts`) :
+`createSupplierReport(+rating)`, `getSupplierReportById`,
+`getSupplierReports(status?)`, `getPublishedSupplierReports(page,limit)`
+(jointure `supplierStores` pour nom/logo du magasin, jamais
+`cafeOwnerId`), `resolveSupplierReport` ; routes
+`POST /api/supplier/:userId/report` (note 1-5 requise, vérifie
+`target.role === "SUPPLIER"`), `GET /api/supplier/reports/published`,
+`GET/PATCH /api/admin/supplier/reports[/resolve]` — mirroring exact des
+5 autres services, garde-fou "pas de note = pas de publication" inclus
+par précaution (jamais déclenché en pratique, la note est toujours
+requise à la soumission).
+
+**Hook client** `client/src/hooks/use-supplier-reports.ts`
+(`createEntityReportHooks("supplier")`).
+
+**Store Detail Page** (`client/src/pages/cafe/store-detail-page.tsx`) —
+bouton Signaler (icône Flag) ajouté au cluster d'icônes existant
+(Info/Avis), gated `user?.role === "CAFE_OWNER"` ; `<ReportModal>`
+(accent ambre, thème Shop) ciblant toujours `store.supplierId` —
+jamais un produit ou un pack, quel que soit le contexte de navigation
+de la page. `useAuth()` ajouté au composant principal (absent
+auparavant, nécessaire pour le gate de rôle).
+
+**Shop Hero** (`client/src/pages/cafe/browse-products.tsx`) — icône
+"Fournisseurs signalés" (Ban, même style que Maintenance/Barista/etc.)
+ajoutée dans `controlsRow`, conditionnée à
+`heroActions.SHOP.reportEnabled` (réglage déjà existant dans
+`use-hero-actions.ts`, jamais lu avant cette tâche) **et** au total
+publié réel (`useSupplierPublishedReports(1,10).total > 0`, "fail
+open" pendant chargement/erreur). Nouveau composant fin
+`client/src/components/shop/shop-blacklist-modal.tsx` autour de
+`EntityPublishedReportsModal` (grabber inclus), sans clic-vers-profil
+(même choix qu'Academy).
+
+**Switcher Signalements** — `service-category-switcher.tsx` : nouvel
+export `REPORT_SERVICE_TABS` (Supplier → Delivery → Maintenance →
+Barista → Academy → Print → Marketing, construit par clé à partir de
+`SERVICE_CATEGORY_TABS`, jamais dupliqué) ; `ServiceCategorySwitcher`
+accepte désormais une prop `tabs` optionnelle (défaut
+`SERVICE_CATEGORY_TABS`, donc **aucun changement** pour
+`reviews-page.tsx`, confirmé par `git diff` — toujours les 9
+catégories y compris Product/Pack). `reports-page.tsx` : passe
+`tabs={REPORT_SERVICE_TABS}`, ajoute `SUPPLIER` à
+`REPORT_SERVICE_SLUG`, onglet par défaut changé de `MAINTENANCE` à
+`SUPPLIER` (premier de la liste). `DRIVER` ("Delivery") reste dans le
+switcher mais sans entrée dans `REPORT_SERVICE_SLUG` — comportement
+déjà existant (état vide "non supporté"), rien construit pour Delivery
+dans cette tâche (hors périmètre, comportement préservé tel quel).
+
+**Temps réel** — `client/src/hooks/use-realtime.ts` :
+`admin_supplier_report_created` ajouté à `STORE_EVENTS` ; les clés
+`/api/supplier/reports/published` et `/api/admin/supplier/reports`
+ajoutées à `invalidateStoreQueries` **dès ce commit** (pas de bug à
+corriger après coup comme pour Maintenance aux tâches 52-53).
+
+### Vérification réelle effectuée
+
+- `npx tsc --noEmit` : 0 erreur après correction de deux problèmes
+  détectés à la compilation : (1) la prop `tabs` de
+  `ServiceCategorySwitcher` devait être typée `readonly
+  ServiceCategoryTab[]` (la liste source est un `as const`) ; (2)
+  `store-detail-page.tsx` et `browse-products.tsx` n'appelaient pas
+  `useAuth()` au niveau de leur composant principal — ajouté aux deux.
+- `npm run build` : réussi (client + serveur).
+- **Migration appliquée sur la vraie base**, vérifiée par requête SQL
+  directe (colonnes + valeurs d'enum confirmées sur `supplier_reports`).
+- **Exercice réel du cycle complet contre la vraie base** (script `tsx`
+  temporaire, supprimé après exécution, ligne de test nettoyée) : sur
+  un vrai couple CAFE_OWNER/SUPPLIER existant (fournisseur "Café
+  Ellouze") — création notée 5 → apparaît dans la liste Admin PENDING
+  → publication → apparaît dans la liste publique avec le **vrai nom
+  et logo du magasin** (jointure `supplierStores` confirmée
+  fonctionnelle, jamais `cafeOwnerId` exposé) → rejet → disparaît de la
+  liste publique.
+- **Serveur réellement démarré** (port 5055, process distinct du port
+  5000 déjà utilisé par l'utilisateur, jamais touché, arrêté proprement
+  en fin de vérification, port libéré confirmé) : `/`, `/stores/2`,
+  `/admin/reports` répondent `HTTP 200` ; `GET /api/supplier/reports/
+  published` et `GET /api/admin/supplier/reports` répondent
+  correctement `401` sans cookie de session.
+- `git diff --stat` sur `reviews-page.tsx` : confirme qu'aucun appel à
+  `ServiceCategorySwitcher` n'y a été modifié dans cette tâche (toujours
+  sans prop `tabs`, donc toujours les 9 catégories complètes).
+- **Non vérifiable cette session** : comme pour toutes les tâches de
+  signalement précédentes, aucune session authentifiée via `curl` n'a
+  été possible (classifieur Auto Mode), donc aucune interaction
+  navigateur réelle (clic sur l'icône Signaler d'une vraie page Store,
+  ouverture du modal Hero du Shop, bascule effective du switcher Admin
+  vers l'onglet Supplier, scénarios temps réel de bout en bout).
+  Vérifié uniquement par lecture de code (réutilisation stricte des
+  composants déjà fonctionnels) et par l'exercice direct de la base de
+  données ci-dessus.

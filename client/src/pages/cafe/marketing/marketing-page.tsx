@@ -57,6 +57,7 @@ import { useMarketingStoreNav } from "@/hooks/use-marketing-store-nav";
 import { MarketingMappedServiceCard } from "@/components/marketing/marketing-mapped-service-card";
 import { MarketingFastSearch } from "@/components/marketing/marketing-fast-search";
 import { MarketingBlacklistModal } from "@/components/marketing/marketing-blacklist-modal";
+import { useMarketingPublishedReports } from "@/hooks/use-marketing-reports";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem } from "@/components/ui/dropdown-menu";
 import { formatDistance } from "@/lib/distance";
 import { resolveMarketingCategoryIcon, resolveMarketingSubCategoryIcon } from "@/lib/marketing-category-icon";
@@ -427,6 +428,14 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
   const [quoteProvider, setQuoteProvider] = useState<MarketingMarketplaceCard | null>(null);
   const [fastSearchOpen, setFastSearchOpen] = useState(false);
   const [blacklistOpen, setBlacklistOpen] = useState(false);
+  // Hero report icon visibility (task: "Extend the Shared Reporting System
+  // to Print, Academy, and Marketing") — same query/cache key
+  // MarketingBlacklistModal itself reads, no extra request. Fails OPEN while
+  // loading/on error, same as Maintenance/Barista/Print.
+  const { data: publishedMarketingReportsPreview, isLoading: publishedMarketingReportsLoading, error: publishedMarketingReportsError } = useMarketingPublishedReports(1, 10);
+  const hasPublishedMarketingReports = publishedMarketingReportsLoading || publishedMarketingReportsError
+    ? true
+    : (publishedMarketingReportsPreview?.total ?? 0) > 0;
 
   const { data: taxonomy = [] } = useMarketingTaxonomy();
   const { data: subcategoryTaxonomy = [] } = useMarketingSubCategoryTaxonomy();
@@ -659,7 +668,7 @@ export default function MarketingPage({ comingSoon = false }: { comingSoon?: boo
               now, so the duplicated hero one is gone; Fast Search/Report stay
               Admin-toggleable per service (see /api/hero-actions). */
           <div className="relative flex justify-end items-center gap-2 mb-9">
-            {canAct && heroActions.MARKETING.reportEnabled && (
+            {canAct && heroActions.MARKETING.reportEnabled && hasPublishedMarketingReports && (
               <button
                 onClick={() => setBlacklistOpen(true)}
                 aria-label="Prestataires signalés"

@@ -26,6 +26,7 @@ import { useCircularItemNav } from "@/hooks/use-circular-item-nav";
 import { usePrintStoreNav } from "@/hooks/use-print-store-nav";
 import { PrintFastSearch } from "@/components/print/print-fast-search";
 import { PrintBlacklistModal } from "@/components/print/print-blacklist-modal";
+import { usePrintPublishedReports } from "@/hooks/use-print-reports";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
 import { PrintCompanyDetailModal } from "@/components/print/print-company-detail-modal";
 import { PrintMappedServiceCard } from "@/components/print/print-mapped-service-card";
@@ -559,6 +560,14 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
   const [blacklistOpen, setBlacklistOpen] = useState(false);
   const [previewServiceId, setPreviewServiceId] = useState<number | null>(null);
   const [previewCompanyId, setPreviewCompanyId] = useState<number | null>(null);
+  // Hero report icon visibility (task: "Extend the Shared Reporting System
+  // to Print, Academy, and Marketing") — same query/cache key
+  // PrintBlacklistModal itself reads (page 1, limit 10), no extra request.
+  // Fails OPEN while loading/on error, same as Maintenance/Barista.
+  const { data: publishedPrintReportsPreview, isLoading: publishedPrintReportsLoading, error: publishedPrintReportsError } = usePrintPublishedReports(1, 10);
+  const hasPublishedPrintReports = publishedPrintReportsLoading || publishedPrintReportsError
+    ? true
+    : (publishedPrintReportsPreview?.total ?? 0) > 0;
 
   const { data: cards = EMPTY_PRINT_CARDS, isLoading: cardsLoading } = useQuery<PrintCatalogCard[]>({
     queryKey: ["/api/print/marketplace"],
@@ -741,11 +750,6 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
 
   const isLoading = cardsLoading || categoriesLoading;
   const distinctPrinterCount = useMemo(() => new Set(cards.map((c) => c.printerId)).size, [cards]);
-  const distinctPrinters = useMemo(() => {
-    const map = new Map<number, string>();
-    for (const c of cards) if (!map.has(c.printerId)) map.set(c.printerId, c.printerName);
-    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
-  }, [cards]);
   const { user } = useAuth();
   const canAct = !!user && user.role === "CAFE_OWNER" && accessLevel === "approved";
 
@@ -795,7 +799,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
               service — see /api/hero-actions) follow the exact /barista
               hero pattern. */
           <div className="relative flex justify-end items-center gap-2 mb-9">
-            {!comingSoon && canAct && heroActions.PRINT.reportEnabled && (
+            {!comingSoon && canAct && heroActions.PRINT.reportEnabled && hasPublishedPrintReports && (
               <button
                 onClick={() => setBlacklistOpen(true)}
                 aria-label="Imprimeurs signalés"
@@ -953,7 +957,7 @@ export default function PrintPage({ comingSoon = false }: { comingSoon?: boolean
         cards={cards}
         onOpenDetail={(card) => setPreviewServiceId(card.id)}
       />
-      <PrintBlacklistModal open={blacklistOpen} onClose={() => setBlacklistOpen(false)} isDark={isDark} printers={distinctPrinters} />
+      <PrintBlacklistModal open={blacklistOpen} onClose={() => setBlacklistOpen(false)} isDark={isDark} />
 
       {/* Service / Company details modals — replaces the old direct navigation to the
           full-page item detail for a quick preview; the full page (with its file-upload/

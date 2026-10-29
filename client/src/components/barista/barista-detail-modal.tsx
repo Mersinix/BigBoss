@@ -9,10 +9,11 @@ import {
   useBaristaReviews,
   useBaristaMissions,
   useCreateBaristaReview,
-  useReportBarista,
   startBaristaConversation,
   type BaristaMarketplaceCard,
 } from "@/hooks/use-barista-marketplace";
+import { useSubmitBaristaReport } from "@/hooks/use-barista-reports";
+import { ReportModal } from "@/components/report-modal";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -20,7 +21,6 @@ import { getAvatarUrl } from "@/lib/avatar";
 import { useFallbackImage } from "@/hooks/use-fallback-image";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Star, MapPin, Clock, Award, Image as ImageIcon, Briefcase, MessageCircle,
@@ -147,16 +147,17 @@ export function BaristaDetailModal({
   const { data: reviews = [] } = useBaristaReviews(baristaUserId);
   const { data: missions = [] } = useBaristaMissions();
   const createReview = useCreateBaristaReview();
-  const reportBarista = useReportBarista();
+  const submitReportMutation = useSubmitBaristaReport();
 
   const faved = useFavorites((s) => (baristaUserId ? !!s.baristaMarket[baristaUserId] : false));
   const toggleBaristaMarket = useFavorites((s) => s.toggleBaristaMarket);
 
   const [reviewMissionId, setReviewMissionId] = useState<number | null>(null);
-  // Signaler now opens its own separate Dialog instead of an inline
-  // collapsible panel — same mutation/validation/success-error behavior.
+  // Signaler — now the shared ReportModal (task: "Add a Grabber to the
+  // Maintenance Reports Modal and Extend the Reporting System to Barista"),
+  // same open/close state as before; the rating+comment form and its own
+  // scroll-dismiss now live inside ReportModal itself.
   const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [reportReason, setReportReason] = useState("");
   const [availabilityModalOpen, setAvailabilityModalOpen] = useState(false);
   // Star — opens its own dedicated modal instead of expanding inline, same
   // pattern as Signaler/Disponibilité already do.
@@ -184,7 +185,6 @@ export function BaristaDetailModal({
   const handleClose = () => {
     setReviewMissionId(null);
     setReportModalOpen(false);
-    setReportReason("");
     onClose();
   };
 
@@ -198,17 +198,6 @@ export function BaristaDetailModal({
     onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
     dismissContentStyle, dismissOverlayStyle,
   } = useScrollDismiss(open, handleClose, undefined, true);
-
-  // Same swipe-to-dismiss, independently, for the nested Signaler dialog
-  // (task: "Standardize Grabber Design and Swipe-to-Dismiss Across Store
-  // Information and Service Modals") — a separate Dialog/open state, so a
-  // separate hook instance; safe since this dialog is already rendered as a
-  // sibling of the main modal's own gesture container, never a descendant.
-  const {
-    onBodyWheel: reportOnBodyWheel, onBodyTouchStart: reportOnBodyTouchStart,
-    onBodyTouchMove: reportOnBodyTouchMove, onBodyTouchEnd: reportOnBodyTouchEnd,
-    dismissContentStyle: reportDismissContentStyle, dismissOverlayStyle: reportDismissOverlayStyle,
-  } = useScrollDismiss(reportModalOpen, () => { setReportModalOpen(false); setReportReason(""); }, undefined, true);
 
   const handleMessage = async () => {
     if (!card || readOnly) return;
@@ -224,15 +213,9 @@ export function BaristaDetailModal({
     }
   };
 
-  const submitReport = () => {
-    if (!card || !reportReason.trim() || readOnly) return;
-    reportBarista.mutate(
-      { baristaUserId: card.userId, reason: reportReason.trim() },
-      {
-        onSuccess: () => { toast({ title: "Signalement envoyé", description: "L'équipe Admin va l'examiner." }); setReportModalOpen(false); setReportReason(""); },
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      }
-    );
+  const submitReport = async (rating: number, reason: string) => {
+    if (!card || readOnly) throw new Error("Aperçu en lecture seule");
+    await submitReportMutation.mutateAsync({ targetUserId: card.userId, reason, rating });
   };
 
   return (
@@ -475,42 +458,19 @@ export function BaristaDetailModal({
       </DialogContent>
     </Dialog>
 
-    {/* Signaler — same modal chrome as the Disponibilité modal above (rounded-[2rem]
-        container, circular close button), close button on the right
-        (docs/print_marketing_ui_synchronization_audit.md Section 14-17). Content/
-        functionality unchanged. */}
-    <Dialog open={reportModalOpen} onOpenChange={(v) => { if (!v) { setReportModalOpen(false); setReportReason(""); } }}>
-      <DialogContent
-        className={`sm:max-w-md p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden ${t.modalBg}`}
-        style={reportDismissContentStyle}
-        overlayStyle={reportDismissOverlayStyle}
-      >
-        <VisuallyHidden><DialogTitle>Signaler {card?.name ?? ""}</DialogTitle></VisuallyHidden>
-        <div
-          className="px-5 pt-1 pb-5 space-y-3"
-          onWheel={reportOnBodyWheel}
-          onTouchStart={reportOnBodyTouchStart}
-          onTouchMove={reportOnBodyTouchMove}
-          onTouchEnd={reportOnBodyTouchEnd}
-        >
-          <ModalGrabber isDark={isDark} />
-          <div className="flex items-center justify-between">
-            <div className="w-8 h-8" />
-            <span className={`text-[13px] font-semibold tracking-tight leading-tight ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler {card?.name}</span>
-            <button onClick={() => { setReportModalOpen(false); setReportReason(""); }} aria-label="Close" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}>
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-          <Textarea placeholder="Décrivez le problème…" rows={3} value={reportReason} onChange={(e) => setReportReason(e.target.value)} className={t.inputBg} data-testid="input-report-reason" />
-          <div className="flex gap-2 justify-end pt-1">
-            <Button size="sm" variant="outline" className={t.textPrimary} onClick={() => { setReportModalOpen(false); setReportReason(""); }}>Annuler</Button>
-            <Button size="sm" variant="destructive" onClick={submitReport} disabled={!reportReason.trim() || reportBarista.isPending} data-testid="button-submit-report">
-              {reportBarista.isPending ? "Envoi…" : "Envoyer le signalement"}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+    {/* Signaler — redesigned on the Avis modal pattern (task: "Add a Grabber
+        to the Maintenance Reports Modal and Extend the Reporting System to
+        Barista"), same shared ReportModal Maintenance uses: 5-level sadness
+        rating + comment. Submitted reports are never shown anywhere until an
+        Admin explicitly publishes them (see BaristaBlacklistModal). */}
+    <ReportModal
+      open={reportModalOpen}
+      onClose={() => setReportModalOpen(false)}
+      targetName={card?.name ?? ""}
+      onSubmit={submitReport}
+      isSubmitting={submitReportMutation.isPending}
+      accentClassName={isDark ? "text-emerald-400" : "text-green-600"}
+    />
 
     {/* Disponibilité — weekly schedule, Shop Opening Hours visual reference,
         real saved Barista data only. */}

@@ -1,10 +1,14 @@
 import { Link, useLocation } from "wouter";
-import { Bell, MessageCircle, Star } from "lucide-react";
+import { Bell, MessageCircle, Star, Flag } from "lucide-react";
 
 const TABS = [
   { href: "/admin/notifications", label: "Notifications", icon: Bell },
   { href: "/admin/messages", label: "Messages", icon: MessageCircle },
   { href: "/admin/reviews", label: "Reviews", icon: Star },
+  // Signalements (task: "Centralize Report Moderation in Admin Communication
+  // and Fix Real-Time Publication") — entity-level reports (Coffee Owner
+  // flagging a professional/account), distinct from review moderation above.
+  { href: "/admin/reports", label: "Signalements", icon: Flag },
 ];
 
 /**

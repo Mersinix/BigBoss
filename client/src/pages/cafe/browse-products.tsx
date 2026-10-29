@@ -12,8 +12,11 @@ import {
 } from "@/components/ui/select";
 import {
  Gift, Package, Store, Heart, SlidersHorizontal, RotateCcw, Lock, Navigation,
-  Plus, ShoppingBag, Layers, Star, MapPin, Zap, Search,
+  Plus, ShoppingBag, Layers, Star, MapPin, Zap, Search, Ban,
 } from "lucide-react";
+import { useHeroActionSettings } from "@/hooks/use-hero-actions";
+import { useSupplierPublishedReports } from "@/hooks/use-supplier-reports";
+import { ShopBlacklistModal } from "@/components/shop/shop-blacklist-modal";
 import type { ListingPromotion } from "@shared/schema";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
@@ -1026,6 +1029,7 @@ function FilterBar({
 export default function BrowseProducts() {
   const [, navigate] = useLocation();
   const searchStr = useSearch();
+  const { user } = useAuth();
   const hasCommercialAccess = useCommercialAccess();
   const searchLocation = useSearchLocationStore((s) => s.searchLocation);
   const searchLat = searchLocation?.lat ? parseFloat(searchLocation.lat) : null;
@@ -1037,6 +1041,16 @@ export default function BrowseProducts() {
   const t = useTheme(isDark);
 
   const [flashOpen, setFlashOpen] = useState(false);
+  const [blacklistOpen, setBlacklistOpen] = useState(false);
+  const { settings: heroActions } = useHeroActionSettings();
+  // Hero report icon visibility (task: "Extend the Shared Reporting System
+  // to Supplier Stores") — same query/cache key ShopBlacklistModal itself
+  // reads (page 1, limit 10), no extra request. Fails OPEN while loading/on
+  // error, same pattern as every other service's hero icon.
+  const { data: publishedSupplierReportsPreview, isLoading: publishedSupplierReportsLoading, error: publishedSupplierReportsError } = useSupplierPublishedReports(1, 10);
+  const hasPublishedSupplierReports = publishedSupplierReportsLoading || publishedSupplierReportsError
+    ? true
+    : (publishedSupplierReportsPreview?.total ?? 0) > 0;
 
   const urlParams = useMemo(() => new URLSearchParams(searchStr), [searchStr]);
   const initialSearch = urlParams.get("q") ?? "";
@@ -1346,6 +1360,17 @@ export default function BrowseProducts() {
               toggle is gone, the global navbar theme control is now the single
               source for this page too (still driven by the same isDark below). */
           <div className="relative flex justify-end items-center gap-2 mb-9">
+            {user?.role === "CAFE_OWNER" && heroActions.SHOP.reportEnabled && hasPublishedSupplierReports && (
+              <button
+                onClick={() => setBlacklistOpen(true)}
+                aria-label="Fournisseurs signalés"
+                title="Fournisseurs signalés"
+                data-testid="button-open-shop-blacklist"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-red-400" : "bg-white/20 hover:bg-white/30 text-white"}`}
+              >
+                <Ban className="w-4 h-4" />
+              </button>
+            )}
             {(allProducts.length > 0 || packs.length > 0) && (
               <button
                 onClick={() => setFlashOpen(true)}
@@ -1509,6 +1534,8 @@ export default function BrowseProducts() {
         packs={packs}
         storeName="BigBossCoffee"
       />
+
+      <ShopBlacklistModal open={blacklistOpen} onClose={() => setBlacklistOpen(false)} isDark={isDark} />
     </div>
   );
 }

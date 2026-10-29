@@ -2200,8 +2200,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const target = await storage.getUser(marketingUserId);
     if (!target || target.role !== "MARKETING") return res.status(404).json({ message: "Marketing account not found" });
     try {
-      const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body);
-      const report = await storage.createMarketingReport(user.id, marketingUserId, reason);
+      const { reason, rating } = z.object({ reason: z.string().min(1).max(500), rating: z.number().int().min(1).max(5) }).parse(req.body);
+      const report = await storage.createMarketingReport(user.id, marketingUserId, reason, rating);
       broadcast("admin_marketing_report_created", { marketingUserId });
       const adminIds = await storage.getAdminUserIds();
       await notifyMany({
@@ -2224,6 +2224,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const user = await storage.getUser(req.session.userId);
     if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
     res.json(await storage.getMarketingReportsByOwner(user.id));
+  });
+
+  app.get("/api/marketing/reports/published", requireAuth, async (req: any, res) => {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(Math.max(1, Number(req.query.limit) || 10), 50);
+    res.json(await storage.getPublishedMarketingReports(page, limit));
   });
 
   // ── PRINT catalog/marketplace/orders ──────────────────────────────────────
@@ -2428,8 +2434,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const target = await storage.getUser(printerId);
     if (!target || target.role !== "PRINTER") return res.status(404).json({ message: "Printer account not found" });
     try {
-      const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body);
-      const report = await storage.createPrintReport(user.id, printerId, reason);
+      const { reason, rating } = z.object({ reason: z.string().min(1).max(500), rating: z.number().int().min(1).max(5) }).parse(req.body);
+      const report = await storage.createPrintReport(user.id, printerId, reason, rating);
       broadcast("admin_print_report_created", { printerId });
       const adminIds = await storage.getAdminUserIds();
       await notifyMany({
@@ -2452,6 +2458,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const user = await storage.getUser(req.session.userId);
     if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
     res.json(await storage.getPrintReportsByOwner(user.id));
+  });
+
+  app.get("/api/print/reports/published", requireAuth, async (req: any, res) => {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(Math.max(1, Number(req.query.limit) || 10), 50);
+    res.json(await storage.getPublishedPrintReports(page, limit));
   });
 
   app.get("/api/print/me/categories", requireAuth, async (req: any, res) => {
@@ -3357,17 +3369,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.get("/api/admin/marketing/reports", requireAdmin, async (req: any, res) => {
-    const status = typeof req.query.status === "string" ? (req.query.status as "PENDING" | "RESOLVED" | "DISMISSED") : undefined;
+    const status = typeof req.query.status === "string" ? (req.query.status as "PENDING" | "RESOLVED" | "DISMISSED" | "PUBLISHED" | "REJECTED") : undefined;
     res.json(await storage.getMarketingReports(status));
   });
 
   app.patch("/api/admin/marketing/reports/:id/resolve", requireAdmin, async (req: any, res) => {
     try {
       const { status, resolutionNote } = z.object({
-        status: z.enum(["RESOLVED", "DISMISSED"]),
+        status: z.enum(["RESOLVED", "DISMISSED", "PUBLISHED", "REJECTED"]),
         resolutionNote: z.string().max(1000).optional(),
       }).parse(req.body);
-      const report = await storage.resolveMarketingReport(Number(req.params.id), status, resolutionNote);
+      if (status === "PUBLISHED") {
+        const target = await storage.getMarketingReportById(Number(req.params.id));
+        if (!target) return res.status(404).json({ message: "Not found" });
+        if (target.rating == null) return res.status(400).json({ message: "Ce signalement n'a pas de note et ne peut pas être publié." });
+      }
+      const report = await storage.resolveMarketingReport(Number(req.params.id), status, resolutionNote, req.session.userId);
       if (!report) return res.status(404).json({ message: "Not found" });
       broadcast("admin_marketing_report_created", { marketingUserId: report.marketingUserId });
       res.json(report);
@@ -3378,17 +3395,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.get("/api/admin/academy/reports", requireAdmin, async (req: any, res) => {
-    const status = typeof req.query.status === "string" ? (req.query.status as "PENDING" | "RESOLVED" | "DISMISSED") : undefined;
+    const status = typeof req.query.status === "string" ? (req.query.status as "PENDING" | "RESOLVED" | "DISMISSED" | "PUBLISHED" | "REJECTED") : undefined;
     res.json(await storage.getAcademyReports(status));
   });
 
   app.patch("/api/admin/academy/reports/:id/resolve", requireAdmin, async (req: any, res) => {
     try {
       const { status, resolutionNote } = z.object({
-        status: z.enum(["RESOLVED", "DISMISSED"]),
+        status: z.enum(["RESOLVED", "DISMISSED", "PUBLISHED", "REJECTED"]),
         resolutionNote: z.string().max(1000).optional(),
       }).parse(req.body);
-      const report = await storage.resolveAcademyReport(Number(req.params.id), status, resolutionNote);
+      if (status === "PUBLISHED") {
+        const target = await storage.getAcademyReportById(Number(req.params.id));
+        if (!target) return res.status(404).json({ message: "Not found" });
+        if (target.rating == null) return res.status(400).json({ message: "Ce signalement n'a pas de note et ne peut pas être publié." });
+      }
+      const report = await storage.resolveAcademyReport(Number(req.params.id), status, resolutionNote, req.session.userId);
       if (!report) return res.status(404).json({ message: "Not found" });
       broadcast("admin_academy_report_created", { academyUserId: report.academyUserId });
       res.json(report);
@@ -3399,17 +3421,22 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   });
 
   app.get("/api/admin/print/reports", requireAdmin, async (req: any, res) => {
-    const status = typeof req.query.status === "string" ? (req.query.status as "PENDING" | "RESOLVED" | "DISMISSED") : undefined;
+    const status = typeof req.query.status === "string" ? (req.query.status as "PENDING" | "RESOLVED" | "DISMISSED" | "PUBLISHED" | "REJECTED") : undefined;
     res.json(await storage.getPrintReports(status));
   });
 
   app.patch("/api/admin/print/reports/:id/resolve", requireAdmin, async (req: any, res) => {
     try {
       const { status, resolutionNote } = z.object({
-        status: z.enum(["RESOLVED", "DISMISSED"]),
+        status: z.enum(["RESOLVED", "DISMISSED", "PUBLISHED", "REJECTED"]),
         resolutionNote: z.string().max(1000).optional(),
       }).parse(req.body);
-      const report = await storage.resolvePrintReport(Number(req.params.id), status, resolutionNote);
+      if (status === "PUBLISHED") {
+        const target = await storage.getPrintReportById(Number(req.params.id));
+        if (!target) return res.status(404).json({ message: "Not found" });
+        if (target.rating == null) return res.status(400).json({ message: "Ce signalement n'a pas de note et ne peut pas être publié." });
+      }
+      const report = await storage.resolvePrintReport(Number(req.params.id), status, resolutionNote, req.session.userId);
       if (!report) return res.status(404).json({ message: "Not found" });
       broadcast("admin_print_report_created", { printerId: report.printerId });
       res.json(report);
@@ -3431,7 +3458,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(updated);
   });
 
-  // ── Entity-level Maintenance reports — "Blacklist" (Parts 20-23) ───────────
+  // ── Entity-level Maintenance reports — "Blacklist" (Parts 20-23), extended
+  // (task: "Redesign Maintenance Reports Using the Avis Modal Pattern and
+  // Add Admin Moderation") with a 1-5 sadness rating and a
+  // Submitted -> Pending -> Published/Rejected moderation lifecycle. ────────
   app.post("/api/maintenance/:userId/report", requireAuth, async (req: any, res) => {
     const user = await storage.getUser(req.session.userId);
     if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
@@ -3439,8 +3469,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const target = await storage.getUser(maintenanceUserId);
     if (!target || target.role !== "MAINTENANCE") return res.status(404).json({ message: "Maintenance account not found" });
     try {
-      const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body);
-      const report = await storage.createMaintenanceReport(user.id, maintenanceUserId, reason);
+      // rating/status are never trusted from elsewhere — the reporting user
+      // is always the authenticated session user (never a client-supplied
+      // id), and the report always starts PENDING (createMaintenanceReport
+      // never accepts a status), so a report can never be self-published by
+      // manipulating this request.
+      const { reason, rating } = z.object({ reason: z.string().min(1).max(500), rating: z.number().int().min(1).max(5) }).parse(req.body);
+      const report = await storage.createMaintenanceReport(user.id, maintenanceUserId, reason, rating);
       broadcast("admin_maintenance_report_created", { maintenanceUserId });
       const adminIds = await storage.getAdminUserIds();
       await notifyMany({
@@ -3465,18 +3500,35 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(await storage.getMaintenanceReportsByOwner(user.id));
   });
 
+  // Public (any authenticated user) read of admin-published reports only —
+  // server-side filtered (status = PUBLISHED), never exposes cafeOwnerId or
+  // the reporting owner's name/identity.
+  app.get("/api/maintenance/reports/published", requireAuth, async (req: any, res) => {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(Math.max(1, Number(req.query.limit) || 10), 50);
+    res.json(await storage.getPublishedMaintenanceReports(page, limit));
+  });
+
   app.get("/api/admin/maintenance/reports", requireAdmin, async (req: any, res) => {
-    const status = typeof req.query.status === "string" ? (req.query.status as "PENDING" | "RESOLVED" | "DISMISSED") : undefined;
+    const status = typeof req.query.status === "string" ? (req.query.status as "PENDING" | "RESOLVED" | "DISMISSED" | "PUBLISHED" | "REJECTED") : undefined;
     res.json(await storage.getMaintenanceReports(status));
   });
 
   app.patch("/api/admin/maintenance/reports/:id/resolve", requireAdmin, async (req: any, res) => {
     try {
       const { status, resolutionNote } = z.object({
-        status: z.enum(["RESOLVED", "DISMISSED"]),
+        status: z.enum(["RESOLVED", "DISMISSED", "PUBLISHED", "REJECTED"]),
         resolutionNote: z.string().max(1000).optional(),
       }).parse(req.body);
-      const report = await storage.resolveMaintenanceReport(Number(req.params.id), status, resolutionNote);
+      if (status === "PUBLISHED") {
+        // A legacy report (submitted before this task, no rating) can be
+        // rejected/dismissed but never published — the public list always
+        // shows a real 1-5 rating, never a fabricated or missing one.
+        const target = await storage.getMaintenanceReportById(Number(req.params.id));
+        if (!target) return res.status(404).json({ message: "Not found" });
+        if (target.rating == null) return res.status(400).json({ message: "Ce signalement n'a pas de note et ne peut pas être publié." });
+      }
+      const report = await storage.resolveMaintenanceReport(Number(req.params.id), status, resolutionNote, req.session.userId);
       if (!report) return res.status(404).json({ message: "Not found" });
       broadcast("admin_maintenance_report_created", { maintenanceUserId: report.maintenanceUserId });
       res.json(report);
@@ -4156,6 +4208,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
 
   // Entity-level report — a Coffee Owner flagging a Barista account (distinct
   // from review-reporting). Admin resolves centrally; see /api/admin/barista/reports below.
+  // Extended (task: "Add a Grabber to the Maintenance Reports Modal and
+  // Extend the Reporting System to Barista") with a 1-5 sadness rating and
+  // the same Submitted -> Pending -> Published/Rejected lifecycle already
+  // used by Maintenance.
   app.post("/api/barista/:userId/report", requireAuth, async (req: any, res) => {
     const user = await storage.getUser(req.session.userId);
     if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
@@ -4163,8 +4219,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const target = await storage.getUser(baristaUserId);
     if (!target || target.role !== "BARISTA_MARKETPLACE") return res.status(404).json({ message: "Barista not found" });
     try {
-      const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body);
-      const report = await storage.createBaristaReport(user.id, baristaUserId, reason);
+      const { reason, rating } = z.object({ reason: z.string().min(1).max(500), rating: z.number().int().min(1).max(5) }).parse(req.body);
+      const report = await storage.createBaristaReport(user.id, baristaUserId, reason, rating);
       broadcast("admin_barista_report_created", { baristaUserId });
       const adminIds = await storage.getAdminUserIds();
       await notifyMany({
@@ -4192,18 +4248,33 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json(await storage.getBaristaReportsByOwner(user.id));
   });
 
+  // Public (any authenticated user) read of admin-published reports only —
+  // mirrors GET /api/maintenance/reports/published exactly.
+  app.get("/api/barista/reports/published", requireAuth, async (req: any, res) => {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(Math.max(1, Number(req.query.limit) || 10), 50);
+    res.json(await storage.getPublishedBaristaReports(page, limit));
+  });
+
   app.get("/api/admin/barista/reports", requireAdmin, async (req: any, res) => {
-    const status = typeof req.query.status === "string" ? (req.query.status as "PENDING" | "RESOLVED" | "DISMISSED") : undefined;
+    const status = typeof req.query.status === "string" ? (req.query.status as "PENDING" | "RESOLVED" | "DISMISSED" | "PUBLISHED" | "REJECTED") : undefined;
     res.json(await storage.getBaristaReports(status));
   });
 
   app.patch("/api/admin/barista/reports/:id/resolve", requireAdmin, async (req: any, res) => {
     try {
       const { status, resolutionNote } = z.object({
-        status: z.enum(["RESOLVED", "DISMISSED"]),
+        status: z.enum(["RESOLVED", "DISMISSED", "PUBLISHED", "REJECTED"]),
         resolutionNote: z.string().max(1000).optional(),
       }).parse(req.body);
-      const report = await storage.resolveBaristaReport(Number(req.params.id), status, resolutionNote);
+      if (status === "PUBLISHED") {
+        // A legacy report (no rating) can be rejected/dismissed but never
+        // published — mirrors the same guard on the Maintenance route.
+        const target = await storage.getBaristaReportById(Number(req.params.id));
+        if (!target) return res.status(404).json({ message: "Not found" });
+        if (target.rating == null) return res.status(400).json({ message: "Ce signalement n'a pas de note et ne peut pas être publié." });
+      }
+      const report = await storage.resolveBaristaReport(Number(req.params.id), status, resolutionNote, req.session.userId);
       if (!report) return res.status(404).json({ message: "Not found" });
       broadcast("admin_barista_report_created", { baristaUserId: report.baristaUserId });
       res.json(report);
@@ -4751,8 +4822,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const target = await storage.getUser(academyUserId);
     if (!target || target.role !== "BARISTA_ACADEMY") return res.status(404).json({ message: "Academy account not found" });
     try {
-      const { reason } = z.object({ reason: z.string().min(1).max(500) }).parse(req.body);
-      const report = await storage.createAcademyReport(user.id, academyUserId, reason);
+      const { reason, rating } = z.object({ reason: z.string().min(1).max(500), rating: z.number().int().min(1).max(5) }).parse(req.body);
+      const report = await storage.createAcademyReport(user.id, academyUserId, reason, rating);
       broadcast("admin_academy_report_created", { academyUserId });
       const adminIds = await storage.getAdminUserIds();
       await notifyMany({
@@ -4775,6 +4846,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const user = await storage.getUser(req.session.userId);
     if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
     res.json(await storage.getAcademyReportsByOwner(user.id));
+  });
+
+  app.get("/api/academy/reports/published", requireAuth, async (req: any, res) => {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(Math.max(1, Number(req.query.limit) || 10), 50);
+    res.json(await storage.getPublishedAcademyReports(page, limit));
   });
 
   app.get("/api/academy/profile/:userId", requireAuth, async (req: any, res) => {
@@ -9356,6 +9433,71 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       if (!detail) return res.status(404).json({ message: 'Not found' });
       res.json(detail);
     } catch { res.status(500).json({ message: 'Error' }); }
+  });
+
+  // Entity-level report — a Coffee Owner flagging a Supplier (via their Shop
+  // Store page), mirrors POST /api/maintenance/:userId/report exactly (task:
+  // "Extend the Shared Reporting System to Supplier Stores"). Targets the
+  // supplier ACCOUNT (supplierId), never a Product or Pack — the submitting
+  // page may be showing a specific product/pack, but the report is always
+  // about the store/supplier itself.
+  app.post("/api/supplier/:userId/report", requireAuth, async (req: any, res) => {
+    const user = await storage.getUser(req.session.userId);
+    if (!user || user.role !== "CAFE_OWNER") return res.status(403).json({ message: "Coffee Owner access required" });
+    const supplierId = Number(req.params.userId);
+    const target = await storage.getUser(supplierId);
+    if (!target || target.role !== "SUPPLIER") return res.status(404).json({ message: "Supplier account not found" });
+    try {
+      const { reason, rating } = z.object({ reason: z.string().min(1).max(500), rating: z.number().int().min(1).max(5) }).parse(req.body);
+      const report = await storage.createSupplierReport(user.id, supplierId, reason, rating);
+      broadcast("admin_supplier_report_created", { supplierId });
+      const adminIds = await storage.getAdminUserIds();
+      await notifyMany({
+        userIds: adminIds,
+        service: "ADMIN", type: "supplier_report_created", priority: "URGENT",
+        title: "Fournisseur signalé",
+        message: `${user.name} a signalé ${target.name} (Supplier) : "${reason}".`,
+        entityType: "supplier_report", entityId: report.id,
+        prefKey: "reports",
+        dedupeKeyPrefix: `admin:supplier_report_created:${report.id}`,
+      });
+      res.status(201).json(report);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid report data" });
+    }
+  });
+
+  app.get("/api/supplier/reports/published", requireAuth, async (req: any, res) => {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(Math.max(1, Number(req.query.limit) || 10), 50);
+    res.json(await storage.getPublishedSupplierReports(page, limit));
+  });
+
+  app.get("/api/admin/supplier/reports", requireAdmin, async (req: any, res) => {
+    const status = typeof req.query.status === "string" ? (req.query.status as "PENDING" | "PUBLISHED" | "REJECTED") : undefined;
+    res.json(await storage.getSupplierReports(status));
+  });
+
+  app.patch("/api/admin/supplier/reports/:id/resolve", requireAdmin, async (req: any, res) => {
+    try {
+      const { status, resolutionNote } = z.object({
+        status: z.enum(["PUBLISHED", "REJECTED"]),
+        resolutionNote: z.string().max(1000).optional(),
+      }).parse(req.body);
+      if (status === "PUBLISHED") {
+        const target = await storage.getSupplierReportById(Number(req.params.id));
+        if (!target) return res.status(404).json({ message: "Not found" });
+        if (target.rating == null) return res.status(400).json({ message: "Ce signalement n'a pas de note et ne peut pas être publié." });
+      }
+      const report = await storage.resolveSupplierReport(Number(req.params.id), status, resolutionNote, req.session.userId);
+      if (!report) return res.status(404).json({ message: "Not found" });
+      broadcast("admin_supplier_report_created", { supplierId: report.supplierId });
+      res.json(report);
+    } catch (err) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+      res.status(400).json({ message: "Invalid data" });
+    }
   });
 
   // ── Marketplace (cafe browsing — admin products with variant pricing) ────────

@@ -7,23 +7,20 @@ import { useFavorites } from "@/hooks/use-favorites";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useToast } from "@/hooks/use-toast";
 import {
-  usePrintCompanyDetail, usePrintReviews, useCreatePrintReview, useReportPrinter,
+  usePrintCompanyDetail, usePrintReviews, useCreatePrintReview,
 } from "@/hooks/use-print-marketplace";
+import { useSubmitPrintReport } from "@/hooks/use-print-reports";
+import { ReportModal } from "@/components/report-modal";
 import { printCategoryIcon, printSubCategoryIcon } from "@/lib/print-category-icons";
 import { PrintCompanyAvailabilityModal } from "@/components/print/print-company-detail-modal";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
 import { ReviewModal } from "@/components/review-modal";
-import { ModalGrabber } from "@/components/shared/modal-grabber";
-import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import {
-  Printer, ChevronLeft, Heart, Star, MapPin, Package, Clock, Flag, X, Search, SlidersHorizontal,
+  Printer, ChevronLeft, Heart, Star, MapPin, Package, Clock, Flag, Search, SlidersHorizontal,
 } from "lucide-react";
 import type { PrintCatalogCard, PrintOrderWithParties } from "@shared/schema";
 import { PrintMappedServiceCard } from "@/components/print/print-mapped-service-card";
@@ -135,20 +132,10 @@ export default function PrintStoreDetailPage() {
     enabled: user?.role === "CAFE_OWNER",
   });
   const createReview = useCreatePrintReview();
-  const reportPrinter = useReportPrinter();
+  const submitReportMutation = useSubmitPrintReport();
   const [reviewsModalOpen, setReviewsModalOpen] = useState(false);
   const [reviewOrderId, setReviewOrderId] = useState<number | null>(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
-  const [reportReason, setReportReason] = useState("");
-
-  // Swipe-to-dismiss on the Signaler dialog's own grabber (task: "Standardize
-  // Grabber Design and Swipe-to-Dismiss Across Store Information and Service
-  // Modals") — same shared hook/parameters as the established reference.
-  const {
-    onBodyWheel: reportOnBodyWheel, onBodyTouchStart: reportOnBodyTouchStart,
-    onBodyTouchMove: reportOnBodyTouchMove, onBodyTouchEnd: reportOnBodyTouchEnd,
-    dismissContentStyle: reportDismissContentStyle, dismissOverlayStyle: reportDismissOverlayStyle,
-  } = useScrollDismiss(reportModalOpen, () => { setReportModalOpen(false); setReportReason(""); }, undefined, true);
 
   const eligibleOrders = useMemo(
     () => myOrders.filter((o) => card && o.printerId === card.userId && o.status === "DELIVERED"),
@@ -167,15 +154,9 @@ export default function PrintStoreDetailPage() {
     await createReview.mutateAsync({ printerId: card.userId, printOrderId: activeOrderId, rating, comment: comment.trim() || undefined });
   };
 
-  const submitReport = () => {
-    if (!card || !reportReason.trim()) return;
-    reportPrinter.mutate(
-      { printerId: card.userId, reason: reportReason.trim() },
-      {
-        onSuccess: () => { toast({ title: "Signalement envoyé", description: "L'équipe Admin va l'examiner." }); setReportModalOpen(false); setReportReason(""); },
-        onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-      }
-    );
+  const submitReport = async (rating: number, reason: string) => {
+    if (!card) throw new Error("Professionnel introuvable");
+    await submitReportMutation.mutateAsync({ targetUserId: card.userId, reason, rating });
   };
 
   const { data: taxonomy } = useQuery<{ categories: { name: string; icon: string | null }[]; subcategories: { name: string; icon: string | null }[] }>({
@@ -608,48 +589,18 @@ export default function PrintStoreDetailPage() {
         ) : undefined}
       />
 
-      {/* Signaler — same modal chrome as the Disponibilité modal above
-          (rounded-[2rem] container, circular close button), close button on
-          the right, standardized across the app this session. */}
-      <Dialog open={reportModalOpen} onOpenChange={(v) => { if (!v) { setReportModalOpen(false); setReportReason(""); } }}>
-        <DialogContent
-          className={`sm:max-w-md p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden ${isDark ? "bg-gray-900" : "bg-white"}`}
-          style={reportDismissContentStyle}
-          overlayStyle={reportDismissOverlayStyle}
-        >
-          <VisuallyHidden><DialogTitle>Signaler {card.name}</DialogTitle></VisuallyHidden>
-          <div
-            className="px-5 pt-1 pb-5 space-y-3"
-            onWheel={reportOnBodyWheel}
-            onTouchStart={reportOnBodyTouchStart}
-            onTouchMove={reportOnBodyTouchMove}
-            onTouchEnd={reportOnBodyTouchEnd}
-          >
-            <ModalGrabber isDark={isDark} />
-            <div className="flex items-center justify-between">
-              <div className="w-8 h-8" />
-              <span className={`text-[13px] font-semibold tracking-tight leading-tight ${isDark ? "text-red-400" : "text-red-700"}`}>Signaler {card.name}</span>
-              <button onClick={() => { setReportModalOpen(false); setReportReason(""); }} aria-label="Close" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}>
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <Textarea
-              placeholder="Décrivez le problème…"
-              rows={3}
-              value={reportReason}
-              onChange={(e) => setReportReason(e.target.value)}
-              className={isDark ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500" : "bg-gray-50 border-gray-200"}
-              data-testid="input-store-report-reason"
-            />
-            <div className="flex gap-2 justify-end pt-1">
-              <Button size="sm" variant="outline" className={t.textPrimary} onClick={() => { setReportModalOpen(false); setReportReason(""); }}>Annuler</Button>
-              <Button size="sm" variant="destructive" onClick={submitReport} disabled={!reportReason.trim() || reportPrinter.isPending} data-testid="button-submit-store-report">
-                {reportPrinter.isPending ? "Envoi…" : "Envoyer le signalement"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Signaler — redesigned on the Avis modal pattern (task: "Standardize
+          the Remaining Report Modals Using the New Academy Design"), same
+          shared ReportModal used by PrintCompanyDetailModal and every other
+          migrated report entry point. */}
+      <ReportModal
+        open={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        targetName={card.name}
+        onSubmit={submitReport}
+        isSubmitting={submitReportMutation.isPending}
+        accentClassName={isDark ? "text-blue-400" : "text-blue-600"}
+      />
 
       <PrintServiceDetailModal
         serviceId={previewServiceId}

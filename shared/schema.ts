@@ -1534,6 +1534,36 @@ export const supplierStores = pgTable("supplier_stores", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Entity-level report — a Coffee Owner flagging a Supplier (their store,
+// via Coffee Owner -> Shop -> Store page), mirrors maintenanceReports/
+// baristaReports/etc exactly (task: "Extend the Shared Reporting System to
+// Supplier Stores"). supplierStores.supplierId is unique (one store per
+// supplier account), so — exactly like every other service reusing
+// supplierProductReviews' own reviewType:'SUPPLIER' convention — the report
+// targets the supplier ACCOUNT (supplierId), never a separate "store id";
+// the Store page is only the UI entry point. Built directly with the final
+// rated model (no legacy pre-rating rows exist for this brand-new table).
+export const supplierReportStatusEnum = pgEnum('supplier_report_status', ['PENDING', 'PUBLISHED', 'REJECTED']);
+
+export const supplierReports = pgTable("supplier_reports", {
+  id: serial("id").primaryKey(),
+  cafeOwnerId: integer("cafe_owner_id").notNull(),
+  supplierId: integer("supplier_id").notNull(),
+  reason: text("reason").notNull(),
+  rating: integer("rating"),
+  status: supplierReportStatusEnum("status").notNull().default('PENDING'),
+  createdAt: timestamp("created_at").defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
+  resolutionNote: text("resolution_note"),
+  moderatedByAdminId: integer("moderated_by_admin_id"),
+}, (table) => ({
+  supplierIdx: index("supplier_reports_supplier_idx").on(table.supplierId),
+  statusIdx: index("supplier_reports_status_idx").on(table.status),
+}));
+export type SupplierReport = typeof supplierReports.$inferSelect;
+export type InsertSupplierReport = typeof supplierReports.$inferInsert;
+export const insertSupplierReportSchema = createInsertSchema(supplierReports).omit({ id: true, createdAt: true, resolvedAt: true, moderatedByAdminId: true });
+
 // Supplier product reviews — submitted by cafe owners, shown on supplier reviews tab
 export const supplierProductReviews = pgTable("supplier_product_reviews", {
   id: serial("id").primaryKey(),
@@ -1751,24 +1781,34 @@ export const baristaMarketplaceMissions = pgTable("barista_marketplace_missions"
 // specific review about them). Resolved centrally by Admin, mirroring the same
 // reportedAt/resolvedAt shape used for reviews so the moderation shape is familiar,
 // but kept in its own table since it targets an account, not a review row.
-export const baristaReportStatusEnum = pgEnum('barista_report_status', ['PENDING', 'RESOLVED', 'DISMISSED']);
+// PUBLISHED/REJECTED + rating added (task: "Add a Grabber to the Maintenance
+// Reports Modal and Extend the Reporting System to Barista") — same additive
+// extension already applied to maintenanceReportStatusEnum/maintenanceReports
+// (see that table's own comment), reused identically here so Barista gets the
+// exact same Submitted -> Pending -> Published/Rejected lifecycle.
+export const baristaReportStatusEnum = pgEnum('barista_report_status', ['PENDING', 'RESOLVED', 'DISMISSED', 'PUBLISHED', 'REJECTED']);
 
 export const baristaReports = pgTable("barista_reports", {
   id: serial("id").primaryKey(),
   cafeOwnerId: integer("cafe_owner_id").notNull(),
   baristaUserId: integer("barista_user_id").notNull(),
   reason: text("reason").notNull(),
+  // 1-5 sadness rating, nullable — NULL means a legacy report submitted
+  // before this feature existed, never reinterpreted as a real rating; such
+  // reports can only be rejected/dismissed, never published.
+  rating: integer("rating"),
   status: baristaReportStatusEnum("status").notNull().default('PENDING'),
   createdAt: timestamp("created_at").defaultNow(),
   resolvedAt: timestamp("resolved_at"),
   resolutionNote: text("resolution_note"),
+  moderatedByAdminId: integer("moderated_by_admin_id"),
 }, (table) => ({
   baristaUserIdx: index("barista_reports_barista_user_idx").on(table.baristaUserId),
   statusIdx: index("barista_reports_status_idx").on(table.status),
 }));
 export type BaristaReport = typeof baristaReports.$inferSelect;
 export type InsertBaristaReport = typeof baristaReports.$inferInsert;
-export const insertBaristaReportSchema = createInsertSchema(baristaReports).omit({ id: true, createdAt: true, resolvedAt: true });
+export const insertBaristaReportSchema = createInsertSchema(baristaReports).omit({ id: true, createdAt: true, resolvedAt: true, moderatedByAdminId: true });
 
 export type BaristaLevel = 'BEGINNER' | 'ADVANCED' | 'EXPERT';
 export type BaristaRequestStatus = 'PENDING' | 'DISCUSSION' | 'ACCEPTED' | 'REJECTED' | 'CANCELLED' | 'COMPLETED';
@@ -2137,24 +2177,29 @@ export const academyFavorites = pgTable("academy_favorites", {
 // account itself, mirrors marketingReports/maintenanceReports/baristaReports
 // exactly (own table, own service scope, never shared with another service's
 // blacklist).
-export const academyReportStatusEnum = pgEnum('academy_report_status', ['PENDING', 'RESOLVED', 'DISMISSED']);
+// PUBLISHED/REJECTED + rating added (task: "Extend the Shared Reporting
+// System to Print, Academy, and Marketing") — same additive extension
+// already applied to maintenanceReportStatusEnum/baristaReportStatusEnum.
+export const academyReportStatusEnum = pgEnum('academy_report_status', ['PENDING', 'RESOLVED', 'DISMISSED', 'PUBLISHED', 'REJECTED']);
 
 export const academyReports = pgTable("academy_reports", {
   id: serial("id").primaryKey(),
   cafeOwnerId: integer("cafe_owner_id").notNull(),
   academyUserId: integer("academy_user_id").notNull(),
   reason: text("reason").notNull(),
+  rating: integer("rating"),
   status: academyReportStatusEnum("status").notNull().default('PENDING'),
   createdAt: timestamp("created_at").defaultNow(),
   resolvedAt: timestamp("resolved_at"),
   resolutionNote: text("resolution_note"),
+  moderatedByAdminId: integer("moderated_by_admin_id"),
 }, (table) => ({
   academyUserIdx: index("academy_reports_academy_user_idx").on(table.academyUserId),
   statusIdx: index("academy_reports_status_idx").on(table.status),
 }));
 
 export const insertAcademyFavoriteSchema = createInsertSchema(academyFavorites).omit({ id: true, createdAt: true });
-export const insertAcademyReportSchema = createInsertSchema(academyReports).omit({ id: true, createdAt: true, resolvedAt: true });
+export const insertAcademyReportSchema = createInsertSchema(academyReports).omit({ id: true, createdAt: true, resolvedAt: true, moderatedByAdminId: true });
 
 export type AcademyProfile = typeof academyProfiles.$inferSelect;
 export type InsertAcademyProfile = typeof academyProfiles.$inferInsert;
@@ -2538,24 +2583,43 @@ export type MaintenanceJobApplicationWithParties = MaintenanceJobApplication & {
 // Maintenance blacklist and vice versa). Distinct from review-reporting
 // (POST /api/maintenance/reviews/:id/report, the reviewed party disputing a
 // specific review — already exists and is untouched by this).
-export const maintenanceReportStatusEnum = pgEnum('maintenance_report_status', ['PENDING', 'RESOLVED', 'DISMISSED']);
+//
+// PUBLISHED/REJECTED added (task: "Redesign Maintenance Reports Using the
+// Avis Modal Pattern and Add Admin Moderation") for the new Submitted ->
+// Pending review -> Published OR Rejected/Removed lifecycle; the legacy
+// RESOLVED/DISMISSED values are kept as-is for any pre-existing rows (no
+// admin UI ever produced them in practice — none consumed this endpoint
+// before this task — but the values are additive-only, never dropped).
+export const maintenanceReportStatusEnum = pgEnum('maintenance_report_status', ['PENDING', 'RESOLVED', 'DISMISSED', 'PUBLISHED', 'REJECTED']);
 
 export const maintenanceReports = pgTable("maintenance_reports", {
   id: serial("id").primaryKey(),
   cafeOwnerId: integer("cafe_owner_id").notNull(),
   maintenanceUserId: integer("maintenance_user_id").notNull(),
   reason: text("reason").notNull(),
+  // 1-5 "sadness" rating (task above) — nullable because every report
+  // submitted before this task has no rating at all; NULL means a legacy
+  // report, never reinterpreted as a real rating value, and such reports
+  // can only be rejected/dismissed, never published (the public list always
+  // has a rating to show).
+  rating: integer("rating"),
   status: maintenanceReportStatusEnum("status").notNull().default('PENDING'),
   createdAt: timestamp("created_at").defaultNow(),
+  // Reused as the general "moderation timestamp" (resolved, dismissed,
+  // published, or rejected) rather than adding a parallel column — it
+  // already meant "when an admin acted on this", which still holds.
   resolvedAt: timestamp("resolved_at"),
   resolutionNote: text("resolution_note"),
+  // Soft reference (project convention — no hard FK), audit trail of which
+  // admin made the moderation decision.
+  moderatedByAdminId: integer("moderated_by_admin_id"),
 }, (table) => ({
   maintenanceUserIdx: index("maintenance_reports_maintenance_user_idx").on(table.maintenanceUserId),
   statusIdx: index("maintenance_reports_status_idx").on(table.status),
 }));
 export type MaintenanceReport = typeof maintenanceReports.$inferSelect;
 export type InsertMaintenanceReport = typeof maintenanceReports.$inferInsert;
-export const insertMaintenanceReportSchema = createInsertSchema(maintenanceReports).omit({ id: true, createdAt: true, resolvedAt: true });
+export const insertMaintenanceReportSchema = createInsertSchema(maintenanceReports).omit({ id: true, createdAt: true, resolvedAt: true, moderatedByAdminId: true });
 
 // ── MARKETING ────────────────────────────────────────────────────────────────
 // Mirrors Maintenance's shape (one profile per provider, a flat starting price)
@@ -2681,17 +2745,21 @@ export const marketingSubCategoryTaxonomy = pgTable("marketing_subcategory_taxon
 
 // Entity-level report — mirrors maintenanceReports exactly (own table, own
 // service scope — never shared with another service's blacklist).
-export const marketingReportStatusEnum = pgEnum('marketing_report_status', ['PENDING', 'RESOLVED', 'DISMISSED']);
+// PUBLISHED/REJECTED + rating added (task: "Extend the Shared Reporting
+// System to Print, Academy, and Marketing").
+export const marketingReportStatusEnum = pgEnum('marketing_report_status', ['PENDING', 'RESOLVED', 'DISMISSED', 'PUBLISHED', 'REJECTED']);
 
 export const marketingReports = pgTable("marketing_reports", {
   id: serial("id").primaryKey(),
   cafeOwnerId: integer("cafe_owner_id").notNull(),
   marketingUserId: integer("marketing_user_id").notNull(),
   reason: text("reason").notNull(),
+  rating: integer("rating"),
   status: marketingReportStatusEnum("status").notNull().default('PENDING'),
   createdAt: timestamp("created_at").defaultNow(),
   resolvedAt: timestamp("resolved_at"),
   resolutionNote: text("resolution_note"),
+  moderatedByAdminId: integer("moderated_by_admin_id"),
 }, (table) => ({
   marketingUserIdx: index("marketing_reports_marketing_user_idx").on(table.marketingUserId),
   statusIdx: index("marketing_reports_status_idx").on(table.status),
@@ -2767,7 +2835,7 @@ export const insertMarketingServiceSchema = createInsertSchema(marketingServices
 
 export const insertMarketingProfileSchema = createInsertSchema(marketingProfiles).omit({ id: true, updatedAt: true });
 export const insertMarketingProjectSchema = createInsertSchema(marketingProjects).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertMarketingReportSchema = createInsertSchema(marketingReports).omit({ id: true, createdAt: true, resolvedAt: true });
+export const insertMarketingReportSchema = createInsertSchema(marketingReports).omit({ id: true, createdAt: true, resolvedAt: true, moderatedByAdminId: true });
 export const insertMarketingFavoriteSchema = createInsertSchema(marketingFavorites).omit({ id: true, createdAt: true });
 
 export type MarketingProfile = typeof marketingProfiles.$inferSelect;
@@ -2985,23 +3053,27 @@ export const printSubCategoryTaxonomy = pgTable("print_subcategory_taxonomy", {
 // Entity-level report ("Blacklist") — a Coffee Owner flagging a Printer
 // account itself, mirrors marketingReports/maintenanceReports/academyReports/
 // baristaReports exactly (own table, own service scope).
-export const printReportStatusEnum = pgEnum('print_report_status', ['PENDING', 'RESOLVED', 'DISMISSED']);
+// PUBLISHED/REJECTED + rating added (task: "Extend the Shared Reporting
+// System to Print, Academy, and Marketing").
+export const printReportStatusEnum = pgEnum('print_report_status', ['PENDING', 'RESOLVED', 'DISMISSED', 'PUBLISHED', 'REJECTED']);
 
 export const printReports = pgTable("print_reports", {
   id: serial("id").primaryKey(),
   cafeOwnerId: integer("cafe_owner_id").notNull(),
   printerId: integer("printer_id").notNull(),
   reason: text("reason").notNull(),
+  rating: integer("rating"),
   status: printReportStatusEnum("status").notNull().default('PENDING'),
   createdAt: timestamp("created_at").defaultNow(),
   resolvedAt: timestamp("resolved_at"),
   resolutionNote: text("resolution_note"),
+  moderatedByAdminId: integer("moderated_by_admin_id"),
 }, (table) => ({
   printerIdx: index("print_reports_printer_idx").on(table.printerId),
   statusIdx: index("print_reports_status_idx").on(table.status),
 }));
 
-export const insertPrintReportSchema = createInsertSchema(printReports).omit({ id: true, createdAt: true, resolvedAt: true });
+export const insertPrintReportSchema = createInsertSchema(printReports).omit({ id: true, createdAt: true, resolvedAt: true, moderatedByAdminId: true });
 
 export const printOrders = pgTable("print_orders", {
   id: serial("id").primaryKey(),

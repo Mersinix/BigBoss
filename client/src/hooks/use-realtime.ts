@@ -19,7 +19,7 @@ const SERVICE_HERO_CONFIG_EVENTS = ["service_hero_config_updated"];
 const ACCOUNT_DARK_MODE_EVENTS = ["account_dark_mode_settings_updated"];
 const LANDING_CONFIG_EVENTS = ["landing_config_updated"];
 const CURRENCY_EVENTS = ["currency_updated"];
-const STORE_EVENTS = ["store_updated", "store_approval_changed"];
+const STORE_EVENTS = ["store_updated", "store_approval_changed", "admin_supplier_report_created"];
 const PACK_EVENTS = ["pack_updated"];
 const PRODUCT_EVENTS = ["product_updated"];
 const INVENTORY_EVENTS = ["inventory_updated"];
@@ -125,6 +125,11 @@ function invalidateStoreQueries(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ["/api/supplier/store"] });
   qc.invalidateQueries({ queryKey: ["/api/admin/stores"] });
   qc.invalidateQueries({ queryKey: ["/api/stores"] });
+  // Supplier reports (task: "Extend the Shared Reporting System to
+  // Supplier Stores") — included from the start, unlike the gap found and
+  // fixed for Maintenance/Barista/etc. in tasks 52-55.
+  qc.invalidateQueries({ queryKey: ["/api/supplier/reports/published"] });
+  qc.invalidateQueries({ queryKey: ["/api/admin/supplier/reports"] });
 }
 
 function invalidatePackQueries(qc: QueryClient) {
@@ -424,6 +429,9 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "/api/print/company" });
             qc.invalidateQueries({ queryKey: ["/api/print/reports/mine"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/print/reports"] });
+            // Same fix as Maintenance (task 52/53 root cause) — the public
+            // published-reports query key was missing here.
+            qc.invalidateQueries({ queryKey: ["/api/print/reports/published"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/print"] });
             invalidateMessagingQueries(qc);
           }
@@ -439,6 +447,14 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/admin/maintenance"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/maintenance/reports"] });
             qc.invalidateQueries({ queryKey: ["/api/maintenance/reports/mine"] });
+            // Root cause (task: "Centralize Report Moderation in Admin
+            // Communication and Fix Real-Time Publication") — this was the
+            // one query key missing here: the Coffee Owner hero modal reads
+            // from /api/maintenance/reports/published, which never got
+            // invalidated, so a freshly published report never reached an
+            // already-mounted modal even though the server-side publish
+            // itself worked correctly.
+            qc.invalidateQueries({ queryKey: ["/api/maintenance/reports/published"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/reviews", "MAINTENANCE"] });
             qc.invalidateQueries({ queryKey: ["/api/maintenance/jobs"] });
             qc.invalidateQueries({ queryKey: ["/api/maintenance/jobs/mine"] });
@@ -485,6 +501,7 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/admin/marketing"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/marketing/reports"] });
             qc.invalidateQueries({ queryKey: ["/api/marketing/reports/mine"] });
+            qc.invalidateQueries({ queryKey: ["/api/marketing/reports/published"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/reviews", "MARKETING"] });
             invalidateMessagingQueries(qc);
           }
@@ -500,6 +517,9 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/admin/barista"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/barista/reports"] });
             qc.invalidateQueries({ queryKey: ["/api/barista/reports/mine"] });
+            // Same fix as Maintenance (task 52/53 root cause) — the public
+            // published-reports query key was missing here.
+            qc.invalidateQueries({ queryKey: ["/api/barista/reports/published"] });
             qc.invalidateQueries({ queryKey: ["/api/barista-favorites"] });
             qc.invalidateQueries({ queryKey: ["/api/barista/education-levels"] });
             qc.invalidateQueries({ queryKey: ["/api/barista/languages"] });
@@ -523,6 +543,7 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/academy-favorites"] });
             qc.invalidateQueries({ queryKey: ["/api/academy/reports/mine"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/academy/reports"] });
+            qc.invalidateQueries({ queryKey: ["/api/academy/reports/published"] });
             if (event === "academy_registration_created" || event === "academy_registration_status_changed") {
               invalidateMessagingQueries(qc);
             }

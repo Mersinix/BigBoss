@@ -899,6 +899,10 @@ export default function MaintenanceAdminPage() {
         </Tabs>
       </TabsContent>
       <TabsContent value="accounts" className="mt-4 space-y-4">
+        {/* Report moderation moved to Admin -> Communication -> Signalements
+            (task: "Centralize Report Moderation in Admin Communication and
+            Fix Real-Time Publication") — see
+            client/src/pages/admin/reports-page.tsx. Not duplicated here. */}
         <div className="flex justify-end">
           <Button size="sm" onClick={() => setAddAccountOpen(true)} data-testid="button-add-maintenance-account"><Plus className="h-4 w-4 mr-1.5" />Ajouter un compte Maintenance</Button>
         </div>

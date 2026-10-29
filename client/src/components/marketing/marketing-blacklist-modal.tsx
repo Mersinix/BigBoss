@@ -1,28 +1,20 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { getAvatarUrl } from "@/lib/avatar";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { ShieldAlert, MapPin, Calendar, Ban, X } from "lucide-react";
-import { useMyMarketingReports, type MarketingMarketplaceCard } from "@/hooks/use-marketing";
+import { Ban } from "lucide-react";
+import type { MarketingMarketplaceCard } from "@/hooks/use-marketing";
 import { MarketingDetailModal } from "@/components/marketing/marketing-detail-modal";
 import { useThemeStore } from "@/store/theme-store";
-import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
+import { useMarketingPublishedReports } from "@/hooks/use-marketing-reports";
+import { EntityPublishedReportsModal } from "@/components/shared/entity-published-reports-modal";
+import type { PublishedReportRow } from "@/components/published-reports-list";
 
-const STATUS_LABELS: Record<string, string> = { PENDING: "En attente", RESOLVED: "Résolu", DISMISSED: "Ignoré" };
-// This app's dark mode never adds a `.dark` class to the DOM (see the note in
-// barista-detail-modal.tsx) — per-component `isDark`-driven ternary classes only.
-function statusColors(isDark: boolean): Record<string, string> {
-  return isDark
-    ? { PENDING: "bg-amber-900/50 text-amber-300", RESOLVED: "bg-green-900/50 text-green-300", DISMISSED: "bg-gray-700 text-gray-300" }
-    : { PENDING: "bg-amber-100 text-amber-700", RESOLVED: "bg-green-100 text-green-700", DISMISSED: "bg-gray-100 text-gray-600" };
-}
-
-// Coffee Owner's "Blacklist" for Marketing — a scoped VIEW of the same
-// marketingReports table Admin moderates (GET /api/marketing/reports/mine),
-// never a second report system. Mirrors BaristaBlacklistModal exactly.
+// Coffee Owner's Marketing Hero "report modal" (task: "Extend the Shared
+// Reporting System to Print, Academy, and Marketing") — a **public**,
+// read-only feed of reports an Admin has explicitly published
+// (GET /api/marketing/reports/published), replacing the previous "my own
+// submitted reports" view. No submission UI here; the Marketing detail
+// modal's own Signaler is the sole report-submission entry point. Preserves
+// the existing click-through to MarketingDetailModal (already wired here
+// before this task).
 export function MarketingBlacklistModal({
   open, onClose, onRequestQuote,
 }: {
@@ -30,109 +22,34 @@ export function MarketingBlacklistModal({
   onClose: () => void;
   onRequestQuote: (provider: MarketingMarketplaceCard) => void;
 }) {
-  const { data: reports = [], isLoading } = useMyMarketingReports();
-  const [detailProviderId, setDetailProviderId] = useState<number | null>(null);
   const isDark = useThemeStore((s) => s.isDark);
-  const STATUS_COLORS = statusColors(isDark);
-  const t = {
-    modalBg: isDark ? "bg-gray-900" : "bg-white",
-    textPrimary: isDark ? "text-white" : "text-gray-900",
-    textMuted: isDark ? "text-gray-400" : "text-gray-500",
-    border: isDark ? "border-gray-700/60" : "border-gray-100",
-    rowHover: isDark ? "hover:bg-gray-800/60" : "hover:bg-gray-50",
-  };
+  const [detailProviderId, setDetailProviderId] = useState<number | null>(null);
 
-  // Scroll/swipe-to-dismiss (second upward swipe follows the finger live,
-  // same mechanism/threshold as the Product Detail Modal reference) — see
-  // client/src/hooks/use-scroll-dismiss.ts. This modal's DialogContent is
-  // itself the scroll container, so the handlers/styles attach directly to it.
-  const {
-    onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
-    dismissContentStyle, dismissOverlayStyle,
-  } = useScrollDismiss(open, onClose, undefined, true);
+  const openReported = (report: PublishedReportRow) => {
+    if (report.professionalId != null) setDetailProviderId(report.professionalId);
+  };
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-        {/* Header/close-button/scrollbar synchronized to the Maintenance Hero
-            Signaler modal's visual reference
-            (docs/coffee_owner_hero_signaler_modal_design_audit.md) — content/
-            data below unchanged. */}
-        <DialogContent
-          className={`sm:max-w-xl rounded-2xl border-0 shadow-2xl max-h-[85vh] overflow-y-auto [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}
-          style={dismissContentStyle}
-          overlayStyle={dismissOverlayStyle}
-          onWheel={onBodyWheel}
-          onTouchStart={onBodyTouchStart}
-          onTouchMove={onBodyTouchMove}
-          onTouchEnd={onBodyTouchEnd}
-        >
-          <VisuallyHidden><DialogTitle>Prestataires Marketing signalés</DialogTitle></VisuallyHidden>
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <div className="flex items-center gap-2 min-w-0">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isDark ? "bg-red-900/40" : "bg-red-100"}`}>
-                <Ban className={`w-4 h-4 ${isDark ? "text-red-400" : "text-red-600"}`} />
-              </div>
-              <div className="min-w-0">
-                <h2 className={`font-bold text-base ${t.textPrimary}`}>Prestataires signalés</h2>
-                <p className={`text-xs ${t.textMuted}`}>Les prestataires Marketing que vous avez personnellement signalés.</p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              aria-label="Close"
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${isDark ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}
-            >
-              <X className="w-4 h-4" />
-            </button>
+      <EntityPublishedReportsModal
+        open={open}
+        onClose={onClose}
+        isDark={isDark}
+        title="Prestataires signalés"
+        subtitle="Signalements publiés par l'équipe Admin concernant des prestataires Marketing."
+        icon={
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isDark ? "bg-red-900/40" : "bg-red-100"}`}>
+            <Ban className={`w-4 h-4 ${isDark ? "text-red-400" : "text-red-600"}`} />
           </div>
-
-          {isLoading ? (
-            <div className="space-y-2 mt-2">
-              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className={`h-24 w-full rounded-2xl ${isDark ? "bg-gray-800" : ""}`} />)}
-            </div>
-          ) : reports.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-14 gap-3 text-center">
-              <ShieldAlert className={`w-10 h-10 ${isDark ? "text-gray-600" : "text-gray-300"}`} />
-              <p className={`text-sm font-medium ${t.textPrimary}`}>Aucun prestataire signalé</p>
-              <p className={`text-xs max-w-xs ${t.textMuted}`}>Les prestataires que vous signalez depuis leur profil apparaîtront ici avec le motif que vous avez soumis.</p>
-            </div>
-          ) : (
-            <div className="space-y-2.5 mt-2">
-              {reports.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => setDetailProviderId(r.marketingUserId)}
-                  className={`w-full text-left flex gap-3 p-3 rounded-2xl border transition-colors ${t.border} ${t.rowHover}`}
-                  data-testid={`row-blacklist-${r.id}`}
-                >
-                  <Avatar className="w-14 h-14 shrink-0 rounded-xl">
-                    <AvatarImage src={getAvatarUrl({ profileImageUrl: r.marketingProfileImageUrl })} alt={r.marketingName} className="object-cover rounded-xl" />
-                    <AvatarFallback className={`rounded-xl font-bold ${isDark ? "bg-red-900/40 text-red-300" : "bg-red-100 text-red-700"}`}>
-                      {r.marketingName.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className={`font-semibold text-sm truncate ${t.textPrimary}`}>{r.marketingName}</p>
-                      <Badge className={`text-[10px] border-0 shrink-0 px-1.5 ${STATUS_COLORS[r.status]}`}>{STATUS_LABELS[r.status]}</Badge>
-                    </div>
-                    {r.marketingLocation && (
-                      <p className={`text-xs flex items-center gap-1 mt-0.5 ${t.textMuted}`}><MapPin className="w-3 h-3 shrink-0" /> {r.marketingLocation}</p>
-                    )}
-                    <p className={`text-xs flex items-center gap-1 mt-0.5 ${t.textMuted}`}><Calendar className="w-3 h-3 shrink-0" /> {new Date(r.createdAt).toLocaleDateString("fr-FR")}</p>
-                    <p className={`text-sm mt-1.5 line-clamp-2 ${t.textPrimary}`}>{r.reason}</p>
-                    {r.status !== "PENDING" && r.resolutionNote && (
-                      <p className={`text-xs mt-1 italic ${t.textMuted}`}>Réponse Admin : {r.resolutionNote}</p>
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+        }
+        usePublishedReports={useMarketingPublishedReports}
+        mapRow={(r: any) => ({
+          id: r.id, professionalId: r.marketingUserId, professionalName: r.marketingName, professionalImageUrl: r.marketingProfileImageUrl,
+          rating: r.rating, comment: r.reason, createdAt: r.createdAt, publishedAt: r.resolvedAt,
+        })}
+        onSelectProfessional={openReported}
+        accentClassName={isDark ? "text-purple-400" : "text-purple-600"}
+      />
 
       {/* Clicking a reported provider opens the exact same shared Details modal
           used everywhere else — no separate profile implementation. */}

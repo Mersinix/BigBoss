@@ -43,6 +43,7 @@ import { useCircularItemNav } from "@/hooks/use-circular-item-nav";
 import { useAcademyStoreNav } from "@/hooks/use-academy-store-nav";
 import { AcademyFastSearch } from "@/components/academy/academy-fast-search";
 import { AcademyBlacklistModal } from "@/components/academy/academy-blacklist-modal";
+import { useAcademyPublishedReports } from "@/hooks/use-academy-reports";
 import { AcademyMappedCourseCard } from "@/components/academy/academy-mapped-course-card";
 import { AcademyStoresSection } from "@/components/academy/academy-stores-section";
 import { EnrollDialog } from "@/components/academy/academy-enroll-dialog";
@@ -210,6 +211,14 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
   const [detailCourseId, setDetailCourseId] = useState<number | null>(null);
   const [fastSearchOpen, setFastSearchOpen] = useState(false);
   const [blacklistOpen, setBlacklistOpen] = useState(false);
+  // Hero report icon visibility (task: "Extend the Shared Reporting System
+  // to Print, Academy, and Marketing") — same query/cache key
+  // AcademyBlacklistModal itself reads, no extra request. Fails OPEN while
+  // loading/on error, same as Maintenance/Barista/Print/Marketing.
+  const { data: publishedAcademyReportsPreview, isLoading: publishedAcademyReportsLoading, error: publishedAcademyReportsError } = useAcademyPublishedReports(1, 10);
+  const hasPublishedAcademyReports = publishedAcademyReportsLoading || publishedAcademyReportsError
+    ? true
+    : (publishedAcademyReportsPreview?.total ?? 0) > 0;
 
   // Fetch the FULL eligible course set once (task: "Synchronize All Filters
   // and Display Only Options With Matching Results") — search/level/
@@ -359,7 +368,7 @@ export default function BaristaAcademyPage({ comingSoon = false }: { comingSoon?
               now, so the duplicated hero one is gone; Fast Search/Report stay
               Admin-toggleable per service (see /api/hero-actions). */
           <div className="relative flex justify-end items-center gap-2 mb-9">
-            {canAct && heroActions.ACADEMY.reportEnabled && (
+            {canAct && heroActions.ACADEMY.reportEnabled && hasPublishedAcademyReports && (
               <button
                 onClick={() => setBlacklistOpen(true)}
                 aria-label="Académies signalées"

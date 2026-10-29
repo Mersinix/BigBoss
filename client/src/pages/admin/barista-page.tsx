@@ -24,9 +24,7 @@ import { useFormatCurrency } from "@/hooks/use-currency";
 import { useAuth } from "@/hooks/use-auth";
 import { DashboardHero, SectionCard, RankRow, EmptyState, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { AlertTriangle } from "lucide-react";
 import {
-  useAdminBaristaReports, useResolveBaristaReport,
   useAdminBaristaEducationLevels, useCreateAdminBaristaEducationLevel, useUpdateAdminBaristaEducationLevel, useDeleteAdminBaristaEducationLevel,
   useAdminBaristaLanguages, useCreateAdminBaristaLanguage, useUpdateAdminBaristaLanguage, useDeleteAdminBaristaLanguage,
 } from "@/hooks/use-barista-marketplace";
@@ -667,8 +665,6 @@ export default function AdminBaristaPage() {
   const jobPostSearchInputRef = useRef<HTMLInputElement>(null);
 
   const { data, isLoading } = useQuery<Overview>({ queryKey: ["/api/admin/barista"] });
-  const { data: pendingReports = [] } = useAdminBaristaReports("PENDING");
-  const resolveReport = useResolveBaristaReport();
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["/api/admin/barista"] });
@@ -855,39 +851,10 @@ export default function AdminBaristaPage() {
 
         {/* ── Baristas ── */}
         <TabsContent value="baristas" className="mt-4 space-y-4">
-          {/* Entity-level reports — a Coffee Owner flagging a Barista account
-              (distinct from review-reporting, which stays under Admin → Reviews →
-              Barista). Relocated here (account-level moderation) now that the
-              "Vue d'ensemble" tab that used to host it has been removed. */}
-          {pendingReports.length > 0 && (
-            <Card className="border-amber-300 dark:border-amber-700">
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2 text-amber-700 dark:text-amber-400">
-                  <AlertTriangle className="w-4 h-4" /> Signalements en attente ({pendingReports.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0 divide-y divide-border/50">
-                {pendingReports.map((r) => (
-                  <div key={r.id} className="p-3 flex items-start justify-between gap-3" data-testid={`row-barista-report-${r.id}`}>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">{r.baristaName} <span className="text-muted-foreground font-normal">signalé par {r.cafeOwnerName}</span></p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{r.reason}</p>
-                    </div>
-                    <div className="flex gap-1.5 shrink-0">
-                      <Button size="sm" variant="outline" className="h-7 text-xs" disabled={resolveReport.isPending}
-                        onClick={() => resolveReport.mutate({ id: r.id, status: "DISMISSED" })} data-testid={`button-dismiss-report-${r.id}`}>
-                        Ignorer
-                      </Button>
-                      <Button size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700 text-white" disabled={resolveReport.isPending}
-                        onClick={() => resolveReport.mutate({ id: r.id, status: "RESOLVED" })} data-testid={`button-resolve-report-${r.id}`}>
-                        Marquer résolu
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+          {/* Report moderation moved to Admin -> Communication -> Signalements
+              (task: "Add a Grabber to the Maintenance Reports Modal and
+              Extend the Reporting System to Barista") — see
+              client/src/pages/admin/reports-page.tsx. Not duplicated here. */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
             <div className="relative shrink-0 sm:flex-1 sm:min-w-[220px]">
               {!baristaSearchOpen && (

@@ -56,6 +56,7 @@ import {
 } from "@/hooks/use-barista-marketplace";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem } from "@/components/ui/dropdown-menu";
 import { BaristaDetailModal } from "@/components/barista/barista-detail-modal";
+import { useBaristaPublishedReports } from "@/hooks/use-barista-reports";
 import { useCircularItemNav } from "@/hooks/use-circular-item-nav";
 import { BaristaFastSearch } from "@/components/barista/barista-fast-search";
 import { BaristaBlacklistModal } from "@/components/barista/barista-blacklist-modal";
@@ -427,6 +428,16 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
   const [fastSearchOpen, setFastSearchOpen] = useState(false);
   const [blacklistOpen, setBlacklistOpen] = useState(false);
   const [jobManagementOpen, setJobManagementOpen] = useState(false);
+  // Hero report icon visibility (task: "Add a Grabber to the Maintenance
+  // Reports Modal and Extend the Reporting System to Barista") — same
+  // query/cache key BaristaBlacklistModal itself reads (page 1, limit 10),
+  // so this never fires a second network request. Fails OPEN (icon stays
+  // visible) while loading or on error — only a confirmed total of 0 hides
+  // it, mirroring the Maintenance hero icon's exact behavior.
+  const { data: publishedBaristaReportsPreview, isLoading: publishedBaristaReportsLoading, error: publishedBaristaReportsError } = useBaristaPublishedReports(1, 10);
+  const hasPublishedBaristaReports = publishedBaristaReportsLoading || publishedBaristaReportsError
+    ? true
+    : (publishedBaristaReportsPreview?.total ?? 0) > 0;
 
   const { data: profiles = [], isLoading: profilesLoading, isError: profilesError } = useBaristaProfiles();
   const { data: skillOptions = [] } = useBaristaSkills();
@@ -623,7 +634,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
               now, so the duplicated hero one is gone; Fast Search/Report stay
               Admin-toggleable per service (see /api/hero-actions). */
           <div className="relative flex justify-end items-center gap-2 mb-9">
-            {canAct && heroActions.BARISTA.reportEnabled && (
+            {canAct && heroActions.BARISTA.reportEnabled && hasPublishedBaristaReports && (
               <button
                 onClick={() => setBlacklistOpen(true)}
                 aria-label="Baristas signalés"

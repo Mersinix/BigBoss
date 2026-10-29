@@ -119,7 +119,7 @@ export function AppSidebar() {
             { title: "Prospecting ⭐", url: "/admin/prospecting", icon: Target },
             { title: "System Management", url: "/admin/system-management", icon: Sliders },
             { title: "Performance", url: "/", icon: Activity, activeUrls: ["/", "/admin/analytics", "/admin/earnings"] },
-            { title: "Communication", url: "/admin/messages", icon: MessageCircle, activeUrls: ["/admin/messages", "/admin/notifications",  "/admin/reviews"] },
+            { title: "Communication", url: "/admin/messages", icon: MessageCircle, activeUrls: ["/admin/messages", "/admin/notifications",  "/admin/reviews", "/admin/reports"] },
 
           ],
         },

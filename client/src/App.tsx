@@ -128,6 +128,7 @@ import SystemManagementPage from "@/pages/admin/system-management-page";
 import AdminSettingsPage from "@/pages/admin/settings-page";
 import ProspectingPage from "@/pages/admin/prospecting-page";
 import AdminReviewsPage from "@/pages/admin/reviews-page";
+import AdminReportsPage from "@/pages/admin/reports-page";
 import AdminMaintenancePage from "@/pages/admin/maintenance-page";
 import AdminMarketingPage from "@/pages/admin/marketing-page";
 import AdminPrintPage from "@/pages/admin/print-page";
@@ -820,6 +821,9 @@ function Router() {
       </Route>
       <Route path="/admin/reviews">
         {() => (<DashboardLayout><ProtectedRoute component={AdminReviewsPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
+      </Route>
+      <Route path="/admin/reports">
+        {() => (<DashboardLayout><ProtectedRoute component={AdminReportsPage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}
       </Route>
       <Route path="/admin/maintenance">
         {() => (<DashboardLayout><ProtectedRoute component={AdminMaintenancePage} allowedRoles={ADMIN_ROLES} /></DashboardLayout>)}

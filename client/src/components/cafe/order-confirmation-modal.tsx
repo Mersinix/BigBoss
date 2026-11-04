@@ -268,24 +268,7 @@ export default function OrderConfirmationModal({
           {/* ── Header ── */}
           <div className={`shrink-0 border-b px-6 pt-5 pb-4 ${t.headerBg}`}>
             <div className="flex items-center justify-between mb-3">
-              {/* Close */}
-              <button
-                onClick={() => { if (!isSubmitting) onClose(); }}
-                aria-label="Fermer"
-                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${t.iconBtn}`}
-              >
-                <X className="w-4 h-4" />
-              </button>
-
-              {/* Title */}
-              <div className="flex items-center gap-2">
-                <CheckCircle className="w-4 h-4 text-amber-500" />
-                <span className={`text-[15px] font-bold tracking-tight ${t.textPrimary}`}>
-                  Récapitulatif de commande
-                </span>
-              </div>
-
-              {/* Theme toggle */}
+               {/* Theme toggle */}
               <button
                 onClick={toggle}
                 aria-label="Changer le thème"
@@ -295,6 +278,24 @@ export default function OrderConfirmationModal({
                   ? <Sun className="w-4 h-4 text-amber-400" />
                   : <Moon className="w-4 h-4 text-gray-500" />
                 }
+              </button>
+            
+
+              {/* Title */}
+              <div className="flex items-center gap-2">
+                <CheckCircle className="w-4 h-4 text-amber-500" />
+                <span className={`text-[15px] font-bold tracking-tight ${t.textPrimary}`}>
+                  Récapitulatif de commande
+                </span>
+              </div>
+
+               {/* Close */}
+              <button
+                onClick={() => { if (!isSubmitting) onClose(); }}
+                aria-label="Fermer"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${t.iconBtn}`}
+              >
+                <X className="w-4 h-4" />
               </button>
             </div>
             <p className={`text-sm text-center ${t.textMuted}`}>

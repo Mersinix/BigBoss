@@ -22,7 +22,7 @@ import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { calculateDistance, formatDistance } from "@/lib/distance";
-import { useSearchLocationStore } from "@/store/search-location-store";
+import { useEffectiveLocation } from "@/hooks/use-effective-location";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import { useStoreNav } from "@/hooks/use-store-nav";
@@ -207,7 +207,7 @@ function ProductCard({
   const faved = useFavorites((s) => !!s.shop[product.id]);
   const toggleShop = useFavorites((s) => s.toggleShop);
   const openQuickView = useQuickView((s) => s.open);
-  const searchLocation = useSearchLocationStore((s) => s.searchLocation);
+  const effectiveLocation = useEffectiveLocation();
 
   const listingIds = product.listings.map(l => l.id);
 
@@ -218,21 +218,18 @@ function ProductCard({
   );
 
   const distanceKm = useMemo(() => {
-    if (!searchLocation) return null;
-    const sLat = parseFloat(searchLocation.lat);
-    const sLng = parseFloat(searchLocation.lng);
-    if (Number.isNaN(sLat) || Number.isNaN(sLng)) return null;
+    if (!effectiveLocation) return null;
     let nearest: number | null = null;
     for (const l of product.listings) {
       if (!l.supplierLat || !l.supplierLng) continue;
       const lat = parseFloat(l.supplierLat);
       const lng = parseFloat(l.supplierLng);
       if (Number.isNaN(lat) || Number.isNaN(lng)) continue;
-      const d = calculateDistance(sLat, sLng, lat, lng);
+      const d = calculateDistance(effectiveLocation.lat, effectiveLocation.lng, lat, lng);
       if (nearest === null || d < nearest) nearest = d;
     }
     return nearest;
-  }, [searchLocation, product.listings]);
+  }, [effectiveLocation, product.listings]);
 
   const hasReviews = product.reviewCount > 0;
   const categoryName = product.categoryLabel?.name ?? product.category ?? null;
@@ -563,17 +560,17 @@ export function PackCardTile({
   const faved = useFavorites((s) => !!s.pack[pack.id]);
   const togglePack = useFavorites((s) => s.togglePack);
   const openPackQuickView = usePackQuickView((s) => s.open);
-  const searchLocation = useSearchLocationStore((s) => s.searchLocation);
+  const effectiveLocation = useEffectiveLocation();
   const maxQty = Math.min(pack.quantityAvailable, pack.maxBuildable);
 
 
   const distance = useMemo(() => {
-    if (!searchLocation || !(pack as any).supplierLat || !(pack as any).supplierLng) return null;
+    if (!effectiveLocation || !(pack as any).supplierLat || !(pack as any).supplierLng) return null;
     const lat = parseFloat((pack as any).supplierLat);
     const lng = parseFloat((pack as any).supplierLng);
     if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
-    return calculateDistance(parseFloat(searchLocation.lat), parseFloat(searchLocation.lng), lat, lng);
-  }, [(pack as any).supplierLat, (pack as any).supplierLng, searchLocation]);
+    return calculateDistance(effectiveLocation.lat, effectiveLocation.lng, lat, lng);
+  }, [(pack as any).supplierLat, (pack as any).supplierLng, effectiveLocation]);
 
   // Build correct category → brands map from items (each item carries its own categoryId + brandId)
   const catBrandMap = useMemo(() => {
@@ -1031,10 +1028,10 @@ export default function BrowseProducts() {
   const searchStr = useSearch();
   const { user } = useAuth();
   const hasCommercialAccess = useCommercialAccess();
-  const searchLocation = useSearchLocationStore((s) => s.searchLocation);
-  const searchLat = searchLocation?.lat ? parseFloat(searchLocation.lat) : null;
-  const searchLng = searchLocation?.lng ? parseFloat(searchLocation.lng) : null;
-  const hasSearchLocation = searchLat !== null && searchLng !== null && !Number.isNaN(searchLat) && !Number.isNaN(searchLng);
+  const effectiveLocation = useEffectiveLocation();
+  const searchLat = effectiveLocation?.lat ?? null;
+  const searchLng = effectiveLocation?.lng ?? null;
+  const hasSearchLocation = effectiveLocation !== null;
 
   // ── Dark / light mode (dark by default — matches Favorites modal) ──────────
   const isDark = useThemeStore((s) => s.isDark);

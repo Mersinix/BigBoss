@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Ban } from "lucide-react";
 import type { MarketingMarketplaceCard } from "@/hooks/use-marketing";
 import { MarketingDetailModal } from "@/components/marketing/marketing-detail-modal";
 import { useThemeStore } from "@/store/theme-store";
 import { useMarketingPublishedReports } from "@/hooks/use-marketing-reports";
 import { EntityPublishedReportsModal } from "@/components/shared/entity-published-reports-modal";
-import type { PublishedReportRow } from "@/components/published-reports-list";
+import { ReportedEntityBadge } from "@/components/shared/reported-entity-badge";
+import { mapPublishedReportRow, type PublishedReportRow } from "@/components/published-reports-list";
+import { BLACKLIST_SECTIONS, resolveAccentClassName } from "@/components/shared/blacklist-sections";
 
 // Coffee Owner's Marketing Hero "report modal" (task: "Extend the Shared
 // Reporting System to Print, Academy, and Marketing") — a **public**,
@@ -15,6 +16,20 @@ import type { PublishedReportRow } from "@/components/published-reports-list";
 // modal's own Signaler is the sole report-submission entry point. Preserves
 // the existing click-through to MarketingDetailModal (already wired here
 // before this task).
+//
+// Kept as its own dedicated wrapper, NOT folded into SimpleBlacklistModal
+// (task: "Safely Consolidate the Six Blacklist Modal Components into One
+// Shared Component", approved architecture §6/§7 of
+// BLACKLIST_MODAL_REFACTOR_AUDIT.md) — this one takes a required
+// `onRequestQuote` prop its parent page relies on, with no equivalent in
+// Barista's or Maintenance's integrations. Only the icon/title/subtitle/
+// accent/row-mapping (identical shape, different field names) are now
+// pulled from the shared blacklist-sections config instead of duplicated.
+// headerVariant="centered" (task: "Unify the Design of All Six Blacklist
+// Modals") matches this modal's header to Shop's, the approved visual
+// reference.
+const config = BLACKLIST_SECTIONS.MARKETING;
+
 export function MarketingBlacklistModal({
   open, onClose, onRequestQuote,
 }: {
@@ -35,20 +50,14 @@ export function MarketingBlacklistModal({
         open={open}
         onClose={onClose}
         isDark={isDark}
-        title="Prestataires signalés"
-        subtitle="Signalements publiés par l'équipe Admin concernant des prestataires Marketing."
-        icon={
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isDark ? "bg-red-900/40" : "bg-red-100"}`}>
-            <Ban className={`w-4 h-4 ${isDark ? "text-red-400" : "text-red-600"}`} />
-          </div>
-        }
+        title={config.title}
+        subtitle={config.subtitle}
+        icon={<ReportedEntityBadge isDark={isDark} />}
         usePublishedReports={useMarketingPublishedReports}
-        mapRow={(r: any) => ({
-          id: r.id, professionalId: r.marketingUserId, professionalName: r.marketingName, professionalImageUrl: r.marketingProfileImageUrl,
-          rating: r.rating, comment: r.reason, createdAt: r.createdAt, publishedAt: r.resolvedAt,
-        })}
+        mapRow={(r: any) => mapPublishedReportRow(r, config)}
         onSelectProfessional={openReported}
-        accentClassName={isDark ? "text-purple-400" : "text-purple-600"}
+        accentClassName={resolveAccentClassName(config, isDark)}
+        headerVariant="centered"
       />
 
       {/* Clicking a reported provider opens the exact same shared Details modal

@@ -107,7 +107,7 @@ import { PlatformSettingsStorage } from "./storage/domains/platform-settings.sto
 import { DiscountCodesStorage } from "./storage/domains/discount-codes.storage";
 import { AuthProviderSettingsStorage } from "./storage/domains/auth-provider-settings.storage";
 import { LoginSecuritySettingsStorage } from "./storage/domains/login-security-settings.storage";
-import { ReviewsStorage } from "./storage/domains/reviews.storage";
+import { ReviewsStorage, type DeliveryCompanyDriverReview, type CompanyDriverPerformanceReview } from "./storage/domains/reviews.storage";
 import { ShopCatalogStorage } from "./storage/domains/shop-catalog.storage";
 import { BaristaStorage } from "./storage/domains/barista.storage";
 import { MaintenanceStorage } from "./storage/domains/maintenance.storage";
@@ -2142,6 +2142,19 @@ export class DatabaseStorage implements IStorage {
 
   async getDeliveryCompanyReviews(deliveryCompanyUserId: number): Promise<SupplierProductReview[]> {
     return this.reviewsDomain.getDeliveryCompanyReviews(deliveryCompanyUserId);
+  }
+
+  // Driver Reviews & Performance Dashboard (task: "Delivery Company — Driver Reviews &
+  // Performance Dashboard") — see reviews.storage.ts for the enrichment logic.
+  async getDeliveryCompanyDriverReviews(deliveryCompanyUserId: number): Promise<DeliveryCompanyDriverReview[]> {
+    return this.reviewsDomain.getDeliveryCompanyDriverReviews(deliveryCompanyUserId);
+  }
+
+  // Fix Delivery Company Avis — Include Coffee Owner Reviews of Its Drivers — see
+  // reviews.storage.ts for the scoping/enrichment logic. Deliberately separate from
+  // getDeliveryCompanyDriverReviews above (different reviewer/target population).
+  async getDriverReviewsForDeliveryCompany(deliveryCompanyUserId: number): Promise<CompanyDriverPerformanceReview[]> {
+    return this.reviewsDomain.getDriverReviewsForDeliveryCompany(deliveryCompanyUserId);
   }
 
   async getDeliveryCompanyReviewForDelivery(deliveryId: number, supplierId: number): Promise<SupplierProductReview | undefined> {

@@ -3132,7 +3132,9 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
 
   const locationLabel = searchLocation?.address
     ? formatLocationLabel(searchLocation.address)
-    : "Tunis";
+    : (user as any)?.locationAddress
+      ? formatLocationLabel((user as any).locationAddress)
+      : "Tunis";
 
   const handleLocationButtonClick = () => {
     setLocationPickerOpen(true);

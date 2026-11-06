@@ -750,6 +750,25 @@ export function registerDeliveryRoutes(app: Express): void {
       catch { res.status(500).json({ message: 'Failed to load Delivery Company reviews' }); }
     });
 
+    // Driver Reviews & Performance Dashboard (task: "Delivery Company — Driver Reviews &
+    // Performance Dashboard") — authenticated, company-scoped. Unlike the public route just
+    // above (which powers the marketplace rating card and is untouched), this one never
+    // accepts a company id from the client at all: requireApprovedDeliveryCompany resolves
+    // it purely from the session (req.deliveryCompany.id).
+    app.get('/api/delivery-company/driver-reviews', requireApprovedDeliveryCompany, async (req: any, res) => {
+      try { res.json(await storage.getDeliveryCompanyDriverReviews(req.deliveryCompany.id)); }
+      catch { res.status(500).json({ message: 'Failed to load driver reviews' }); }
+    });
+
+    // Fix Delivery Company Avis — Include Coffee Owner Reviews of Its Drivers — a
+    // deliberately separate endpoint from the one above: reviewType='DRIVER', reviewer=Cafe
+    // Owner, scoped via deliveries.deliveryCompanyId (never users.deliveryCompanyId). Same
+    // session-only identity rule as every other Delivery Company route.
+    app.get('/api/delivery-company/driver-performance-reviews', requireApprovedDeliveryCompany, async (req: any, res) => {
+      try { res.json(await storage.getDriverReviewsForDeliveryCompany(req.deliveryCompany.id)); }
+      catch { res.status(500).json({ message: 'Failed to load driver performance reviews' }); }
+    });
+
     app.post('/api/delivery-company/reviews', requireApprovedSupplier, async (req: any, res) => {
       const user = await storage.getUser(req.session.userId);
       if (!user) return res.status(401).json({ message: 'Unauthorized' });

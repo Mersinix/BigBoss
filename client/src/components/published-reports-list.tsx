@@ -27,6 +27,32 @@ export interface PublishedReportRow {
   publishedAt?: string | null;
 }
 
+// Every service's own `mapRow` already does exactly this (task: "Safely
+// Consolidate the Six Blacklist Modal Components into One Shared Component"
+// — see BLACKLIST_MODAL_REFACTOR_AUDIT.md §2.1/§6): the `rating`/`comment`/
+// `createdAt`/`publishedAt` fields always come from the identically-shaped
+// `PublishedEntityReport` (see use-entity-reports.ts), and only the raw
+// field names for the target professional's id/name/image differ per
+// section — supplied here instead of duplicated per caller.
+export interface PublishedReportRowKeys {
+  idKey: string;
+  nameKey: string;
+  imageKey: string;
+}
+
+export function mapPublishedReportRow(raw: any, keys: PublishedReportRowKeys): PublishedReportRow {
+  return {
+    id: raw.id,
+    professionalId: raw[keys.idKey],
+    professionalName: raw[keys.nameKey],
+    professionalImageUrl: raw[keys.imageKey],
+    rating: raw.rating,
+    comment: raw.reason,
+    createdAt: raw.createdAt,
+    publishedAt: raw.resolvedAt,
+  };
+}
+
 interface Props {
   reports: PublishedReportRow[];
   isLoading: boolean;

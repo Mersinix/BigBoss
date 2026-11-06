@@ -1,7 +1,6 @@
-import { Ban } from "lucide-react";
 import { useThemeStore } from "@/store/theme-store";
 import { useAcademyPublishedReports } from "@/hooks/use-academy-reports";
-import { EntityPublishedReportsModal } from "@/components/shared/entity-published-reports-modal";
+import { SimpleBlacklistModal } from "@/components/shared/simple-blacklist-modal";
 
 // Coffee Owner's Academy Hero "report modal" (task: "Extend the Shared
 // Reporting System to Print, Academy, and Marketing") — a **public**,
@@ -13,27 +12,27 @@ import { EntityPublishedReportsModal } from "@/components/shared/entity-publishe
 // implementation's own stated decision: an Academy account isn't a single
 // browsable "profile" here — its formations are — so this stays a
 // read-only list, consistent with the entity being reported).
+//
+// Built on SimpleBlacklistModal (task: "Safely Consolidate the Six
+// Blacklist Modal Components into One Shared Component") — Academy has no
+// row click-through, so its config/icon/mapRow are now the shared ACADEMY
+// section entry in blacklist-sections.ts instead of being duplicated here.
+// isDark stays internal (own useThemeStore read, same as before) since
+// no other part of this task requires changing this component's external
+// prop signature. headerVariant="centered" (task: "Unify the Design of All
+// Six Blacklist Modals") matches this modal's header to Shop's, the
+// approved visual reference.
 export function AcademyBlacklistModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const isDark = useThemeStore((s) => s.isDark);
 
   return (
-    <EntityPublishedReportsModal
+    <SimpleBlacklistModal
+      sectionId="ACADEMY"
       open={open}
       onClose={onClose}
       isDark={isDark}
-      title="Académies signalées"
-      subtitle="Signalements publiés par l'équipe Admin concernant des académies."
-      icon={
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isDark ? "bg-red-900/40" : "bg-red-100"}`}>
-          <Ban className={`w-4 h-4 ${isDark ? "text-red-400" : "text-red-600"}`} />
-        </div>
-      }
       usePublishedReports={useAcademyPublishedReports}
-      mapRow={(r: any) => ({
-        id: r.id, professionalId: r.academyUserId, professionalName: r.academyName, professionalImageUrl: r.academyProfileImageUrl,
-        rating: r.rating, comment: r.reason, createdAt: r.createdAt, publishedAt: r.resolvedAt,
-      })}
-      accentClassName={isDark ? "text-indigo-400" : "text-indigo-600"}
+      headerVariant="centered"
     />
   );
 }

@@ -403,6 +403,9 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/drivers/") });
             qc.invalidateQueries({ queryKey: ["/api/admin/delivery-pricing"] });
             qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/driver/reviews") });
+            // Fix Delivery Company Avis — Include Coffee Owner Reviews of Its Drivers — same
+            // driver_review_created event already refreshing the driver's own page above.
+            qc.invalidateQueries({ queryKey: ["/api/delivery-company/driver-performance-reviews"] });
             qc.invalidateQueries({ queryKey: ["/api/delivery-company/opportunities"] });
             qc.invalidateQueries({ queryKey: ["/api/driver/opportunities"] });
           }
@@ -466,6 +469,11 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/delivery-company/profiles"] });
             qc.invalidateQueries({ queryKey: ["/api/delivery-company/profile"] });
             qc.invalidateQueries({ queryKey: ["/api/delivery-company/reviews"] });
+            // Driver Reviews & Performance Dashboard (task: "Delivery Company — Driver
+            // Reviews & Performance Dashboard") — same delivery_company_review_updated
+            // event as the line above; without this the dashboard would keep showing a
+            // stale review list until the page is remounted.
+            qc.invalidateQueries({ queryKey: ["/api/delivery-company/driver-reviews"] });
             qc.invalidateQueries({ queryKey: ["/api/delivery-company/reports/mine"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/delivery-company/reports"] });
             // Drivers/vehicles are never duplicated for the card/modal — refresh those too

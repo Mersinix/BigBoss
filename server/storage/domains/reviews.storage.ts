@@ -2,7 +2,7 @@ import { db } from "../../db";
 import { eq, and, inArray, desc, sql } from "drizzle-orm";
 import {
   supplierProductReviews, users, supplierProductListings,
-  maintenanceProfiles, marketingProfiles, deliveryCompanyProfiles,
+  maintenanceProfiles, marketingProfiles, deliveryCompanyProfiles, deliveries,
   type SupplierProductReview,
 } from "@shared/schema";
 
@@ -81,6 +81,43 @@ import {
 // header and re-confirmed this batch) — carried over unchanged, not
 // deleted, per the project's standing rule against removing code that
 // merely appears unused.
+
+// Driver Reviews & Performance Dashboard (task: "Delivery Company — Driver Reviews &
+// Performance Dashboard") — a computed/enriched shape, not a DB table, so it lives here
+// next to the one method that produces it rather than in shared/schema.ts.
+export interface DeliveryCompanyDriverReview {
+  id: number;
+  supplierId: number | null;
+  supplierName: string;
+  supplierImageUrl: string | null;
+  driverId: number | null;
+  driverName: string | null;
+  driverImageUrl: string | null;
+  deliveryId: number | null;
+  rating: number;
+  comment: string | null;
+  createdAt: Date | null;
+}
+
+// Delivery Company Avis — Coffee-Owner-authored DRIVER reviews of this company's own
+// drivers (task: "Fix Delivery Company Avis — Include Coffee Owner Reviews of Its
+// Drivers", DELIVERY_COMPANY_DRIVER_REVIEWS_GAP_AUDIT.md §6) — a genuinely different
+// reviewer/target pair from DeliveryCompanyDriverReview above (Cafe Owner -> driver, not
+// Supplier -> company), kept as its own type so the two populations are never merged.
+export interface CompanyDriverPerformanceReview {
+  id: number;
+  reviewerId: number | null;
+  reviewerName: string;
+  reviewerImageUrl: string | null;
+  driverId: number;
+  driverName: string | null;
+  driverImageUrl: string | null;
+  deliveryId: number | null;
+  rating: number;
+  comment: string | null;
+  createdAt: Date | null;
+}
+
 export class ReviewsStorage {
   // ══════════════════════════════════════════════════════════════════════════════════════
   // Generic / admin-wide review operations — new extraction from server/storage.ts.
@@ -337,6 +374,136 @@ export class ReviewsStorage {
         eq(supplierProductReviews.reviewType, "DELIVERY_COMPANY"),
       ))
       .orderBy(desc(supplierProductReviews.createdAt));
+  }
+
+  /**
+   * Driver Reviews & Performance Dashboard (task: "Delivery Company — Driver Reviews &
+   * Performance Dashboard", DELIVERY_DRIVER_REVIEWS_AUDIT.md §9) — the exact same
+   * DELIVERY_COMPANY-type, Supplier-authored reviews getDeliveryCompanyReviews already
+   * returns, enriched with the driver who performed each review's underlying delivery.
+   * driverId/deliveryCompanyId on `deliveries` are frozen once a delivery leaves ASSIGNED
+   * (reassignDriver refuses once "already been collected") and a review can only exist for
+   * a DELIVERED delivery — so reading them off the delivery row is historically accurate
+   * regardless of a driver's CURRENT company membership (see audit §5). Never includes
+   * reviewType='DRIVER' rows (a different reviewer — the Cafe Owner, not the Supplier).
+   *
+   * Two extra batched lookups total (deliveries, users), never one per review — no N+1.
+   */
+  async getDeliveryCompanyDriverReviews(deliveryCompanyUserId: number): Promise<DeliveryCompanyDriverReview[]> {
+    const reviews = await this.getDeliveryCompanyReviews(deliveryCompanyUserId);
+    if (reviews.length === 0) return [];
+
+    const deliveryIds = Array.from(new Set(reviews.map((r) => r.deliveryId).filter((id): id is number => id != null)));
+    const deliveryRows = deliveryIds.length
+      ? await db.select({ id: deliveries.id, driverId: deliveries.driverId, deliveryCompanyId: deliveries.deliveryCompanyId })
+          .from(deliveries).where(inArray(deliveries.id, deliveryIds))
+      : [];
+    const deliveryById = new Map(deliveryRows.map((d) => [d.id, d]));
+
+    // Safety check (belt-and-suspenders on top of the deliveryCompanyUserId filter already
+    // applied above, which is the real, write-time-enforced isolation boundary — see
+    // POST /api/delivery-company/reviews's own delivery.deliveryCompanyId === body check):
+    // only attach driver attribution when the delivery's own company snapshot still agrees.
+    const driverIdByReviewId = new Map<number, number>();
+    for (const r of reviews) {
+      if (r.deliveryId == null) continue;
+      const delivery = deliveryById.get(r.deliveryId);
+      if (delivery?.driverId != null && delivery.deliveryCompanyId === deliveryCompanyUserId) {
+        driverIdByReviewId.set(r.id, delivery.driverId);
+      }
+    }
+
+    const userIds = Array.from(new Set([
+      ...Array.from(driverIdByReviewId.values()),
+      ...reviews.map((r) => r.cafeId).filter((id): id is number => id != null),
+    ]));
+    const userRows = userIds.length
+      ? await db.select({ id: users.id, name: users.name, profileImageUrl: users.profileImageUrl }).from(users).where(inArray(users.id, userIds))
+      : [];
+    const userById = new Map(userRows.map((u) => [u.id, u]));
+
+    return reviews.map((r) => {
+      const driverId = driverIdByReviewId.get(r.id) ?? null;
+      const driver = driverId != null ? userById.get(driverId) : undefined;
+      const supplier = r.cafeId != null ? userById.get(r.cafeId) : undefined;
+      return {
+        id: r.id,
+        supplierId: r.cafeId ?? null,
+        supplierName: r.cafeName || "Fournisseur",
+        supplierImageUrl: supplier?.profileImageUrl ?? null,
+        driverId,
+        driverName: driver?.name ?? null,
+        driverImageUrl: driver?.profileImageUrl ?? null,
+        deliveryId: r.deliveryId ?? null,
+        rating: r.rating,
+        comment: r.comment ?? null,
+        createdAt: r.createdAt,
+      };
+    });
+  }
+
+  /**
+   * Delivery Company Avis — Coffee-Owner-authored reviews of this company's own drivers
+   * (task: "Fix Delivery Company Avis — Include Coffee Owner Reviews of Its Drivers",
+   * DELIVERY_COMPANY_DRIVER_REVIEWS_GAP_AUDIT.md §6). A deliberately different population
+   * from getDeliveryCompanyDriverReviews above (reviewType='DRIVER', reviewer=Cafe Owner —
+   * never merged with the DELIVERY_COMPANY/Supplier population).
+   *
+   * Scoped by this company's own `deliveries` rows first (WHERE deliveryCompanyId = :id),
+   * not by `users.deliveryCompanyId` (a driver's CURRENT membership) and not by scanning the
+   * platform-wide DRIVER review population — deliveries.deliveryCompanyId is frozen once a
+   * delivery leaves ASSIGNED (see reassignDriver), so this is the historically-correct
+   * ownership boundary regardless of a driver's membership today. Three queries total
+   * (deliveries, reviews, users), independent of review count — no N+1.
+   */
+  async getDriverReviewsForDeliveryCompany(deliveryCompanyUserId: number): Promise<CompanyDriverPerformanceReview[]> {
+    const companyDeliveries = await db.select({ id: deliveries.id, driverId: deliveries.driverId })
+      .from(deliveries).where(eq(deliveries.deliveryCompanyId, deliveryCompanyUserId));
+    if (companyDeliveries.length === 0) return [];
+
+    const driverIdByDeliveryId = new Map(companyDeliveries.map((d) => [d.id, d.driverId]));
+    const reviews = await db.select().from(supplierProductReviews)
+      .where(and(
+        eq(supplierProductReviews.reviewType, "DRIVER"),
+        inArray(supplierProductReviews.deliveryId as any, companyDeliveries.map((d) => d.id)),
+      ))
+      .orderBy(desc(supplierProductReviews.createdAt));
+    if (reviews.length === 0) return [];
+
+    // The delivery row (not the review row) is the trusted source for which driver performed
+    // it — re-derived here the same way getDeliveryCompanyDriverReviews re-derives it, even
+    // though review.driverId is already write-time validated to agree (never trust a value
+    // merely because it usually agrees).
+    const userIds = Array.from(new Set([
+      ...reviews.map((r) => r.deliveryId != null ? driverIdByDeliveryId.get(r.deliveryId) : null).filter((id): id is number => id != null),
+      ...reviews.map((r) => r.cafeId).filter((id): id is number => id != null),
+    ]));
+    const userRows = userIds.length
+      ? await db.select({ id: users.id, name: users.name, profileImageUrl: users.profileImageUrl }).from(users).where(inArray(users.id, userIds))
+      : [];
+    const userById = new Map(userRows.map((u) => [u.id, u]));
+
+    const result: CompanyDriverPerformanceReview[] = [];
+    for (const r of reviews) {
+      const driverId = r.deliveryId != null ? driverIdByDeliveryId.get(r.deliveryId) : undefined;
+      if (driverId == null) continue; // delivery row vanished or had no driver — cannot attribute, skip rather than fabricate
+      const driver = userById.get(driverId);
+      const reviewer = r.cafeId != null ? userById.get(r.cafeId) : undefined;
+      result.push({
+        id: r.id,
+        reviewerId: r.cafeId ?? null,
+        reviewerName: r.cafeName || "Café",
+        reviewerImageUrl: reviewer?.profileImageUrl ?? null,
+        driverId,
+        driverName: driver?.name ?? null,
+        driverImageUrl: driver?.profileImageUrl ?? null,
+        deliveryId: r.deliveryId ?? null,
+        rating: r.rating,
+        comment: r.comment ?? null,
+        createdAt: r.createdAt,
+      });
+    }
+    return result;
   }
 
   async getDeliveryCompanyReviewForDelivery(deliveryId: number, supplierId: number): Promise<SupplierProductReview | undefined> {

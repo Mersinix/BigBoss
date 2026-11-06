@@ -4,7 +4,7 @@ import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MapPin, Search, Navigation, ChevronLeft, CheckCircle, Loader2, X, Sun, Moon } from "lucide-react";
+import { MapPin, Search, Navigation, ChevronLeft, CheckCircle, Loader2, X, Sun, Moon, AlertCircle } from "lucide-react";
 import { useThemeStore } from "@/store/theme-store";
 import type { AddressDetails } from "@shared/schema";
 
@@ -150,6 +150,7 @@ export default function LocationPickerModal({
   const [search, setSearch] = useState(initialAddress ?? "");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [loadingGeo, setLoadingGeo] = useState(false);
+  const [geoError, setGeoError] = useState<string | null>(null);
   const [selectedAddress, setSelectedAddress] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number }>(DEFAULT_CENTER);
   const [placeId, setPlaceId] = useState("");
@@ -206,6 +207,7 @@ export default function LocationPickerModal({
     setDetails({ ...EMPTY_DETAILS, ...initialDetails });
     setSaving(false);
     setStreetError(null);
+    setGeoError(null);
     setRadiusKm(null);
     mapRef.current = null;
     markerRef.current = null;
@@ -236,12 +238,18 @@ export default function LocationPickerModal({
       marker.addListener("dragend", () => {
         const pos = marker.getPosition();
         if (!pos) return;
-        geocoderRef.current?.geocode({ location: { lat: pos.lat(), lng: pos.lng() } }, (results, status) => {
+        // Same principle as GPS detection: the dragged pin's coordinates are real and
+        // known immediately — they must not wait on reverse geocoding to be recorded.
+        const lat = pos.lat();
+        const lng = pos.lng();
+        setCoords({ lat, lng });
+        setPositionPicked(true);
+        setSelectedAddress("");
+        setPlaceId("");
+        geocoderRef.current?.geocode({ location: { lat, lng } }, (results, status) => {
           if (status === "OK" && results?.[0]) {
             setSelectedAddress(results[0].formatted_address);
-            setCoords({ lat: pos.lat(), lng: pos.lng() });
             setPlaceId(results[0].place_id ?? "");
-            setPositionPicked(true);
           }
         });
       });
@@ -301,25 +309,52 @@ export default function LocationPickerModal({
   }, [details.street]);
 
   const useMyPosition = useCallback(() => {
-    if (!navigator.geolocation) return;
+    setGeoError(null);
+    if (!navigator.geolocation) {
+      setGeoError("La géolocalisation n'est pas prise en charge par ce navigateur.");
+      return;
+    }
+    if (typeof window !== "undefined" && window.isSecureContext === false) {
+      setGeoError("La géolocalisation nécessite une connexion sécurisée (HTTPS). Utilisez la recherche ci-dessus.");
+      return;
+    }
     setLoadingGeo(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        // GPS success is independent of reverse geocoding: the browser already gave us
+        // real coordinates, so the map opens on them immediately. Any previously-resolved
+        // address/placeId is cleared since it belonged to a different position. Resolving
+        // a human-readable address below is a best-effort enhancement — its failure (e.g.
+        // the Geocoding API being unavailable) must never undo the position we already have.
         const { latitude: lat, longitude: lng } = pos.coords;
+        setLoadingGeo(false);
+        setCoords({ lat, lng });
+        setPositionPicked(true);
+        setSelectedAddress("");
+        setSearch("");
+        setPlaceId("");
+        setStep(2);
         geocoderRef.current?.geocode({ location: { lat, lng } }, (results, status) => {
-          setLoadingGeo(false);
           if (status === "OK" && results?.[0]) {
-            setCoords({ lat, lng });
             setSelectedAddress(results[0].formatted_address);
             setSearch(results[0].formatted_address);
             setPlaceId(results[0].place_id ?? "");
-            setPositionPicked(true);
             if (!details.street) setDetails((d) => ({ ...d, street: results[0].formatted_address }));
-            setStep(2);
           }
+          // Failure (REQUEST_DENIED, ZERO_RESULTS, geocoder not ready, etc.) is silent here —
+          // Step 2 shows a clear "address unavailable" fallback instead of blocking the map.
         });
       },
-      () => setLoadingGeo(false),
+      (err) => {
+        setLoadingGeo(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          setGeoError("Localisation refusée. Autorisez l'accès à la position dans les réglages de votre navigateur, puis réessayez.");
+        } else if (err.code === err.TIMEOUT) {
+          setGeoError("La détection de la position a expiré. Réessayez.");
+        } else {
+          setGeoError("Impossible de déterminer votre position actuelle. Réessayez ou utilisez la recherche ci-dessus.");
+        }
+      },
       { enableHighAccuracy: true, timeout: 8000 }
     );
   }, [details.street]);
@@ -385,6 +420,7 @@ export default function LocationPickerModal({
     setDetails({ ...EMPTY_DETAILS, ...initialDetails });
     setSaving(false);
     setStreetError(null);
+    setGeoError(null);
     setRadiusKm(null);
     mapRef.current = null;
     markerRef.current = null;
@@ -600,6 +636,13 @@ export default function LocationPickerModal({
                       </div>
                     </div>
 
+                    {geoError && (
+                      <div className="flex items-start gap-2 text-xs text-red-500" data-testid="text-geo-error">
+                        <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                        <span>{geoError}</span>
+                      </div>
+                    )}
+
                     {required && (
                       <p className="text-xs text-amber-500 text-center">
                         ⚠️ La localisation est requise pour les fournisseurs
@@ -619,7 +662,9 @@ export default function LocationPickerModal({
                     <MapPin className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
                     <div className="flex-1 min-w-0">
                       <p className={`text-xs mb-0.5 ${textMuted}`}>Adresse sélectionnée</p>
-                      <p className={`text-sm font-semibold leading-snug ${textPrimary}`}>{selectedAddress}</p>
+                      <p className={`text-sm font-semibold leading-snug ${textPrimary}`}>
+                        {selectedAddress || (positionPicked ? "Adresse indisponible pour le moment — position GPS enregistrée" : "")}
+                      </p>
                     </div>
                   </div>
                   <p className={`text-xs text-center ${textMuted}`}>

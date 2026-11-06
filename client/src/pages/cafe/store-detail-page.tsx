@@ -26,7 +26,7 @@ import { useFavorites } from "@/hooks/use-favorites";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { calculateDistance, formatDistance } from "@/lib/distance";
 import { useCoverZoomStyle, getAdjustmentFor } from "@/lib/image-adjustment";
-import { useSearchLocationStore } from "@/store/search-location-store";
+import { useEffectiveLocation } from "@/hooks/use-effective-location";
 import { useQuickView } from "@/hooks/use-quick-view";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import { useStoreNav } from "@/hooks/use-store-nav";
@@ -534,10 +534,10 @@ export default function StoreDetailPage() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
   const hasCommercialAccess = useCommercialAccess();
-  const searchLocation = useSearchLocationStore((s) => s.searchLocation);
-  const searchLat = searchLocation?.lat ? parseFloat(searchLocation.lat) : null;
-  const searchLng = searchLocation?.lng ? parseFloat(searchLocation.lng) : null;
-  const hasSearchLocation = searchLat !== null && searchLng !== null && !Number.isNaN(searchLat) && !Number.isNaN(searchLng);
+  const effectiveLocation = useEffectiveLocation();
+  const searchLat = effectiveLocation?.lat ?? null;
+  const searchLng = effectiveLocation?.lng ?? null;
+  const hasSearchLocation = effectiveLocation !== null;
 
   const storeId = params?.storeId;
   const faved = useStoreFavorites((s) => (storeId ? !!s.stores[Number(storeId)] : false));

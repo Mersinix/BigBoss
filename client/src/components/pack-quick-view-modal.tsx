@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { apiRequest } from "@/lib/queryClient";
 import { useThemeStore } from "@/store/theme-store";
-import { useSearchLocationStore } from "@/store/search-location-store";
+import { useEffectiveLocation } from "@/hooks/use-effective-location";
 import { calculateDistance, formatDistance } from "@/lib/distance";
 import { PackImageGallery } from "@/components/pack-image-gallery";
 import { ModalGrabber } from "@/components/shared/modal-grabber";
@@ -601,16 +601,16 @@ export function PackQuickViewModal({ previewPack, previewOpen, onPreviewClose }:
   const maxQty = pack ? Math.min(pack.quantityAvailable, pack.maxBuildable) : 0;
 
   // Distance — identical computation/guard to PackCardTile (browse-products.tsx):
-  // null (omitted, never fabricated) unless both the user's search location and
+  // null (omitted, never fabricated) unless both the effective Shop location and
   // the pack's supplier coordinates are present and valid.
-  const searchLocation = useSearchLocationStore((s) => s.searchLocation);
+  const effectiveLocation = useEffectiveLocation();
   const distance = useMemo(() => {
-    if (!pack || !searchLocation || !(pack as any).supplierLat || !(pack as any).supplierLng) return null;
+    if (!pack || !effectiveLocation || !(pack as any).supplierLat || !(pack as any).supplierLng) return null;
     const lat = parseFloat((pack as any).supplierLat);
     const lng = parseFloat((pack as any).supplierLng);
     if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
-    return calculateDistance(parseFloat(searchLocation.lat), parseFloat(searchLocation.lng), lat, lng);
-  }, [pack, searchLocation]);
+    return calculateDistance(effectiveLocation.lat, effectiveLocation.lng, lat, lng);
+  }, [pack, effectiveLocation]);
 
   // Expiry/stock styling — mirrors PackCardTile's exact treatment (amber,
   // no separate icon for expiry, "Exp: <day> <month short> <year>").

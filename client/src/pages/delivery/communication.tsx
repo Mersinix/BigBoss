@@ -8,8 +8,9 @@ import DeliveryCompanyReviewsPage from "@/pages/delivery/reviews-page";
 
 // Communication tab — Messages / Notifications / Avis, each the account's own
 // existing page component moved under one switcher. Avis is real Supplier→Delivery
-// Company review data (reviewType='DELIVERY_COMPANY'), not a placeholder — see
-// reviews-page.tsx.
+// Company review data (reviewType='DELIVERY_COMPANY'), enriched with per-driver
+// attribution and a filterable dashboard (task: "Delivery Company — Driver Reviews
+// & Performance Dashboard") — see reviews-page.tsx.
 export default function DeliveryCommunication() {
   const { data: unreadMsg } = useQuery<{ count: number }>({
     queryKey: ["/api/messages/unread-count"],

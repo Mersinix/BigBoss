@@ -62,6 +62,54 @@ export function useDeliveryCompanyReviews(deliveryCompanyUserId: number | null) 
   });
 }
 
+// Driver Reviews & Performance Dashboard (task: "Delivery Company — Driver Reviews &
+// Performance Dashboard") — GET /api/delivery-company/driver-reviews is authenticated
+// (requireApprovedDeliveryCompany resolves the company purely from the session), so unlike
+// useDeliveryCompanyReviews above this takes no id parameter at all.
+export interface DeliveryCompanyDriverReview {
+  id: number;
+  supplierId: number | null;
+  supplierName: string;
+  supplierImageUrl: string | null;
+  driverId: number | null;
+  driverName: string | null;
+  driverImageUrl: string | null;
+  deliveryId: number | null;
+  rating: number;
+  comment: string | null;
+  createdAt: string | null;
+}
+
+export function useDeliveryCompanyDriverReviews() {
+  return useQuery<DeliveryCompanyDriverReview[]>({
+    queryKey: ["/api/delivery-company/driver-reviews"],
+    queryFn: () => getJson(`/api/delivery-company/driver-reviews`),
+  });
+}
+
+// Fix Delivery Company Avis — Include Coffee Owner Reviews of Its Drivers — a separate
+// population from DeliveryCompanyDriverReview above (reviewer = Cafe Owner, not Supplier).
+export interface CompanyDriverPerformanceReview {
+  id: number;
+  reviewerId: number | null;
+  reviewerName: string;
+  reviewerImageUrl: string | null;
+  driverId: number;
+  driverName: string | null;
+  driverImageUrl: string | null;
+  deliveryId: number | null;
+  rating: number;
+  comment: string | null;
+  createdAt: string | null;
+}
+
+export function useDriverPerformanceReviews() {
+  return useQuery<CompanyDriverPerformanceReview[]>({
+    queryKey: ["/api/delivery-company/driver-performance-reviews"],
+    queryFn: () => getJson(`/api/delivery-company/driver-performance-reviews`),
+  });
+}
+
 export function useCreateDeliveryCompanyReview() {
   const qc = useQueryClient();
   return useMutation({

@@ -42,6 +42,7 @@ import {
   type Delivery, type DeliveryStatus, type DeliveryMode, type DeliveryWithDetails, type GeoLocation,
   type Vehicle, type InsertVehicle, type DeliveryVehicleType,
   type DeliveryPricingSettings, type DeliveryOpportunity, type DeliveryOpportunityStatus,
+  type DeliveryDriverOffer, type DeliveryDriverOfferStatus,
   type LandingConfig, type Prospect, type InsertProspect, type ProspectStats,
   type ConversationSummary, type ConversationMessageRow, type EligibleContact,
   type InsertUser, type User,
@@ -508,6 +509,53 @@ export class DatabaseStorage implements IStorage {
     drivers: Array<{ id: number; name: string; phone: string | null; vehicleType: DeliveryVehicleType | null; compatible: boolean; reason?: string; expectedPayoutCents: number }>;
   }> {
     return this.deliveryDomain.getAssignableDriversForDelivery(deliveryId, actingUser);
+  }
+
+  // ── Smart Driver Dispatch System (task: "BigBossCoffee — Smart Driver Dispatch System")
+  // — thin delegates, all logic lives in delivery.storage.ts. ──────────────────────────────
+  async isDriverBusy(driverId: number): Promise<boolean> {
+    return this.deliveryDomain.isDriverBusy(driverId);
+  }
+  async dispatchNextOffer(deliveryId: number): Promise<{ offer: DeliveryDriverOffer | null; exhausted: boolean }> {
+    return this.deliveryDomain.dispatchNextOffer(deliveryId);
+  }
+  async getDriverPendingOffers(driverId: number): Promise<Array<DeliveryDriverOffer & { delivery: DeliveryWithDetails | null }>> {
+    return this.deliveryDomain.getDriverPendingOffers(driverId);
+  }
+  // Task: "Update Espace Chauffeur → Business → Planification" — Anciennes' "Annulée" cards.
+  async getDriverRefusedOffers(driverId: number): Promise<Array<DeliveryDriverOffer & { delivery: DeliveryWithDetails | null }>> {
+    return this.deliveryDomain.getDriverRefusedOffers(driverId);
+  }
+  async acceptDriverOffer(offerId: number, driver: { id: number }): Promise<Delivery> {
+    return this.deliveryDomain.acceptDriverOffer(offerId, driver);
+  }
+  async refuseDriverOffer(offerId: number, driver: { id: number }): Promise<DeliveryDriverOffer> {
+    return this.deliveryDomain.refuseDriverOffer(offerId, driver);
+  }
+  async cancelPendingOfferForDelivery(deliveryId: number): Promise<void> {
+    return this.deliveryDomain.cancelPendingOfferForDelivery(deliveryId);
+  }
+  async expireOverduePendingOffers(): Promise<DeliveryDriverOffer[]> {
+    return this.deliveryDomain.expireOverduePendingOffers();
+  }
+  async getDispatchStatusForDelivery(deliveryId: number): Promise<{
+    state: 'NONE' | 'SEARCHING' | 'OFFER_PENDING' | 'EXHAUSTED' | 'ASSIGNED';
+    pendingOffer: (DeliveryDriverOffer & { driverName: string }) | null;
+    attemptCount: number;
+  }> {
+    return this.deliveryDomain.getDispatchStatusForDelivery(deliveryId);
+  }
+  async getDriverDispatchStats(driverId: number): Promise<{
+    totalOffers: number; accepted: number; refused: number; expired: number; cancelled: number;
+    acceptanceRate: number | null; completedDeliveries: number; avgRating: number | null; reviewCount: number;
+  }> {
+    return this.deliveryDomain.getDriverDispatchStats(driverId);
+  }
+  async getCompanyDispatchStats(companyId: number): Promise<{
+    totalOffers: number; accepted: number; refused: number; expired: number; cancelled: number;
+    acceptanceRate: number | null; completedDeliveries: number;
+  }> {
+    return this.deliveryDomain.getCompanyDispatchStats(companyId);
   }
 
   async createDriverForOwner(ownerType: 'DELIVERY_COMPANY' | 'SUPPLIER', ownerId: number, data: { name: string; email: string; password: string; phone?: string | null; isWhatsapp?: boolean; profileImageUrl?: string | null }): Promise<User> {
@@ -1540,6 +1588,12 @@ export class DatabaseStorage implements IStorage {
   // ── Driver Reviews (reuses supplierProductReviews, reviewType='DRIVER') ──────────
   async getDriverReviews(driverId: number): Promise<SupplierProductReview[]> {
     return this.reviewsDomain.getDriverReviews(driverId);
+  }
+
+  // Smart Driver Dispatch System — batched driver-review aggregate, used by the ranking
+  // algorithm via DeliveryStorage's facade reference. See reviews.storage.ts.
+  async getDriverReviewStatsBatch(driverIds: number[]): Promise<Map<number, { rating: number; reviewCount: number }>> {
+    return this.reviewsDomain.computeDriverReviewStats(driverIds);
   }
 
   async getDriverReviewForDelivery(deliveryId: number, cafeId: number): Promise<SupplierProductReview | undefined> {

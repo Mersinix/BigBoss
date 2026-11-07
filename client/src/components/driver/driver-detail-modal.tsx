@@ -3,13 +3,14 @@ import { useThemeStore } from "@/store/theme-store";
 import { useDeliveries } from "@/hooks/use-deliveries";
 import { useDriverReviews, VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
 import { useDriverDetails } from "@/hooks/use-driver-profile";
+import { useDriverDispatchStats } from "@/hooks/use-dispatch";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarUrl } from "@/lib/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Star, MapPin, Clock, Truck, Mail, Phone, Award, Package, Building2, Store, X, Zap, Image as ImageIcon } from "lucide-react";
+import { Star, MapPin, Clock, Truck, Mail, Phone, Award, Package, Building2, Store, X, Zap, Image as ImageIcon, Target } from "lucide-react";
 import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
 import { ReviewsModal } from "@/components/account/reviews-modal";
@@ -152,6 +153,11 @@ export function DriverDetailModal({
   const { data, isLoading } = useDriverDetails(driver?.id ?? null);
   const { data: deliveries = [] } = useDeliveries();
   const { data: reviews = [] } = useDriverReviews(driver?.id ?? null);
+  // Smart Driver Dispatch System (task: "BigBossCoffee — Smart Driver Dispatch System",
+  // Phase 7) — single shared source (getDriverDispatchStats), reusing the same
+  // reviewCount/avgRating it already computes rather than a second computation from
+  // `reviews` above (that one stays purely for ReviewsModal's own list display).
+  const { data: dispatchStats } = useDriverDispatchStats(driver?.id ?? null);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const [albumOpen, setAlbumOpen] = useState(false);
   const [albumIndex, setAlbumIndex] = useState(0);
@@ -309,6 +315,27 @@ export function DriverDetailModal({
                   <span className={t.textMuted}>{total} au total</span>
                 </div>
               </div>
+
+              {/* Smart Driver Dispatch System (task: "BigBossCoffee — Smart Driver Dispatch
+                  System") — worded distinctly from the "Disponible"/"Indisponible" pill
+                  above (that one is isOnVacation; this is the separate acceptingNewOffers
+                  dispatch preference) so the two concepts are never confused in this modal. */}
+              {dispatchStats && (
+                <div className={`${t.sectionBg} rounded-xl p-3`}>
+                  <h3 className={`text-xs font-semibold mb-2 flex items-center gap-1 ${t.textMuted}`}><Target className="w-3.5 h-3.5 text-primary" /> Répartition automatique</h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                    <div><p className={`text-[11px] ${t.textSubtle}`}>Offres</p><p className={`font-semibold ${t.textPrimary}`}>{dispatchStats.totalOffers}</p></div>
+                    <div><p className={`text-[11px] ${t.textSubtle}`}>Acceptées</p><p className="font-semibold text-emerald-500">{dispatchStats.accepted}</p></div>
+                    <div><p className={`text-[11px] ${t.textSubtle}`}>Refusées</p><p className="font-semibold text-red-500">{dispatchStats.refused}</p></div>
+                    <div><p className={`text-[11px] ${t.textSubtle}`}>Expirées</p><p className="font-semibold text-amber-500">{dispatchStats.expired}</p></div>
+                    <div><p className={`text-[11px] ${t.textSubtle}`}>Taux d'acceptation</p><p className={`font-semibold ${t.textPrimary}`}>{dispatchStats.acceptanceRate != null ? `${dispatchStats.acceptanceRate}%` : "—"}</p></div>
+                    <div><p className={`text-[11px] ${t.textSubtle}`}>Note moyenne</p><p className={`font-semibold ${t.textPrimary}`}>{dispatchStats.avgRating != null ? `${dispatchStats.avgRating.toFixed(1)} (${dispatchStats.reviewCount})` : "—"}</p></div>
+                  </div>
+                  <p className={`text-[11px] mt-2 ${t.textSubtle}`}>
+                    {profile.acceptingNewOffers ? "Accepte les offres automatiques." : "Offres automatiques en pause (préférence du chauffeur)."}
+                  </p>
+                </div>
+              )}
 
               {/* Avis — moved out of the inline body into ReviewsModal (Star icon above). */}
 

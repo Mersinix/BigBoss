@@ -36,6 +36,14 @@ type Props = {
   driverLocation?: { lat: string; lng: string } | null;
   /** Action buttons slot (accept / assign / dispatch / status update) — owned by the caller. */
   actions?: React.ReactNode;
+  // Smart Driver Dispatch System — offer acceptance (task: "Update Espace Chauffeur →
+  // Business → Planification: Offer Acceptance, Refusal, and Delivery Details", §3/§7):
+  // a driver who has not yet accepted an offer must never see the Products card — the
+  // underlying data is already redacted server-side (see
+  // delivery.storage.ts's redactItemsForUnacceptedOffer), this just skips the section
+  // entirely rather than rendering it against an empty/misleading `items` array. Every
+  // existing caller omits this (defaults false), so nothing changes for them.
+  hideProducts?: boolean;
 };
 
 /**
@@ -45,7 +53,7 @@ type Props = {
  * the parent page supplies), so one component serves all four rather than four near-identical
  * copies. See SHOP_DELIVERY_V2 implementation notes.
  */
-export default function DeliveryDetails({ delivery: d, viewerRole, showNavigation, driverLocation, actions }: Props) {
+export default function DeliveryDetails({ delivery: d, viewerRole, showNavigation, driverLocation, actions, hideProducts }: Props) {
   const fmt = useFormatCurrency();
   const isDark = useThemeStore((s) => s.isDark);
   const statusMeta = DELIVERY_STATUS_META[d.status] ?? { label: d.status, cls: "bg-gray-100 text-gray-700" };
@@ -128,7 +136,9 @@ export default function DeliveryDetails({ delivery: d, viewerRole, showNavigatio
         </CardContent>
       </Card>
 
-      {/* Products */}
+      {/* Products — hidden entirely before offer acceptance (task §3/§7), never rendered
+          against a redacted/empty `items` array. */}
+      {!hideProducts && (
       <Card>
         <CardContent className="p-4">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
@@ -216,6 +226,7 @@ export default function DeliveryDetails({ delivery: d, viewerRole, showNavigatio
           </div>
         </CardContent>
       </Card>
+      )}
 
       {/* Transport requirements (Delivery System V2) — supplier-declared, informational +
           vehicle-compatibility gating only (see storage.isVehicleCompatible). Shown to every

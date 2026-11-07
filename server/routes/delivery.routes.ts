@@ -1,4 +1,4 @@
-import { requireAuth, requireAdmin, requireApprovedSupplier, requireApprovedDeliveryCompany } from "./shared/middleware";
+import { requireAuth, requireAdmin, requireApprovedSupplier, requireApprovedDeliveryCompany, requireDriver } from "./shared/middleware";
 import { storage } from "../storage";
 import { z } from "zod";
 import { db } from "../db";
@@ -7,6 +7,52 @@ import { eq } from "drizzle-orm";
 import { broadcastToUsers, broadcast } from "../ws";
 import { notify, notifyMany } from "../notify";
 import type { Express } from "express";
+
+// Smart Driver Dispatch System (task: "BigBossCoffee — Smart Driver Dispatch System") —
+// shared by the accept-delivery route, the offer-refuse route, and the expiration worker
+// below, so "try the next eligible driver" is triggered identically from every one of the
+// three places §5/§7 of the audit says it must be: after a company accepts a delivery,
+// after a refusal, and after an expiry. Never throws — a dispatch failure must not fail the
+// caller's own primary action (accepting/refusing/expiring already succeeded by the time
+// this runs).
+async function triggerAutomaticDispatch(deliveryId: number): Promise<void> {
+  try {
+    const { offer, exhausted } = await storage.dispatchNextOffer(deliveryId);
+    if (offer) {
+      const delivery = await storage.getDelivery(offer.deliveryId);
+      broadcastToUsers([offer.driverId], 'dispatch_offer_created', { offerId: offer.id, deliveryId, expiresAt: offer.expiresAt });
+      if (delivery?.deliveryCompanyId) {
+        broadcastToUsers([delivery.deliveryCompanyId], 'dispatch_status_changed', { deliveryId, state: 'OFFER_PENDING' });
+      }
+      await notify({
+        userId: offer.driverId,
+        service: "SHOP", type: "dispatch_offer_created", priority: "WARNING",
+        title: "Nouvelle offre de livraison",
+        message: delivery ? `Une livraison pour la commande #${delivery.order.id} (${delivery.supplier.name}) vous est proposée.` : "Une nouvelle livraison vous est proposée.",
+        entityType: "delivery", entityId: deliveryId,
+        prefKey: "shop_delivery",
+        dedupeKey: `shop:dispatch_offer_created:${offer.id}`,
+      });
+    } else if (exhausted) {
+      const delivery = await storage.getDelivery(deliveryId);
+      if (delivery?.deliveryCompanyId) {
+        broadcastToUsers([delivery.deliveryCompanyId], 'dispatch_exhausted', { deliveryId });
+        await notify({
+          userId: delivery.deliveryCompanyId,
+          service: "SHOP", type: "dispatch_exhausted", priority: "WARNING",
+          title: "Aucun chauffeur disponible",
+          message: `Aucun chauffeur éligible n'a accepté la livraison de la commande #${delivery.order.id}. Une assignation manuelle est nécessaire.`,
+          entityType: "delivery", entityId: deliveryId,
+          prefKey: "shop_delivery",
+          dedupeKey: `shop:dispatch_exhausted:${deliveryId}`,
+        });
+      }
+    }
+  } catch {
+    // Best-effort — the delivery stays ACCEPTED either way and remains manually assignable;
+    // nothing here is a safety invariant (see dispatchNextOffer's own doc comment).
+  }
+}
 
 export function registerDeliveryRoutes(app: Express): void {
     // ── Deliveries ─────────────────────────────────────────────────────────────
@@ -141,6 +187,10 @@ export function registerDeliveryRoutes(app: Express): void {
           });
         }
         res.json(storage.redactDeliveryCodes(updated, 'DELIVERY_COMPANY'));
+        // Smart Driver Dispatch System — fired after the response is already sent: accepting
+        // the delivery is the request's own primary action and must succeed/fail on its own
+        // merits; automatic dispatch is a best-effort follow-on (see triggerAutomaticDispatch).
+        void triggerAutomaticDispatch(deliveryId);
       } catch (err: any) {
         res.status(409).json({ message: err.message ?? 'Unable to accept delivery' });
       }
@@ -178,6 +228,12 @@ export function registerDeliveryRoutes(app: Express): void {
         const deliveryId = parseInt(req.params.id);
         const { driverId } = z.object({ driverId: z.number() }).parse(req.body);
         const updated = await storage.assignDriver(deliveryId, { id: user.id, role: user.role }, driverId);
+        // Smart Driver Dispatch System — a manual assignment is an explicit company decision
+        // that must win over any automatic offer still outstanding for this delivery (audit
+        // §8/§10: "company manually assigns while automatic dispatch has a pending offer").
+        // assignDriver's own CAS already guarantees the delivery itself can't be double-
+        // assigned; this only prevents a now-stale offer from later being accepted too.
+        await storage.cancelPendingOfferForDelivery(deliveryId);
         const delivery = await storage.getDelivery(deliveryId);
         broadcastToUsers([driverId, user.id], 'delivery_assigned', { deliveryId, status: updated.status, driverId });
         broadcast('delivery_status_changed', { deliveryId, status: updated.status });
@@ -208,6 +264,140 @@ export function registerDeliveryRoutes(app: Express): void {
       } catch (err: any) {
         if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
         res.status(409).json({ message: err.message ?? 'Unable to assign driver' });
+      }
+    });
+
+    // ── Smart Driver Dispatch System (task: "BigBossCoffee — Smart Driver Dispatch
+    // System") — offer lifecycle, dispatch status, and dispatch statistics. ────────────────
+
+    // Driver's own incoming offers ("Nouvelles demandes") — session-only identity, exactly
+    // like every other /api/driver/* route; never a driverId the client supplies.
+    app.get('/api/driver/offers/pending', requireDriver, async (req: any, res) => {
+      try {
+        res.json(await storage.getDriverPendingOffers(req.driver.id));
+      } catch (err: any) {
+        res.status(500).json({ message: err.message ?? 'Unable to load pending offers' });
+      }
+    });
+
+    // Task: "Update Espace Chauffeur → Business → Planification: Offer Acceptance,
+    // Refusal, and Delivery Details" §4 — the driver's own refused-offer history, rendered
+    // as "Annulée" in Anciennes. Session-only identity, same as every other /api/driver/*
+    // route.
+    app.get('/api/driver/offers/refused', requireDriver, async (req: any, res) => {
+      try {
+        res.json(await storage.getDriverRefusedOffers(req.driver.id));
+      } catch (err: any) {
+        res.status(500).json({ message: err.message ?? 'Unable to load refused offers' });
+      }
+    });
+
+    app.patch('/api/driver/offers/:id/accept', requireDriver, async (req: any, res) => {
+      try {
+        const offerId = parseInt(req.params.id);
+        const updated = await storage.acceptDriverOffer(offerId, { id: req.driver.id });
+        const delivery = await storage.getDelivery(updated.id);
+        broadcast('delivery_status_changed', { deliveryId: updated.id, status: updated.status });
+        broadcastToUsers([req.driver.id], 'dispatch_offer_accepted', { offerId, deliveryId: updated.id });
+        if (delivery) {
+          broadcastToUsers([delivery.cafeId, delivery.supplierId, delivery.deliveryCompanyId].filter((x): x is number => x != null), 'delivery_status_changed', {
+            deliveryId: updated.id, status: updated.status, orderId: delivery.orderId, subOrderId: delivery.subOrderId,
+          });
+          if (delivery.deliveryCompanyId) {
+            await notify({
+              userId: delivery.deliveryCompanyId,
+              service: "SHOP", type: "dispatch_offer_accepted", priority: "SUCCESS",
+              title: "Offre acceptée",
+              message: `${req.driver.name} a accepté la livraison de la commande #${delivery.order.id}.`,
+              entityType: "delivery", entityId: updated.id,
+              prefKey: "shop_delivery",
+              dedupeKey: `shop:dispatch_offer_accepted:${offerId}`,
+            });
+          }
+        }
+        res.json(storage.redactDeliveryCodes(updated, 'DRIVER'));
+      } catch (err: any) {
+        res.status(409).json({ message: err.message ?? 'Unable to accept offer' });
+      }
+    });
+
+    app.patch('/api/driver/offers/:id/refuse', requireDriver, async (req: any, res) => {
+      try {
+        const offerId = parseInt(req.params.id);
+        const offer = await storage.refuseDriverOffer(offerId, { id: req.driver.id });
+        const delivery = await storage.getDelivery(offer.deliveryId);
+        if (delivery?.deliveryCompanyId) {
+          broadcastToUsers([delivery.deliveryCompanyId], 'dispatch_offer_refused', { offerId, deliveryId: offer.deliveryId });
+        }
+        res.json(offer);
+        // Continue automatic dispatch immediately (audit §7 "Retry behavior") — after the
+        // response is already sent, for the same reason as the /accept route's own call.
+        void triggerAutomaticDispatch(offer.deliveryId);
+      } catch (err: any) {
+        res.status(409).json({ message: err.message ?? 'Unable to refuse offer' });
+      }
+    });
+
+    // Manual retry after automatic dispatch reported EXHAUSTED (audit §9's "Automatic
+    // dispatch action/retry where appropriate") — e.g. the company just enabled another
+    // driver's availability. Ownership re-verified the same way every other Delivery
+    // Company delivery route already does; dispatchNextOffer itself re-checks the
+    // delivery's own status/mode, so this is a safe no-op if nothing has actually changed.
+    app.post('/api/deliveries/:id/dispatch/retry', requireApprovedDeliveryCompany, async (req: any, res) => {
+      try {
+        const deliveryId = parseInt(req.params.id);
+        const delivery = await storage.getDelivery(deliveryId);
+        if (!delivery || delivery.deliveryCompanyId !== req.deliveryCompany.id) {
+          return res.status(403).json({ message: 'Forbidden' });
+        }
+        await triggerAutomaticDispatch(deliveryId);
+        res.json(await storage.getDispatchStatusForDelivery(deliveryId));
+      } catch (err: any) {
+        res.status(409).json({ message: err.message ?? 'Unable to retry dispatch' });
+      }
+    });
+
+    // Mes livraisons' dispatch-status pill — any of the three roles that can legitimately see
+    // this delivery at all (reuses canUserAccessDelivery's exact existing boundary).
+    app.get('/api/deliveries/:id/dispatch-status', requireAuth, async (req: any, res) => {
+      try {
+        const user = await storage.getUser(req.session.userId);
+        if (!user) return res.status(401).json({ message: 'Unauthorized' });
+        const deliveryId = parseInt(req.params.id);
+        const canAccess = await storage.canUserAccessDelivery(user.id, user.role, deliveryId);
+        if (!canAccess) return res.status(403).json({ message: 'Forbidden' });
+        res.json(await storage.getDispatchStatusForDelivery(deliveryId));
+      } catch (err: any) {
+        res.status(500).json({ message: err.message ?? 'Unable to load dispatch status' });
+      }
+    });
+
+    app.get('/api/delivery-company/dispatch-stats', requireApprovedDeliveryCompany, async (req: any, res) => {
+      try {
+        res.json(await storage.getCompanyDispatchStats(req.deliveryCompany.id));
+      } catch (err: any) {
+        res.status(500).json({ message: err.message ?? 'Unable to load dispatch statistics' });
+      }
+    });
+
+    // Same permission boundary as GET /api/drivers/:driverId/details (self / admin / own
+    // operator) — never a second, looser check for the same underlying driver's data.
+    app.get('/api/drivers/:driverId/dispatch-stats', requireAuth, async (req: any, res) => {
+      try {
+        const viewer = await storage.getUser(req.session.userId);
+        if (!viewer) return res.status(401).json({ message: 'Unauthorized' });
+        const driverId = parseInt(req.params.driverId);
+        const target = await storage.getUser(driverId);
+        if (!target || target.role !== 'DRIVER') return res.status(404).json({ message: 'Driver not found' });
+        const isSelf = viewer.id === driverId;
+        const isAdmin = ['ADMIN', 'SUPER_ADMIN'].includes(viewer.role);
+        const isOwnOperator =
+          (viewer.role === 'SUPPLIER' && target.supplierId === viewer.id) ||
+          (viewer.role === 'DELIVERY_COMPANY' && target.deliveryCompanyId === viewer.id);
+        if (!isSelf && !isAdmin && !isOwnOperator) return res.status(403).json({ message: 'Forbidden' });
+        res.json(await storage.getDriverDispatchStats(driverId));
+      } catch (err: any) {
+        res.status(500).json({ message: err.message ?? 'Unable to load driver dispatch statistics' });
       }
     });
 
@@ -293,6 +483,9 @@ export function registerDeliveryRoutes(app: Express): void {
           code: z.string().trim().max(32).optional(),
         }).parse(req.body);
         const updated = await storage.updateDeliveryStatus(deliveryId, { id: user.id, role: user.role }, status, code);
+        // Smart Driver Dispatch System — a cancelled delivery can never be accepted via a
+        // still-PENDING offer afterward (audit §8/§10: "cancellation during dispatch").
+        if (status === 'CANCELLED') await storage.cancelPendingOfferForDelivery(deliveryId);
         const delivery = await storage.getDelivery(deliveryId);
         if (delivery) {
           await storage.refreshOrderMessagingState(delivery.orderId);
@@ -545,6 +738,9 @@ export function registerDeliveryRoutes(app: Express): void {
           experienceYears: z.number().int().min(0).optional(),
           certifications: z.array(z.string()).optional(),
           isOnVacation: z.boolean().optional(),
+          // Smart Driver Dispatch System — dispatch preference only, never a replacement
+          // for isOnVacation above (see driverProfiles' own schema comment).
+          acceptingNewOffers: z.boolean().optional(),
           portfolioImages: z.array(z.string()).max(4, "4 photos maximum").optional(),
           weeklyHours: z.object({
             monday: z.object({ open: z.string(), close: z.string(), closed: z.boolean() }),
@@ -558,6 +754,9 @@ export function registerDeliveryRoutes(app: Express): void {
         }).parse(req.body);
         const profile = await storage.upsertDriverProfile(user.id, body);
         broadcast('driver_profile_updated', { userId: user.id });
+        if (body.acceptingNewOffers !== undefined) {
+          broadcastToUsers([user.id], 'driver_availability_changed', { driverId: user.id, acceptingNewOffers: profile.acceptingNewOffers });
+        }
         res.json(profile);
       } catch (err: any) {
         if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
@@ -1392,4 +1591,25 @@ export function registerDeliveryRoutes(app: Express): void {
         res.status(409).json({ message: err.message ?? 'Unable to accept opportunity' });
       }
     });
+
+    // ── Smart Driver Dispatch System — expiration worker (SMART_DRIVER_DISPATCH_AUDIT.md
+    // §5/§10: "no existing scheduler... implement a lightweight server-side worker within
+    // the existing application process"). A single setInterval sweep is safe across
+    // multiple app instances — expireOverduePendingOffers' own conditional UPDATE is the
+    // real safety net (see its doc comment), not this timer — and correctly catches up
+    // after a restart: the sweep reads the database's own clock, not an in-memory timer, so
+    // the very first tick after a cold start re-evaluates every already-overdue row exactly
+    // as if the process had never stopped.
+    const DISPATCH_OFFER_WORKER_INTERVAL_MS = 15_000;
+    setInterval(async () => {
+      try {
+        const expired = await storage.expireOverduePendingOffers();
+        for (const offer of expired) {
+          broadcastToUsers([offer.driverId], 'dispatch_offer_expired', { offerId: offer.id, deliveryId: offer.deliveryId });
+          void triggerAutomaticDispatch(offer.deliveryId);
+        }
+      } catch {
+        // A transient DB hiccup must not crash the process — the next tick retries.
+      }
+    }, DISPATCH_OFFER_WORKER_INTERVAL_MS);
 }

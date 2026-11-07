@@ -882,10 +882,14 @@ export class ReviewsStorage {
     return review;
   }
 
-  // Pre-existing dead code — zero callers anywhere in the repository (confirmed in Batch 13's
-  // own header and re-confirmed this batch). Carried over unchanged, not deleted, per the
-  // project's standing rule against removing code that merely appears unused.
-  private async computeDriverReviewStats(driverIds: number[]): Promise<Map<number, { rating: number; reviewCount: number }>> {
+  // Previously dead code (zero callers, confirmed in Batch 13's own header and re-confirmed in
+  // a later batch) — now used by the Smart Driver Dispatch System's ranking algorithm (task:
+  // "BigBossCoffee — Smart Driver Dispatch System") via DeliveryStorage's facade reference, to
+  // batch-fetch every candidate driver's review stats in one query instead of N+1 calls to
+  // getDriverReviews. `rating` stays ×10 (e.g. 47 = 4.7), the same scale deliveryCompanyProfiles
+  // already uses — callers divide by 10, this method is not renamed/rescaled to avoid touching
+  // its signature for existing (currently none) binary compatibility.
+  async computeDriverReviewStats(driverIds: number[]): Promise<Map<number, { rating: number; reviewCount: number }>> {
     if (!driverIds.length) return new Map();
     const rows = await db.select({ driverId: supplierProductReviews.driverId, rating: supplierProductReviews.rating })
       .from(supplierProductReviews)

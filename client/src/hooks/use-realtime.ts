@@ -27,6 +27,14 @@ const PROMOTION_EVENTS = ["promotion_updated"];
 const DISCOUNT_CODE_EVENTS = ["discount_code_updated"];
 const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_changed", "suborder_items_cancelled", "order_deleted"];
 const DELIVERY_EVENTS = ["delivery_created", "delivery_accepted", "delivery_assigned", "delivery_status_changed"];
+// Smart Driver Dispatch System (task: "BigBossCoffee — Smart Driver Dispatch System",
+// Phase 8) — the offer lifecycle's own events, separate from DELIVERY_EVENTS above since
+// they target a driver's offer inbox / a delivery's dispatch-status pill, not the delivery
+// list itself (though a few of them also touch that list — see the handler below).
+const SMART_DISPATCH_EVENTS = [
+  "dispatch_offer_created", "dispatch_offer_accepted", "dispatch_offer_refused",
+  "dispatch_offer_expired", "dispatch_exhausted", "dispatch_status_changed", "driver_availability_changed",
+];
 // A Supplier's saved transport requirements (vehicle/weight/volume/packages/special handling —
 // see components/supplier/supplier-order-details-modal.tsx) are embedded in BOTH OrderWithDetails
 // (GET /api/orders — Supplier/Coffee Owner/Admin order views) and DeliveryWithDetails
@@ -384,6 +392,23 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/deliveries"] });
             // Delivery status changes propagate into sub-order/order aggregates.
             qc.invalidateQueries({ queryKey: ["/api/orders"] });
+            // Smart Driver Dispatch System — an assignment or cancellation also resolves (or
+            // starts) this delivery's dispatch pill and eligible-driver list, even though
+            // neither event name is one of SMART_DISPATCH_EVENTS below.
+            qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "/api/deliveries" && (q.queryKey[2] === "dispatch-status" || q.queryKey[2] === "assignable-drivers") });
+          }
+          if (SMART_DISPATCH_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/driver/offers/pending"] });
+            // Task: "Update Espace Chauffeur → Business → Planification" — a refusal (by
+            // this client or, in principle, read back after any action) also affects the
+            // Anciennes "Annulée" list.
+            qc.invalidateQueries({ queryKey: ["/api/driver/offers/refused"] });
+            qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "/api/deliveries" && (q.queryKey[2] === "dispatch-status" || q.queryKey[2] === "assignable-drivers") });
+            qc.invalidateQueries({ queryKey: ["/api/delivery-company/dispatch-stats"] });
+            qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && q.queryKey[0] === "/api/drivers" && q.queryKey[2] === "dispatch-stats" });
+            if (event === "dispatch_offer_accepted") {
+              qc.invalidateQueries({ queryKey: ["/api/deliveries"] });
+            }
           }
           if (TRANSPORT_REQUIREMENTS_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/orders"] });

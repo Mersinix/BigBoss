@@ -642,6 +642,14 @@ export const driverProfiles = pgTable("driver_profiles", {
   certifications: text("certifications").array().notNull().default([]),
   weeklyHours: jsonb("weekly_hours").$type<OpeningHoursMap | null>(),
   isOnVacation: boolean("is_on_vacation").notNull().default(false),
+  // Smart Driver Dispatch System (task: "BigBossCoffee — Smart Driver Dispatch System",
+  // SMART_DRIVER_DISPATCH_AUDIT.md §4) — a dispatch PREFERENCE ("pause new automatic
+  // offers"), deliberately separate from isOnVacation above (a different, coarser existing
+  // concept) and never repurposed from it. Defaults true so every existing driver remains
+  // eligible for offers on day one, with no behavior change until a driver explicitly opts
+  // out. Read only by automatic dispatch's eligibility filter — manual dispatch still shows
+  // (and warns on, never blocks) a driver with this set to false.
+  acceptingNewOffers: boolean("accepting_new_offers").notNull().default(true),
   // Profile → Portfolio (max 4 enforced at the API layer) — same shape/convention as
   // maintenanceProfiles/marketingProfiles/deliveryCompanyProfiles.portfolioImages.
   portfolioImages: text("portfolio_images").array().notNull().default([]),
@@ -1127,6 +1135,51 @@ export const deliveryOpportunities = pgTable("delivery_opportunities", {
 
 export type DeliveryOpportunity = typeof deliveryOpportunities.$inferSelect;
 export type DeliveryOpportunityStatus = 'OPEN' | 'FILLED' | 'CLOSED' | 'CANCELLED';
+
+// Smart Driver Dispatch System (task: "BigBossCoffee — Smart Driver Dispatch System",
+// SMART_DRIVER_DISPATCH_AUDIT.md §6) — a per-delivery, per-driver dispatch negotiation,
+// deliberately a NEW table rather than reusing deliveryOpportunities above (a different
+// concept entirely: a labor/staffing shift with no deliveryId, no expiration, no
+// acceptance-rate semantics — see the audit's own comparison) or adding columns to
+// `deliveries` (one delivery can accumulate many offers across dispatch attempts, which
+// doesn't fit a 1:1 column-per-delivery shape). Accepting an offer never creates its own
+// assignment logic — it always calls the existing assignDriver, unchanged (see
+// delivery.storage.ts's offer-acceptance method).
+export const deliveryDriverOfferStatusEnum = pgEnum('delivery_driver_offer_status', [
+  'PENDING', 'ACCEPTED', 'REFUSED', 'EXPIRED', 'CANCELLED',
+]);
+
+export const deliveryDriverOffers = pgTable("delivery_driver_offers", {
+  id: serial("id").primaryKey(),
+  deliveryId: integer("delivery_id").notNull(),
+  driverId: integer("driver_id").notNull(),
+  status: deliveryDriverOfferStatusEnum("status").notNull().default('PENDING'),
+  // This delivery's Nth offer overall (1, 2, 3, ...) — mirrors deliveries.assignmentSequence's
+  // own "DB-native atomic increment, never a client-computed current+1" pattern (see
+  // createNextDispatchOffer in delivery.storage.ts), so a delivery's full offer history is
+  // orderable even across multiple dispatch attempts to the same driver.
+  attemptNumber: integer("attempt_number").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  respondedAt: timestamp("responded_at"),
+  expiresAt: timestamp("expires_at").notNull(),
+}, (table) => ({
+  deliveryIdx: index("delivery_driver_offers_delivery_idx").on(table.deliveryId),
+  driverIdx: index("delivery_driver_offers_driver_idx").on(table.driverId),
+  // Dispatch statistics (acceptance rate) group by driverId + status — a composite index
+  // keeps that aggregation query index-only instead of a full table scan as offer volume grows.
+  driverStatusIdx: index("delivery_driver_offers_driver_status_idx").on(table.driverId, table.status),
+  // At most one PENDING offer per delivery at the database level — the real guarantee behind
+  // "only one driver can have a pending offer for a particular delivery at any time" (not just
+  // an application-level check), mirroring deliveries.deliveries_sub_order_active_unique and
+  // vehicles.vehicles_assigned_driver_unique's own partial-unique-index pattern.
+  onePendingOfferPerDelivery: uniqueIndex("delivery_driver_offers_pending_unique")
+    .on(table.deliveryId)
+    .where(sql`${table.status} = 'PENDING'`),
+}));
+
+export type DeliveryDriverOffer = typeof deliveryDriverOffers.$inferSelect;
+export type InsertDeliveryDriverOffer = typeof deliveryDriverOffers.$inferInsert;
+export type DeliveryDriverOfferStatus = 'PENDING' | 'ACCEPTED' | 'REFUSED' | 'EXPIRED' | 'CANCELLED';
 
 // Full detail payload — deliberately includes everything a Supplier / Delivery Company /
 // Driver / Admin needs to decide on or perform a delivery without a second fetch (order

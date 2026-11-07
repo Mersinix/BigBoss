@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useDeliveries, useAssignDriver, useDeliveryCompanyDrivers } from "@/hooks/use-deliveries";
 import { useReassignDriver } from "@/hooks/use-delivery-ecosystem";
+import { useAssignableDrivers, useDispatchStatus, useRetryDispatch, useCountdownSeconds, type AssignableDriver, type DispatchStatus } from "@/hooks/use-dispatch";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { formatDate } from "@/lib/format";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { MapPin, Store, ArrowRight, Truck, X } from "lucide-react";
+import { MapPin, Store, ArrowRight, Truck, X, RotateCcw } from "lucide-react";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -17,33 +18,123 @@ import DeliveryDetails, { DELIVERY_STATUS_META as STATUS_META } from "@/componen
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { DeliveryWithDetails } from "@shared/schema";
 
+// Smart Driver Dispatch System (task: "BigBossCoffee — Smart Driver Dispatch System") —
+// French labels for the automatic-dispatch status pill, per the task's own suggested list.
+const DISPATCH_STATE_META: Record<DispatchStatus["state"], { label: string; cls: string } | null> = {
+  NONE: null,
+  SEARCHING: { label: "Recherche d'un chauffeur", cls: "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300" },
+  OFFER_PENDING: { label: "Offre envoyée", cls: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300" },
+  EXHAUSTED: { label: "Aucun chauffeur disponible", cls: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300" },
+  ASSIGNED: { label: "Chauffeur assigné", cls: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300" },
+};
+
+// Automatic-dispatch status for one ACCEPTED-and-unassigned delivery — current pending
+// driver, response countdown, attempt count, and a manual retry action once exhausted (task
+// §5/§6). Manual driver selection (AssignDriverControl below) always stays available
+// alongside this, never replaced by it.
+function DispatchStatusPill({ deliveryId }: { deliveryId: number }) {
+  const { data } = useDispatchStatus(deliveryId);
+  const retry = useRetryDispatch();
+  const { toast } = useToast();
+  const seconds = useCountdownSeconds(data?.pendingOffer?.expiresAt ?? null);
+  const meta = data ? DISPATCH_STATE_META[data.state] : null;
+  if (!data || !meta) return null;
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Badge variant="secondary" className={`text-xs ${meta.cls}`}>{meta.label}</Badge>
+      {data.state === "OFFER_PENDING" && data.pendingOffer && (
+        <span className="text-xs text-muted-foreground">{data.pendingOffer.driverName} · {seconds}s restantes · Tentative {data.attemptCount}</span>
+      )}
+      {data.state === "EXHAUSTED" && (
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">{data.attemptCount} tentative{data.attemptCount > 1 ? "s" : ""}</span>
+          <Button
+            size="sm" variant="outline" className="h-7 text-xs gap-1"
+            disabled={retry.isPending}
+            onClick={() => retry.mutate(deliveryId, { onError: (err: any) => toast({ title: "Erreur", description: err.message, variant: "destructive" }) })}
+            data-testid={`button-retry-dispatch-${deliveryId}`}
+          >
+            <RotateCcw className="w-3 h-3" /> Réessayer
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AssignDriverControl({ delivery }: { delivery: DeliveryWithDetails }) {
-  const { data: drivers = [] } = useDeliveryCompanyDrivers();
+  const { data } = useAssignableDrivers(delivery.id);
   const assignDriver = useAssignDriver();
   const { toast } = useToast();
   const [selected, setSelected] = useState<string>("");
+  const [confirmTarget, setConfirmTarget] = useState<AssignableDriver | null>(null);
+
+  // Vehicle eligibility stays mandatory: incompatible drivers are never offered for manual
+  // selection either (task §6: "Do not show irrelevant drivers who fail vehicle compatibility").
+  const drivers = (data?.drivers ?? []).filter((d) => d.compatible);
+  const selectedDriver = drivers.find((d) => String(d.id) === selected);
+
+  const doAssign = (driverId: number) => {
+    assignDriver.mutate({ deliveryId: delivery.id, driverId }, {
+      onSuccess: () => toast({ title: "Chauffeur assigné" }),
+      onError: (err: any) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
+    });
+  };
+
+  const handleAssignClick = () => {
+    if (!selectedDriver) return;
+    // Manual dispatch never uses automatic ranking to pick the driver, but still warns
+    // before confirming a busy/unavailable one (task §6) rather than silently blocking it —
+    // the company's explicit decision wins either way once confirmed.
+    if (selectedDriver.busy || !selectedDriver.acceptingNewOffers) setConfirmTarget(selectedDriver);
+    else doAssign(selectedDriver.id);
+  };
 
   return (
-    <div className="flex items-center gap-2">
-      <Select value={selected} onValueChange={setSelected}>
-        <SelectTrigger className="h-8 w-44 text-xs"><SelectValue placeholder="Choisir un chauffeur" /></SelectTrigger>
-        <SelectContent>
-          {drivers.length === 0 && <div className="px-2 py-1.5 text-xs text-muted-foreground">Aucun chauffeur — ajoutez-en un</div>}
-          {drivers.map((d) => <SelectItem key={d.id} value={String(d.id)} className="text-xs">{d.name}</SelectItem>)}
-        </SelectContent>
-      </Select>
-      <Button
-        size="sm"
-        className="h-8 text-xs"
-        disabled={!selected || assignDriver.isPending}
-        onClick={() => assignDriver.mutate({ deliveryId: delivery.id, driverId: Number(selected) }, {
-          onSuccess: () => toast({ title: "Chauffeur assigné" }),
-          onError: (err: any) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
-        })}
-      >
-        Assigner
-      </Button>
-    </div>
+    <>
+      <div className="flex items-center gap-2">
+        <Select value={selected} onValueChange={setSelected}>
+          <SelectTrigger className="h-8 w-56 text-xs"><SelectValue placeholder="Choisir un chauffeur" /></SelectTrigger>
+          <SelectContent>
+            {drivers.length === 0 && <div className="px-2 py-1.5 text-xs text-muted-foreground">Aucun chauffeur compatible</div>}
+            {drivers.map((d) => (
+              <SelectItem key={d.id} value={String(d.id)} className="text-xs">
+                <span className="flex items-center gap-1.5">
+                  {d.name}
+                  {d.busy && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-amber-600 border-amber-300">Occupé</Badge>}
+                  {!d.acceptingNewOffers && <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 text-gray-500">Indisponible</Badge>}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          size="sm"
+          className="h-8 text-xs"
+          disabled={!selected || assignDriver.isPending}
+          onClick={handleAssignClick}
+        >
+          Assigner
+        </Button>
+      </div>
+
+      <Dialog open={!!confirmTarget} onOpenChange={(v) => { if (!v) setConfirmTarget(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Confirmer l'assignation</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {confirmTarget?.busy
+              ? `${confirmTarget?.name} a déjà une livraison active. L'assigner quand même ?`
+              : `${confirmTarget?.name} a désactivé les nouvelles offres. L'assigner quand même ?`}
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" onClick={() => setConfirmTarget(null)}>Annuler</Button>
+            <Button size="sm" onClick={() => { if (confirmTarget) doAssign(confirmTarget.id); setConfirmTarget(null); }} data-testid="button-confirm-assign-anyway">
+              Assigner quand même
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -172,7 +263,12 @@ export default function MyDeliveriesPage() {
                     </div>
                     <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
                       <span className="font-semibold text-sm">{fmt(d.deliveryFee ?? 0)}</span>
-                      {d.status === "ACCEPTED" && <AssignDriverControl delivery={d} />}
+                      {d.status === "ACCEPTED" && (
+                        <div className="flex flex-col items-end gap-1.5">
+                          <DispatchStatusPill deliveryId={d.id} />
+                          <AssignDriverControl delivery={d} />
+                        </div>
+                      )}
                       {d.status === "ASSIGNED" && (
                         redispatchId === d.id ? (
                           <ReassignDriverControl delivery={d} onDone={() => setRedispatchId(null)} />

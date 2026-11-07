@@ -2,11 +2,12 @@ import { db } from "../../db";
 import { and, desc, eq, gte, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import {
   deliveries, deliveryPricingSettings, deliveryFinancialLedger, deliveryOpportunities,
-  promotions, vehicles, driverProfiles,
+  promotions, vehicles, driverProfiles, deliveryDriverOffers,
   users, products, orders, orderItems, subOrders,
   type Delivery, type DeliveryStatus, type DeliveryMode, type DeliveryWithDetails, type GeoLocation,
   type DeliveryVehicleType, type DeliveryPricingSettings, type DeliveryOpportunity,
   type Vehicle, type InsertVehicle, type DriverProfile, type InsertDriverProfile,
+  type DeliveryDriverOffer, type DeliveryDriverOfferStatus,
   type FinancialLedgerEntry, type LedgerEntryType, type LedgerActorRole, type LedgerDirection, type LedgerStatus,
   type User, type Product, type Order, type OrderItem, type SubOrder,
 } from "@shared/schema";
@@ -1125,7 +1126,11 @@ export class DeliveryStorage {
       totalWeightKg: string | null; totalVolumeL: string | null; numberOfPackages: number | null; numberOfItems: number | null;
       isFragile: boolean; specialHandling: string | null;
     };
-    drivers: Array<{ id: number; name: string; phone: string | null; vehicleType: DeliveryVehicleType | null; compatible: boolean; reason?: string; expectedPayoutCents: number }>;
+    // busy/acceptingNewOffers (Smart Driver Dispatch System, task: "BigBossCoffee — Smart
+    // Driver Dispatch System") — additive fields only, so manual dispatch (this method's
+    // only existing caller) can show the same warning-before-confirm the task's §6 asks for,
+    // without a second eligible-driver component.
+    drivers: Array<{ id: number; name: string; phone: string | null; vehicleType: DeliveryVehicleType | null; compatible: boolean; reason?: string; expectedPayoutCents: number; busy: boolean; acceptingNewOffers: boolean }>;
   }> {
     const [delivery] = await db.select().from(deliveries).where(eq(deliveries.id, deliveryId));
     if (!delivery) throw new Error('Delivery not found');
@@ -1149,6 +1154,18 @@ export class DeliveryStorage {
     const [subOrder] = await db.select().from(subOrders).where(eq(subOrders.id, delivery.subOrderId));
     const settings = await this.getDeliveryPricingSettings();
     const roster = await this.getDriversForOwner(ownerType, ownerId);
+    const rosterIds = roster.map((d) => d.id);
+    // Batched (not per-driver) — the two new fields below must not turn this already
+    // per-driver-vehicle-lookup method into a worse N+1 than it already was.
+    const [profileRows, busyRows] = rosterIds.length
+      ? await Promise.all([
+          db.select().from(driverProfiles).where(inArray(driverProfiles.userId, rosterIds)),
+          db.select({ driverId: deliveries.driverId }).from(deliveries)
+            .where(and(inArray(deliveries.driverId, rosterIds), inArray(deliveries.status, ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT']))),
+        ])
+      : [[], []];
+    const profileByDriverId = new Map(profileRows.map((p) => [p.userId, p]));
+    const busyIds = new Set(busyRows.map((r) => r.driverId));
     const drivers = await Promise.all(roster.map(async (driver) => {
       const vehicle = await this.getVehicleForDriver(driver.id);
       const compatibility = this.checkDeliveryVehicleCompatibility({
@@ -1160,11 +1177,14 @@ export class DeliveryStorage {
       const payoutPreview = this.computeDeliveryPayout({
         feeCents: delivery.deliveryFee, deliveryMode: delivery.deliveryMode, driverPayoutSharePercent: settings.driverPayoutSharePercent,
       });
+      const profile = profileByDriverId.get(driver.id);
       return {
         id: driver.id, name: driver.name, phone: driver.phone,
         vehicleType: (vehicle?.type as DeliveryVehicleType | undefined) ?? null,
         compatible: compatibility.compatible, reason: compatibility.reason,
         expectedPayoutCents: payoutPreview.driverPayoutCents,
+        busy: busyIds.has(driver.id),
+        acceptingNewOffers: profile ? profile.acceptingNewOffers : true,
       };
     }));
 
@@ -1326,6 +1346,389 @@ export class DeliveryStorage {
       return { compatible: false, reason: `This order requires capacity for ${params.numberOfPackages} packages — the selected vehicle's configured maximum is ${cap.maxPackages}` };
     }
     return { compatible: true };
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════
+  // Smart Driver Dispatch System (task: "BigBossCoffee — Smart Driver Dispatch System",
+  // SMART_DRIVER_DISPATCH_AUDIT.md) — automatic + manual dispatch built over the new
+  // deliveryDriverOffers table. Reuses, never duplicates: checkDeliveryVehicleCompatibility
+  // and isVehicleCompatible (above), haversineKm/parseLatLng (below), getDriversForOwner,
+  // getDeliveryPricingSettings — and, critically, assignDriver itself, completely unchanged,
+  // for the actual assignment once an offer is accepted (see acceptDriverOffer's own comment
+  // on exactly why it is a plain top-level call, never nested inside assignDriver's own
+  // internal transaction).
+  // ══════════════════════════════════════════════════════════════════════════════════════
+
+  static readonly OFFER_RESPONSE_WINDOW_MS = 90_000;
+  private static readonly MIN_OFFERS_FOR_ACCEPTANCE_RATE = 5;
+
+  /** Operationally busy = has a delivery currently ASSIGNED/PICKED_UP/IN_TRANSIT — the exact
+   *  same definition server/storage.ts's getDeliveryCompanyDriverCards already uses, reused
+   *  here instead of inventing a second "busy" definition. Checked across ALL of the
+   *  driver's deliveries (not scoped to one company) since a driver belongs to exactly one
+   *  current operator but a delivery dispatched before an operator change could, in theory,
+   *  still be active. */
+  async isDriverBusy(driverId: number): Promise<boolean> {
+    const [row] = await db.select({ id: deliveries.id }).from(deliveries)
+      .where(and(eq(deliveries.driverId, driverId), inArray(deliveries.status, ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT'])))
+      .limit(1);
+    return !!row;
+  }
+
+  /**
+   * Ranks this delivery's eligible drivers for automatic dispatch (SMART_DRIVER_DISPATCH_AUDIT.md
+   * §7/§9). Mandatory filters, all applied before ranking: belongs to the operating company,
+   * approved account, compatible vehicle, accepting new offers, not operationally busy, not
+   * already offered this delivery (any status). Fully batched — one query per dimension,
+   * never one per driver — regardless of roster size.
+   *
+   * Ranking, in order: (1) acceptance rate, but ONLY once a driver has reached
+   * MIN_OFFERS_FOR_ACCEPTANCE_RATE resolved (ACCEPTED+REFUSED, EXPIRED/CANCELLED excluded)
+   * offers — drivers below that threshold are ranked, as a whole group, below every driver
+   * who has reached it, so one lucky early acceptance can never outrank an experienced
+   * driver; (2) distance to the pickup address, using the driver's registered account
+   * coordinates (confirmed by the audit: a proxy, not live GPS); a missing coordinate ranks
+   * last within its group; (3) average review rating (supplierProductReviews,
+   * reviewType='DRIVER'); no reviews ranks last within its group. Final deterministic
+   * tiebreaker: driver id.
+   */
+  async rankEligibleDriversForOffer(deliveryId: number, excludeDriverIds: number[] = []): Promise<Array<{
+    driverId: number; acceptanceRate: number | null; resolvedOfferCount: number; distanceKm: number | null; avgRating: number | null;
+  }>> {
+    const [delivery] = await db.select().from(deliveries).where(eq(deliveries.id, deliveryId));
+    if (!delivery || delivery.deliveryMode !== 'DELIVERY_COMPANY' || !delivery.deliveryCompanyId) return [];
+
+    const roster = (await this.getDriversForOwner('DELIVERY_COMPANY', delivery.deliveryCompanyId))
+      .filter((d) => d.status === 'approved' && !excludeDriverIds.includes(d.id));
+    if (roster.length === 0) return [];
+    const candidateIds = roster.map((d) => d.id);
+
+    const [subOrder, pricingSettings, profiles, vehicleRows, busyRows, offerRows, reviewStats] = await Promise.all([
+      db.select().from(subOrders).where(eq(subOrders.id, delivery.subOrderId)).then((r) => r[0]),
+      this.getDeliveryPricingSettings(),
+      db.select().from(driverProfiles).where(inArray(driverProfiles.userId, candidateIds)),
+      db.select().from(vehicles).where(inArray(vehicles.assignedDriverId, candidateIds)),
+      db.select({ driverId: deliveries.driverId }).from(deliveries)
+        .where(and(inArray(deliveries.driverId, candidateIds), inArray(deliveries.status, ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT']))),
+      db.select({ driverId: deliveryDriverOffers.driverId, status: deliveryDriverOffers.status, n: sql<number>`count(*)` })
+        .from(deliveryDriverOffers).where(inArray(deliveryDriverOffers.driverId, candidateIds))
+        .groupBy(deliveryDriverOffers.driverId, deliveryDriverOffers.status),
+      this.facade.getDriverReviewStatsBatch(candidateIds),
+    ]);
+
+    const profileByDriverId = new Map(profiles.map((p) => [p.userId, p]));
+    const vehicleByDriverId = new Map(vehicleRows.filter((v) => v.assignedDriverId != null).map((v) => [v.assignedDriverId as number, v]));
+    const busyIds = new Set(busyRows.map((r) => r.driverId));
+    const offerCountsByDriverId = new Map<number, { accepted: number; refused: number }>();
+    for (const row of offerRows) {
+      if (row.status !== 'ACCEPTED' && row.status !== 'REFUSED') continue; // EXPIRED/CANCELLED excluded, per spec
+      const cur = offerCountsByDriverId.get(row.driverId) ?? { accepted: 0, refused: 0 };
+      if (row.status === 'ACCEPTED') cur.accepted += Number(row.n); else cur.refused += Number(row.n);
+      offerCountsByDriverId.set(row.driverId, cur);
+    }
+    const pickupPos = this.parseLatLng(delivery.pickupAddress);
+
+    type RankedCandidate = { driverId: number; acceptanceRate: number | null; resolvedOfferCount: number; distanceKm: number | null; avgRating: number | null; hasEnoughHistory: boolean };
+    const candidates: RankedCandidate[] = [];
+    for (const driver of roster) {
+      const profile = profileByDriverId.get(driver.id);
+      // No profile row yet (never visited) is NOT an opt-out — the column's own DB default is true.
+      if (profile && !profile.acceptingNewOffers) continue;
+      if (busyIds.has(driver.id)) continue;
+
+      const vehicle = vehicleByDriverId.get(driver.id);
+      const compatibility = this.checkDeliveryVehicleCompatibility({
+        requiredVehicleType: subOrder?.requiredVehicleType as DeliveryVehicleType | null,
+        totalWeightKg: subOrder?.totalWeightKg, totalVolumeL: subOrder?.totalVolumeL, numberOfPackages: subOrder?.numberOfPackages,
+        vehicleType: vehicle?.type as DeliveryVehicleType | null,
+        vehicleCapacity: vehicle?.type ? pricingSettings.vehiclePricing?.[vehicle.type as DeliveryVehicleType] : undefined,
+      });
+      if (!compatibility.compatible) continue;
+
+      const counts = offerCountsByDriverId.get(driver.id) ?? { accepted: 0, refused: 0 };
+      const resolvedOfferCount = counts.accepted + counts.refused;
+      const hasEnoughHistory = resolvedOfferCount >= DeliveryStorage.MIN_OFFERS_FOR_ACCEPTANCE_RATE;
+      const acceptanceRate = resolvedOfferCount > 0 ? (counts.accepted / resolvedOfferCount) * 100 : null;
+
+      const driverPos = this.parseLatLng({ lat: driver.locationLat, lng: driver.locationLng });
+      const distanceKm = pickupPos && driverPos ? this.haversineKm(driverPos, pickupPos) : null;
+
+      const review = reviewStats.get(driver.id);
+      const avgRating = review ? review.rating / 10 : null; // stored ×10 — see computeDriverReviewStats
+
+      candidates.push({ driverId: driver.id, acceptanceRate, resolvedOfferCount, distanceKm, avgRating, hasEnoughHistory });
+    }
+
+    candidates.sort((a, b) => {
+      if (a.hasEnoughHistory !== b.hasEnoughHistory) return a.hasEnoughHistory ? -1 : 1;
+      if (a.hasEnoughHistory) {
+        const rateA = a.acceptanceRate ?? 0, rateB = b.acceptanceRate ?? 0;
+        if (rateA !== rateB) return rateB - rateA;
+      }
+      const distA = a.distanceKm ?? Infinity, distB = b.distanceKm ?? Infinity;
+      if (distA !== distB) return distA - distB;
+      const ratingA = a.avgRating ?? -1, ratingB = b.avgRating ?? -1;
+      if (ratingA !== ratingB) return ratingB - ratingA;
+      return a.driverId - b.driverId;
+    });
+
+    return candidates.map(({ hasEnoughHistory, ...rest }) => rest);
+  }
+
+  /** Creates the next PENDING offer for this delivery's best-ranked eligible driver not yet
+   *  offered it, or reports exhaustion. Safe to call concurrently for the same delivery: the
+   *  partial unique index (deliveryDriverOffers, at most one PENDING per deliveryId) means at
+   *  most one caller's insert can win; a competing caller's insert is caught here and treated
+   *  as a benign no-op, not an error — someone else's dispatch attempt already created the
+   *  pending offer this call would have. */
+  async dispatchNextOffer(deliveryId: number): Promise<{ offer: DeliveryDriverOffer | null; exhausted: boolean }> {
+    const [delivery] = await db.select().from(deliveries).where(eq(deliveries.id, deliveryId));
+    if (!delivery || delivery.status !== 'ACCEPTED' || delivery.deliveryMode !== 'DELIVERY_COMPANY') {
+      return { offer: null, exhausted: false };
+    }
+    const priorOffers = await db.select({ driverId: deliveryDriverOffers.driverId }).from(deliveryDriverOffers)
+      .where(eq(deliveryDriverOffers.deliveryId, deliveryId));
+    const excludeIds = priorOffers.map((o) => o.driverId);
+    const ranked = await this.rankEligibleDriversForOffer(deliveryId, excludeIds);
+    if (ranked.length === 0) return { offer: null, exhausted: true };
+
+    try {
+      // Mirrors deliveries.assignmentSequence's own "DB-native atomic increment, never a
+      // client-computed current+1" pattern (see assignDriver) — a correlated subquery so the
+      // database, not this process, decides the next attemptNumber even under concurrent inserts.
+      const nextAttempt = sql<number>`(SELECT COALESCE(MAX(${deliveryDriverOffers.attemptNumber}), 0) + 1 FROM ${deliveryDriverOffers} WHERE ${deliveryDriverOffers.deliveryId} = ${deliveryId})`;
+      const [offer] = await db.insert(deliveryDriverOffers).values({
+        deliveryId, driverId: ranked[0].driverId, status: 'PENDING',
+        attemptNumber: nextAttempt as any,
+        expiresAt: new Date(Date.now() + DeliveryStorage.OFFER_RESPONSE_WINDOW_MS),
+      }).returning();
+      return { offer, exhausted: false };
+    } catch {
+      return { offer: null, exhausted: false };
+    }
+  }
+
+  /**
+   * Product visibility before offer acceptance (task: "Update Espace Chauffeur → Business →
+   * Planification: Offer Acceptance, Refusal, and Delivery Details", §7: "Enforce product
+   * visibility on the backend/API level, not only by hiding the Products component in
+   * React... Do not expose product information through an alternative response field or
+   * endpoint before acceptance"). getDelivery's own `items` array always carries full
+   * product/pack detail regardless of caller — this strips it at the one place a
+   * not-yet-accepted driver's response is assembled, so there is no way for a client to
+   * recover product data for an offer it has not accepted, no matter what it reads from
+   * the response. `order.itemCount`/`order.totalAmount` are left untouched — the task
+   * explicitly allows those (count/total, never which products).
+   */
+  private redactItemsForUnacceptedOffer(delivery: DeliveryWithDetails): DeliveryWithDetails {
+    return { ...delivery, items: [] };
+  }
+
+  async getDriverPendingOffers(driverId: number): Promise<Array<DeliveryDriverOffer & { delivery: DeliveryWithDetails | null }>> {
+    const offers = await db.select().from(deliveryDriverOffers)
+      .where(and(eq(deliveryDriverOffers.driverId, driverId), eq(deliveryDriverOffers.status, 'PENDING')))
+      .orderBy(desc(deliveryDriverOffers.createdAt));
+    // A driver realistically has at most a handful of simultaneous pending offers (dispatch
+    // sends one at a time per delivery) — bounded by this driver's own inbox, not by overall
+    // platform size, so reusing the existing getDelivery per offer here is not the N+1 the
+    // ranking query above had to avoid.
+    return Promise.all(offers.map(async (o) => {
+      const delivery = await this.getDelivery(o.deliveryId, 'DRIVER');
+      return { ...o, delivery: delivery ? this.redactItemsForUnacceptedOffer(delivery) : null };
+    }));
+  }
+
+  /**
+   * This driver's own REFUSED-offer history ("Anciennes" → "Annulée", task §4) — the
+   * underlying delivery is never touched or reinterpreted here: its real, current status is
+   * whatever the ongoing dispatch/assignment lifecycle has made it (possibly assigned to a
+   * different driver, or still unassigned). This method only ever reads the offer row this
+   * driver's own refusal created; it is the caller's job to render it as this driver's own
+   * historical "Annulée" item without implying anything about the delivery's global state.
+   * Items redacted the same way as a pending offer — a refused offer never granted this
+   * driver product visibility, and refusing it does not change that.
+   */
+  async getDriverRefusedOffers(driverId: number): Promise<Array<DeliveryDriverOffer & { delivery: DeliveryWithDetails | null }>> {
+    const offers = await db.select().from(deliveryDriverOffers)
+      .where(and(eq(deliveryDriverOffers.driverId, driverId), eq(deliveryDriverOffers.status, 'REFUSED')))
+      .orderBy(desc(deliveryDriverOffers.respondedAt));
+    return Promise.all(offers.map(async (o) => {
+      const delivery = await this.getDelivery(o.deliveryId, 'DRIVER');
+      return { ...o, delivery: delivery ? this.redactItemsForUnacceptedOffer(delivery) : null };
+    }));
+  }
+
+  /**
+   * Driver accepts a PENDING offer. CRITICAL ordering (per the task's own explicit
+   * instruction to inspect assignDriver's transaction before integrating): assignDriver
+   * manages its OWN internal db.transaction and is not transaction-aware from the outside —
+   * nesting a second db.transaction inside it is unsupported by this driver/ORM and was
+   * explicitly ruled out, so assignDriver is called here as a plain top-level call. The offer
+   * is flipped to ACCEPTED only AFTER assignDriver has already succeeded, never before, so a
+   * failed assignment can never leave an offer falsely marked ACCEPTED. assignDriver's own
+   * atomic compare-and-swap on the delivery's status (WHERE status = 'ACCEPTED') is what
+   * actually guarantees two drivers can never both successfully accept the same delivery —
+   * only one call can ever still see 'ACCEPTED'; the checks below are additional guards on
+   * top of that guarantee, not a replacement for it.
+   */
+  async acceptDriverOffer(offerId: number, driver: { id: number }): Promise<Delivery> {
+    const [offer] = await db.select().from(deliveryDriverOffers).where(eq(deliveryDriverOffers.id, offerId));
+    if (!offer) throw new Error('Offer not found');
+    if (offer.driverId !== driver.id) throw new Error('This offer does not belong to you');
+    if (offer.status !== 'PENDING') throw new Error('This offer is no longer pending');
+    if (offer.expiresAt.getTime() <= Date.now()) throw new Error('This offer has expired');
+
+    // assignDriver itself has no concept of "busy" (a Smart Dispatch addition, deliberately
+    // not retrofitted into that existing method) — re-checked here so a driver who became
+    // busy on ANOTHER delivery between receiving this offer and responding cannot double-book.
+    if (await this.isDriverBusy(driver.id)) throw new Error('You already have an active delivery and cannot accept a new one');
+
+    const [delivery] = await db.select().from(deliveries).where(eq(deliveries.id, offer.deliveryId));
+    if (!delivery || !delivery.deliveryCompanyId) throw new Error('Delivery is no longer available for assignment');
+
+    try {
+      // Synthetic actingUser: the real actor is the driver, but assignDriver's existing
+      // ownership contract requires the OPERATING COMPANY as actingUser (role==='DELIVERY_COMPANY'
+      // matching delivery.deliveryCompanyId) — exactly the company the dispatch system is
+      // already acting on behalf of (the same company that put this delivery into automatic
+      // dispatch by accepting it). Resolved from the delivery's OWN authoritative
+      // deliveryCompanyId column, never from anything the driver supplied — this preserves
+      // assignDriver's exact existing contract instead of adding a third caller shape to it.
+      const updated = await this.assignDriver(offer.deliveryId, { id: delivery.deliveryCompanyId, role: 'DELIVERY_COMPANY' }, driver.id);
+      await db.update(deliveryDriverOffers).set({ status: 'ACCEPTED', respondedAt: new Date() }).where(eq(deliveryDriverOffers.id, offerId));
+      return updated;
+    } catch (err) {
+      // assignDriver failed (someone else manually assigned a different driver in the
+      // meantime, vehicle incompatibility, a weather restriction, etc.) — this offer can
+      // never succeed now. Mark it CANCELLED (guarded by status='PENDING' so this can never
+      // clobber a state some other path already moved it to) instead of leaving a stale
+      // PENDING offer the driver could keep retrying against an already-resolved delivery.
+      await db.update(deliveryDriverOffers).set({ status: 'CANCELLED', respondedAt: new Date() })
+        .where(and(eq(deliveryDriverOffers.id, offerId), eq(deliveryDriverOffers.status, 'PENDING')));
+      throw err;
+    }
+  }
+
+  async refuseDriverOffer(offerId: number, driver: { id: number }): Promise<DeliveryDriverOffer> {
+    const [offer] = await db.update(deliveryDriverOffers)
+      .set({ status: 'REFUSED', respondedAt: new Date() })
+      .where(and(eq(deliveryDriverOffers.id, offerId), eq(deliveryDriverOffers.driverId, driver.id), eq(deliveryDriverOffers.status, 'PENDING')))
+      .returning();
+    if (!offer) throw new Error('This offer is no longer pending, or does not belong to you');
+    return offer;
+  }
+
+  /** Best-effort cleanup, called after a delivery is manually assigned or cancelled — never
+   *  the actual safety net (assignDriver's own compare-and-swap on the delivery's status is),
+   *  so it is deliberately NOT nested in the caller's own transaction/compare-and-swap: even
+   *  if this call were skipped by a crash, a stale PENDING offer could never be successfully
+   *  accepted afterward — acceptDriverOffer re-reads the delivery's live status via
+   *  assignDriver's own CAS, which fails outright once the delivery is no longer 'ACCEPTED'. */
+  async cancelPendingOfferForDelivery(deliveryId: number): Promise<void> {
+    await db.update(deliveryDriverOffers).set({ status: 'CANCELLED', respondedAt: new Date() })
+      .where(and(eq(deliveryDriverOffers.deliveryId, deliveryId), eq(deliveryDriverOffers.status, 'PENDING')));
+  }
+
+  /**
+   * The expiration worker's core sweep (SMART_DRIVER_DISPATCH_AUDIT.md §5/§10) — a single
+   * conditional UPDATE, safe to run from multiple application instances or multiple
+   * concurrent ticks: each row can only be flipped from PENDING once (status='PENDING' is
+   * re-checked at the database level in the same statement that flips it), so two
+   * overlapping sweeps simply divide the overdue rows between them with no double-processing
+   * and no double-dispatch. Uses the database's own clock (now()) as the source of truth, not
+   * the worker process's in-memory timers — a server restart loses no state: the very next
+   * sweep after restart re-evaluates every still-PENDING, still-overdue row exactly as if the
+   * process had never stopped.
+   */
+  async expireOverduePendingOffers(): Promise<DeliveryDriverOffer[]> {
+    return db.update(deliveryDriverOffers)
+      .set({ status: 'EXPIRED', respondedAt: new Date() })
+      .where(and(eq(deliveryDriverOffers.status, 'PENDING'), sql`${deliveryDriverOffers.expiresAt} <= now()`))
+      .returning();
+  }
+
+  /** Mes livraisons' dispatch-status pill for one delivery. Deliberately only 5 states: the
+   *  backend's retry loop is synchronous (refuseDriverOffer/expireOverduePendingOffers both
+   *  immediately call dispatchNextOffer), so by the time anything reads this snapshot, a
+   *  REFUSED/EXPIRED offer has already either produced a new PENDING one or exhausted the
+   *  roster — "chauffeur a refusé"/"offre expirée" are surfaced as transient realtime events
+   *  (Phase 8), not as a durable state this method would ever need to report. */
+  async getDispatchStatusForDelivery(deliveryId: number): Promise<{
+    state: 'NONE' | 'SEARCHING' | 'OFFER_PENDING' | 'EXHAUSTED' | 'ASSIGNED';
+    pendingOffer: (DeliveryDriverOffer & { driverName: string }) | null;
+    attemptCount: number;
+  }> {
+    const [delivery] = await db.select().from(deliveries).where(eq(deliveries.id, deliveryId));
+    if (!delivery) return { state: 'NONE', pendingOffer: null, attemptCount: 0 };
+    if (delivery.deliveryMode !== 'DELIVERY_COMPANY') return { state: 'NONE', pendingOffer: null, attemptCount: 0 };
+    if (['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED'].includes(delivery.status)) {
+      return { state: 'ASSIGNED', pendingOffer: null, attemptCount: 0 };
+    }
+    if (delivery.status !== 'ACCEPTED') return { state: 'NONE', pendingOffer: null, attemptCount: 0 };
+
+    const offers = await db.select().from(deliveryDriverOffers).where(eq(deliveryDriverOffers.deliveryId, deliveryId))
+      .orderBy(desc(deliveryDriverOffers.attemptNumber));
+    if (offers.length === 0) return { state: 'SEARCHING', pendingOffer: null, attemptCount: 0 };
+
+    const latest = offers[0];
+    if (latest.status === 'PENDING') {
+      const [driver] = await db.select({ name: users.name }).from(users).where(eq(users.id, latest.driverId));
+      return { state: 'OFFER_PENDING', pendingOffer: { ...latest, driverName: driver?.name ?? 'Chauffeur' }, attemptCount: offers.length };
+    }
+    return { state: 'EXHAUSTED', pendingOffer: null, attemptCount: offers.length };
+  }
+
+  /** Single shared source for dispatch statistics — both Espace Livraison → Performance and
+   *  the Admin driver detail modal call this (or getCompanyDispatchStats below), never their
+   *  own inline recomputation (SMART_DRIVER_DISPATCH_AUDIT.md §9). Null acceptanceRate (not
+   *  0%) when there are no resolved offers yet — never a misleading reliability score. */
+  async getDriverDispatchStats(driverId: number): Promise<{
+    totalOffers: number; accepted: number; refused: number; expired: number; cancelled: number;
+    acceptanceRate: number | null; completedDeliveries: number; avgRating: number | null; reviewCount: number;
+  }> {
+    const [offerRows, completedRows, reviewStats] = await Promise.all([
+      db.select({ status: deliveryDriverOffers.status, n: sql<number>`count(*)` }).from(deliveryDriverOffers)
+        .where(eq(deliveryDriverOffers.driverId, driverId)).groupBy(deliveryDriverOffers.status),
+      db.select({ id: deliveries.id }).from(deliveries).where(and(eq(deliveries.driverId, driverId), eq(deliveries.status, 'DELIVERED'))),
+      this.facade.getDriverReviewStatsBatch([driverId]),
+    ]);
+    const counts: Record<DeliveryDriverOfferStatus, number> = { PENDING: 0, ACCEPTED: 0, REFUSED: 0, EXPIRED: 0, CANCELLED: 0 };
+    for (const row of offerRows) counts[row.status as DeliveryDriverOfferStatus] = Number(row.n);
+    const resolved = counts.ACCEPTED + counts.REFUSED;
+    const review = reviewStats.get(driverId);
+    return {
+      totalOffers: Object.values(counts).reduce((a, b) => a + b, 0),
+      accepted: counts.ACCEPTED, refused: counts.REFUSED, expired: counts.EXPIRED, cancelled: counts.CANCELLED,
+      acceptanceRate: resolved > 0 ? Math.round((counts.ACCEPTED / resolved) * 1000) / 10 : null,
+      completedDeliveries: completedRows.length,
+      avgRating: review ? review.rating / 10 : null,
+      reviewCount: review?.reviewCount ?? 0,
+    };
+  }
+
+  /** Company-wide roll-up of the same statistics, for Espace Livraison → Performance. */
+  async getCompanyDispatchStats(companyId: number): Promise<{
+    totalOffers: number; accepted: number; refused: number; expired: number; cancelled: number;
+    acceptanceRate: number | null; completedDeliveries: number;
+  }> {
+    const driverIds = (await this.getDriversForOwner('DELIVERY_COMPANY', companyId)).map((d) => d.id);
+    if (driverIds.length === 0) {
+      return { totalOffers: 0, accepted: 0, refused: 0, expired: 0, cancelled: 0, acceptanceRate: null, completedDeliveries: 0 };
+    }
+    const [offerRows, completedRows] = await Promise.all([
+      db.select({ status: deliveryDriverOffers.status, n: sql<number>`count(*)` }).from(deliveryDriverOffers)
+        .where(inArray(deliveryDriverOffers.driverId, driverIds)).groupBy(deliveryDriverOffers.status),
+      db.select({ id: deliveries.id }).from(deliveries).where(and(inArray(deliveries.driverId, driverIds), eq(deliveries.status, 'DELIVERED'))),
+    ]);
+    const counts: Record<DeliveryDriverOfferStatus, number> = { PENDING: 0, ACCEPTED: 0, REFUSED: 0, EXPIRED: 0, CANCELLED: 0 };
+    for (const row of offerRows) counts[row.status as DeliveryDriverOfferStatus] = Number(row.n);
+    const resolved = counts.ACCEPTED + counts.REFUSED;
+    return {
+      totalOffers: Object.values(counts).reduce((a, b) => a + b, 0),
+      accepted: counts.ACCEPTED, refused: counts.REFUSED, expired: counts.EXPIRED, cancelled: counts.CANCELLED,
+      acceptanceRate: resolved > 0 ? Math.round((counts.ACCEPTED / resolved) * 1000) / 10 : null,
+      completedDeliveries: completedRows.length,
+    };
   }
 
   /**

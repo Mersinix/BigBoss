@@ -3,10 +3,11 @@ import { useDeliveries, useDeliveryCompanyDrivers } from "@/hooks/use-deliveries
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Package, Truck, CheckCircle2, Clock, Users, Banknote } from "lucide-react";
+import { Package, Truck, CheckCircle2, Clock, Users, Banknote, Target } from "lucide-react";
 import { Link } from "wouter";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { useMyFinancialSummary } from "@/hooks/use-delivery-ecosystem";
+import { useCompanyDispatchStats } from "@/hooks/use-dispatch";
 
 const CARD_CLASS = "bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700/60 rounded-2xl";
 
@@ -30,6 +31,10 @@ export default function DeliveryDashboard() {
   // economic "Montant conservé" stat above (that's what the ledger says is owed; this is what
   // has actually been grouped into a settlement and confirmed paid).
   const { data: financialSummary } = useMyFinancialSummary();
+  // Smart Driver Dispatch System (task: "BigBossCoffee — Smart Driver Dispatch System",
+  // Phase 7) — company-wide roll-up only; the Driver view of this same shared page never
+  // fetches or renders it.
+  const { data: dispatchStats } = useCompanyDispatchStats(isCompany);
 
   if (isLoading) {
     return <div className="h-full flex items-center justify-center p-10"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" /></div>;
@@ -120,6 +125,23 @@ export default function DeliveryDashboard() {
             <div><p className="text-xs text-muted-foreground">Approuvé</p><p className="font-semibold">{fmt(financialSummary.approvedCents)}</p></div>
             <div><p className="text-xs text-muted-foreground">Payé</p><p className="font-semibold text-emerald-600">{fmt(financialSummary.paidCents)}</p></div>
             <div><p className="text-xs text-muted-foreground">En attente</p><p className="font-semibold text-amber-600">{fmt(financialSummary.outstandingCents)}</p></div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Smart Driver Dispatch System (task: "BigBossCoffee — Smart Driver Dispatch
+          System") — company-wide roll-up; single shared source (getCompanyDispatchStats),
+          never recomputed here from raw offer rows. */}
+      {isCompany && dispatchStats && (
+        <Card className={CARD_CLASS}>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold flex items-center gap-2"><Target className="w-4 h-4 text-primary" />Répartition automatique</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm pt-0">
+            <div><p className="text-xs text-muted-foreground">Offres envoyées</p><p className="font-semibold">{dispatchStats.totalOffers}</p></div>
+            <div><p className="text-xs text-muted-foreground">Acceptées</p><p className="font-semibold text-emerald-600">{dispatchStats.accepted}</p></div>
+            <div><p className="text-xs text-muted-foreground">Refusées</p><p className="font-semibold text-red-600">{dispatchStats.refused}</p></div>
+            <div><p className="text-xs text-muted-foreground">Expirées</p><p className="font-semibold text-amber-600">{dispatchStats.expired}</p></div>
+            <div><p className="text-xs text-muted-foreground">Taux d'acceptation</p><p className="font-semibold">{dispatchStats.acceptanceRate != null ? `${dispatchStats.acceptanceRate}%` : "—"}</p></div>
+            <div><p className="text-xs text-muted-foreground">Livraisons terminées</p><p className="font-semibold">{dispatchStats.completedDeliveries}</p></div>
           </CardContent>
         </Card>
       )}

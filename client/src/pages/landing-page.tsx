@@ -255,8 +255,8 @@ const ROLES = [
   { id: "DELIVERY_COMPANY",    label: "Livraison",          icon: Truck,         color: "text-green-600",   bg: "bg-green-50",   border: "border-green-200",   iconBg: "bg-green-500",   hover: "hover:border-green-400",   desc: "Gérez vos routes et vos livraisons facilement." },
   { id: "PRINTER",             label: "Imprimerie",         icon: Printer,       color: "text-orange-600",  bg: "bg-orange-50",  border: "border-orange-200",  iconBg: "bg-orange-500",  hover: "hover:border-orange-400",  desc: "Offrez vos services d'impression aux cafés." },
   { id: "MARKETING",           label: "Marketing",          icon: Megaphone,     color: "text-purple-600",  bg: "bg-purple-50",  border: "border-purple-200",  iconBg: "bg-purple-500",  hover: "hover:border-purple-400",  desc: "Proposez vos services marketing aux professionnels." },
-  { id: "BARISTA_ACADEMY",     label: "Barista Academy",    icon: GraduationCap, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200", iconBg: "bg-emerald-500", hover: "hover:border-emerald-400", desc: "Proposez des formations barista professionnelles." },
-  { id: "BARISTA_MARKETPLACE", label: "Marketplace Barista",icon: Users,         color: "text-indigo-600",  bg: "bg-indigo-50",  border: "border-indigo-200",  iconBg: "bg-indigo-500",  hover: "hover:border-indigo-400",  desc: "Mettez en valeur vos services de barista." },
+  { id: "BARISTA_ACADEMY",     label: "Academy",    icon: GraduationCap, color: "text-emerald-600", bg: "bg-emerald-50", border: "border-emerald-200", iconBg: "bg-emerald-500", hover: "hover:border-emerald-400", desc: "Proposez des formations barista professionnelles." },
+  { id: "BARISTA_MARKETPLACE", label: "Barista",icon: Users,         color: "text-indigo-600",  bg: "bg-indigo-50",  border: "border-indigo-200",  iconBg: "bg-indigo-500",  hover: "hover:border-indigo-400",  desc: "Mettez en valeur vos services de barista." },
   { id: "MAINTENANCE",         label: "Maintenance",        icon: Wrench,        color: "text-orange-600",  bg: "bg-orange-50",  border: "border-orange-200",  iconBg: "bg-orange-500",  hover: "hover:border-orange-400",  desc: "Proposez vos services de maintenance aux cafés." },
 ];
 
@@ -1447,7 +1447,7 @@ export default function LandingPage() {
                   </div>
                   {/* Contextual image */}
                   <div className="sm:w-36 sm:shrink-0 rounded-2xl overflow-hidden shadow-md">
-                    <img src={marketplaceImg} alt="Barista Marketplace" className="w-full h-32 sm:h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
+                    <img src={marketplaceImg} alt="Barista" className="w-full h-32 sm:h-full object-cover transition-transform duration-700 group-hover:scale-105" loading="lazy" />
                   </div>
                 </div>
               )}

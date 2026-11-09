@@ -17,6 +17,8 @@ import { registerMaintenanceRoutes } from "./routes/maintenance.routes";
 import { registerMarketingRoutes } from "./routes/marketing.routes";
 import { registerBaristaRoutes } from "./routes/barista.routes";
 import { registerSupplierRoutes } from "./routes/supplier.routes";
+import { registerCafeRegistrationRoutes } from "./routes/cafe-registrations.routes";
+import { registerAcademyBaristaRegistrationRoutes } from "./routes/academy-barista-registrations.routes";
 import { registerShopCatalogRoutes } from "./routes/shop-catalog.routes";
 import { registerDeliveryRoutes } from "./routes/delivery.routes";
 
@@ -70,6 +72,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
   registerMarketingRoutes(app);
   registerBaristaRoutes(app);
   registerSupplierRoutes(app);
+  registerCafeRegistrationRoutes(app);
+  registerAcademyBaristaRegistrationRoutes(app);
   registerShopCatalogRoutes(app);
   registerDeliveryRoutes(app);
 

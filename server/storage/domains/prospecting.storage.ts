@@ -4,6 +4,7 @@ import {
   users, prospects, prospectCustomTypes, PROSPECT_TYPES,
   type Prospect, type InsertProspect, type ProspectStats,
 } from "@shared/schema";
+import { normalizePhoneForMatch, normalizeEmailForMatch } from "../../contact-normalize";
 
 // Stage 2 extraction — Prospecting domain. Moved verbatim out of
 // server/storage.ts's DatabaseStorage class; see
@@ -11,19 +12,11 @@ import {
 // dependency analysis that made this the first domain extracted (zero
 // transactions, zero cross-domain `this.*` calls in or out).
 export class ProspectingStorage {
-  // Last-8-digits comparison robustly treats +216XXXXXXXX / 216XXXXXXXX /
-  // 0XXXXXXXX / XXXXXXXX as the same Tunisian number regardless of how either
-  // side happened to store it (international prefix, trunk 0, spaces/dashes).
-  private normalizePhoneForMatch(phone: string | null | undefined): string | null {
-    if (!phone) return null;
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length < 8) return null; // too short to reliably match — avoid false positives
-    return digits.slice(-8);
-  }
-  private normalizeEmailForMatch(email: string | null | undefined): string | null {
-    const e = email?.trim().toLowerCase();
-    return e || null;
-  }
+  // Moved to server/contact-normalize.ts — shared with the Supplier café registration
+  // duplicate-account check (server/storage.ts createSupplierCafeRegistration), which
+  // needed the exact same email/phone matching rules.
+  private normalizePhoneForMatch = normalizePhoneForMatch;
+  private normalizeEmailForMatch = normalizeEmailForMatch;
 
   // Batch account-existence check for a page of prospects — one pass over the
   // users table (not one query per prospect) so this stays cheap on the list

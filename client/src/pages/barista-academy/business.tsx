@@ -1,8 +1,9 @@
-import { BookOpen, ClipboardList, Users, CalendarDays, UserCheck } from "lucide-react";
+import { BookOpen, ClipboardList, Users, CalendarDays, UserCheck, Coffee } from "lucide-react";
 import { SubTabSwitcher } from "@/components/account/sub-tab-switcher";
 import AcademyCoursesPage from "@/pages/barista-academy/courses";
 import AcademyRegistrationsPage from "@/pages/barista-academy/registrations";
 import AcademyStudentsPage from "@/pages/barista-academy/students";
+import AcademyBaristaRegistrationsPage from "@/pages/barista-academy/barista-registrations";
 import AcademyCalendarPage from "@/pages/barista-academy/calendar";
 import AcademyProfilePage from "@/pages/barista-academy/profile";
 
@@ -22,6 +23,7 @@ export default function AcademyBusiness() {
         { key: "courses", label: "Formations", icon: BookOpen, content: <AcademyCoursesPage /> },
         { key: "registrations", label: "Inscriptions", icon: ClipboardList, content: <AcademyRegistrationsPage /> },
         { key: "students", label: "Étudiants", icon: Users, content: <AcademyStudentsPage /> },
+        { key: "barista", label: "Barista", icon: Coffee, content: <AcademyBaristaRegistrationsPage /> },
         { key: "calendar", label: "Calendrier", icon: CalendarDays, content: <AcademyCalendarPage /> },
       ]}
     />

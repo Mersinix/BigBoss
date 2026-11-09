@@ -8,6 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import SupplierCafeRegistrationsTab from "@/pages/admin/supplier-cafe-registrations-tab";
+import AcademyBaristaRegistrationsTab from "@/pages/admin/academy-barista-registrations-tab";
 import {
   Users, UserCheck, ShieldCheck, Plus, CheckCircle, XCircle, Clock,
   Filter, Trash2, Save, MapPin, X
@@ -622,6 +625,7 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
 export default function UsersPage() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const [tab, setTab] = useState("users");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
@@ -699,6 +703,20 @@ export default function UsersPage() {
         }
       />
 
+      <Tabs value={tab} onValueChange={setTab}>
+        <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+          <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
+            <TabsTrigger value="users" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-admin-users-utilisateurs">Utilisateurs</TabsTrigger>
+            <TabsTrigger value="supplier-cafes" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-admin-users-supplier-cafes">Supplier utilisateurs</TabsTrigger>
+            <TabsTrigger value="academy-baristas" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-admin-users-academy-baristas">Academy utilisateurs</TabsTrigger>
+          </TabsList>
+        </div>
+
+        {tab === "supplier-cafes" && <div className="mt-4"><SupplierCafeRegistrationsTab /></div>}
+        {tab === "academy-baristas" && <div className="mt-4"><AcademyBaristaRegistrationsTab /></div>}
+      </Tabs>
+
+      {tab === "users" && <>
       {/* Stats */}
       {!isMobile && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -885,6 +903,7 @@ export default function UsersPage() {
             onPageSizeChange={pagination.setPageSize}
             itemLabel="utilisateurs"
           />
+      </>}
 
       {/* User Detail Modal — live-synced via selectedUserId → users query */}
       <UserDetailDialog

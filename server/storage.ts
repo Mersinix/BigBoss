@@ -1,9 +1,12 @@
 import { db } from "./db";
+import { normalizePhoneForMatch, normalizeEmailForMatch } from "./contact-normalize";
 import { isNull, isNotNull, or, like, gte, lte } from "drizzle-orm";
 import { evaluateCartPromotions as engineEvaluate } from "./promotions-engine";
 import type { PromoCartItem } from "./promotions-engine";
 import {
   users, products, orders, orderItems, subOrders, supplierProductVariants,
+  supplierCafeRegistrations, type SupplierCafeRegistration,
+  academyBaristaRegistrations, type AcademyBaristaRegistration,
   categories, subCategories, flavors, sizes, brands,
   supplierProductListings, favorites,
   platformServices, supplierProductReviews, supplierReports, type SupplierReport,
@@ -603,23 +606,267 @@ export class DatabaseStorage implements IStorage {
     }).sort((a, b) => (b.lastOrderAt?.getTime() ?? 0) - (a.lastOrderAt?.getTime() ?? 0));
   }
 
-  /** Creates a real CAFE_OWNER account, tagged with referredBySupplierId so it appears in
-   *  the Supplier's Cafes list immediately — same createUser() pathway Admin's Add User and
-   *  createDriverForOwner use, never a separate/isolated café-user system. */
-  async createCafeForSupplier(supplierId: number, data: { name: string; email: string; password: string; phone?: string | null; isWhatsapp?: boolean; profileImageUrl?: string | null }): Promise<User> {
-    const existing = await this.getUserByEmail(data.email);
-    if (existing) throw new Error('Email already exists');
-    return this.createUser({
-      name: data.name,
-      email: data.email,
-      password: data.password,
-      role: 'CAFE_OWNER',
-      status: 'approved', // vetted by the supplier who added it, not the platform admin
-      phone: data.phone ?? null,
-      isWhatsapp: !!data.isWhatsapp,
-      profileImageUrl: data.profileImageUrl?.trim() || null,
-      referredBySupplierId: supplierId,
-    } as any);
+  /** Supplier submits a new café — no account is created yet, only a request row an Admin
+   *  must review (see supplierCafeRegistrations in shared/schema.ts for why). Replaces the
+   *  old createCafeForSupplier instant-approval path.
+   *
+   *  Duplicate-account validation (email OR phone) is authoritative here, not just on the
+   *  client — checked against every existing `users` row (any role/status) and every other
+   *  PENDING registration (any supplier), using the same normalizeEmailForMatch/
+   *  normalizePhoneForMatch rules ProspectingStorage already uses for account matching (see
+   *  server/contact-normalize.ts), so this never becomes a second, diverging comparison
+   *  algorithm. Wrapped in one db.transaction to shrink (not fully eliminate — see note
+   *  below) the race window between the check and the insert. */
+  async createSupplierCafeRegistration(supplierId: number, data: { cafeName: string; contactName: string; email: string; address?: string | null; phone?: string | null }): Promise<SupplierCafeRegistration> {
+    const normalizedEmail = normalizeEmailForMatch(data.email);
+    const normalizedPhone = normalizePhoneForMatch(data.phone);
+
+    return db.transaction(async (tx) => {
+      const allUsers = await tx.select({ email: users.email, phone: users.phone }).from(users);
+      const emailTaken = normalizedEmail != null && allUsers.some((u) => normalizeEmailForMatch(u.email) === normalizedEmail);
+      const phoneTaken = normalizedPhone != null && allUsers.some((u) => normalizePhoneForMatch(u.phone) === normalizedPhone);
+      if (emailTaken && phoneTaken) {
+        throw new Error("Cette adresse e-mail et ce numéro de téléphone sont déjà associés à un compte existant. Impossible d'envoyer la demande.");
+      }
+      if (emailTaken) {
+        throw new Error("Cette adresse e-mail est déjà associée à un compte existant. Impossible d'envoyer la demande.");
+      }
+      if (phoneTaken) {
+        throw new Error("Ce numéro de téléphone est déjà associé à un compte existant. Impossible d'envoyer la demande.");
+      }
+
+      // Pending-duplicate check — global (any supplier), since email/phone uniqueness is
+      // ultimately global at approval time regardless of who submitted the request.
+      const pending = await tx.select({ email: supplierCafeRegistrations.email, phone: supplierCafeRegistrations.phone })
+        .from(supplierCafeRegistrations)
+        .where(eq(supplierCafeRegistrations.status, 'PENDING'));
+      const pendingDuplicate = pending.some((p) =>
+        (normalizedEmail != null && normalizeEmailForMatch(p.email) === normalizedEmail) ||
+        (normalizedPhone != null && normalizePhoneForMatch(p.phone) === normalizedPhone));
+      if (pendingDuplicate) {
+        throw new Error("Une demande d'inscription avec cette adresse e-mail ou ce numéro de téléphone est déjà en attente de traitement.");
+      }
+
+      const [registration] = await tx.insert(supplierCafeRegistrations).values({
+        supplierId,
+        cafeName: data.cafeName,
+        contactName: data.contactName,
+        email: data.email,
+        address: data.address ?? null,
+        phone: data.phone ?? null,
+      }).returning();
+      return registration;
+    });
+  }
+
+  async getSupplierCafeRegistrations(supplierId: number): Promise<SupplierCafeRegistration[]> {
+    return db.select().from(supplierCafeRegistrations)
+      .where(eq(supplierCafeRegistrations.supplierId, supplierId))
+      .orderBy(desc(supplierCafeRegistrations.createdAt));
+  }
+
+  async getAdminCafeRegistrations(): Promise<Array<SupplierCafeRegistration & { supplierName: string; supplierEmail: string }>> {
+    const rows = await db.select({ registration: supplierCafeRegistrations, supplier: users })
+      .from(supplierCafeRegistrations)
+      .innerJoin(users, eq(supplierCafeRegistrations.supplierId, users.id))
+      .orderBy(desc(supplierCafeRegistrations.createdAt));
+    return rows.map(({ registration, supplier }) => ({ ...registration, supplierName: supplier.name, supplierEmail: supplier.email }));
+  }
+
+  /** Approval transaction — CRITICAL: every write below uses `tx`, never `this.createUser`/
+   *  the module-level `db` import, so the whole thing is genuinely atomic. (storage.createUser
+   *  always writes through the module-level `db`, even when called from inside a
+   *  db.transaction callback — it is NOT transaction-aware. Calling it here would let a
+   *  created user survive a later rollback.) If anything throws, Postgres rolls back the
+   *  tentative row lock, the uniqueness checks, and the insert together — the registration
+   *  is left exactly as it was (still PENDING), never stuck half-approved. */
+  async approveCafeRegistration(registrationId: number, adminId: number, data: { contactName: string; email: string; phone?: string | null; isWhatsapp?: boolean; profileImageUrl?: string | null; password: string; address?: string | null; locationLat?: string | null; locationLng?: string | null; locationPlaceId?: string | null; locationDetails?: Record<string, any> | null }): Promise<{ registration: SupplierCafeRegistration; user: User }> {
+    // Hashing is pure CPU work with no DB access — done once, before the transaction opens,
+    // so the (potentially slow, bcrypt) hash computation never holds a row lock open.
+    const hashedPassword = await this.hashPassword(data.password);
+
+    return db.transaction(async (tx) => {
+      // 1+2: lock the row for the duration of this transaction and recheck its status —
+      // serializes two admins racing to approve/reject the same registration.
+      const [registration] = await tx.select().from(supplierCafeRegistrations)
+        .where(eq(supplierCafeRegistrations.id, registrationId))
+        .for('update');
+      if (!registration) throw new Error('Registration not found');
+      if (registration.status !== 'PENDING') throw new Error('This registration is no longer pending (already approved or rejected)');
+
+      // 3: email/phone uniqueness — checked inside the same locked transaction.
+      const [existingEmailUser] = await tx.select().from(users).where(eq(users.email, data.email));
+      if (existingEmailUser) throw new Error('Email already exists');
+      if (data.phone) {
+        const [existingPhoneUser] = await tx.select().from(users).where(eq(users.phone, data.phone));
+        if (existingPhoneUser) throw new Error('Phone number already in use');
+      }
+
+      // 4-7: create the real account.
+      const [createdUser] = await tx.insert(users).values({
+        name: `${data.contactName} — ${registration.cafeName}`,
+        email: data.email,
+        password: hashedPassword,
+        role: 'CAFE_OWNER',
+        status: 'approved',
+        phone: data.phone ?? null,
+        isWhatsapp: !!data.isWhatsapp,
+        profileImageUrl: data.profileImageUrl?.trim() || null,
+        locationAddress: data.address ?? null,
+        locationLat: data.locationLat ?? null,
+        locationLng: data.locationLng ?? null,
+        locationPlaceId: data.locationPlaceId ?? null,
+        locationDetails: data.locationDetails ?? null,
+        referredBySupplierId: registration.supplierId,
+      } as any).returning();
+
+      // 8-10: link the new account back, finalize the registration's own status.
+      const [updatedRegistration] = await tx.update(supplierCafeRegistrations)
+        .set({ status: 'APPROVED', approvedUserId: createdUser.id, processedAt: new Date(), processedByAdminId: adminId })
+        .where(eq(supplierCafeRegistrations.id, registrationId))
+        .returning();
+
+      return { registration: updatedRegistration, user: createdUser };
+    });
+  }
+
+  async rejectCafeRegistration(registrationId: number, adminId: number, reason?: string | null): Promise<SupplierCafeRegistration> {
+    const [updated] = await db.update(supplierCafeRegistrations)
+      .set({ status: 'REJECTED', rejectionReason: reason ?? null, processedAt: new Date(), processedByAdminId: adminId })
+      .where(and(eq(supplierCafeRegistrations.id, registrationId), eq(supplierCafeRegistrations.status, 'PENDING')))
+      .returning();
+    if (!updated) throw new Error('This registration is no longer pending (already approved or rejected)');
+    return updated;
+  }
+
+  // ── Academy-initiated barista registrations — same architecture as the Supplier café
+  // registration cluster directly above (see shared/schema.ts academyBaristaRegistrations for
+  // why this is a separate table from both `users` and the unrelated academyRegistrations
+  // course-signup table). Kept directly on DatabaseStorage rather than inside AcademyStorage
+  // (server/storage/domains/academy.storage.ts), which deliberately keeps its `this.facade`
+  // cross-domain escape hatch limited to its two existing, already-documented call sites —
+  // adding a third (this.hashPassword / db.transaction) for a cluster that is architecturally
+  // closer to the café-registration pattern than to Academy's own course/session business
+  // logic would widen that documented exception for no real benefit. ──────────────────────
+
+  /** Academy submits a candidate barista — no account is created yet, only a request row an
+   *  Admin must review. Duplicate-account validation mirrors createSupplierCafeRegistration
+   *  exactly (same normalizeEmailForMatch/normalizePhoneForMatch rules, same transaction
+   *  shape, same race-window caveat — see that method's own comment). */
+  async createAcademyBaristaRegistration(academyId: number, data: { baristaName: string; contactName: string; email: string; address?: string | null; phone?: string | null }): Promise<AcademyBaristaRegistration> {
+    const normalizedEmail = normalizeEmailForMatch(data.email);
+    const normalizedPhone = normalizePhoneForMatch(data.phone);
+
+    return db.transaction(async (tx) => {
+      const allUsers = await tx.select({ email: users.email, phone: users.phone }).from(users);
+      const emailTaken = normalizedEmail != null && allUsers.some((u) => normalizeEmailForMatch(u.email) === normalizedEmail);
+      const phoneTaken = normalizedPhone != null && allUsers.some((u) => normalizePhoneForMatch(u.phone) === normalizedPhone);
+      if (emailTaken && phoneTaken) {
+        throw new Error("Cette adresse e-mail et ce numéro de téléphone sont déjà associés à un compte existant. Impossible d'envoyer la demande.");
+      }
+      if (emailTaken) {
+        throw new Error("Cette adresse e-mail est déjà associée à un compte existant. Impossible d'envoyer la demande.");
+      }
+      if (phoneTaken) {
+        throw new Error("Ce numéro de téléphone est déjà associé à un compte existant. Impossible d'envoyer la demande.");
+      }
+
+      const pending = await tx.select({ email: academyBaristaRegistrations.email, phone: academyBaristaRegistrations.phone })
+        .from(academyBaristaRegistrations)
+        .where(eq(academyBaristaRegistrations.status, 'PENDING'));
+      const pendingDuplicate = pending.some((p) =>
+        (normalizedEmail != null && normalizeEmailForMatch(p.email) === normalizedEmail) ||
+        (normalizedPhone != null && normalizePhoneForMatch(p.phone) === normalizedPhone));
+      if (pendingDuplicate) {
+        throw new Error("Une demande d'inscription pour ce barista est déjà en attente de traitement.");
+      }
+
+      const [registration] = await tx.insert(academyBaristaRegistrations).values({
+        academyId,
+        baristaName: data.baristaName,
+        contactName: data.contactName,
+        email: data.email,
+        address: data.address ?? null,
+        phone: data.phone ?? null,
+      }).returning();
+      return registration;
+    });
+  }
+
+  async getAcademyBaristaRegistrationsForAcademy(academyId: number): Promise<AcademyBaristaRegistration[]> {
+    return db.select().from(academyBaristaRegistrations)
+      .where(eq(academyBaristaRegistrations.academyId, academyId))
+      .orderBy(desc(academyBaristaRegistrations.createdAt));
+  }
+
+  async getAdminAcademyBaristaRegistrations(): Promise<Array<AcademyBaristaRegistration & { academyName: string; academyEmail: string }>> {
+    const rows = await db.select({ registration: academyBaristaRegistrations, academy: users })
+      .from(academyBaristaRegistrations)
+      .innerJoin(users, eq(academyBaristaRegistrations.academyId, users.id))
+      .orderBy(desc(academyBaristaRegistrations.createdAt));
+    return rows.map(({ registration, academy }) => ({ ...registration, academyName: academy.name, academyEmail: academy.email }));
+  }
+
+  /** Approval transaction — same atomicity requirements and the same deliberate avoidance of
+   *  this.createUser (not transaction-aware — see approveCafeRegistration's own comment for
+   *  the full explanation) as the café-registration approval. Creates a BARISTA_MARKETPLACE
+   *  account (the existing marketplace-professional role — confirmed via
+   *  landing-page.tsx's BaristaMarketplaceForm and server/storage/domains/barista.storage.ts;
+   *  never BARISTA_ACADEMY, which is the training-organization role the submitting Academy
+   *  itself already holds). No baristaMarketplaceProfiles row is pre-created here — mirrors
+   *  the existing public registration convention (server/routes/auth.routes.ts only
+   *  pre-creates a profile for role MAINTENANCE; every other professional role, including
+   *  BARISTA_MARKETPLACE, lazy-creates its profile row on first access via
+   *  getBaristaMarketplaceProfile). */
+  async approveAcademyBaristaRegistration(registrationId: number, adminId: number, data: { baristaName: string; email: string; phone?: string | null; isWhatsapp?: boolean; profileImageUrl?: string | null; password: string; address?: string | null; locationLat?: string | null; locationLng?: string | null; locationPlaceId?: string | null; locationDetails?: Record<string, any> | null }): Promise<{ registration: AcademyBaristaRegistration; user: User }> {
+    const hashedPassword = await this.hashPassword(data.password);
+
+    return db.transaction(async (tx) => {
+      const [registration] = await tx.select().from(academyBaristaRegistrations)
+        .where(eq(academyBaristaRegistrations.id, registrationId))
+        .for('update');
+      if (!registration) throw new Error('Registration not found');
+      if (registration.status !== 'PENDING') throw new Error('This registration is no longer pending (already approved or rejected)');
+
+      const [existingEmailUser] = await tx.select().from(users).where(eq(users.email, data.email));
+      if (existingEmailUser) throw new Error('Email already exists');
+      if (data.phone) {
+        const [existingPhoneUser] = await tx.select().from(users).where(eq(users.phone, data.phone));
+        if (existingPhoneUser) throw new Error('Phone number already in use');
+      }
+
+      const [createdUser] = await tx.insert(users).values({
+        name: data.baristaName,
+        email: data.email,
+        password: hashedPassword,
+        role: 'BARISTA_MARKETPLACE',
+        status: 'approved',
+        phone: data.phone ?? null,
+        isWhatsapp: !!data.isWhatsapp,
+        profileImageUrl: data.profileImageUrl?.trim() || null,
+        locationAddress: data.address ?? null,
+        locationLat: data.locationLat ?? null,
+        locationLng: data.locationLng ?? null,
+        locationPlaceId: data.locationPlaceId ?? null,
+        locationDetails: data.locationDetails ?? null,
+      } as any).returning();
+
+      const [updatedRegistration] = await tx.update(academyBaristaRegistrations)
+        .set({ status: 'APPROVED', approvedUserId: createdUser.id, processedAt: new Date(), processedByAdminId: adminId })
+        .where(eq(academyBaristaRegistrations.id, registrationId))
+        .returning();
+
+      return { registration: updatedRegistration, user: createdUser };
+    });
+  }
+
+  async rejectAcademyBaristaRegistration(registrationId: number, adminId: number, reason?: string | null): Promise<AcademyBaristaRegistration> {
+    const [updated] = await db.update(academyBaristaRegistrations)
+      .set({ status: 'REJECTED', rejectionReason: reason ?? null, processedAt: new Date(), processedByAdminId: adminId })
+      .where(and(eq(academyBaristaRegistrations.id, registrationId), eq(academyBaristaRegistrations.status, 'PENDING')))
+      .returning();
+    if (!updated) throw new Error('This registration is no longer pending (already approved or rejected)');
+    return updated;
   }
 
   async getActiveDeliveryForSubOrder(subOrderId: number): Promise<Delivery | undefined> {

@@ -1452,9 +1452,9 @@ function LandingConfigSection() {
                   <ImageInput label="Image — Section SHOP" value={shopImage} onChange={setShopImage} />
                   <ImageInput label="Image — Section PRINT" value={printImage} onChange={setPrintImage} />
                   <ImageInput label="Image — Section MARKETING" value={marketingImage} onChange={setMarketingImage} />
-                  <ImageInput label="Image — Barista Academy" value={baristaAcademyImage} onChange={setBaristaAcademyImage} />
-                  <ImageInput label="Image — Marketplace Barista" value={baristaMarketplaceImage} onChange={setBaristaMarketplaceImage} />
-                  <ImageInput label="Image — Maintenance" value={maintenanceImage} onChange={setMaintenanceImage} />
+                  <ImageInput label="Image — Section Academy" value={baristaAcademyImage} onChange={setBaristaAcademyImage} />
+                  <ImageInput label="Image — Section Barista" value={baristaMarketplaceImage} onChange={setBaristaMarketplaceImage} />
+                  <ImageInput label="Image — Section Maintenance" value={maintenanceImage} onChange={setMaintenanceImage} />
                 </div>
               </section>
 

@@ -1021,8 +1021,8 @@ function TypeManagementModal({ open, onClose, prospectTypes }: { open: boolean; 
 const ACCOUNT_TYPE_CONFIG: Record<string, { label: string; icon: any; nameShape: "cafe" | "company" | "person" | "simple"; needsLocation: boolean }> = {
   CAFE_OWNER:          { label: "Café Owner",          icon: Coffee,        nameShape: "cafe",    needsLocation: true },
   SUPPLIER:            { label: "Supplier",             icon: Building2,     nameShape: "company", needsLocation: true },
-  BARISTA_ACADEMY:     { label: "Barista Academy",      icon: GraduationCap, nameShape: "company", needsLocation: true },
-  BARISTA_MARKETPLACE: { label: "Barista Marketplace",  icon: Coffee,        nameShape: "company", needsLocation: true },
+  BARISTA_ACADEMY:     { label: "Academy",      icon: GraduationCap, nameShape: "company", needsLocation: true },
+  BARISTA_MARKETPLACE: { label: "Barista",  icon: Coffee,        nameShape: "company", needsLocation: true },
   DELIVERY_COMPANY:    { label: "Delivery",             icon: Truck,         nameShape: "person",  needsLocation: false },
   DRIVER:              { label: "Driver",               icon: Car,           nameShape: "simple",  needsLocation: false },
   MAINTENANCE:         { label: "Maintenance",           icon: Wrench,        nameShape: "company", needsLocation: true },

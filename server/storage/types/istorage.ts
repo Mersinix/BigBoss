@@ -44,7 +44,8 @@ import type {
   ProductWithSupplier, ProductWithTaxonomy, Prospect, ProspectStats,
   ResolvedPackOrderItem, ServiceKey, ServiceState, ServiceStatesMap, ShopFavoriteItem,
   Size, SizeWithCount, StoreAdminRow, StoreCard, StoreDetail, SubCategory,
-  SubCategoryWithDetails, SubOrder, SupplierCategoryMapping, SupplierListingWithProduct,
+  AcademyBaristaRegistration,
+  SubCategoryWithDetails, SubOrder, SupplierCafeRegistration, SupplierCategoryMapping, SupplierListingWithProduct,
   SupplierProductListing, SupplierProductReview, SupplierProductVariant, SupplierStore,
   SupplierVariantWithLabels, User, orders,
 } from "@shared/schema";
@@ -111,7 +112,22 @@ export interface IStorage {
   getDriversForOwner(ownerType: 'DELIVERY_COMPANY' | 'SUPPLIER', ownerId: number): Promise<User[]>;
   createDriverForOwner(ownerType: 'DELIVERY_COMPANY' | 'SUPPLIER', ownerId: number, data: { name: string; email: string; password: string; phone?: string | null }): Promise<User>;
   getSupplierCafes(supplierId: number): Promise<Array<User & { orderCount: number; totalSpent: number; lastOrderAt: Date | null; referred: boolean }>>;
-  createCafeForSupplier(supplierId: number, data: { name: string; email: string; password: string; phone?: string | null; isWhatsapp?: boolean; profileImageUrl?: string | null }): Promise<User>;
+  // Supplier-initiated café registration requests — see shared/schema.ts
+  // supplierCafeRegistrations for why this is a separate table from `users`.
+  // Replaces the old createCafeForSupplier instant-approval path.
+  createSupplierCafeRegistration(supplierId: number, data: { cafeName: string; contactName: string; email: string; address?: string | null; phone?: string | null }): Promise<SupplierCafeRegistration>;
+  getSupplierCafeRegistrations(supplierId: number): Promise<SupplierCafeRegistration[]>;
+  getAdminCafeRegistrations(): Promise<Array<SupplierCafeRegistration & { supplierName: string; supplierEmail: string }>>;
+  approveCafeRegistration(registrationId: number, adminId: number, data: { contactName: string; email: string; phone?: string | null; isWhatsapp?: boolean; profileImageUrl?: string | null; password: string; address?: string | null; locationLat?: string | null; locationLng?: string | null; locationPlaceId?: string | null; locationDetails?: Record<string, any> | null }): Promise<{ registration: SupplierCafeRegistration; user: User }>;
+  rejectCafeRegistration(registrationId: number, adminId: number, reason?: string | null): Promise<SupplierCafeRegistration>;
+  // Academy-initiated barista registration requests — see shared/schema.ts
+  // academyBaristaRegistrations for why this is separate from both `users` and the
+  // unrelated academyRegistrations (course signup) table.
+  createAcademyBaristaRegistration(academyId: number, data: { baristaName: string; contactName: string; email: string; address?: string | null; phone?: string | null }): Promise<AcademyBaristaRegistration>;
+  getAcademyBaristaRegistrationsForAcademy(academyId: number): Promise<AcademyBaristaRegistration[]>;
+  getAdminAcademyBaristaRegistrations(): Promise<Array<AcademyBaristaRegistration & { academyName: string; academyEmail: string }>>;
+  approveAcademyBaristaRegistration(registrationId: number, adminId: number, data: { baristaName: string; email: string; phone?: string | null; isWhatsapp?: boolean; profileImageUrl?: string | null; password: string; address?: string | null; locationLat?: string | null; locationLng?: string | null; locationPlaceId?: string | null; locationDetails?: Record<string, any> | null }): Promise<{ registration: AcademyBaristaRegistration; user: User }>;
+  rejectAcademyBaristaRegistration(registrationId: number, adminId: number, reason?: string | null): Promise<AcademyBaristaRegistration>;
   getApprovedDeliveryCompanyIds(): Promise<number[]>;
   getActiveDeliveryForSubOrder(subOrderId: number): Promise<Delivery | undefined>;
 

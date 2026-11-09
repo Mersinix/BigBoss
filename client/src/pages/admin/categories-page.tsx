@@ -936,7 +936,7 @@ function TaxonomyCrudTab({
 const CAT_ROLES = ["SUPPLIER", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "DELIVERY_COMPANY"];
 const ROLE_LABELS: Record<string, string> = {
   SUPPLIER: "Fournisseur", PRINTER: "Imprimerie", MARKETING: "Marketing",
-  BARISTA_ACADEMY: "Barista Academy", BARISTA_MARKETPLACE: "Barista Marketplace",
+  BARISTA_ACADEMY: "Academy", BARISTA_MARKETPLACE: "Barista",
   CAFE_OWNER: "Café", DELIVERY_COMPANY: "Livraison",
 };
 

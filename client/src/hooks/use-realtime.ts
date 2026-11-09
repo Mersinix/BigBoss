@@ -341,6 +341,17 @@ export function useRealtime(userId?: number) {
             // A newly-added café (Supplier → Cafes → "Add Café") is created through this
             // same admin_user_directory_changed broadcast (see POST /api/supplier/cafes).
             qc.invalidateQueries({ queryKey: ["/api/supplier/cafes"] });
+            // Café registration requests (Supplier → Cafes → "Inscriptions") also broadcast
+            // this same event on create/approve/reject (see cafe-registrations.routes.ts) —
+            // keeps the Supplier's own request list, KPIs, and status badges in sync without
+            // a manual refresh when an Admin approves/rejects elsewhere.
+            qc.invalidateQueries({ queryKey: ["/api/supplier/cafe-registrations"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/cafe-registrations"] });
+            // Same reasoning for Academy-initiated barista registrations (Business → Barista /
+            // Admin → Utilisateurs → "Academy utilisateurs") — broadcast on the same event by
+            // academy-barista-registrations.routes.ts on create/approve/reject.
+            qc.invalidateQueries({ queryKey: ["/api/academy/barista-registrations"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/academy-barista-registrations"] });
             // Academy's public /academy marketplace is course-driven (AcademyCourseCard
             // embeds the academy's own location/identity at fetch time, no separate
             // "/api/academy/profiles" list) — invalidate it too so an Admin-changed

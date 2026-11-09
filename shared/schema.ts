@@ -106,6 +106,80 @@ export const users = pgTable("users", {
   ),
 }));
 
+// Supplier-initiated café registration request — created when a Supplier submits a new café
+// via Supplier → Cafés → "Inscriptions" (client/src/pages/supplier/cafes-page.tsx). Deliberately
+// NOT a row in `users`: no account, password or login exists until an Admin reviews and
+// approves it (server/routes/cafe-registrations.routes.ts). Replaces the old
+// createCafeForSupplier instant-approval path (task: "Supplier-Initiated Café Registration &
+// Admin Approval Workflow"). No unique constraint on email — duplicates are allowed at
+// request time (a supplier may resubmit, or two suppliers may register the same café by
+// mistake); uniqueness is only enforced against `users.email` at approval time.
+export const supplierCafeRegistrationStatusEnum = pgEnum('supplier_cafe_registration_status', ['PENDING', 'APPROVED', 'REJECTED']);
+
+export const supplierCafeRegistrations = pgTable("supplier_cafe_registrations", {
+  id: serial("id").primaryKey(),
+  supplierId: integer("supplier_id").notNull(),
+  cafeName: text("cafe_name").notNull(),
+  contactName: text("contact_name").notNull(),
+  email: text("email").notNull(),
+  address: text("address"),
+  phone: text("phone"),
+  status: supplierCafeRegistrationStatusEnum("status").notNull().default('PENDING'),
+  createdAt: timestamp("created_at").defaultNow(),
+  processedAt: timestamp("processed_at"),
+  processedByAdminId: integer("processed_by_admin_id"),
+  rejectionReason: text("rejection_reason"),
+  // Set only on an APPROVED row — the real CAFE_OWNER account created by the approval
+  // transaction. Never set on a PENDING/REJECTED row.
+  approvedUserId: integer("approved_user_id"),
+}, (table) => ({
+  supplierIdx: index("supplier_cafe_registrations_supplier_idx").on(table.supplierId),
+  statusIdx: index("supplier_cafe_registrations_status_idx").on(table.status),
+}));
+
+// Academy-initiated barista registration request — the exact same architecture as
+// supplierCafeRegistrations above, adapted for an Academy (role BARISTA_ACADEMY) proposing a
+// new individual professional. Created when an Academy submits a candidate via Business →
+// Barista (client/src/pages/barista-academy/barista-registrations.tsx). Deliberately NOT a
+// row in `users`, and deliberately a SEPARATE table from academyRegistrations (which is an
+// unrelated, pre-existing concept: a Coffee Owner/Barista signing up for one of this
+// Academy's training courses) — no account, password or login exists until an Admin reviews
+// and approves it, which creates a real BARISTA_MARKETPLACE account (the existing role for an
+// individual professional listed on the Barista Marketplace — NOT BARISTA_ACADEMY, which is
+// the training-organization account itself). No unique constraint on email/phone — duplicates
+// are allowed at request time; uniqueness is only enforced against `users` at approval time
+// (task: "Academy-Initiated Barista Registration & Admin Approval Workflow").
+export const academyBaristaRegistrationStatusEnum = pgEnum('academy_barista_registration_status', ['PENDING', 'APPROVED', 'REJECTED']);
+
+export const academyBaristaRegistrations = pgTable("academy_barista_registrations", {
+  id: serial("id").primaryKey(),
+  academyId: integer("academy_id").notNull(),
+  // The proposed barista's own name ("Nom du barista" in the registration modal — mirrors the
+  // real public Barista Marketplace registration form's own "Nom du barista" field, see
+  // landing-page.tsx's BaristaMarketplaceForm) — becomes `users.name` on approval, unmodified.
+  baristaName: text("barista_name").notNull(),
+  // Who at the Academy can be reached about this specific submission — submission metadata
+  // only, never used to build the created account's own name (mirrors the two-name-field
+  // shape of supplierCafeRegistrations, reinterpreted for an individual professional who has
+  // no separate "business name").
+  contactName: text("contact_name").notNull(),
+  email: text("email").notNull(),
+  address: text("address"),
+  phone: text("phone"),
+  status: academyBaristaRegistrationStatusEnum("status").notNull().default('PENDING'),
+  createdAt: timestamp("created_at").defaultNow(),
+  processedAt: timestamp("processed_at"),
+  processedByAdminId: integer("processed_by_admin_id"),
+  rejectionReason: text("rejection_reason"),
+  // Set only on an APPROVED row — the real BARISTA_MARKETPLACE account created by the
+  // approval transaction. Never set on a PENDING/REJECTED row.
+  approvedUserId: integer("approved_user_id"),
+}, (table) => ({
+  academyIdx: index("academy_barista_registrations_academy_idx").on(table.academyId),
+  statusIdx: index("academy_barista_registrations_status_idx").on(table.status),
+  createdAtIdx: index("academy_barista_registrations_created_at_idx").on(table.createdAt),
+}));
+
 // Password reset — one row per "forgot password" request. Only ever stores HASHES, never
 // the raw 6-digit code or the raw reset token — see server/storage.ts
 // createPasswordResetCode/verifyPasswordResetCode/resetPasswordWithToken, the only code
@@ -3502,6 +3576,8 @@ export const messagesRelations = relations(messages, ({ one }) => ({
 // ── Insert Schemas ───────────────────────────────────────────────────────────
 
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
+export const insertSupplierCafeRegistrationSchema = createInsertSchema(supplierCafeRegistrations).omit({ id: true, createdAt: true, processedAt: true, processedByAdminId: true, approvedUserId: true });
+export const insertAcademyBaristaRegistrationSchema = createInsertSchema(academyBaristaRegistrations).omit({ id: true, createdAt: true, processedAt: true, processedByAdminId: true, approvedUserId: true });
 export const insertProductSchema = createInsertSchema(products).omit({ id: true, createdAt: true });
 export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true });
 export const insertOrderItemSchema = createInsertSchema(orderItems).omit({ id: true });
@@ -3563,6 +3639,12 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+
+export type SupplierCafeRegistration = typeof supplierCafeRegistrations.$inferSelect;
+export type InsertSupplierCafeRegistration = z.infer<typeof insertSupplierCafeRegistrationSchema>;
+
+export type AcademyBaristaRegistration = typeof academyBaristaRegistrations.$inferSelect;
+export type InsertAcademyBaristaRegistration = z.infer<typeof insertAcademyBaristaRegistrationSchema>;
 
 export type Product = typeof products.$inferSelect;
 export type InsertProduct = z.infer<typeof insertProductSchema>;

@@ -4,6 +4,7 @@ import { evaluateCartPromotions as engineEvaluate } from "../../promotions-engin
 import type { PromoCartItem } from "../../promotions-engine";
 import {
   promotions, promotionUsage, orders, subOrders, supplierProductListings, products,
+  categories, supplierProductVariants,
 } from "@shared/schema";
 import type { DatabaseStorage } from "../../storage";
 
@@ -174,10 +175,98 @@ export class PromotionsStorage {
           label: this._promoLabel(p, currencySymbol),
           endDate: p.endDate,
           discountValue: p.discountValue,
+          minimumOrderValue: p.minimumOrderValue ?? null,
         });
       }
     }
     return result;
+  }
+
+  // Customer-safe single-promotion lookup for the Coffee Owner's Promotion Details
+  // modal. Re-validates the promotion the exact same way getPromotionsForListings
+  // does (active/dates/usage/cafe-eligibility, and — critically — that the given
+  // listing is actually targeted by this promotion) so a Coffee Owner can never
+  // fetch a promotion unrelated to the product/variant they're looking at, nor one
+  // belonging to another supplier. Returns undefined (→ 404 at the route) on any
+  // failed check, never a partial/placeholder result.
+  async getPromotionDetailForListing(
+    promotionId: number,
+    listingId: number,
+    variant: { flavorId: number | null; sizeId: number | null },
+    cafeId?: number,
+  ): Promise<import("@shared/schema").CustomerPromotionDetail | undefined> {
+    const [listing] = await db.select().from(supplierProductListings).where(eq(supplierProductListings.id, listingId));
+    if (!listing) return undefined;
+
+    const [p] = await db.select().from(promotions).where(eq(promotions.id, promotionId));
+    if (!p || p.supplierId !== listing.supplierId) return undefined;
+    if (p.status !== 'ACTIVE') return undefined;
+    const now = new Date();
+    if (p.startDate && p.startDate > now) return undefined;
+    if (p.endDate && p.endDate < now) return undefined;
+    if (p.maxUses != null && p.usageCount >= p.maxUses) return undefined;
+    if (cafeId != null && p.eligibleCafeIds && p.eligibleCafeIds.length > 0 && !p.eligibleCafeIds.includes(cafeId)) return undefined;
+
+    let eligible = false;
+    let categoryName: string | null = null;
+    if (p.targetType === 'ALL') {
+      eligible = true;
+    } else if (p.targetType === 'PRODUCTS') {
+      eligible = (p.targetListingIds ?? []).includes(listingId);
+    } else if (p.targetType === 'CATEGORIES') {
+      const [product] = await db.select().from(products).where(eq(products.id, listing.productId));
+      if (product?.categoryId != null && (p.targetCategoryIds ?? []).includes(product.categoryId)) {
+        eligible = true;
+        const [cat] = await db.select().from(categories).where(eq(categories.id, product.categoryId));
+        categoryName = cat?.name ?? null;
+      }
+    }
+    if (!eligible) return undefined;
+
+    // Resolve the specific variant/listing's current price for the discount preview.
+    let originalPrice: number | null = null;
+    const variants = await db.select().from(supplierProductVariants).where(eq(supplierProductVariants.listingId, listingId));
+    if (variants.length > 0) {
+      const v = variants.find(v => (v.flavorId ?? null) === (variant.flavorId ?? null) && (v.sizeId ?? null) === (variant.sizeId ?? null));
+      originalPrice = v?.price ?? null;
+    } else {
+      originalPrice = listing.price;
+    }
+    let promotionalPrice: number | null = null;
+    if (originalPrice != null) {
+      if (['PERCENTAGE', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER'].includes(p.type)) {
+        promotionalPrice = Math.max(0, Math.round(originalPrice * (1 - p.discountValue / 10000)));
+      } else if (p.type === 'FIXED_AMOUNT') {
+        // discountValue is CENTS for this type (see the unit note below) — same unit
+        // as originalPrice, no conversion needed.
+        promotionalPrice = Math.max(0, originalPrice - p.discountValue);
+      }
+    }
+
+    // discountValue/maximumDiscount/minimumOrderValue/freeShippingMinAmount are all
+    // stored in CENTS on the `promotions` row (shared/schema.ts's own column
+    // comments), the same unit as originalPrice/promotionalPrice above and every
+    // other monetary field in this API — no conversion needed, passed through as-is.
+    return {
+      promotionId: p.id,
+      name: p.name,
+      type: p.type,
+      description: p.description ?? null,
+      discountValue: p.discountValue,
+      maximumDiscount: p.maximumDiscount ?? null,
+      minimumOrderValue: p.minimumOrderValue ?? null,
+      minimumQuantity: p.minimumQuantity ?? null,
+      buyQuantity: p.buyQuantity ?? null,
+      getQuantity: p.getQuantity ?? null,
+      freeShippingMinAmount: p.freeShippingMinAmount ?? null,
+      giftInfo: (p.giftInfo as import("@shared/schema").GiftInfo | null) ?? null,
+      stackable: p.stackable,
+      startDate: p.startDate ?? null,
+      endDate: p.endDate ?? null,
+      categoryName,
+      originalPrice,
+      promotionalPrice,
+    };
   }
 
   private _promoLabel(p: import("@shared/schema").Promotion, currencySymbol: string): string {
@@ -185,7 +274,12 @@ export class PromotionsStorage {
       case 'PERCENTAGE':
       case 'CATEGORY_DISCOUNT': return `${p.discountValue / 100}% OFF`;
       case 'FIXED_AMOUNT':
-      case 'MIN_ORDER_AMOUNT': return `${(p.discountValue / 1000).toFixed(3)} ${currencySymbol} OFF`;
+      // discountValue is CENTS for these two types (shared/schema.ts's column
+      // comment: "basis points (for %) or cents (for fixed)") — divide by 100, not
+      // 1000, to get DT. The previous /1000 here assumed the Discount Codes
+      // feature's unrelated "millimes" convention; see
+      // PROMOTION_MINIMUM_ORDER_ELIGIBILITY_THEME_REALTIME_REPORT.md.
+      case 'MIN_ORDER_AMOUNT': return `${(p.discountValue / 100).toFixed(3)} ${currencySymbol} OFF`;
       case 'BUY_X_GET_Y': return `Buy ${p.buyQuantity} Get ${p.getQuantity}`;
       case 'QUANTITY_TIER': return 'Tier Pricing';
       case 'FREE_SHIPPING': return 'Free Shipping';

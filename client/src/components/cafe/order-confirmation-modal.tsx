@@ -5,16 +5,17 @@ import { Button } from "@/components/ui/button";
 import {
   Store, Layers, MapPin, Clock, AlertTriangle,
   Minus, Plus, Trash2, Zap, ArrowRight, Calendar, CheckCircle,
-  Sun, Moon, X, Truck, Banknote, CreditCard, Smartphone, Landmark, Package, Pencil,
+  Sun, Moon, X, Truck, Banknote, CreditCard, Smartphone, Landmark, Package, Pencil, Loader2,
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useThemeStore } from "@/store/theme-store";
 import { usePackQuickView } from "@/hooks/use-pack-quick-view";
 import { usePackAvailability } from "@/hooks/use-pack-availability";
 import { useProductImageData } from "@/hooks/use-product-image-data";
+import { usePromotionEvaluation } from "@/hooks/use-promotion-evaluation";
 import { computeCoverZoomScale, getAdjustmentFor } from "@/lib/image-adjustment";
 import type { CartItem, PackCartItem } from "@/hooks/use-cart";
-import type { CartPromotionEvaluation, GeoLocation, OrderPriority } from "@shared/schema";
+import type { DiscountCodeValidationResult, GeoLocation, OrderPriority } from "@shared/schema";
 import { groupPackIncludedProducts } from "@/lib/pack-grouping";
 import { groupCartProducts } from "@/lib/cart-grouping";
 
@@ -36,12 +37,12 @@ type Props = {
   packItems: PackCartItem[];
   deliveryAddress: GeoLocation | null;
   courierInstructions: string;
-  promoEval: CartPromotionEvaluation;
-  // Discount Code amount, if the Coffee Owner applied one — a separate mechanism from
-  // Promotions (see shared/schema.ts's discountCodes note), shown as its own line here so
-  // the confirmation total the Coffee Owner sees always matches what checkout will charge.
-  discountCodeAmount?: number;
-  discountCodeLabel?: string;
+  // Identifying info only — NOT a pre-computed amount. The modal re-validates this code
+  // itself (see discountCodeResult below) against the current draft (localItems), the
+  // same way it re-evaluates automatic promotions, instead of trusting a value computed
+  // by the parent from the Cart's state at the moment this modal was opened. A separate
+  // mechanism from Promotions (see shared/schema.ts's discountCodes note).
+  discountCode?: { code: string; supplierId: number } | null;
   isSubmitting: boolean;
   onConfirm: (opts: ConfirmOrderOpts) => void;
 };
@@ -101,7 +102,7 @@ function useTheme(isDark: boolean) {
 
 export default function OrderConfirmationModal({
   open, onClose, items, packItems, deliveryAddress, courierInstructions,
-  promoEval, discountCodeAmount = 0, discountCodeLabel, isSubmitting, onConfirm,
+  discountCode, isSubmitting, onConfirm,
 }: Props) {
   const { isDark, toggle } = useThemeStore();
   const t = useTheme(isDark);
@@ -201,10 +202,59 @@ export default function OrderConfirmationModal({
   };
 
   // ── Totals ───────────────────────────────────────────────────────────────────
+  // Re-evaluated from THIS modal's own draft (localItems), not a value computed by the
+  // parent Cart page from the live Cart's contents at the moment this modal opened.
+  // Editing/removing an item here (updateItemQty/removeItem, above) only ever touches
+  // localItems, never the real Cart — so a promotion evaluation keyed off the live Cart
+  // would silently keep reflecting products no longer in this draft. Reusing
+  // usePromotionEvaluation (the exact same hook/endpoint the Cart page itself calls,
+  // see cart-page.tsx) with localItems as its override gives this draft the identical
+  // calculation, re-run automatically (TanStack Query's own query-key-change behavior)
+  // every time localItems changes — no duplicate pricing logic, no manual invalidation.
+  const { evaluation: promoEval, isLoading: isPromoRecalculating } = usePromotionEvaluation(localItems);
+  const discount = promoEval.totalDiscount;
+
+  // Same staleness class, same fix, for an applied Discount Code (a separate mechanism
+  // from Promotions — see shared/schema.ts's discountCodes note): re-validated here
+  // against this draft's current items for that code's supplier, not trusted as a flat
+  // amount computed once when the Coffee Owner clicked "Appliquer" on the Cart page.
+  const discountCodeItems = discountCode
+    ? localItems.filter(i => i.supplierId === discountCode.supplierId).map(i => ({ supplierId: i.supplierId, quantity: i.quantity, unitPrice: i.unitPrice }))
+    : [];
+  const discountCodeQueryKey = [
+    "/api/discount-codes/validate",
+    discountCode?.code ?? null,
+    discountCodeItems.map(i => `${i.supplierId}:${i.quantity}:${i.unitPrice}`).sort().join(","),
+  ];
+  const { data: discountCodeResult, isLoading: isDiscountCodeRecalculating, isError: discountCodeFailed } = useQuery<DiscountCodeValidationResult>({
+    queryKey: discountCodeQueryKey,
+    queryFn: async () => {
+      const res = await fetch("/api/discount-codes/validate", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: discountCode!.code, items: discountCodeItems }),
+      });
+      if (!res.ok) throw new Error("Discount code validation failed");
+      return res.json();
+    },
+    enabled: !!discountCode && discountCodeItems.length > 0,
+    retry: false,
+  });
+  // discountCodeItems.length === 0 means this code's supplier no longer has any items in
+  // the draft (e.g. the Coffee Owner removed them here) — correctly 0, no request needed.
+  const discountCodeAmount = discountCode && discountCodeItems.length > 0 && discountCodeResult?.valid
+    ? (discountCodeResult.discountAmount ?? 0)
+    : 0;
+  const discountCodeLabel = discountCode?.code;
+
+  // While either recalculation is in flight, the displayed discount/total must not be
+  // trusted for confirmation yet (task: "If a pricing recalculation is still in
+  // progress, prevent confirmation using stale values").
+  const isRecalculating = isPromoRecalculating || isDiscountCodeRecalculating;
 
   const itemsTotal = localItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
   const packsTotal = localPackItems.reduce((s, p) => s + p.unitPrice * p.quantity, 0);
-  const discount   = promoEval.totalDiscount;
   const grandTotal = Math.max(0, itemsTotal + packsTotal - discount - discountCodeAmount);
   const isEmpty    = localItems.length === 0 && localPackItems.length === 0;
 
@@ -244,7 +294,7 @@ export default function OrderConfirmationModal({
   // ── Confirm ──────────────────────────────────────────────────────────────────
 
   const handleConfirm = () => {
-    if (isEmpty || isSubmitting) return;
+    if (isEmpty || isSubmitting || isRecalculating) return;
     let scheduledAt: string | undefined;
     if (isScheduled && scheduledDate)
       scheduledAt = new Date(`${scheduledDate}T${scheduledTime || "09:00"}:00`).toISOString();
@@ -695,10 +745,21 @@ export default function OrderConfirmationModal({
                   <span>−{fmt(discountCodeAmount)}</span>
                 </div>
               )}
+              {discountCodeFailed && (
+                <p className="text-xs text-red-400 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3 shrink-0" /> Impossible de revalider le code promo. Réessayez.
+                </p>
+              )}
               <div className={`flex justify-between font-bold text-base pt-2 border-t ${t.dk ? "border-gray-800" : "border-gray-100"}`}>
                 <span className={t.textPrimary}>Total</span>
-                <span className="text-amber-500 text-lg">{fmt(grandTotal)}</span>
+                <span className="text-amber-500 text-lg flex items-center gap-1.5">
+                  {isRecalculating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {fmt(grandTotal)}
+                </span>
               </div>
+              {isRecalculating && (
+                <p className={`text-xs ${t.textMuted}`}>Recalcul des promotions en cours…</p>
+              )}
             </div>
 
             {/* Actions */}
@@ -718,11 +779,13 @@ export default function OrderConfirmationModal({
               <Button
                 className="flex-1 rounded-xl h-11 font-semibold bg-amber-500 hover:bg-amber-400 text-white border-0 transition-colors active:scale-[.98]"
                 onClick={handleConfirm}
-                disabled={isEmpty || isSubmitting}
+                disabled={isEmpty || isSubmitting || isRecalculating}
                 data-testid="button-confirm-order"
               >
                 {isSubmitting
                   ? "Traitement…"
+                  : isRecalculating
+                  ? "Recalcul en cours…"
                   : (
                     <span className="flex items-center gap-2">
                       Confirmer la commande

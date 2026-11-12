@@ -24,6 +24,11 @@ const PACK_EVENTS = ["pack_updated"];
 const PRODUCT_EVENTS = ["product_updated"];
 const INVENTORY_EVENTS = ["inventory_updated"];
 const PROMOTION_EVENTS = ["promotion_updated"];
+// Admin → System Management → Promotion (task: "Admin Promotion Management — Supplier
+// Promotions Visibility and Type Configuration") — separate from PROMOTION_EVENTS above,
+// which is about individual promotion records changing, not the feature's own
+// availability settings.
+const PROMOTION_SETTINGS_EVENTS = ["promotion_settings_updated", "promotion_type_settings_updated"];
 const DISCOUNT_CODE_EVENTS = ["discount_code_updated"];
 const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_changed", "suborder_items_cancelled", "order_deleted"];
 const DELIVERY_EVENTS = ["delivery_created", "delivery_accepted", "delivery_assigned", "delivery_status_changed"];
@@ -244,6 +249,10 @@ export function useRealtime(userId?: number) {
           }
           if (ACCOUNT_DARK_MODE_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/account-dark-mode-settings"] });
+          }
+          if (PROMOTION_SETTINGS_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/promotion-settings"] });
+            qc.invalidateQueries({ queryKey: ["/api/promotion-type-settings"] });
           }
           if (SYSTEM_SERVICES_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/system-services"] });

@@ -3298,6 +3298,35 @@ export const promotionUsage = pgTable("promotion_usage", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Admin-controlled Supplier Promotions feature AVAILABILITY — entirely separate from
+// promotion ELIGIBILITY/pricing (server/promotions-engine.ts, never touched by this).
+// Mirrors messagingSettings exactly: a single row, defaulting to the current behavior
+// (visible), that only governs whether the Supplier-facing management UI/API is
+// reachable. Hiding this must never delete, deactivate, or otherwise alter an existing
+// promotion row, nor affect Coffee-Owner-facing promotion evaluation/checkout.
+export const promotionSettings = pgTable("promotion_settings", {
+  id: serial("id").primaryKey(),
+  globalVisible: boolean("global_visible").notNull().default(true),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export type PromotionSettings = typeof promotionSettings.$inferSelect;
+
+// Admin-controlled availability of each individual promotionTypeEnum value in the
+// Supplier "Créer une promotion" Type picklist — one row per existing type (reusing
+// promotionTypeEnum as-is, never a new/invented type), same seed/get/set shape as
+// heroActionSettings/accountDarkModeSettings above. Disabling a type only blocks
+// CREATING a new promotion of that type, or CHANGING an existing promotion TO that
+// type — it never touches an existing promotion already using it (that promotion keeps
+// its type, data, and eligibility exactly as before).
+export const promotionTypeSettings = pgTable("promotion_type_settings", {
+  id: serial("id").primaryKey(),
+  type: promotionTypeEnum("type").notNull().unique(),
+  enabled: boolean("enabled").notNull().default(true),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export type PromotionTypeSetting = typeof promotionTypeSettings.$inferSelect;
+export type PromotionTypeSettingsMap = Record<PromotionType, boolean>;
+
 // ── Discount Codes ─────────────────────────────────────────────────────────────
 // A completely separate mechanism from Promotions above: Promotions apply
 // automatically based on eligibility rules, Discount Codes are entered by the
@@ -3958,7 +3987,39 @@ export type ListingPromotion = {
   type: PromotionType;
   label: string;         // e.g. "20% OFF"
   endDate: Date | null;
-  discountValue: number; // basis points or cents depending on type
+  discountValue: number;         // basis points or cents depending on type
+  minimumOrderValue: number | null; // cents (same unit as discountValue/prices) — lets
+  // the client decide, before adding to cart, whether a price-affecting promotion is
+  // ALREADY eligible given the current cart's subtotal for this listing's supplier,
+  // instead of always showing the discounted price as active.
+};
+
+// Customer-safe promotion detail returned by GET /api/marketplace/promotions/:id
+// for the Coffee Owner's "Promotion Details" modal (clicking a promotion badge in
+// the Product Detail Modal). Deliberately excludes every internal/administrative
+// field of `Promotion` — internalNotes, eligibleCafeIds, targetListingIds/
+// targetCategoryIds (raw arrays), usageCount, priority, supplierId — only
+// information the supplier intended customers to see, or that's needed to
+// explain eligibility, is included.
+export type CustomerPromotionDetail = {
+  promotionId: number;
+  name: string;
+  type: PromotionType;
+  description: string | null;      // the supplier's customer-visible description, never internalNotes
+  discountValue: number;           // basis points for percentage-family types, cents for FIXED_AMOUNT/MIN_ORDER_AMOUNT
+  maximumDiscount: number | null;  // cents
+  minimumOrderValue: number | null; // cents
+  minimumQuantity: number | null;
+  buyQuantity: number | null;
+  getQuantity: number | null;
+  freeShippingMinAmount: number | null; // cents
+  giftInfo: GiftInfo | null;
+  stackable: boolean;
+  startDate: Date | null;
+  endDate: Date | null;
+  categoryName: string | null;     // set only for a CATEGORIES-targeted promotion eligible via this listing's category
+  originalPrice: number | null;    // the specific listing/variant's current price, for display alongside the discount
+  promotionalPrice: number | null; // originalPrice after this promotion, when the type affects unit price
 };
 
 // ── Pack Rich Types ───────────────────────────────────────────────────────────

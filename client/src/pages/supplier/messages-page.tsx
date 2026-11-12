@@ -9,7 +9,7 @@ export default function SupplierMessagesPage() {
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title="Messages"
-        subtitle="Chat with your café customers and support."
+        subtitle="Discutez avec vos clients cafés et le support."
       />
       <SupplierCommunicationSwitcher />
       {user && <MessagesPanel currentUserId={user.id} showRoleIndicator standardizedCloseButton />}

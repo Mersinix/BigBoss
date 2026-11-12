@@ -74,19 +74,43 @@ interface CalcResult {
 function calcDiscount(p: Promotion, targeted: PromoCartItem[], subtotal: number): CalcResult | null {
   const totalQty = targeted.reduce((s, i) => s + i.quantity, 0);
   const targetedSubtotal = targeted.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+  // minimumOrderValue/maximumDiscount/freeShippingMinAmount/discountValue (for the
+  // FIXED_AMOUNT/MIN_ORDER_AMOUNT types) are all documented and stored in CENTS on the
+  // `promotions` row (shared/schema.ts's own column comments), the same unit as every
+  // price/subtotal this engine operates on — no conversion is needed or correct here.
+  // (A prior pass at this file incorrectly treated them as milli-DT and divided by 10;
+  // the real unit bug was in the Supplier form, see promotions-page.tsx's
+  // formToPayload/promoToForm and PROMOTION_MINIMUM_ORDER_ELIGIBILITY_THEME_REALTIME_REPORT.md.)
+  const minOrderValue = p.minimumOrderValue;
+  const maxDiscount = p.maximumDiscount;
+
+  // Minimum order value gates every type EXCEPT MIN_ORDER_AMOUNT/GIFT (which already
+  // check it themselves below, as their own primary trigger condition) and
+  // FREE_SHIPPING (which uses its own dedicated freeShippingMinAmount field instead).
+  // This was previously only enforced for MIN_ORDER_AMOUNT/GIFT — PERCENTAGE,
+  // CATEGORY_DISCOUNT, MIN_QUANTITY, BUY_X_GET_Y, QUANTITY_TIER and FIRST_ORDER could
+  // all have a supplier-configured minimumOrderValue (the Supplier form offers this
+  // field for every type except MIN_ORDER_AMOUNT/GIFT/FREE_SHIPPING) that the engine
+  // simply never read — the root cause of the eligibility-bypass bug. Scope: the
+  // promotion-owning supplier's full order subtotal (`subtotal`, not the
+  // category/product-targeted subtotal alone) — the same scope already implemented
+  // for MIN_ORDER_AMOUNT/GIFT below, reused for consistency rather than inventing a
+  // second meaning for the same field (see the report's scope-decision audit).
+  if (!['MIN_ORDER_AMOUNT', 'GIFT', 'FREE_SHIPPING'].includes(p.type) && minOrderValue != null && subtotal < minOrderValue) {
+    return null;
+  }
 
   switch (p.type) {
     case 'PERCENTAGE':
     case 'CATEGORY_DISCOUNT': {
       if (targetedSubtotal === 0) return null;
       const raw = Math.round(targetedSubtotal * p.discountValue / 10000);
-      const discount = p.maximumDiscount ? Math.min(raw, p.maximumDiscount) : raw;
+      const discount = maxDiscount ? Math.min(raw, maxDiscount) : raw;
       return { discountAmount: discount, freeShipping: false, giftInfo: null, appliedTierPrice: null };
     }
     case 'FIXED_AMOUNT':
     case 'MIN_ORDER_AMOUNT': {
-      const minValue = p.minimumOrderValue ?? 0;
-      if (subtotal < minValue) return null;
+      if (p.type === 'MIN_ORDER_AMOUNT' && subtotal < (minOrderValue ?? 0)) return null;
       const discount = Math.min(p.discountValue, subtotal);
       return { discountAmount: discount, freeShipping: false, giftInfo: null, appliedTierPrice: null };
     }
@@ -94,7 +118,7 @@ function calcDiscount(p: Promotion, targeted: PromoCartItem[], subtotal: number)
       const minQty = p.minimumQuantity ?? 1;
       if (totalQty < minQty) return null;
       const raw = Math.round(targetedSubtotal * p.discountValue / 10000);
-      const discount = p.maximumDiscount ? Math.min(raw, p.maximumDiscount) : raw;
+      const discount = maxDiscount ? Math.min(raw, maxDiscount) : raw;
       return { discountAmount: discount, freeShipping: false, giftInfo: null, appliedTierPrice: null };
     }
     case 'BUY_X_GET_Y': {
@@ -129,7 +153,7 @@ function calcDiscount(p: Promotion, targeted: PromoCartItem[], subtotal: number)
       return { discountAmount: 0, freeShipping: true, giftInfo: null, appliedTierPrice: null };
     }
     case 'GIFT': {
-      const minValue = p.minimumOrderValue ?? 0;
+      const minValue = minOrderValue ?? 0;
       const minQty = p.minimumQuantity ?? 0;
       if (subtotal < minValue) return null;
       if (minQty > 0 && totalQty < minQty) return null;
@@ -139,7 +163,7 @@ function calcDiscount(p: Promotion, targeted: PromoCartItem[], subtotal: number)
     case 'FIRST_ORDER': {
       // Caller sets cafeOrderCount; 0 = first order
       const raw = Math.round(subtotal * p.discountValue / 10000);
-      const discount = p.maximumDiscount ? Math.min(raw, p.maximumDiscount) : raw;
+      const discount = maxDiscount ? Math.min(raw, maxDiscount) : raw;
       return { discountAmount: discount, freeShipping: false, giftInfo: null, appliedTierPrice: null };
     }
     default:

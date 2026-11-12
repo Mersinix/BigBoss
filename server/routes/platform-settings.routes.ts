@@ -121,6 +121,51 @@ export function registerPlatformSettingsRoutes(app: Express): void {
       }
     });
 
+    // ── Promotion Settings (Admin → System Management → Promotion) ─────────────
+    // Global Supplier Promotions tab visibility. Public GET (no auth) — same convention
+    // as hero-actions/account-dark-mode-settings above, since this is non-sensitive
+    // boolean configuration several roles need to read (Supplier sidebar/page gate).
+    app.get("/api/promotion-settings", async (_req, res) => {
+      try {
+        res.json(await storage.getPromotionSettings());
+      } catch { res.status(500).json({ message: "Failed to load promotion settings" }); }
+    });
+
+    app.patch("/api/admin/promotion-settings", requireAdmin, async (req, res) => {
+      try {
+        const body = z.object({ globalVisible: z.boolean().optional() }).strict().parse(req.body);
+        const settings = await storage.updatePromotionSettings(body);
+        broadcast("promotion_settings_updated", settings);
+        res.json(settings);
+      } catch (err) {
+        if (err instanceof z.ZodError) return res.status(400).json({ message: "Invalid promotion settings" });
+        res.status(500).json({ message: "Failed to update promotion settings" });
+      }
+    });
+
+    // Per-type availability in the Supplier "Créer une promotion" Type picklist. Reuses
+    // the existing promotionTypeEnum values — never a new/invented type.
+    app.get("/api/promotion-type-settings", async (_req, res) => {
+      try {
+        res.json(await storage.getPromotionTypeSettings());
+      } catch { res.status(500).json({ message: "Failed to load promotion type settings" }); }
+    });
+
+    app.patch("/api/admin/promotion-type-settings/:type", requireAdmin, async (req, res) => {
+      try {
+        const type = req.params.type as string;
+        const VALID_TYPES = ['PERCENTAGE', 'FIXED_AMOUNT', 'BUY_X_GET_Y', 'QUANTITY_TIER', 'CATEGORY_DISCOUNT', 'FREE_SHIPPING', 'GIFT', 'MIN_ORDER_AMOUNT', 'MIN_QUANTITY', 'FIRST_ORDER'];
+        if (!VALID_TYPES.includes(type)) return res.status(400).json({ message: "Invalid promotion type" });
+        const { enabled } = z.object({ enabled: z.boolean() }).parse(req.body);
+        const settings = await storage.setPromotionTypeEnabled(type as any, enabled);
+        broadcast("promotion_type_settings_updated", settings);
+        res.json(settings);
+      } catch (err) {
+        if (err instanceof z.ZodError) return res.status(400).json({ message: err.errors[0].message });
+        res.status(500).json({ message: "Failed to update promotion type settings" });
+      }
+    });
+
     app.get("/api/system-service-order", async (_req, res) => {
       try {
         res.json(await storage.getServiceOrder());

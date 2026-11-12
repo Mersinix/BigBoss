@@ -2107,6 +2107,8 @@ export class DeliveryStorage {
       if (p.startDate && new Date(p.startDate) > now) return false;
       if (p.endDate && new Date(p.endDate) < now) return false;
       if (p.eligibleCafeIds && p.eligibleCafeIds.length > 0 && !p.eligibleCafeIds.includes(cafeId)) return false;
+      // freeShippingMinAmount is stored in cents (shared/schema.ts's column comment),
+      // the same unit as subtotalCents — no conversion needed.
       const minAmount = p.freeShippingMinAmount ?? 0;
       return subtotalCents >= minAmount;
     });

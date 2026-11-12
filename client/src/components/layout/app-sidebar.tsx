@@ -3,6 +3,7 @@ import { Link, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { useMessagingSettings } from "@/hooks/use-messaging-settings";
+import { usePromotionSettings } from "@/hooks/use-promotion-settings";
 import {
   Store, Package, ShoppingCart, LayoutDashboard,
   ClipboardList, Truck, Users, LogOut, Coffee,
@@ -86,6 +87,7 @@ export function AppSidebar() {
   const { toggleSidebar } = useSidebar();
   const isAdmin = !!user && (user.role === "ADMIN" || user.role === "SUPER_ADMIN");
   const { settings: messagingSettings } = useMessagingSettings();
+  const { settings: promotionSettings } = usePromotionSettings();
 
   const hasMessages = user && MESSAGES_URLS.has(
     user.role === "ADMIN" || user.role === "SUPER_ADMIN" ? "/admin/messages"
@@ -192,7 +194,12 @@ export function AppSidebar() {
           label: "MARKETING",
           items: [
             { title: "Communication", url: "/supplier/messages", icon: MessageCircle, activeUrls: ["/supplier/messages", "/supplier/notifications", "/supplier/reviews"] },
-            { title: "Promotions", url: "/supplier/promotions", icon: Tag },
+            // Admin → System Management → Promotion's global toggle (task: "Admin
+            // Promotion Management — Supplier Promotions Visibility") — hides this
+            // nav entry entirely when disabled, reactively (usePromotionSettings is a
+            // useQuery kept in sync by use-realtime.ts's promotion_settings_updated
+            // handler), same principle as messagingSettings.globalVisible above.
+            ...(promotionSettings.globalVisible ? [{ title: "Promotions", url: "/supplier/promotions", icon: Tag }] : []),
             { title: "Discount Codes", url: "/supplier/discount-codes", icon: Ticket },
           ],
         },

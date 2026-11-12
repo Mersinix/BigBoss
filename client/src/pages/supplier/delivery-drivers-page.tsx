@@ -16,6 +16,7 @@ export default function SupplierDeliveryDriversPage() {
         subtitle="Chauffeurs que vous gérez directement, indépendamment des entreprises de livraison."
         useDrivers={useSupplierDrivers}
         useCreateDriver={useCreateSupplierDriver}
+        useAdminCardDesign
       />
     </div>
   );

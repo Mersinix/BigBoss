@@ -25,6 +25,9 @@ import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { computeCoverZoomScale, getAdjustmentFor } from "@/lib/image-adjustment";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { usePromotionSettings } from "@/hooks/use-promotion-settings";
+import { usePromotionTypeSettings } from "@/hooks/use-promotion-type-settings";
+import { Lock } from "lucide-react";
 
 // ── API helpers ─────────────────────────────────────────────────────────────
 
@@ -39,16 +42,25 @@ async function fetchJSON(url: string, opts?: RequestInit) {
 // ── Type helpers ─────────────────────────────────────────────────────────────
 
 const TYPE_LABELS: Record<PromotionType, string> = {
-  PERCENTAGE: "% Discount",
-  FIXED_AMOUNT: "Fixed Amount",
-  BUY_X_GET_Y: "Buy X Get Y",
-  QUANTITY_TIER: "Tier Pricing",
-  CATEGORY_DISCOUNT: "Category Discount",
-  FREE_SHIPPING: "Free Shipping",
-  GIFT: "Free Gift",
-  MIN_ORDER_AMOUNT: "Min Order Amount",
-  MIN_QUANTITY: "Min Quantity",
-  FIRST_ORDER: "First Order",
+  PERCENTAGE: "Réduction en %",
+  FIXED_AMOUNT: "Montant fixe",
+  BUY_X_GET_Y: "Achetez X, obtenez Y",
+  QUANTITY_TIER: "Tarification par palier",
+  CATEGORY_DISCOUNT: "Réduction par catégorie",
+  FREE_SHIPPING: "Livraison gratuite",
+  GIFT: "Cadeau gratuit",
+  MIN_ORDER_AMOUNT: "Montant minimum de commande",
+  MIN_QUANTITY: "Quantité minimum",
+  FIRST_ORDER: "Première commande",
+};
+
+// French display label for the effective promotion status badge — `PromotionStatus`
+// itself (the stored enum) is never translated, only its rendered text here.
+const STATUS_LABELS: Record<PromotionStatus, string> = {
+  ACTIVE: "Active",
+  PAUSED: "En pause",
+  SCHEDULED: "Programmée",
+  EXPIRED: "Expirée",
 };
 
 const TYPE_ICONS: Record<PromotionType, JSX.Element> = {
@@ -80,17 +92,23 @@ const STATUS_STYLES: Record<PromotionStatus, string> = {
 };
 
 function discountLabel(p: Promotion, fmt: (n: number) => string): string {
+  // discountValue (for FIXED_AMOUNT/MIN_ORDER_AMOUNT) and freeShippingMinAmount are
+  // stored in cents (shared/schema.ts's own column comments), the same unit fmt()
+  // expects — no conversion needed. (A prior pass here incorrectly divided by 10,
+  // based on the wrong assumption that these fields were milli-DT; the actual unit
+  // bug was in formToPayload/promoToForm below, now fixed — see
+  // PROMOTION_MINIMUM_ORDER_ELIGIBILITY_THEME_REALTIME_REPORT.md.)
   switch (p.type) {
     case 'PERCENTAGE':
     case 'CATEGORY_DISCOUNT':
     case 'MIN_QUANTITY':
-    case 'FIRST_ORDER': return `${p.discountValue / 100}% off`;
+    case 'FIRST_ORDER': return `${p.discountValue / 100}% de réduction`;
     case 'FIXED_AMOUNT':
-    case 'MIN_ORDER_AMOUNT': return `${fmt(p.discountValue)} off`;
-    case 'BUY_X_GET_Y': return `Buy ${p.buyQuantity} Get ${p.getQuantity} Free`;
-    case 'QUANTITY_TIER': return 'Tier Pricing';
-    case 'FREE_SHIPPING': return p.freeShippingMinAmount ? `Free shipping on ${fmt(p.freeShippingMinAmount)}+` : 'Always free shipping';
-    case 'GIFT': return 'Free gift';
+    case 'MIN_ORDER_AMOUNT': return `${fmt(p.discountValue)} de réduction`;
+    case 'BUY_X_GET_Y': return `Achetez ${p.buyQuantity}, obtenez ${p.getQuantity} gratuit${p.getQuantity !== 1 ? "s" : ""}`;
+    case 'QUANTITY_TIER': return 'Tarification par palier';
+    case 'FREE_SHIPPING': return p.freeShippingMinAmount ? `Livraison gratuite à partir de ${fmt(p.freeShippingMinAmount)}` : 'Toujours la livraison gratuite';
+    case 'GIFT': return 'Cadeau gratuit';
     default: return '';
   }
 }
@@ -124,6 +142,14 @@ const EMPTY_FORM = {
 type FormState = typeof EMPTY_FORM;
 
 function formToPayload(f: FormState) {
+  // minimumOrderValue/maximumDiscount/freeShippingMinAmount, and discountValue for
+  // the FIXED_AMOUNT/MIN_ORDER_AMOUNT types, are all stored in CENTS on the
+  // `promotions` row (shared/schema.ts's own column comments) — the same unit as
+  // every price elsewhere in the app (`Math.round(dt * 100)`, e.g. the variant price
+  // save endpoint). The *1000 used here previously was the Discount Codes feature's
+  // unrelated "millimes" convention, copied onto this form by mistake — the root
+  // cause of the "10.000 DT -> 100.000 DT" Promotion Details bug. See
+  // PROMOTION_MINIMUM_ORDER_ELIGIBILITY_THEME_REALTIME_REPORT.md.
   const base: Record<string, any> = {
     name: f.name.trim(),
     description: f.description.trim() || null,
@@ -135,9 +161,9 @@ function formToPayload(f: FormState) {
     endDate: f.endDate || null,
     maxUses: f.maxUses ? Number(f.maxUses) : null,
     maxUsesPerCustomer: f.maxUsesPerCustomer ? Number(f.maxUsesPerCustomer) : null,
-    minimumOrderValue: f.minimumOrderValue ? Math.round(parseFloat(f.minimumOrderValue) * 1000) : null,
+    minimumOrderValue: f.minimumOrderValue ? Math.round(parseFloat(f.minimumOrderValue) * 100) : null,
     minimumQuantity: f.minimumQuantity ? Number(f.minimumQuantity) : null,
-    maximumDiscount: f.maximumDiscount ? Math.round(parseFloat(f.maximumDiscount) * 1000) : null,
+    maximumDiscount: f.maximumDiscount ? Math.round(parseFloat(f.maximumDiscount) * 100) : null,
     stackable: f.stackable,
     targetType: f.targetType,
     discountValue: 0,
@@ -157,17 +183,17 @@ function formToPayload(f: FormState) {
       break;
     case 'FIXED_AMOUNT':
     case 'MIN_ORDER_AMOUNT':
-      base.discountValue = Math.round(parseFloat(f.discountValue || '0') * 1000);
+      base.discountValue = Math.round(parseFloat(f.discountValue || '0') * 100);
       break;
     case 'BUY_X_GET_Y':
       base.buyQuantity = Number(f.buyQuantity) || 1;
       base.getQuantity = Number(f.getQuantity) || 1;
       break;
     case 'FREE_SHIPPING':
-      base.freeShippingMinAmount = f.freeShippingMinAmount ? Math.round(parseFloat(f.freeShippingMinAmount) * 1000) : 0;
+      base.freeShippingMinAmount = f.freeShippingMinAmount ? Math.round(parseFloat(f.freeShippingMinAmount) * 100) : 0;
       break;
     case 'GIFT':
-      base.giftInfo = { description: f.giftDescription || 'Free gift', quantity: Number(f.giftQuantity) || 1 };
+      base.giftInfo = { description: f.giftDescription || 'Cadeau gratuit', quantity: Number(f.giftQuantity) || 1 };
       break;
   }
   return base;
@@ -185,9 +211,9 @@ function promoToForm(p: Promotion): FormState {
   f.endDate = p.endDate ? new Date(p.endDate).toISOString().slice(0, 16) : "";
   f.maxUses = p.maxUses?.toString() ?? "";
   f.maxUsesPerCustomer = p.maxUsesPerCustomer?.toString() ?? "";
-  f.minimumOrderValue = p.minimumOrderValue ? (p.minimumOrderValue / 1000).toFixed(3) : "";
+  f.minimumOrderValue = p.minimumOrderValue ? (p.minimumOrderValue / 100).toFixed(3) : "";
   f.minimumQuantity = p.minimumQuantity?.toString() ?? "";
-  f.maximumDiscount = p.maximumDiscount ? (p.maximumDiscount / 1000).toFixed(3) : "";
+  f.maximumDiscount = p.maximumDiscount ? (p.maximumDiscount / 100).toFixed(3) : "";
   f.stackable = p.stackable;
   f.targetType = p.targetType;
   switch (p.type) {
@@ -199,14 +225,14 @@ function promoToForm(p: Promotion): FormState {
       break;
     case 'FIXED_AMOUNT':
     case 'MIN_ORDER_AMOUNT':
-      f.discountValue = (p.discountValue / 1000).toFixed(3);
+      f.discountValue = (p.discountValue / 100).toFixed(3);
       break;
     case 'BUY_X_GET_Y':
       f.buyQuantity = p.buyQuantity?.toString() ?? "1";
       f.getQuantity = p.getQuantity?.toString() ?? "1";
       break;
     case 'FREE_SHIPPING':
-      f.freeShippingMinAmount = p.freeShippingMinAmount ? (p.freeShippingMinAmount / 1000).toFixed(3) : "";
+      f.freeShippingMinAmount = p.freeShippingMinAmount ? (p.freeShippingMinAmount / 100).toFixed(3) : "";
       break;
     case 'GIFT': {
       const gi = p.giftInfo as any;
@@ -220,36 +246,52 @@ function promoToForm(p: Promotion): FormState {
 
 // ── Promotion Form ──────────────────────────────────────────────────────────
 
-function PromotionForm({ form, onChange }: { form: FormState; onChange: (f: FormState) => void }) {
+function PromotionForm({ form, onChange, enabledTypes, originalType }: {
+  form: FormState;
+  onChange: (f: FormState) => void;
+  // Admin → System Management → Promotion's per-type toggle (task: "Admin Promotion
+  // Management — Supplier Promotions Visibility and Type Configuration"). Only these
+  // types are offered for a NEW selection.
+  enabledTypes: Set<PromotionType>;
+  // When editing an existing promotion whose type has since been hidden, its type must
+  // still display correctly and remain selected — never silently swapped to another
+  // type or dropped from the list — even though it can't be chosen for anything else.
+  originalType: PromotionType | null;
+}) {
   const symbol = useCurrency();
   const set = (k: keyof FormState, v: any) => onChange({ ...form, [k]: v });
+
+  const typeOptions = (Object.entries(TYPE_LABELS) as [PromotionType, string][])
+    .filter(([k]) => enabledTypes.has(k) || k === originalType);
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-4">
         <div className="col-span-2 space-y-1.5">
-          <Label>Promotion Name *</Label>
-          <Input value={form.name} onChange={e => set('name', e.target.value)} placeholder="e.g. Spring Coffee Sale" />
+          <Label>Nom de la promotion *</Label>
+          <Input value={form.name} onChange={e => set('name', e.target.value)} placeholder="ex. Promotion café de printemps" />
         </div>
         <div className="space-y-1.5">
           <Label>Type *</Label>
           <Select value={form.type} onValueChange={v => set('type', v as PromotionType)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              {(Object.entries(TYPE_LABELS) as [PromotionType, string][]).map(([k, v]) => (
-                <SelectItem key={k} value={k}>{v}</SelectItem>
+              {typeOptions.map(([k, v]) => (
+                <SelectItem key={k} value={k}>
+                  {v}{k === originalType && !enabledTypes.has(k) ? " (masqué)" : ""}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label>Status</Label>
+          <Label>Statut</Label>
           <Select value={form.status} onValueChange={v => set('status', v as PromotionStatus)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ACTIVE">Active</SelectItem>
-              <SelectItem value="PAUSED">Paused</SelectItem>
-              <SelectItem value="SCHEDULED">Scheduled</SelectItem>
+              <SelectItem value="PAUSED">En pause</SelectItem>
+              <SelectItem value="SCHEDULED">Programmée</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -258,45 +300,45 @@ function PromotionForm({ form, onChange }: { form: FormState; onChange: (f: Form
       {/* Type-specific discount fields */}
       {['PERCENTAGE', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER'].includes(form.type) && (
         <div className="space-y-1.5">
-          <Label>Discount % *</Label>
+          <Label>Pourcentage de réduction *</Label>
           <div className="relative">
-            <Input type="number" min="0" max="100" step="0.1" value={form.discountValue} onChange={e => set('discountValue', e.target.value)} placeholder="e.g. 20" />
+            <Input type="number" min="0" max="100" step="0.1" value={form.discountValue} onChange={e => set('discountValue', e.target.value)} placeholder="ex. 20" />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">%</span>
           </div>
         </div>
       )}
       {['FIXED_AMOUNT', 'MIN_ORDER_AMOUNT'].includes(form.type) && (
         <div className="space-y-1.5">
-          <Label>Discount Amount ({symbol}) *</Label>
-          <Input type="number" min="0" step="0.001" value={form.discountValue} onChange={e => set('discountValue', e.target.value)} placeholder="e.g. 10.000" />
+          <Label>Montant de la réduction ({symbol}) *</Label>
+          <Input type="number" min="0" step="0.001" value={form.discountValue} onChange={e => set('discountValue', e.target.value)} placeholder="ex. 10.000" />
         </div>
       )}
       {form.type === 'BUY_X_GET_Y' && (
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <Label>Buy Quantity *</Label>
-            <Input type="number" min="1" value={form.buyQuantity} onChange={e => set('buyQuantity', e.target.value)} placeholder="e.g. 10" />
+            <Label>Quantité à acheter *</Label>
+            <Input type="number" min="1" value={form.buyQuantity} onChange={e => set('buyQuantity', e.target.value)} placeholder="ex. 10" />
           </div>
           <div className="space-y-1.5">
-            <Label>Get Free Quantity *</Label>
-            <Input type="number" min="1" value={form.getQuantity} onChange={e => set('getQuantity', e.target.value)} placeholder="e.g. 1" />
+            <Label>Quantité gratuite obtenue *</Label>
+            <Input type="number" min="1" value={form.getQuantity} onChange={e => set('getQuantity', e.target.value)} placeholder="ex. 1" />
           </div>
         </div>
       )}
       {form.type === 'FREE_SHIPPING' && (
         <div className="space-y-1.5">
-          <Label>Minimum Order Amount ({symbol}) — leave empty for always free</Label>
-          <Input type="number" min="0" step="0.001" value={form.freeShippingMinAmount} onChange={e => set('freeShippingMinAmount', e.target.value)} placeholder="e.g. 300.000" />
+          <Label>Montant minimum de commande ({symbol}) — laisser vide pour une livraison toujours gratuite</Label>
+          <Input type="number" min="0" step="0.001" value={form.freeShippingMinAmount} onChange={e => set('freeShippingMinAmount', e.target.value)} placeholder="ex. 300.000" />
         </div>
       )}
       {form.type === 'GIFT' && (
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2 space-y-1.5">
-            <Label>Gift Description *</Label>
-            <Input value={form.giftDescription} onChange={e => set('giftDescription', e.target.value)} placeholder="e.g. Free sugar sample bag" />
+            <Label>Description du cadeau *</Label>
+            <Input value={form.giftDescription} onChange={e => set('giftDescription', e.target.value)} placeholder="ex. Sachet d'échantillon de sucre offert" />
           </div>
           <div className="space-y-1.5">
-            <Label>Gift Quantity</Label>
+            <Label>Quantité du cadeau</Label>
             <Input type="number" min="1" value={form.giftQuantity} onChange={e => set('giftQuantity', e.target.value)} />
           </div>
         </div>
@@ -307,20 +349,20 @@ function PromotionForm({ form, onChange }: { form: FormState; onChange: (f: Form
       {/* Dates & limits */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5">
-          <Label>Start Date</Label>
+          <Label>Date de début</Label>
           <Input type="datetime-local" value={form.startDate} onChange={e => set('startDate', e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label>End Date</Label>
+          <Label>Date de fin</Label>
           <Input type="datetime-local" value={form.endDate} onChange={e => set('endDate', e.target.value)} />
         </div>
         <div className="space-y-1.5">
-          <Label>Max Total Uses</Label>
-          <Input type="number" min="1" value={form.maxUses} onChange={e => set('maxUses', e.target.value)} placeholder="Unlimited" />
+          <Label>Nombre maximum d'utilisations</Label>
+          <Input type="number" min="1" value={form.maxUses} onChange={e => set('maxUses', e.target.value)} placeholder="Illimité" />
         </div>
         <div className="space-y-1.5">
-          <Label>Max Per Customer</Label>
-          <Input type="number" min="1" value={form.maxUsesPerCustomer} onChange={e => set('maxUsesPerCustomer', e.target.value)} placeholder="Unlimited" />
+          <Label>Maximum par client</Label>
+          <Input type="number" min="1" value={form.maxUsesPerCustomer} onChange={e => set('maxUsesPerCustomer', e.target.value)} placeholder="Illimité" />
         </div>
       </div>
 
@@ -328,41 +370,41 @@ function PromotionForm({ form, onChange }: { form: FormState; onChange: (f: Form
       <div className="grid grid-cols-2 gap-4">
         {['MIN_ORDER_AMOUNT', 'GIFT', 'FREE_SHIPPING'].includes(form.type) === false && (
           <div className="space-y-1.5">
-            <Label>Min Order Value ({symbol})</Label>
-            <Input type="number" min="0" step="0.001" value={form.minimumOrderValue} onChange={e => set('minimumOrderValue', e.target.value)} placeholder="No minimum" />
+            <Label>Valeur minimum de commande ({symbol})</Label>
+            <Input type="number" min="0" step="0.001" value={form.minimumOrderValue} onChange={e => set('minimumOrderValue', e.target.value)} placeholder="Aucun minimum" />
           </div>
         )}
         {!['BUY_X_GET_Y', 'MIN_QUANTITY'].includes(form.type) || true ? (
           <div className="space-y-1.5">
-            <Label>Min Quantity</Label>
-            <Input type="number" min="0" value={form.minimumQuantity} onChange={e => set('minimumQuantity', e.target.value)} placeholder="No minimum" />
+            <Label>Quantité minimum</Label>
+            <Input type="number" min="0" value={form.minimumQuantity} onChange={e => set('minimumQuantity', e.target.value)} placeholder="Aucun minimum" />
           </div>
         ) : null}
         <div className="space-y-1.5">
-          <Label>Max Discount Cap ({symbol})</Label>
-          <Input type="number" min="0" step="0.001" value={form.maximumDiscount} onChange={e => set('maximumDiscount', e.target.value)} placeholder="No cap" />
+          <Label>Plafond de réduction ({symbol})</Label>
+          <Input type="number" min="0" step="0.001" value={form.maximumDiscount} onChange={e => set('maximumDiscount', e.target.value)} placeholder="Aucun plafond" />
         </div>
         <div className="space-y-1.5">
-          <Label>Priority (higher = applied first)</Label>
+          <Label>Priorité (plus élevé = appliqué en premier)</Label>
           <Input type="number" value={form.priority} onChange={e => set('priority', Number(e.target.value))} placeholder="0" />
         </div>
       </div>
 
       {/* Applies to */}
       <div className="space-y-1.5">
-        <Label>Applies To</Label>
+        <Label>S'applique à</Label>
         <Select value={form.targetType} onValueChange={v => set('targetType', v as any)}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">All my products</SelectItem>
-            <SelectItem value="PRODUCTS">Specific products</SelectItem>
-            <SelectItem value="CATEGORIES">Specific categories</SelectItem>
+            <SelectItem value="ALL">Tous mes produits</SelectItem>
+            <SelectItem value="PRODUCTS">Produits spécifiques</SelectItem>
+            <SelectItem value="CATEGORIES">Catégories spécifiques</SelectItem>
           </SelectContent>
         </Select>
         {form.targetType !== 'ALL' && (
           <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
             <Settings2 className="w-3 h-3 shrink-0" />
-            After saving, use the <strong>Manage Assignments</strong> button on the promotion card to assign specific {form.targetType === 'PRODUCTS' ? 'products' : 'categories'}.
+            Après l'enregistrement, utilisez le bouton <strong>Gérer les assignations</strong> sur la carte de la promotion pour assigner des {form.targetType === 'PRODUCTS' ? 'produits' : 'catégories'} spécifiques.
           </p>
         )}
       </div>
@@ -372,19 +414,19 @@ function PromotionForm({ form, onChange }: { form: FormState; onChange: (f: Form
       {/* Stacking & notes */}
       <div className="flex items-center justify-between rounded-xl border p-4">
         <div>
-          <p className="font-medium text-sm">Stackable</p>
-          <p className="text-xs text-muted-foreground">Can combine with other promotions for the same order</p>
+          <p className="font-medium text-sm">Cumulable</p>
+          <p className="text-xs text-muted-foreground">Peut se combiner avec d'autres promotions pour la même commande</p>
         </div>
         <Switch checked={form.stackable} onCheckedChange={v => set('stackable', v)} />
       </div>
 
       <div className="space-y-1.5">
-        <Label>Description (visible to customers)</Label>
-        <Textarea value={form.description} onChange={e => set('description', e.target.value)} placeholder="What customers will see about this promotion" rows={2} />
+        <Label>Description (visible par les clients)</Label>
+        <Textarea value={form.description} onChange={e => set('description', e.target.value)} placeholder="Ce que les clients verront à propos de cette promotion" rows={2} />
       </div>
       <div className="space-y-1.5">
-        <Label>Internal Notes (not visible to customers)</Label>
-        <Textarea value={form.internalNotes} onChange={e => set('internalNotes', e.target.value)} placeholder="Notes for your team" rows={2} />
+        <Label>Notes internes (non visibles par les clients)</Label>
+        <Textarea value={form.internalNotes} onChange={e => set('internalNotes', e.target.value)} placeholder="Notes pour votre équipe" rows={2} />
       </div>
     </div>
   );
@@ -493,13 +535,13 @@ function PromotionAssignmentDialog({
       await fetchJSON(`${apiBase}/${promo.id}/targets`, { method: "PATCH", body: JSON.stringify(payload) });
       const count = selectedIds.size;
       const noun = isProducts
-        ? `${count} product${count !== 1 ? "s" : ""}`
-        : `${count} categor${count !== 1 ? "ies" : "y"}`;
-      toast({ title: "Assignments saved", description: `${noun} assigned to this promotion.` });
+        ? `${count} produit${count !== 1 ? "s" : ""}`
+        : `${count} catégorie${count !== 1 ? "s" : ""}`;
+      toast({ title: "Assignations enregistrées", description: `${noun} assigné(s) à cette promotion.` });
       onSaved();
       onClose();
     } catch (e: any) {
-      toast({ title: "Error saving", description: e.message, variant: "destructive" });
+      toast({ title: "Erreur lors de l'enregistrement", description: e.message, variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -518,21 +560,21 @@ function PromotionAssignmentDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings2 className="w-5 h-5 text-amber-600" />
-            Manage {isProducts ? "Product" : "Category"} Assignments
+            Gérer les assignations de {isProducts ? "produits" : "catégories"}
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            <strong>{promo.name}</strong> — select which {isProducts ? "products" : "categories"} this promotion applies to.
+            <strong>{promo.name}</strong> — sélectionnez les {isProducts ? "produits" : "catégories"} auxquels cette promotion s'applique.
           </p>
         </DialogHeader>
 
         {/* Summary bar */}
         <div className="flex items-center justify-between rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 px-4 py-2.5 text-sm">
           <span className="text-amber-800 dark:text-amber-400 font-medium">
-            {assignedCount} of {totalItems} {isProducts ? "products" : "categories"} assigned
+            {assignedCount} sur {totalItems} {isProducts ? "produits" : "catégories"} assigné(s)
           </span>
           <div className="flex gap-2">
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={selectAll}>Select all visible</Button>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={deselectAll}>Deselect all</Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={selectAll}>Tout sélectionner (visible)</Button>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={deselectAll}>Tout désélectionner</Button>
           </div>
         </div>
 
@@ -542,7 +584,7 @@ function PromotionAssignmentDialog({
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <Input
               className="pl-8 h-8 text-sm"
-              placeholder={isProducts ? "Search products…" : "Search categories…"}
+              placeholder={isProducts ? "Rechercher des produits…" : "Rechercher des catégories…"}
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
@@ -550,10 +592,10 @@ function PromotionAssignmentDialog({
           {isProducts && categoryOptions.length > 0 && (
             <Select value={filterCategory} onValueChange={setFilterCategory}>
               <SelectTrigger className="h-8 text-sm w-40">
-                <SelectValue placeholder="All categories" />
+                <SelectValue placeholder="Toutes les catégories" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">All categories</SelectItem>
+                <SelectItem value="__all__">Toutes les catégories</SelectItem>
                 {categoryOptions.map(([val, label]) => (
                   <SelectItem key={val} value={val}>{label}</SelectItem>
                 ))}
@@ -573,7 +615,7 @@ function PromotionAssignmentDialog({
             filteredListings.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
                 <Package className="w-10 h-10 mb-2 opacity-30" />
-                <p className="text-sm">No products found</p>
+                <p className="text-sm">Aucun produit trouvé</p>
               </div>
             ) : (
               filteredListings.map(listing => {
@@ -603,7 +645,7 @@ function PromotionAssignmentDialog({
                     <div className="text-right shrink-0">
                       <p className="text-sm font-semibold">{fmt(listing.price)}</p>
                       <p className={`text-xs ${listing.stock === 0 ? "text-destructive" : listing.stock < 10 ? "text-yellow-600 dark:text-yellow-400" : "text-muted-foreground"}`}>
-                        {listing.stock === 0 ? "Out of stock" : `${listing.stock} en stock`}
+                        {listing.stock === 0 ? "Rupture de stock" : `${listing.stock} en stock`}
                       </p>
                     </div>
                     {checked && <Check className="w-4 h-4 text-amber-600 shrink-0" />}
@@ -615,7 +657,7 @@ function PromotionAssignmentDialog({
             filteredCategories.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
                 <Tag className="w-10 h-10 mb-2 opacity-30" />
-                <p className="text-sm">No categories found</p>
+                <p className="text-sm">Aucune catégorie trouvée</p>
               </div>
             ) : (
               filteredCategories.map(cat => {
@@ -632,10 +674,10 @@ function PromotionAssignmentDialog({
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm">{cat.name}</p>
-                      <p className="text-xs text-muted-foreground">{cat.productCount} product{cat.productCount !== 1 ? "s" : ""} in this category</p>
+                      <p className="text-xs text-muted-foreground">{cat.productCount} produit{cat.productCount !== 1 ? "s" : ""} dans cette catégorie</p>
                     </div>
                     <div className="text-right shrink-0">
-                      <Badge variant="secondary" className="text-xs">{cat.productCount} products</Badge>
+                      <Badge variant="secondary" className="text-xs">{cat.productCount} produits</Badge>
                     </div>
                     {checked && <Check className="w-4 h-4 text-amber-600 shrink-0" />}
                   </div>
@@ -648,19 +690,19 @@ function PromotionAssignmentDialog({
         {/* Footer */}
         {isProducts && (
           <p className="text-xs text-muted-foreground bg-secondary/30 rounded-lg p-2.5">
-            Only currently assigned products receive the promotion. New products you add later will need to be manually assigned.
+            Seuls les produits actuellement assignés bénéficient de la promotion. Les nouveaux produits que vous ajouterez devront être assignés manuellement.
           </p>
         )}
         {!isProducts && (
           <p className="text-xs text-muted-foreground bg-secondary/30 rounded-lg p-2.5">
-            All products in assigned categories receive the promotion automatically, including new products you add to these categories later.
+            Tous les produits des catégories assignées bénéficient automatiquement de la promotion, y compris les nouveaux produits que vous ajouterez ultérieurement à ces catégories.
           </p>
         )}
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>Annuler</Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Saving…" : `Save Assignments (${assignedCount})`}
+            {saving ? "Enregistrement…" : `Enregistrer les assignations (${assignedCount})`}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -688,9 +730,9 @@ function PromotionCard({
 
   const targetBadgeLabel =
     promo.targetType === 'PRODUCTS'
-      ? `${(promo.targetListingIds ?? []).length} product${(promo.targetListingIds ?? []).length !== 1 ? "s" : ""} assigned`
+      ? `${(promo.targetListingIds ?? []).length} produit${(promo.targetListingIds ?? []).length !== 1 ? "s" : ""} assigné${(promo.targetListingIds ?? []).length !== 1 ? "s" : ""}`
       : promo.targetType === 'CATEGORIES'
-      ? `${(promo.targetCategoryIds ?? []).length} categor${(promo.targetCategoryIds ?? []).length !== 1 ? "ies" : "y"} assigned`
+      ? `${(promo.targetCategoryIds ?? []).length} catégorie${(promo.targetCategoryIds ?? []).length !== 1 ? "s" : ""} assignée${(promo.targetCategoryIds ?? []).length !== 1 ? "s" : ""}`
       : null;
 
   return (
@@ -705,13 +747,13 @@ function PromotionCard({
               <div className="flex flex-wrap items-center gap-2 mb-1">
                 <p className="font-semibold text-foreground truncate">{promo.name}</p>
                 <Badge className={`text-xs border ${STATUS_STYLES[effectiveStatus]}`} variant="outline">
-                  {effectiveStatus}
+                  {STATUS_LABELS[effectiveStatus]}
                 </Badge>
                 <Badge variant="secondary" className="text-xs bg-primary/5 text-primary border-primary/20">
                   {TYPE_LABELS[promo.type]}
                 </Badge>
                 {promo.stackable && (
-                  <Badge variant="outline" className="text-xs text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30">Stackable</Badge>
+                  <Badge variant="outline" className="text-xs text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30">Cumulable</Badge>
                 )}
                 {promo.targetType !== 'ALL' && (
                   <Badge
@@ -720,7 +762,7 @@ function PromotionCard({
                     onClick={onManageAssignments}
                   >
                     <Settings2 className="w-3 h-3 mr-1" />
-                    {targetBadgeLabel ?? (promo.targetType === 'PRODUCTS' ? "No products assigned" : "No categories assigned")}
+                    {targetBadgeLabel ?? (promo.targetType === 'PRODUCTS' ? "Aucun produit assigné" : "Aucune catégorie assignée")}
                   </Badge>
                 )}
               </div>
@@ -738,16 +780,16 @@ function PromotionCard({
                   </span>
                 )}
                 <span className="flex items-center gap-1">
-                  <Zap className="w-3 h-3" /> Priority {promo.priority}
+                  <Zap className="w-3 h-3" /> Priorité {promo.priority}
                 </span>
-                <span>{promo.usageCount} uses{remaining != null ? ` · ${remaining} remaining` : ''}</span>
+                <span>{promo.usageCount} utilisation{promo.usageCount !== 1 ? "s" : ""}{remaining != null ? ` · ${remaining} restante${remaining !== 1 ? "s" : ""}` : ''}</span>
               </div>
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0 w-full justify-end sm:w-auto sm:justify-start">
             {promo.targetType !== 'ALL' && (
               <Button size="sm" variant="outline" onClick={onManageAssignments} className="h-8 px-2 text-xs gap-1 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-500/30 hover:bg-amber-50 dark:hover:bg-amber-500/10">
-                <Settings2 className="w-3 h-3" /> Manage
+                <Settings2 className="w-3 h-3" /> Gérer
               </Button>
             )}
             <Button size="sm" variant="outline" onClick={onEdit} className="h-8 w-8 p-0"><Edit2 className="w-3.5 h-3.5" /></Button>
@@ -759,19 +801,19 @@ function PromotionCard({
                   <div className="absolute right-0 top-9 z-20 bg-background border border-border rounded-xl shadow-lg py-1 w-44">
                     {effectiveStatus === 'ACTIVE' ? (
                       <button className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-secondary" onClick={() => { setShowMenu(false); onStatusChange('PAUSED'); }}>
-                        <Pause className="w-3.5 h-3.5" /> Pause
+                        <Pause className="w-3.5 h-3.5" /> Mettre en pause
                       </button>
                     ) : effectiveStatus === 'PAUSED' ? (
                       <button className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-secondary" onClick={() => { setShowMenu(false); onStatusChange('ACTIVE'); }}>
-                        <Play className="w-3.5 h-3.5" /> Resume
+                        <Play className="w-3.5 h-3.5" /> Reprendre
                       </button>
                     ) : null}
                     <button className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-secondary" onClick={() => { setShowMenu(false); onDuplicate(); }}>
-                      <Copy className="w-3.5 h-3.5" /> Duplicate
+                      <Copy className="w-3.5 h-3.5" /> Dupliquer
                     </button>
                     <Separator className="my-1" />
                     <button className="flex items-center gap-2 w-full px-3 py-2 text-sm text-destructive hover:bg-destructive/10" onClick={() => { setShowMenu(false); onDelete(); }}>
-                      <Trash2 className="w-3.5 h-3.5" /> Delete
+                      <Trash2 className="w-3.5 h-3.5" /> Supprimer
                     </button>
                   </div>
                 </>
@@ -806,15 +848,28 @@ export default function PromotionsPage() {
   const [assigningPromo, setAssigningPromo] = useState<Promotion | null>(null);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
-  // Data
+  // Admin → System Management → Promotion (task: "Admin Promotion Management —
+  // Supplier Promotions Visibility and Type Configuration"). globalVisible gates the
+  // whole page below; typeSettings drives the Create/Edit form's Type picklist.
+  const { settings: promotionSettings } = usePromotionSettings();
+  const { settings: typeSettings } = usePromotionTypeSettings();
+  const enabledTypes = useMemo(
+    () => new Set((Object.keys(TYPE_LABELS) as PromotionType[]).filter(t => typeSettings[t] !== false)),
+    [typeSettings],
+  );
+
+  // Data — never fetched while the feature is hidden (the server would 403 anyway;
+  // this just avoids the pointless request/console error).
   const { data: promos = [], isLoading } = useQuery<Promotion[]>({
     queryKey: ["/api/promotions"],
     queryFn: () => fetchJSON(apiBase),
+    enabled: promotionSettings.globalVisible,
   });
 
   const { data: stats } = useQuery({
     queryKey: ["/api/promotions/stats"],
     queryFn: () => fetchJSON(`${apiBase}/stats`),
+    enabled: promotionSettings.globalVisible,
   });
 
   // Mutations
@@ -830,45 +885,53 @@ export default function PromotionsPage() {
       invalidate();
       qc.invalidateQueries({ queryKey: ["/api/promotions/stats"] });
       setFormOpen(false);
-      toast({ title: "Promotion created" });
+      toast({ title: "Promotion créée" });
       // If targeting specific products/categories, immediately open assignment dialog
       if (newPromo.targetType !== 'ALL') {
         setTimeout(() => setAssigningPromo(newPromo), 150);
       }
     },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
   });
 
   const updateMut = useMutation({
     mutationFn: ({ id, data }: { id: number; data: any }) => fetchJSON(`${apiBase}/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-    onSuccess: () => { invalidate(); setFormOpen(false); toast({ title: "Promotion updated" }); },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { invalidate(); setFormOpen(false); toast({ title: "Promotion mise à jour" }); },
+    onError: (e: Error) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id: number) => fetchJSON(`${apiBase}/${id}`, { method: "DELETE" }),
-    onSuccess: () => { invalidate(); qc.invalidateQueries({ queryKey: ["/api/promotions/stats"] }); toast({ title: "Promotion deleted" }); },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { invalidate(); qc.invalidateQueries({ queryKey: ["/api/promotions/stats"] }); toast({ title: "Promotion supprimée" }); },
+    onError: (e: Error) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
   });
 
   const statusMut = useMutation({
     mutationFn: ({ id, status }: { id: number; status: PromotionStatus }) =>
       fetchJSON(`${apiBase}/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
     onSuccess: () => { invalidate(); },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e: Error) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
   });
 
   const dupMut = useMutation({
     mutationFn: (id: number) => fetchJSON(`${apiBase}/${id}/duplicate`, { method: "POST" }),
-    onSuccess: () => { invalidate(); toast({ title: "Promotion duplicated" }); },
-    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { invalidate(); toast({ title: "Promotion dupliquée" }); },
+    onError: (e: Error) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
   });
 
-  const openCreate = () => { setEditingPromo(null); setForm(EMPTY_FORM); setFormOpen(true); };
+  const openCreate = () => {
+    setEditingPromo(null);
+    // Default to the first currently-enabled type rather than always "PERCENTAGE" —
+    // if PERCENTAGE itself were hidden by the Admin, a new promotion must never
+    // silently start on a type the supplier can no longer actually save.
+    const firstEnabled = (Object.keys(TYPE_LABELS) as PromotionType[]).find(t => enabledTypes.has(t));
+    setForm({ ...EMPTY_FORM, type: firstEnabled ?? EMPTY_FORM.type });
+    setFormOpen(true);
+  };
   const openEdit = (p: Promotion) => { setEditingPromo(p); setForm(promoToForm(p)); setFormOpen(true); };
 
   const handleSave = () => {
-    if (!form.name.trim()) { toast({ title: "Name required", variant: "destructive" }); return; }
+    if (!form.name.trim()) { toast({ title: "Le nom est requis", variant: "destructive" }); return; }
     const payload = formToPayload(form);
     if (editingPromo) updateMut.mutate({ id: editingPromo.id, data: payload });
     else createMut.mutate(payload);
@@ -892,20 +955,43 @@ export default function PromotionsPage() {
   const pagePromos = filtered.slice(pagination.start, pagination.end);
 
   const kpiItems = [
-    { label: "Active", value: stats?.active ?? promos.filter(p => getEffectiveStatus(p) === 'ACTIVE').length, icon: <Zap className="w-4 h-4 text-green-600 dark:text-green-400" />, color: "bg-green-50 dark:bg-green-500/10" },
-    { label: "Paused", value: stats?.paused ?? promos.filter(p => getEffectiveStatus(p) === 'PAUSED').length, icon: <Pause className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />, color: "bg-yellow-50 dark:bg-yellow-500/10" },
-    { label: "Total Uses", value: stats?.totalUses ?? promos.reduce((s, p) => s + p.usageCount, 0), icon: <Users className="w-4 h-4 text-primary" />, color: "bg-primary/5" },
-    { label: "Savings Generated", value: stats?.totalDiscount != null ? fmt(stats.totalDiscount) : "—", icon: <TrendingUp className="w-4 h-4 text-blue-600 dark:text-blue-400" />, color: "bg-blue-50 dark:bg-blue-500/10" },
+    { label: "Actives", value: stats?.active ?? promos.filter(p => getEffectiveStatus(p) === 'ACTIVE').length, icon: <Zap className="w-4 h-4 text-green-600 dark:text-green-400" />, color: "bg-green-50 dark:bg-green-500/10" },
+    { label: "En pause", value: stats?.paused ?? promos.filter(p => getEffectiveStatus(p) === 'PAUSED').length, icon: <Pause className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />, color: "bg-yellow-50 dark:bg-yellow-500/10" },
+    { label: "Utilisations totales", value: stats?.totalUses ?? promos.reduce((s, p) => s + p.usageCount, 0), icon: <Users className="w-4 h-4 text-primary" />, color: "bg-primary/5" },
+    { label: "Économies générées", value: stats?.totalDiscount != null ? fmt(stats.totalDiscount) : "—", icon: <TrendingUp className="w-4 h-4 text-blue-600 dark:text-blue-400" />, color: "bg-blue-50 dark:bg-blue-500/10" },
   ];
+
+  // Admin → System Management → Promotion's global toggle, checked directly through
+  // the normal URL too (task: "Prevent ordinary suppliers from accessing the
+  // Promotions page directly through its URL... Display an appropriate French
+  // message"). Reactive — usePromotionSettings is a useQuery kept in sync by
+  // use-realtime.ts's promotion_settings_updated handler, so an Admin disabling this
+  // while a Supplier already has this page open shows the message immediately, no
+  // refresh needed. The backend independently enforces the same rule on every
+  // Supplier-facing promotion endpoint (requirePromotionsEnabled in
+  // shop-catalog.routes.ts) — this page-level gate is for a clean UX, not the only
+  // protection.
+  if (!promotionSettings.globalVisible) {
+    return (
+      <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
+        <DashboardHero title="Promotions" subtitle="Créez et gérez des campagnes promotionnelles pour vos produits." />
+        <div className="rounded-2xl border border-border/50 p-16 text-center text-muted-foreground">
+          <Lock className="w-10 h-10 mx-auto mb-3 opacity-20" />
+          <p className="font-medium">Cette fonctionnalité est temporairement indisponible.</p>
+          <p className="text-sm mt-1">Contactez votre administrateur pour plus d'informations.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title="Promotions"
-        subtitle="Create and manage promotional campaigns for your products."
+        subtitle="Créez et gérez des campagnes promotionnelles pour vos produits."
         action={
           <>
-            <Button onClick={openCreate} size="sm"><Plus className="w-4 h-4 mr-1.5" /> Create Promotion</Button>
+            <Button onClick={openCreate} size="sm"><Plus className="w-4 h-4 mr-1.5" /> Créer une promotion</Button>
             {isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
           </>
         }
@@ -952,7 +1038,7 @@ export default function PromotionsPage() {
               type="button"
               className="sm:hidden w-9 h-9 flex items-center justify-center rounded-md border border-input text-muted-foreground"
               onClick={() => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 0); }}
-              aria-label="Open search"
+              aria-label="Ouvrir la recherche"
               data-testid="button-open-promotions-search"
             >
               <Search className="w-4 h-4" />
@@ -963,7 +1049,7 @@ export default function PromotionsPage() {
             <Input
               ref={searchInputRef}
               className="pl-9 h-9"
-              placeholder="Search promotions…"
+              placeholder="Rechercher des promotions…"
               value={search}
               onChange={e => setSearch(e.target.value)}
               onBlur={() => { if (!search) setSearchOpen(false); }}
@@ -971,19 +1057,19 @@ export default function PromotionsPage() {
           </div>
         </div>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-36 h-9 shrink-0"><SelectValue placeholder="Status" /></SelectTrigger>
+          <SelectTrigger className="w-36 h-9 shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">All Statuses</SelectItem>
+            <SelectItem value="ALL">Tous les statuts</SelectItem>
             <SelectItem value="ACTIVE">Active</SelectItem>
-            <SelectItem value="PAUSED">Paused</SelectItem>
-            <SelectItem value="SCHEDULED">Scheduled</SelectItem>
-            <SelectItem value="EXPIRED">Expired</SelectItem>
+            <SelectItem value="PAUSED">En pause</SelectItem>
+            <SelectItem value="SCHEDULED">Programmée</SelectItem>
+            <SelectItem value="EXPIRED">Expirée</SelectItem>
           </SelectContent>
         </Select>
         <Select value={filterType} onValueChange={setFilterType}>
           <SelectTrigger className="w-44 h-9 shrink-0"><SelectValue placeholder="Type" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">All Types</SelectItem>
+            <SelectItem value="ALL">Tous les types</SelectItem>
             {(Object.entries(TYPE_LABELS) as [PromotionType, string][]).map(([k, v]) => (
               <SelectItem key={k} value={k}>{v}</SelectItem>
             ))}
@@ -991,7 +1077,7 @@ export default function PromotionsPage() {
         </Select>
         {hasFilters && (
           <Button variant="outline" size="sm" className="text-muted-foreground shrink-0" onClick={clearFilters}>
-            <X className="w-3.5 h-3.5 mr-1" />Clear
+            <X className="w-3.5 h-3.5 mr-1" />Effacer
           </Button>
         )}
       </div>
@@ -1007,16 +1093,16 @@ export default function PromotionsPage() {
             <Tag className="w-8 h-8 text-primary" />
           </div>
           <h3 className="font-semibold text-lg mb-1">
-            {promos.length === 0 ? "No promotions yet" : "No promotions match your filters"}
+            {promos.length === 0 ? "Aucune promotion pour le moment" : "Aucune promotion ne correspond à vos filtres"}
           </h3>
           <p className="text-muted-foreground text-sm max-w-xs">
             {promos.length === 0
-              ? "Create your first promotion to start offering discounts to your customers."
-              : "Try adjusting the search or filter criteria."}
+              ? "Créez votre première promotion pour commencer à proposer des réductions à vos clients."
+              : "Essayez d'ajuster les critères de recherche ou de filtrage."}
           </p>
           {promos.length === 0 && (
             <Button className="mt-5" onClick={openCreate}>
-              <Plus className="w-4 h-4 mr-1.5" /> Create Promotion
+              <Plus className="w-4 h-4 mr-1.5" /> Créer une promotion
             </Button>
           )}
         </div>
@@ -1058,15 +1144,30 @@ export default function PromotionsPage() {
             <X className="w-4 h-4" />
           </button>
           <DialogHeader>
-            <DialogTitle>{editingPromo ? "Edit Promotion" : "Create Promotion"}</DialogTitle>
+            <DialogTitle>{editingPromo ? "Modifier la promotion" : "Créer une promotion"}</DialogTitle>
           </DialogHeader>
-          <PromotionForm form={form} onChange={setForm} />
-          <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={() => setFormOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? "Saving…" : editingPromo ? "Save Changes" : "Create Promotion"}
-            </Button>
-          </DialogFooter>
+          {/* No type available for a NEW promotion — the existing promo being edited
+              (if any) always keeps its own type regardless of this, so editing is never
+              blocked here (task: "If all promotion types are hidden, display an
+              appropriate French empty state instead of an unusable form"). */}
+          {!editingPromo && enabledTypes.size === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center">
+              <Lock className="w-8 h-8 mb-2 text-muted-foreground opacity-50" />
+              <p className="text-sm text-muted-foreground max-w-xs">
+                Aucun type de promotion n'est actuellement disponible. Veuillez contacter l'administrateur.
+              </p>
+            </div>
+          ) : (
+            <>
+              <PromotionForm form={form} onChange={setForm} enabledTypes={enabledTypes} originalType={editingPromo?.type ?? null} />
+              <DialogFooter className="mt-4">
+                <Button variant="outline" onClick={() => setFormOpen(false)}>Annuler</Button>
+                <Button onClick={handleSave} disabled={isSaving}>
+                  {isSaving ? "Enregistrement…" : editingPromo ? "Enregistrer les modifications" : "Créer une promotion"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -1083,18 +1184,18 @@ export default function PromotionsPage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={open => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Promotion</AlertDialogTitle>
+            <AlertDialogTitle>Supprimer la promotion</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete <strong>{deleteTarget?.name}</strong>? This action cannot be undone.
+              Êtes-vous sûr de vouloir supprimer <strong>{deleteTarget?.name}</strong> ? Cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => { if (deleteTarget) { deleteMut.mutate(deleteTarget.id); setDeleteTarget(null); } }}
             >
-              Delete
+              Supprimer
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

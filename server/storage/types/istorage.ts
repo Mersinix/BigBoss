@@ -282,6 +282,13 @@ export interface IStorage {
   getCurrency(): Promise<string>;
   setCurrency(symbol: string): Promise<string>;
 
+  // Admin → System Management → Promotion — Supplier Promotions feature availability
+  // (separate from promotion eligibility/pricing).
+  getPromotionSettings(): Promise<{ globalVisible: boolean }>;
+  updatePromotionSettings(updates: Partial<{ globalVisible: boolean }>): Promise<{ globalVisible: boolean }>;
+  getPromotionTypeSettings(): Promise<import("@shared/schema").PromotionTypeSettingsMap>;
+  setPromotionTypeEnabled(type: import("@shared/schema").PromotionType, enabled: boolean): Promise<import("@shared/schema").PromotionTypeSettingsMap>;
+
   // Google/Facebook sign-in — admin on/off toggle only (never credentials, see
   // server/oauth.ts for the env-var-driven "configured" check).
   getAuthProviderSettings(): Promise<{ googleEnabled: boolean; facebookEnabled: boolean }>;
@@ -558,6 +565,7 @@ export interface IStorage {
   getActivePromotionsForSupplier(supplierId: number, cafeId?: number): Promise<import("@shared/schema").Promotion[]>;
   // All active promotions across all suppliers for listed listing IDs (for marketplace badges)
   getPromotionsForListings(listingIds: number[], cafeId?: number): Promise<import("@shared/schema").ListingPromotion[]>;
+  getPromotionDetailForListing(promotionId: number, listingId: number, variant: { flavorId: number | null; sizeId: number | null }, cafeId?: number): Promise<import("@shared/schema").CustomerPromotionDetail | undefined>;
   // Evaluate cart promotions server-side (wraps the engine)
   evaluateCartPromotions(itemsBySupplier: Map<number, import("../../promotions-engine").PromoCartItem[]>, cafeId: number): Promise<import("@shared/schema").CartPromotionEvaluation>;
   // Record usage after an order is created

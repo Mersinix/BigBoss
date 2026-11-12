@@ -1,0 +1,51 @@
+# Supplier Inventory — French Localization, Statistics Grid & Empty Stock History — Report
+
+## 1. Files inspected and modified
+All files under `client/src/pages/supplier/inventory*` were inspected; all but one were modified:
+- `client/src/pages/supplier/inventory-page.tsx` — **modified** (page header, filtered-totals line, bulk-action bar, pagination row, both removal `AlertDialog`s, toasts).
+- `client/src/pages/supplier/inventory/inventory-stats-cards.tsx` — **modified** (8 labels + grid columns).
+- `client/src/pages/supplier/inventory/inventory-filter-bar.tsx` — **modified** (search placeholder, 5 selects' labels/options, Export button).
+- `client/src/pages/supplier/inventory/inventory-table.tsx` — **modified** (column headers, status/variant/pack badges, dropdown menu actions, empty/loading states).
+- `client/src/pages/supplier/inventory/edit-listing-dialog.tsx` — **modified** (all labels/placeholders/toasts; the variant-stock-edit `reason` string sent to the API).
+- `client/src/pages/supplier/inventory/adjust-stock-dialog.tsx` — **modified** (title, `REASONS` options, all labels/toasts). Its scrollbar fix from the previous task (`max-h-[90vh] flex flex-col`, `shrink-0` header/footer, `flex-1 min-h-0 overflow-y-auto` body) is untouched — confirmed by diff, only text content changed in this file.
+- `client/src/pages/supplier/inventory/stock-history-dialog.tsx` — **modified** (full translation + the empty-history behavior change, see §3). Its scrollbar fix from the previous task is preserved verbatim.
+- No backend file, no `shared/schema.ts`, and no other Supplier page was opened for writing.
+
+## 2. French localization changes
+Every string listed in the task's own translation table was applied exactly as specified (page header, all 8 stat labels, search/filter/sort controls, Export CSV, all 9 table column/badge labels). Beyond that explicit list, every other user-facing string found in these 6 files was also translated: dropdown menu actions ("Historique du stock," "Modifier les détails," "Masquer/Afficher le produit," "Supprimer"), the Adjust Stock dialog's title/type/reason/quantity/notes labels and its `REASONS` dropdown options (Réapprovisionnement/Marchandise endommagée/Recomptage manuel/Échantillon offert/Correction/Autre), the Edit Details dialog's SKU/barcode/stock-limit/variant fields and validation message, every toast (success and error, using `Impossible de...`/`Échec de...` consistent with this project's existing error-toast convention), the bulk-action bar, pagination ("Affichage de X à Y sur Z", "Page X sur Y"), and both removal confirmation dialogs.
+
+**Deliberately left as-is**: `data-testid` attributes, stored enum values (`"INCREASE"|"DECREASE"|"SET"`, `"VISIBLE"|"HIDDEN"`, `StockStatus` keys, etc.), API paths/payload keys, and two internal `Error("Failed to load ...")` strings in `inventory-page.tsx` that are thrown inside a `queryFn` and never actually rendered to the user by this page (no error UI currently reads them) — judged not to be user-facing text and left untranslated as internal/technical strings, consistent with the task's own "do not translate internal code" instruction.
+
+**One deliberate exception, flagged explicitly**: the `reason` string `"Edited from Inventory Details"` (sent by `edit-listing-dialog.tsx` when a variant's stock is changed via that dialog) was translated to `"Modifié depuis les détails de l'inventaire"` because it is genuinely user-facing — it gets stored and later displayed verbatim as `h.reason` inside the now-fully-French Stock History modal. This means **new** adjustments made this way will show a French reason, while any **already-existing** history rows created before this change will still display the old English reason — an unavoidable consequence of not rewriting historical data (which the task explicitly forbids: "Do not delete, modify, or suppress stock history records in the database"). The same reasoning applies to the `REASONS` dropdown in Adjust Stock — already-recorded history rows keep whichever reason string was selected at the time, in whichever language was in effect then.
+
+## 3. Statistics grid implementation
+`InventoryStatsCards`' grid class changed from `grid-cols-2 md:grid-cols-4 lg:grid-cols-8` to `grid-cols-2 md:grid-cols-4` — simply removing the `lg:grid-cols-8` override that forced a single row of 8 on large screens. The result: 2 columns (4 rows) below the `md` breakpoint, and exactly 4 columns (2 rows) at `md` and above, with no new breakpoint-specific class needed since the grid naturally caps at 4 columns everywhere from `md` up (tablet and desktop both land on the requested 4×2 layout; only mobile differs, as the task explicitly required — "The requested 4×2 layout is specifically for desktop. Do not force 4 columns on small screens."). Card order, icons, colors, padding, and the `StatCard` sub-component itself are untouched — only the label strings (§2) and the parent grid's column classes changed. The loading skeleton's grid wrapper was updated identically so the skeleton and the real content never show a different column count while data is loading. No calculation, data source, or the `InventoryStats` type/query was touched — every value is still `stats.totalProducts`/`.activeProducts`/etc., read live, never hardcoded.
+
+## 4. Empty-history modal behavior
+`StockHistoryDialog` already fetched history via its own `useQuery` (`isLoading`, and now also `isError`, destructured from it). The fix:
+```js
+const confirmedEmpty = !isLoading && !isError && (data?.length ?? 0) === 0;
+useEffect(() => { if (confirmedEmpty) onClose(); }, [confirmedEmpty, onClose]);
+if (isLoading || confirmedEmpty) return null;
+```
+- **While loading** (`isLoading`): the component renders `null` — not a flash of the modal followed by it closing, nothing at all — so a product with zero history never visibly opens anything, even momentarily, while the request is in flight.
+- **Once loaded with zero records** (`confirmedEmpty`): a `useEffect` calls the existing `onClose()` prop (resetting the parent's `historyItem` state to `null`, exactly as a normal manual close already does), and the component renders `null`. The "No stock adjustments recorded yet." message is now unreachable dead state and was removed along with the rest of that branch.
+- **Once loaded with one or more records**: renders the dialog exactly as before — same title, same thin scrollbar, same row layout, same sort order (whatever the API already returns), same date formatting (`formatDate`).
+- **On a failed request** (`isError`): `confirmedEmpty` is `false` (the `!isError` guard excludes it), so the dialog still opens, and now shows an explicit `"Impossible de charger l'historique du stock."` message instead of silently (and incorrectly) being treated as "no history" — this is a genuine, small behavior improvement the task explicitly asked for ("preserve the existing error handling rather than treating the failure as an empty history"), since the previous code had no error branch at all and would have shown the "no history" message for a failed request too.
+- `isLoading` (TanStack Query's "no data yet at all" flag) only ever reflects the very first fetch — a later background refetch of an already-open, already-populated modal never flips it back to `true`, so this change cannot cause an open modal with real history to disappear.
+- The "History" action in the table's dropdown menu was **not** changed — it still calls `onHistory(item)` unconditionally for every product, exactly as before. Which products get a visible modal versus silently nothing is decided entirely inside `StockHistoryDialog` itself, so no other product action, button, or menu item was touched.
+
+## 5. Responsive behavior
+No new responsive logic was added beyond the grid column change in §3 (itself purely a Tailwind breakpoint adjustment, not a redesign). Every other element's existing responsive behavior — the filter bar's horizontal-scroll-on-mobile wrapper, the table's `overflow-x-auto`, the Adjust Stock modal's `max-h-[90vh]`/flex-column scrolling from the previous task, the bulk-action bar's wrapping — is untouched.
+
+## 6. Tests actually executed and their results
+- `npx tsc --noEmit -p .` — **actually run, passed, zero errors**.
+- `npm run build` — **actually run, passed**: Vite client bundle and esbuild server bundle both built successfully (only the pre-existing, unrelated "chunk larger than 500kB" advisory warning).
+- A repo grep across all six modified files for common leftover English words — **actually run**, confirming only false positives remain (the word "Stock" itself, used identically in French).
+- No project test script exists — nothing else to run.
+- **Not actually run** (verified by reading the component/query logic end-to-end, not by rendering it in a browser or against a real database): opening Stock History for a product with zero vs. one-or-more adjustment records and visually confirming no flash/no modal vs. a normal modal respectively; opening it while the network is artificially slowed to confirm no premature "empty" flash; forcing the history request to fail and confirming the new French error message appears instead of a false "no history" state; visually confirming the 4×2 statistics grid at desktop/tablet/mobile widths; exercising search/filter/sort/export/pagination/variant-expansion/stock-adjustment end-to-end. This environment has no `DATABASE_URL` and no browser-automation tool, consistent with every prior task this session.
+
+## 7. Remaining limitations
+- The empty-history fix's correctness rests on TanStack Query's documented `isLoading`/`isError` semantics (confirmed by reading the library's contract, not by an executed test) — a live run against a real backend is the only way to fully confirm the "no flash" behavior end-to-end.
+- As noted in §2, newly-created stock-adjustment reasons will be French going forward while historical rows already in the database keep whatever language they were recorded in — this is expected and was not "fixed" retroactively, per the task's explicit prohibition on modifying stock history records.
+- A live visual pass at desktop/tablet/mobile widths is recommended to confirm the 4×2 statistics grid reads cleanly at every breakpoint, especially the mobile 2-column/4-row fallback.

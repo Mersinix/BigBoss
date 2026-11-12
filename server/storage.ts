@@ -2926,6 +2926,22 @@ export class DatabaseStorage implements IStorage {
     return this.platformSettingsDomain.setAccountDarkModeSetting(account, mode);
   }
 
+  async getPromotionSettings(): Promise<{ globalVisible: boolean }> {
+    return this.platformSettingsDomain.getPromotionSettings();
+  }
+
+  async updatePromotionSettings(updates: Partial<{ globalVisible: boolean }>): Promise<{ globalVisible: boolean }> {
+    return this.platformSettingsDomain.updatePromotionSettings(updates);
+  }
+
+  async getPromotionTypeSettings(): Promise<import("@shared/schema").PromotionTypeSettingsMap> {
+    return this.platformSettingsDomain.getPromotionTypeSettings();
+  }
+
+  async setPromotionTypeEnabled(type: import("@shared/schema").PromotionType, enabled: boolean): Promise<import("@shared/schema").PromotionTypeSettingsMap> {
+    return this.platformSettingsDomain.setPromotionTypeEnabled(type, enabled);
+  }
+
   async getPrinterCategoryMapping(printerId: number): Promise<{ categories: string[]; subCategories: string[] }> {
     return this.printDomain.getPrinterCategoryMapping(printerId);
   }
@@ -4157,6 +4173,15 @@ export class DatabaseStorage implements IStorage {
 
   async getPromotionsForListings(listingIds: number[], cafeId?: number): Promise<import("@shared/schema").ListingPromotion[]> {
     return this.promotionsDomain.getPromotionsForListings(listingIds, cafeId);
+  }
+
+  async getPromotionDetailForListing(
+    promotionId: number,
+    listingId: number,
+    variant: { flavorId: number | null; sizeId: number | null },
+    cafeId?: number,
+  ): Promise<import("@shared/schema").CustomerPromotionDetail | undefined> {
+    return this.promotionsDomain.getPromotionDetailForListing(promotionId, listingId, variant, cafeId);
   }
 
   async evaluateCartPromotions(

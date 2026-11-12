@@ -117,10 +117,10 @@ export default function InventoryPage() {
     mutationFn: (body: any) => apiRequest("POST", "/api/supplier/inventory/bulk", body),
     onSuccess: (_, body) => {
       qc.invalidateQueries({ queryKey: ["/api/supplier/inventory"] });
-      toast({ title: `Updated ${selectedIds.size} product${selectedIds.size === 1 ? "" : "s"}` });
+      toast({ title: `${selectedIds.size} produit${selectedIds.size === 1 ? "" : "s"} mis à jour` });
       setSelectedIds(new Set());
     },
-    onError: (err: any) => toast({ title: "Bulk action failed", description: extractApiErrorMessage(err, "Error"), variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Échec de l'action groupée", description: extractApiErrorMessage(err, "Erreur"), variant: "destructive" }),
   });
 
   const visibilityMutation = useMutation({
@@ -128,7 +128,7 @@ export default function InventoryPage() {
       apiRequest("PATCH", `/api/supplier/inventory/${listingId}`, { visibility }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/supplier/inventory"] });
-      toast({ title: "Visibility updated" });
+      toast({ title: "Visibilité mise à jour" });
     },
   });
 
@@ -136,9 +136,9 @@ export default function InventoryPage() {
     mutationFn: (listingId: number) => apiRequest("POST", "/api/supplier/inventory/bulk", { action: "delete", listingIds: [listingId] }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/supplier/inventory"] });
-      toast({ title: "Product removed from inventory" });
+      toast({ title: "Produit retiré de l'inventaire" });
     },
-    onError: (err: any) => toast({ title: "Cannot remove", description: extractApiErrorMessage(err, "Error removing product"), variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Impossible de supprimer", description: extractApiErrorMessage(err, "Erreur lors de la suppression du produit"), variant: "destructive" }),
   });
 
   const handleChangeFilters = (f: InventoryFilterState) => { setFilters(f); setPage(1); };
@@ -166,8 +166,8 @@ export default function InventoryPage() {
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
-        title="Inventory"
-        subtitle="Track stock levels, adjust quantities, and manage product visibility in real time."
+        title="Inventaire"
+        subtitle="Suivez les niveaux de stock, ajustez les quantités et gérez la visibilité de vos produits en temps réel."
         action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
@@ -191,30 +191,30 @@ export default function InventoryPage() {
 
           {hasActiveFilters && filteredStats && (
             <div className="flex items-center gap-4 text-xs text-muted-foreground border-t pt-3" data-testid="filtered-totals">
-              <span>Filtered results: <strong className="text-foreground">{filteredStats.totalProducts}</strong> products</span>
-              <span>Filtered units: <strong className="text-foreground">{filteredStats.totalUnits.toLocaleString()}</strong></span>
-              <span>Filtered value: <strong className="text-foreground">{fmt(filteredStats.inventoryValue)}</strong></span>
+              <span>Résultats filtrés : <strong className="text-foreground">{filteredStats.totalProducts}</strong> produits</span>
+              <span>Unités filtrées : <strong className="text-foreground">{filteredStats.totalUnits.toLocaleString()}</strong></span>
+              <span>Valeur filtrée : <strong className="text-foreground">{fmt(filteredStats.inventoryValue)}</strong></span>
             </div>
           )}
 
           {selectedIds.size > 0 && (
             <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg p-2.5" data-testid="bulk-action-bar">
-              <span className="text-sm font-medium px-1">{selectedIds.size} selected</span>
+              <span className="text-sm font-medium px-1">{selectedIds.size} sélectionné{selectedIds.size === 1 ? "" : "s"}</span>
               <Button size="sm" variant="outline" onClick={() => bulkMutation.mutate({ action: "hide", listingIds: Array.from(selectedIds) })} data-testid="button-bulk-hide">
-                <EyeOff className="w-3.5 h-3.5 mr-1.5" />Hide
+                <EyeOff className="w-3.5 h-3.5 mr-1.5" />Masquer
               </Button>
               <Button size="sm" variant="outline" onClick={() => bulkMutation.mutate({ action: "show", listingIds: Array.from(selectedIds) })} data-testid="button-bulk-show">
-                <Eye className="w-3.5 h-3.5 mr-1.5" />Show
+                <Eye className="w-3.5 h-3.5 mr-1.5" />Afficher
               </Button>
               <Button
                 size="sm" variant="outline" className="text-destructive hover:text-destructive"
                 onClick={() => setBulkRemoveConfirmOpen(true)}
                 data-testid="button-bulk-delete"
               >
-                <Trash2 className="w-3.5 h-3.5 mr-1.5" />Remove
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" />Supprimer
               </Button>
               <Button size="sm" variant="outline" className="ml-auto" onClick={() => setSelectedIds(new Set())} data-testid="button-clear-selection">
-                <X className="w-3.5 h-3.5 mr-1" />Clear selection
+                <X className="w-3.5 h-3.5 mr-1" />Effacer la sélection
               </Button>
             </div>
           )}
@@ -235,7 +235,7 @@ export default function InventoryPage() {
 
           <div className="flex items-center justify-between flex-wrap gap-3 border-t pt-3">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Showing {items.length ? (page - 1) * pageSize + 1 : 0}–{Math.min(page * pageSize, total)} of {total}</span>
+              <span>Affichage de {items.length ? (page - 1) * pageSize + 1 : 0} à {Math.min(page * pageSize, total)} sur {total}</span>
               <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>
                 <SelectTrigger className="w-[100px] h-8" data-testid="select-page-size"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -247,7 +247,7 @@ export default function InventoryPage() {
               <Button size="icon" variant="outline" className="h-8 w-8" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} data-testid="button-prev-page">
                 <ChevronLeft className="w-4 h-4" />
               </Button>
-              <span className="text-sm px-2">Page {page} of {totalPages}</span>
+              <span className="text-sm px-2">Page {page} sur {totalPages}</span>
               <Button size="icon" variant="outline" className="h-8 w-8" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)} data-testid="button-next-page">
                 <ChevronRight className="w-4 h-4" />
               </Button>
@@ -264,20 +264,20 @@ export default function InventoryPage() {
       <AlertDialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove from Inventory?</AlertDialogTitle>
+            <AlertDialogTitle>Retirer de l'inventaire ?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove <strong>{removeTarget?.productName}</strong> from your inventory. It will no longer be visible to Coffee Owners in the marketplace.
+              Cela retirera <strong>{removeTarget?.productName}</strong> de votre inventaire. Il ne sera plus visible par les Coffee Owners sur la marketplace.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => { if (removeTarget) deleteMutation.mutate(removeTarget.listingId); setRemoveTarget(null); }}
               disabled={deleteMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-testid="button-confirm-remove-inventory-item"
             >
-              {deleteMutation.isPending ? "Removing…" : "Remove"}
+              {deleteMutation.isPending ? "Suppression…" : "Supprimer"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -286,20 +286,20 @@ export default function InventoryPage() {
       <AlertDialog open={bulkRemoveConfirmOpen} onOpenChange={setBulkRemoveConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove Selected Products?</AlertDialogTitle>
+            <AlertDialogTitle>Retirer les produits sélectionnés ?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove <strong>{selectedIds.size} product{selectedIds.size === 1 ? "" : "s"}</strong> from your inventory. They will no longer be visible to Coffee Owners in the marketplace.
+              Cela retirera <strong>{selectedIds.size} produit{selectedIds.size === 1 ? "" : "s"}</strong> de votre inventaire. Ils ne seront plus visibles par les Coffee Owners sur la marketplace.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => { bulkMutation.mutate({ action: "delete", listingIds: Array.from(selectedIds) }); setBulkRemoveConfirmOpen(false); }}
               disabled={bulkMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-testid="button-confirm-bulk-remove-inventory"
             >
-              {bulkMutation.isPending ? "Removing…" : "Remove"}
+              {bulkMutation.isPending ? "Suppression…" : "Supprimer"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

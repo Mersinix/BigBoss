@@ -82,7 +82,7 @@ export function EditListingDialog({ item, onClose }: { item: InventoryItem; onCl
           }
           if (stockChanged) {
             await apiRequest("PATCH", `/api/supplier/inventory/${item.listingId}/variants/${v.variantId}/stock`, {
-              type: "SET", quantity: newStock, reason: "Edited from Inventory Details",
+              type: "SET", quantity: newStock, reason: "Modifié depuis les détails de l'inventaire",
             });
           }
         }
@@ -90,10 +90,10 @@ export function EditListingDialog({ item, onClose }: { item: InventoryItem; onCl
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/supplier/inventory"] });
-      toast({ title: "Product details updated" });
+      toast({ title: "Détails du produit mis à jour" });
       onClose();
     },
-    onError: (err: any) => toast({ title: "Couldn't save changes", description: err?.message, variant: "destructive" }),
+    onError: (err: any) => toast({ title: "Impossible d'enregistrer les modifications", description: err?.message, variant: "destructive" }),
   });
 
   return (
@@ -103,37 +103,37 @@ export function EditListingDialog({ item, onClose }: { item: InventoryItem; onCl
           <X className="w-4 h-4" />
         </button>
         <DialogHeader>
-          <DialogTitle>Edit Inventory Details — {item.productName}</DialogTitle>
+          <DialogTitle>Modifier les détails de l'inventaire — {item.productName}</DialogTitle>
         </DialogHeader>
         <div className="max-h-[65vh] overflow-y-auto space-y-4 pr-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5 col-span-2">
               <Label>SKU</Label>
-              <Input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="e.g. ESP-1KG-001" data-testid="input-sku" />
+              <Input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="ex. ESP-1KG-001" data-testid="input-sku" />
             </div>
             <div className="space-y-1.5 col-span-2">
-              <Label>Barcode</Label>
-              <Input value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="e.g. 6291041500213" data-testid="input-barcode" />
+              <Label>Code-barres</Label>
+              <Input value={barcode} onChange={(e) => setBarcode(e.target.value)} placeholder="ex. 6291041500213" data-testid="input-barcode" />
             </div>
 
             {!hasVariants && (
               <>
                 <div className="space-y-1.5">
-                  <Label>Stock quantity</Label>
-                  <Input type="number" min={0} value={minStock === "" ? "" : undefined} disabled placeholder="Use Adjust Stock" data-testid="input-stock-disabled-hint" />
+                  <Label>Quantité en stock</Label>
+                  <Input type="number" min={0} value={minStock === "" ? "" : undefined} disabled placeholder="Utiliser Ajuster le stock" data-testid="input-stock-disabled-hint" />
                 </div>
                 <div />
                 <div className="space-y-1.5">
-                  <Label>Minimum stock</Label>
+                  <Label>Stock minimum</Label>
                   <Input type="number" min={0} value={minStock} onChange={(e) => setMinStock(e.target.value)} data-testid="input-min-stock" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Maximum stock</Label>
-                  <Input type="number" min={0} value={maxStock} onChange={(e) => setMaxStock(e.target.value)} placeholder="Optional" data-testid="input-max-stock" />
+                  <Label>Stock maximum</Label>
+                  <Input type="number" min={0} value={maxStock} onChange={(e) => setMaxStock(e.target.value)} placeholder="Optionnel" data-testid="input-max-stock" />
                 </div>
                 <div className="space-y-1.5 col-span-2">
-                  <Label>Unit of measure</Label>
-                  <Input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="unit, kg, box, case..." data-testid="input-unit" />
+                  <Label>Unité de mesure</Label>
+                  <Input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="unité, kg, boîte, carton..." data-testid="input-unit" />
                 </div>
               </>
             )}
@@ -141,7 +141,7 @@ export function EditListingDialog({ item, onClose }: { item: InventoryItem; onCl
 
           {hasVariants && (
             <div className="space-y-3">
-              <Label className="text-sm">Per-variant inventory</Label>
+              <Label className="text-sm">Inventaire par variante</Label>
               {item.variants.map((v) => {
                 const draft = variantDrafts[v.variantId];
                 const invalid = maxStockExceeded(v);
@@ -149,11 +149,11 @@ export function EditListingDialog({ item, onClose }: { item: InventoryItem; onCl
                   <div key={v.variantId} className="border rounded-lg p-3 space-y-2" data-testid={`edit-variant-row-${v.variantId}`}>
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium">{v.variantName}</p>
-                      <span className="text-xs text-muted-foreground">Unit: {v.unit}</span>
+                      <span className="text-xs text-muted-foreground">Unité : {v.unit}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1">
-                        <Label className="text-xs">Stock quantity</Label>
+                        <Label className="text-xs">Quantité en stock</Label>
                         <Input
                           type="number" min={0}
                           value={draft?.stock ?? ""}
@@ -163,27 +163,27 @@ export function EditListingDialog({ item, onClose }: { item: InventoryItem; onCl
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs">Min stock</Label>
+                        <Label className="text-xs">Stock min.</Label>
                         <Input
                           type="number" min={0}
                           value={draft?.minStock ?? ""}
                           onChange={(e) => updateVariantDraft(v.variantId, "minStock", e.target.value)}
-                          placeholder="Optional"
+                          placeholder="Optionnel"
                           data-testid={`input-variant-min-${v.variantId}`}
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-xs">Max stock</Label>
+                        <Label className="text-xs">Stock max.</Label>
                         <Input
                           type="number" min={0}
                           value={draft?.maxStock ?? ""}
                           onChange={(e) => updateVariantDraft(v.variantId, "maxStock", e.target.value)}
-                          placeholder="Optional"
+                          placeholder="Optionnel"
                           data-testid={`input-variant-max-${v.variantId}`}
                         />
                       </div>
                     </div>
-                    {invalid && <p className="text-xs text-destructive">Stock quantity cannot exceed the maximum stock for this variant.</p>}
+                    {invalid && <p className="text-xs text-destructive">La quantité en stock ne peut pas dépasser le stock maximum de cette variante.</p>}
                   </div>
                 );
               })}
@@ -191,9 +191,9 @@ export function EditListingDialog({ item, onClose }: { item: InventoryItem; onCl
           )}
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>Annuler</Button>
           <Button onClick={() => mutation.mutate()} disabled={mutation.isPending || anyVariantInvalid} data-testid="button-save-listing-details">
-            {mutation.isPending ? "Saving..." : "Save Changes"}
+            {mutation.isPending ? "Enregistrement..." : "Enregistrer les modifications"}
           </Button>
         </DialogFooter>
       </DialogContent>

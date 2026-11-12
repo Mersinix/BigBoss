@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Ban, Moon, Sun, SunMoon, Car, Store, ShieldCheck, LogIn, AlertTriangle, X, RotateCcw, Save, Palette } from "lucide-react";
+import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Ban, Moon, Sun, SunMoon, Car, Store, ShieldCheck, LogIn, AlertTriangle, X, RotateCcw, Save, Palette, Tag, Percent, DollarSign, BarChart3, Gift, Star } from "lucide-react";
 import { useDeliveryPricingSettings, useUpdateDeliveryPricingSettings, VEHICLE_TYPE_LABELS, type DeliveryVehicleType, type DeliveryPricingSettings, useFinancialLedgerEntries, type FinancialLedgerFilters, useAdminSettlements, useApproveSettlement, useVoidSettlement, type SettlementFilters, useSettlementPayments, useCreatePayment, useConfirmPayment, useFailPayment, useReversePayment, type PaymentMethod, useAdminCodReconciliations, useReconcileCod, useAdminRefunds, useRequestRefund, useConfirmRefund, useFailRefund, useCancelRefund, useAdminAdjustments, useCreateAdjustment, useAdminFinancialSummary } from "@/hooks/use-delivery-ecosystem";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -40,7 +40,7 @@ import type { LandingConfig, HeroSlide } from "@shared/schema";
 // too long"). Purely a UI reorganization — every component below still renders exactly as
 // before, just conditionally by active tab instead of always stacked.
 
-type SystemManagementSection = "landing" | "delivery" | "services" | "messages" | "global";
+type SystemManagementSection = "landing" | "delivery" | "services" | "messages" | "global" | "promotion";
 
 const SYSTEM_MANAGEMENT_SECTIONS: { id: SystemManagementSection; label: string; icon: any }[] = [
   { id: "landing",  label: "Landing Page",     icon: LayoutTemplate },
@@ -48,6 +48,7 @@ const SYSTEM_MANAGEMENT_SECTIONS: { id: SystemManagementSection; label: string; 
   { id: "services", label: "Services",         icon: Zap },
   { id: "messages", label: "Messages System",  icon: MessageSquare },
   { id: "global",   label: "Global Settings",  icon: Sliders },
+  { id: "promotion", label: "Promotion",       icon: Tag },
 ];
 
 // ── Service visibility ────────────────────────────────────────────────────────
@@ -174,6 +175,158 @@ function MessagesSystemSection() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// ── Promotion Settings (Admin → System Management → Promotion) ───────────────
+// Admin-controlled AVAILABILITY of the Supplier Promotions feature — entirely
+// separate from promotion eligibility/pricing (server/promotions-engine.ts), never
+// touched here. Reuses the actual promotionTypeEnum values already defined in
+// shared/schema.ts (never an invented type) and the French labels already
+// established on the Supplier's own Créer une promotion form
+// (client/src/pages/supplier/promotions-page.tsx's TYPE_LABELS), kept identical here
+// for consistency. Same local-state + mutation + setQueryData pattern as
+// MessagesSystemSection above.
+
+type PromotionSettings = { globalVisible: boolean };
+type AdminPromotionType = 'PERCENTAGE' | 'FIXED_AMOUNT' | 'BUY_X_GET_Y' | 'QUANTITY_TIER' | 'CATEGORY_DISCOUNT' | 'FREE_SHIPPING' | 'GIFT' | 'MIN_ORDER_AMOUNT' | 'MIN_QUANTITY' | 'FIRST_ORDER';
+type PromotionTypeSettingsMap = Record<AdminPromotionType, boolean>;
+
+const PROMOTION_TYPES: { type: AdminPromotionType; label: string; description: string; icon: any }[] = [
+  { type: "PERCENTAGE",       label: "Réduction en %",              description: "Réduction en pourcentage sur le total ou sur des produits/catégories spécifiques.", icon: Percent },
+  { type: "FIXED_AMOUNT",     label: "Montant fixe",                description: "Montant fixe déduit du prix.", icon: DollarSign },
+  { type: "BUY_X_GET_Y",      label: "Achetez X, obtenez Y",        description: "Achetez X articles, obtenez Y gratuitement.", icon: ShoppingBag },
+  { type: "QUANTITY_TIER",    label: "Tarification par palier",     description: "Le prix unitaire diminue selon la quantité achetée.", icon: BarChart3 },
+  { type: "CATEGORY_DISCOUNT", label: "Réduction par catégorie",    description: "Réduction en pourcentage ou montant fixe sur des catégories spécifiques.", icon: Tag },
+  { type: "FREE_SHIPPING",    label: "Livraison gratuite",          description: "Livraison gratuite, avec un montant minimum de commande optionnel.", icon: Truck },
+  { type: "GIFT",             label: "Cadeau gratuit",               description: "Cadeau offert après un montant minimum de commande.", icon: Gift },
+  { type: "MIN_ORDER_AMOUNT", label: "Montant minimum de commande", description: "Réduction accordée à partir d'un montant minimum de commande.", icon: DollarSign },
+  { type: "MIN_QUANTITY",     label: "Quantité minimum",             description: "Réduction accordée à partir d'une quantité minimale d'articles achetés.", icon: ShoppingBag },
+  { type: "FIRST_ORDER",      label: "Première commande",            description: "Réduction sur la première commande passée auprès de ce fournisseur.", icon: Star },
+];
+
+function PromotionSettingsSection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: globalSettings } = useQuery<PromotionSettings>({ queryKey: ["/api/promotion-settings"] });
+  const { data: typeSettings } = useQuery<PromotionTypeSettingsMap>({ queryKey: ["/api/promotion-type-settings"] });
+  const [localGlobal, setLocalGlobal] = useState<PromotionSettings | null>(null);
+
+  useEffect(() => {
+    if (globalSettings) setLocalGlobal(globalSettings);
+  }, [globalSettings]);
+
+  const globalValue = localGlobal ?? globalSettings;
+
+  const saveGlobal = useMutation({
+    mutationFn: (updates: Partial<PromotionSettings>) =>
+      apiRequest("PATCH", "/api/admin/promotion-settings", updates),
+    onSuccess: async (response) => {
+      const saved = await response.json();
+      setLocalGlobal(saved);
+      queryClient.setQueryData(["/api/promotion-settings"], saved);
+      toast({ title: "Disponibilité des promotions mise à jour" });
+    },
+    onError: (error: any) => toast({ variant: "destructive", title: "Échec de la mise à jour", description: error?.message }),
+  });
+
+  const saveType = useMutation({
+    mutationFn: ({ type, enabled }: { type: AdminPromotionType; enabled: boolean }) =>
+      apiRequest("PATCH", `/api/admin/promotion-type-settings/${type}`, { enabled }),
+    onSuccess: async (response) => {
+      const saved = await response.json();
+      queryClient.setQueryData(["/api/promotion-type-settings"], saved);
+      toast({ title: "Type de promotion mis à jour" });
+    },
+    onError: (error: any) => toast({ variant: "destructive", title: "Échec de la mise à jour", description: error?.message }),
+  });
+
+  const statusBadgeClass = (enabled: boolean) => enabled
+    ? "bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-400 dark:border-green-500/30"
+    : "bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-500/15 dark:text-gray-400 dark:border-gray-500/30";
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-3">
+            <div className="bg-amber-500/10 rounded-xl p-3"><Tag className="w-5 h-5 text-amber-600" /></div>
+            <div>
+              <CardTitle className="text-base">Disponibilité des promotions</CardTitle>
+              <CardDescription className="pt-1">Contrôlez l'accès à la fonctionnalité Promotions dans l'espace fournisseur.</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!globalValue ? <Skeleton className="h-16 w-full" /> : (
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+              <div>
+                <p className="text-sm font-medium">Onglet Promotions</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Autorise les fournisseurs à accéder à la gestion des promotions (/supplier/promotions).</p>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <Badge variant="outline" className={`text-xs ${statusBadgeClass(globalValue.globalVisible)}`} data-testid="badge-promotions-global-status">
+                  {globalValue.globalVisible ? "Visible" : "Masqué"}
+                </Badge>
+                <Switch
+                  checked={globalValue.globalVisible}
+                  onCheckedChange={(checked) => { setLocalGlobal({ globalVisible: checked }); saveGlobal.mutate({ globalVisible: checked }); }}
+                  disabled={saveGlobal.isPending}
+                  aria-label="Onglet Promotions"
+                  data-testid="switch-promotions-global-visible"
+                />
+              </div>
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">Masquer cet onglet ne supprime ni ne modifie les promotions déjà créées par les fournisseurs ; les commandes et réductions en cours restent inchangées.</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-3">
+            <div className="bg-amber-500/10 rounded-xl p-3"><Percent className="w-5 h-5 text-amber-600" /></div>
+            <div>
+              <CardTitle className="text-base">Types de promotions disponibles</CardTitle>
+              <CardDescription className="pt-1">Activez ou désactivez les types de promotions que les fournisseurs peuvent utiliser lors de la création ou de la modification de leurs promotions.</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!typeSettings ? <Skeleton className="h-64 w-full" /> : (
+            PROMOTION_TYPES.map(({ type, label, description, icon: Icon }) => {
+              const enabled = typeSettings[type] !== false;
+              const isPending = saveType.isPending && saveType.variables?.type === type;
+              return (
+                <div key={type} className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3" data-testid={`row-promotion-type-${type.toLowerCase()}`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="bg-muted rounded-lg p-2 shrink-0"><Icon className="w-4 h-4 text-foreground/70" /></div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{label}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <Badge variant="outline" className={`text-xs ${statusBadgeClass(enabled)}`} data-testid={`badge-status-promotion-type-${type.toLowerCase()}`}>
+                      {enabled ? "Disponible" : "Masqué"}
+                    </Badge>
+                    <Switch
+                      checked={enabled}
+                      onCheckedChange={(checked) => saveType.mutate({ type, enabled: checked })}
+                      disabled={isPending}
+                      aria-label={label}
+                      data-testid={`switch-promotion-type-${type.toLowerCase()}`}
+                    />
+                  </div>
+                </div>
+              );
+            })
+          )}
+          <p className="text-xs text-muted-foreground">Masquer un type ne modifie ni ne désactive les promotions existantes qui l'utilisent déjà ; elles restent gérables par leur fournisseur avec leur type d'origine.</p>
+        </CardContent>
+      </Card>
+    </>
   );
 }
 
@@ -2866,6 +3019,11 @@ export default function SystemManagementPage() {
           <AuthProviderSection />
           <AuthSecuritySettingsSection />
         </>
+      )}
+
+      {/* ── Promotion (Supplier Promotions tab + type availability) ── */}
+      {activeSection === "promotion" && (
+        <PromotionSettingsSection />
       )}
     </div>
   );

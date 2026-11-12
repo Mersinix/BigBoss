@@ -836,6 +836,26 @@ export function registerShopCatalogRoutes(app: Express): void {
       } catch { res.status(500).json({ message: 'Error' }); }
     });
 
+    // GET /api/marketplace/promotions/:id?listingId=X&flavorId=Y&sizeId=Z — customer-safe
+    // promotion detail for the Coffee Owner's "Promotion Details" modal (clicking a promo
+    // badge in the Product Detail Modal). listingId is required: the storage method
+    // re-validates that this exact promotion actually applies to this exact listing (same
+    // eligibility rules as getPromotionsForListings above), so a Coffee Owner can never
+    // fetch an unrelated or another supplier's promotion by guessing an id.
+    app.get('/api/marketplace/promotions/:id', async (req: any, res) => {
+      try {
+        const promotionId = parseInt(req.params.id);
+        const listingId = parseInt(req.query.listingId as string);
+        if (!promotionId || !listingId) return res.status(400).json({ message: 'listingId is required' });
+        const flavorId = req.query.flavorId ? parseInt(req.query.flavorId as string) : null;
+        const sizeId = req.query.sizeId ? parseInt(req.query.sizeId as string) : null;
+        const cafeId = req.session?.userId ? (await storage.getUser(req.session.userId))?.id : undefined;
+        const detail = await storage.getPromotionDetailForListing(promotionId, listingId, { flavorId, sizeId }, cafeId);
+        if (!detail) return res.status(404).json({ message: 'Promotion not found' });
+        res.json(detail);
+      } catch { res.status(500).json({ message: 'Error' }); }
+    });
+
     // GET /api/marketplace/products/image-data?ids=1,2,3 — batched, lightweight
     // image+crop lookup (task: "Synchronize Updated Product and Pack Images in
     // Coffee Owner Cart") so a cart row can re-resolve a fresh image without
@@ -872,8 +892,25 @@ export function registerShopCatalogRoutes(app: Express): void {
       next();
     };
 
+    // Admin → System Management → Promotion's global toggle (task: "Admin Promotion
+    // Management — Supplier Promotions Visibility"). Gates only the Supplier-facing
+    // management endpoints below — never /api/promotions/evaluate, /api/marketplace/
+    // promotions*, or order creation, which must keep working for Coffee Owners and
+    // already-created promotions regardless of this setting (see this file's own
+    // "Promotions (Cafe / Marketplace)" section, untouched). Always runs after
+    // requireSupplier, so it only ever applies to a confirmed SUPPLIER-role request —
+    // never to Admin/SUPER_ADMIN, which requireSupplier already rejects before this
+    // middleware would even run.
+    const requirePromotionsEnabled = async (req: any, res: any, next: any) => {
+      const settings = await storage.getPromotionSettings();
+      if (!settings.globalVisible) {
+        return res.status(403).json({ message: "Cette fonctionnalité est temporairement indisponible." });
+      }
+      next();
+    };
+
     // GET /api/promotions — supplier's own promotions list
-    app.get('/api/promotions', requireSupplier, async (req: any, res) => {
+    app.get('/api/promotions', requireSupplier, requirePromotionsEnabled, async (req: any, res) => {
       try {
         const promos = await storage.getPromotions(req.supplier.id);
         res.json(promos);
@@ -881,7 +918,7 @@ export function registerShopCatalogRoutes(app: Express): void {
     });
 
     // GET /api/promotions/stats — supplier dashboard stats
-    app.get('/api/promotions/stats', requireSupplier, async (req: any, res) => {
+    app.get('/api/promotions/stats', requireSupplier, requirePromotionsEnabled, async (req: any, res) => {
       try {
         const stats = await storage.getPromotionStats(req.supplier.id);
         res.json(stats);
@@ -889,7 +926,7 @@ export function registerShopCatalogRoutes(app: Express): void {
     });
 
     // GET /api/promotions/my-listings — supplier's listings for promotion assignment UI
-    app.get('/api/promotions/my-listings', requireSupplier, async (req: any, res) => {
+    app.get('/api/promotions/my-listings', requireSupplier, requirePromotionsEnabled, async (req: any, res) => {
       try {
         const listings = await storage.getSupplierListings(req.supplier.id);
         res.json(
@@ -911,7 +948,7 @@ export function registerShopCatalogRoutes(app: Express): void {
     });
 
     // GET /api/promotions/my-categories — supplier's categories for promotion assignment UI
-    app.get('/api/promotions/my-categories', requireSupplier, async (req: any, res) => {
+    app.get('/api/promotions/my-categories', requireSupplier, requirePromotionsEnabled, async (req: any, res) => {
       try {
         const [listings, allCategories] = await Promise.all([
           storage.getSupplierListings(req.supplier.id),
@@ -936,7 +973,7 @@ export function registerShopCatalogRoutes(app: Express): void {
     });
 
     // GET /api/promotions/:id — single promotion
-    app.get('/api/promotions/:id', requireSupplier, async (req: any, res) => {
+    app.get('/api/promotions/:id', requireSupplier, requirePromotionsEnabled, async (req: any, res) => {
       try {
         const promo = await storage.getPromotion(parseInt(req.params.id), req.supplier.id);
         if (!promo) return res.status(404).json({ message: 'Not found' });
@@ -945,7 +982,7 @@ export function registerShopCatalogRoutes(app: Express): void {
     });
 
     // GET /api/promotions/:id/usage — usage history
-    app.get('/api/promotions/:id/usage', requireSupplier, async (req: any, res) => {
+    app.get('/api/promotions/:id/usage', requireSupplier, requirePromotionsEnabled, async (req: any, res) => {
       try {
         const promo = await storage.getPromotion(parseInt(req.params.id), req.supplier.id);
         if (!promo) return res.status(404).json({ message: 'Not found' });
@@ -955,9 +992,19 @@ export function registerShopCatalogRoutes(app: Express): void {
     });
 
     // POST /api/promotions — create
-    app.post('/api/promotions', requireSupplier, async (req: any, res) => {
+    app.post('/api/promotions', requireSupplier, requirePromotionsEnabled, async (req: any, res) => {
       try {
         const body = req.body;
+        // A disabled type can never be used for a NEW promotion, even via a manipulated
+        // frontend request (task: "The backend rejects attempts to create a new
+        // promotion using that disabled type"). Never affects existing promotions —
+        // this check only runs on creation.
+        if (body.type) {
+          const typeSettings = await storage.getPromotionTypeSettings();
+          if (typeSettings[body.type as import("@shared/schema").PromotionType] === false) {
+            return res.status(400).json({ message: "Ce type de promotion n'est pas disponible actuellement." });
+          }
+        }
         const promo = await storage.createPromotion({
           ...body,
           supplierId: req.supplier.id,
@@ -973,7 +1020,7 @@ export function registerShopCatalogRoutes(app: Express): void {
 
     // PATCH /api/promotions/:id/targets — update only targetListingIds / targetCategoryIds
     // Dedicated lightweight endpoint so assignment saves never touch unrelated fields
-    app.patch('/api/promotions/:id/targets', requireSupplier, async (req: any, res) => {
+    app.patch('/api/promotions/:id/targets', requireSupplier, requirePromotionsEnabled, async (req: any, res) => {
       try {
         const { targetListingIds, targetCategoryIds } = req.body;
         const updates: Record<string, any> = {};
@@ -990,11 +1037,25 @@ export function registerShopCatalogRoutes(app: Express): void {
     });
 
     // PUT /api/promotions/:id — update full promotion details
-    app.put('/api/promotions/:id', requireSupplier, async (req: any, res) => {
+    app.put('/api/promotions/:id', requireSupplier, requirePromotionsEnabled, async (req: any, res) => {
       try {
         const body = req.body;
         // Strip server-managed / read-only fields so Drizzle never tries to cast them
         const { id: _id, supplierId: _s, usageCount: _u, createdAt: _ca, updatedAt: _ua, ...safeBody } = body;
+        // A disabled type can never be CHANGED TO — but an existing promotion already
+        // of that (now-disabled) type must stay editable on every other field without
+        // being forced to change its type (task: "unless the existing promotion is
+        // being preserved without changing its type").
+        if (safeBody.type) {
+          const existing = await storage.getPromotion(parseInt(req.params.id), req.supplier.id);
+          if (!existing) return res.status(404).json({ message: 'Not found' });
+          if (safeBody.type !== existing.type) {
+            const typeSettings = await storage.getPromotionTypeSettings();
+            if (typeSettings[safeBody.type as import("@shared/schema").PromotionType] === false) {
+              return res.status(400).json({ message: "Ce type de promotion n'est pas disponible actuellement." });
+            }
+          }
+        }
         const updated = await storage.updatePromotion(parseInt(req.params.id), req.supplier.id, {
           ...safeBody,
           startDate: safeBody.startDate ? new Date(safeBody.startDate) : null,
@@ -1009,7 +1070,7 @@ export function registerShopCatalogRoutes(app: Express): void {
     });
 
     // PATCH /api/promotions/:id/status — quick status change
-    app.patch('/api/promotions/:id/status', requireSupplier, async (req: any, res) => {
+    app.patch('/api/promotions/:id/status', requireSupplier, requirePromotionsEnabled, async (req: any, res) => {
       try {
         const { status } = req.body;
         if (!['ACTIVE', 'PAUSED', 'SCHEDULED', 'EXPIRED'].includes(status)) {
@@ -1023,8 +1084,18 @@ export function registerShopCatalogRoutes(app: Express): void {
     });
 
     // POST /api/promotions/:id/duplicate — duplicate
-    app.post('/api/promotions/:id/duplicate', requireSupplier, async (req: any, res) => {
+    app.post('/api/promotions/:id/duplicate', requireSupplier, requirePromotionsEnabled, async (req: any, res) => {
       try {
+        // Duplicating a promotion of a disabled type would create a NEW promotion row
+        // of that type — exactly what "the backend rejects attempts to create a new
+        // promotion using that disabled type" forbids, so this is checked here too,
+        // not just on POST /api/promotions.
+        const original = await storage.getPromotion(parseInt(req.params.id), req.supplier.id);
+        if (!original) return res.status(404).json({ message: 'Not found' });
+        const typeSettings = await storage.getPromotionTypeSettings();
+        if (typeSettings[original.type as import("@shared/schema").PromotionType] === false) {
+          return res.status(400).json({ message: "Ce type de promotion n'est pas disponible actuellement." });
+        }
         const dup = await storage.duplicatePromotion(parseInt(req.params.id), req.supplier.id);
         if (!dup) return res.status(404).json({ message: 'Not found' });
         broadcast('promotion_updated', { supplierId: req.supplier.id, promotionId: dup.id });
@@ -1033,7 +1104,7 @@ export function registerShopCatalogRoutes(app: Express): void {
     });
 
     // DELETE /api/promotions/:id — delete
-    app.delete('/api/promotions/:id', requireSupplier, async (req: any, res) => {
+    app.delete('/api/promotions/:id', requireSupplier, requirePromotionsEnabled, async (req: any, res) => {
       try {
         await storage.deletePromotion(parseInt(req.params.id), req.supplier.id);
         broadcast('promotion_updated', { supplierId: req.supplier.id, promotionId: parseInt(req.params.id) });

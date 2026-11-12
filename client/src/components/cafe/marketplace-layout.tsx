@@ -290,6 +290,7 @@ function AccountPanel({
   const [settingsPhone, setSettingsPhone] = useState(user?.phone ?? "");
   const [settingsWhatsapp, setSettingsWhatsapp] = useState<boolean>((user as any)?.isWhatsapp ?? false);
   const [settingsProfileImageUrl, setSettingsProfileImageUrl] = useState((user as any)?.profileImageUrl ?? "");
+  const [settingsCoverImageUrl, setSettingsCoverImageUrl] = useState((user as any)?.coverImageUrl ?? "");
   const [settingsCurrentPassword, setSettingsCurrentPassword] = useState("");
   const [settingsNewPassword, setSettingsNewPassword] = useState("");
   const [locationModalOpen, setLocationModalOpen] = useState(false);
@@ -300,10 +301,11 @@ function AccountPanel({
     setSettingsPhone(user.phone ?? "");
     setSettingsWhatsapp((user as any).isWhatsapp ?? false);
     setSettingsProfileImageUrl((user as any).profileImageUrl ?? "");
+    setSettingsCoverImageUrl((user as any).coverImageUrl ?? "");
   }, [user?.id]);
 
   const updateAccountProfile = useMutation({
-    mutationFn: (data: { name?: string; phone?: string; isWhatsapp?: boolean; profileImageUrl?: string | null }) =>
+    mutationFn: (data: { name?: string; phone?: string; isWhatsapp?: boolean; profileImageUrl?: string | null; coverImageUrl?: string | null }) =>
       apiRequest("PATCH", "/api/auth/me/profile", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
@@ -1219,6 +1221,16 @@ function AccountPanel({
                   <Input value={user?.email ?? ""} disabled className={`h-9 ${inputCls} opacity-70`} data-testid="input-settings-email" />
                 </div>
                 <div className="space-y-1.5 sm:col-span-2">
+                  <Label className={`text-xs ${textMuted}`}>Cover (URL)</Label>
+                  <Input
+                    value={settingsCoverImageUrl}
+                    onChange={(e) => setSettingsCoverImageUrl(e.target.value)}
+                    placeholder="https://…"
+                    className={`h-9 ${inputCls}`}
+                    data-testid="input-settings-cover"
+                  />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
                   <div className="flex items-center justify-between gap-2">
                     <Label className={`text-xs ${textMuted}`}>Téléphone</Label>
                     <label className={`flex items-center gap-1.5 text-xs cursor-pointer select-none ${textMuted}`}>
@@ -1241,6 +1253,7 @@ function AccountPanel({
                   phone: settingsPhone.trim(),
                   isWhatsapp: settingsWhatsapp,
                   profileImageUrl: settingsProfileImageUrl.trim() || null,
+                  coverImageUrl: settingsCoverImageUrl.trim() || null,
                 })}
                 disabled={updateAccountProfile.isPending || !settingsName.trim()}
                 className="mt-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl"

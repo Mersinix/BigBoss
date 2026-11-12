@@ -30,6 +30,14 @@ type Props = {
   /** Optional visual override for this view's Cards — omitted by the Supplier caller so
    *  its look stays exactly as-is; only the Delivery Company drivers page passes it. */
   cardClassName?: string;
+  /** Opts into the Admin → Users → Utilisateurs mapped-card visual design (cover strip,
+   *  overlapping avatar, border-2 shell) instead of this view's own default card — only the
+   *  Supplier Drivers page passes this (task: "Redesign Supplier Drivers Cards to Match
+   *  Admin Users Cards"). Omitted by the Delivery Company caller, whose rendering is
+   *  byte-for-byte unchanged. Purely presentational: no Admin-specific actions or business
+   *  logic from users-page.tsx are imported here — only the same Tailwind classes/layout
+   *  are reproduced directly, and users-page.tsx itself was not modified. */
+  useAdminCardDesign?: boolean;
   /** Optional DashboardHero accent — when provided (Delivery Company caller only, to match
    *  its own Véhicules page), the header renders as a DashboardHero instead of the plain
    *  title/subtitle block. Omitted by the Supplier caller, whose header stays exactly as-is. */
@@ -45,7 +53,7 @@ type Props = {
  * pages for what is, underneath, the same Driver model. Professional mapped cards (not a
  * table) with real vehicle/rating/activity information — see task Parts 14/15/34.
  */
-export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gérez vos chauffeurs.", useDrivers, useCreateDriver, ownerType, cardClassName, heroGradientClass, heroIconBgClass, heroIconTextClass }: Props) {
+export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gérez vos chauffeurs.", useDrivers, useCreateDriver, ownerType, cardClassName, heroGradientClass, heroIconBgClass, heroIconTextClass, useAdminCardDesign }: Props) {
   const { data: drivers = [], isLoading } = useDrivers();
   const { data: deliveries = [] } = useDeliveries();
   // Hooks called unconditionally (Rules of Hooks) — the vehicles query is simply disabled
@@ -174,6 +182,71 @@ export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gé
           {pageDrivers.map((d) => {
             const busy = (activeDeliveriesByDriver.get(d.id) ?? 0) > 0;
             const vehicle = vehicleByDriver.get(d.id);
+
+            const vehicleAssignBlock = ownerType && (
+              <div className="pt-2 border-t border-border/50">
+                <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1 mb-1"><UserIcon className="w-3 h-3" />Véhicule</label>
+                <Select value={vehicle ? String(vehicle.id) : "__none__"} onValueChange={(val) => val !== "__none__" && handleAssignVehicle(d.id, val)}>
+                  <SelectTrigger className="h-8 text-xs" data-testid={`select-driver-vehicle-${d.id}`}>
+                    <SelectValue placeholder="Aucun">{vehicle ? `${vehicle.brand} ${vehicle.model}` : "Aucun"}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Aucun</SelectItem>
+                    {vehicle && <SelectItem value={String(vehicle.id)}>{vehicle.brand} {vehicle.model}</SelectItem>}
+                    {unassignedVehicles.map((v) => <SelectItem key={v.id} value={String(v.id)}>{VEHICLE_TYPE_LABELS[v.type as DeliveryVehicleType]} — {v.brand} {v.model}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            );
+
+            // Admin → Users → Utilisateurs mapped-card design, reproduced directly here
+            // (users-page.tsx itself was not touched) — cover strip + overlapping avatar +
+            // border-2 shell, same classes/structure as that page's own redesigned cards.
+            // Driver-specific info (phone, en cours/terminée(s) counts, busy/available dot,
+            // vehicle, "Voir les détails") is unchanged — only the shell around it changed.
+            if (useAdminCardDesign) {
+              const coverImageUrl = (d as any).coverImageUrl as string | null | undefined;
+              return (
+                <div
+                  key={d.id}
+                  className="relative bg-card rounded-2xl border-2 border-border shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+                  data-testid={`card-driver-${d.id}`}
+                >
+                  <div className="absolute top-2 right-2 z-10">
+                    <span className={`w-2.5 h-2.5 rounded-full block shadow-sm border border-white/60 ${busy ? "bg-amber-500" : "bg-green-500"}`} title={busy ? "Occupé" : "Disponible"} />
+                  </div>
+                  <div className="aspect-[16/9] bg-muted overflow-hidden cursor-pointer" onClick={() => setDetail(d)}>
+                    {coverImageUrl ? (
+                      <img src={coverImageUrl} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center"><Truck className="w-10 h-10 text-muted-foreground/40" /></div>
+                    )}
+                  </div>
+                  <CardContent className="p-4 space-y-3 cursor-pointer" onClick={() => setDetail(d)}>
+                    <div className="flex items-start gap-3 -mt-9">
+                      <Avatar className="border-2 border-background shadow-sm">
+                        <AvatarImage src={getAvatarUrl(d)} alt={d.name} />
+                        <AvatarFallback className="bg-primary/10 text-primary text-sm font-bold">{d.name.charAt(0)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1 mt-5">
+                        <h3 className="font-semibold text-sm truncate">{d.name}</h3>
+                        <p className="text-xs text-muted-foreground truncate flex items-center gap-1"><Phone className="h-3 w-3" />{d.phone || "—"}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant="secondary" className="text-xs">{activeDeliveriesByDriver.get(d.id) ?? 0} en cours</Badge>
+                      <Badge variant="secondary" className="text-xs">{completedByDriver.get(d.id) ?? 0} terminée(s)</Badge>
+                      {vehicle && <Badge variant="outline" className="text-xs">{VEHICLE_TYPE_LABELS[vehicle.type as DeliveryVehicleType]}</Badge>}
+                    </div>
+                    {vehicleAssignBlock}
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <Button size="sm" variant="outline" className="w-full h-7 text-xs" onClick={() => setDetail(d)} data-testid={`button-driver-details-${d.id}`}>Voir les détails</Button>
+                    </div>
+                  </CardContent>
+                </div>
+              );
+            }
+
             return (
               <Card key={d.id} className={`hover:shadow-md transition-shadow ${cardClassName ?? ""}`} data-testid={`card-driver-${d.id}`}>
                 <CardContent className="p-4 space-y-3">
@@ -193,21 +266,7 @@ export default function DriverRosterView({ title = "Chauffeurs", subtitle = "Gé
                     <Badge variant="secondary" className="text-xs">{completedByDriver.get(d.id) ?? 0} terminée(s)</Badge>
                     {vehicle && <Badge variant="outline" className="text-xs">{VEHICLE_TYPE_LABELS[vehicle.type as DeliveryVehicleType]}</Badge>}
                   </div>
-                  {ownerType && (
-                    <div className="pt-2 border-t border-border/50">
-                      <label className="text-[11px] font-medium text-muted-foreground flex items-center gap-1 mb-1"><UserIcon className="w-3 h-3" />Véhicule</label>
-                      <Select value={vehicle ? String(vehicle.id) : "__none__"} onValueChange={(val) => val !== "__none__" && handleAssignVehicle(d.id, val)}>
-                        <SelectTrigger className="h-8 text-xs" data-testid={`select-driver-vehicle-${d.id}`}>
-                          <SelectValue placeholder="Aucun">{vehicle ? `${vehicle.brand} ${vehicle.model}` : "Aucun"}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">Aucun</SelectItem>
-                          {vehicle && <SelectItem value={String(vehicle.id)}>{vehicle.brand} {vehicle.model}</SelectItem>}
-                          {unassignedVehicles.map((v) => <SelectItem key={v.id} value={String(v.id)}>{VEHICLE_TYPE_LABELS[v.type as DeliveryVehicleType]} — {v.brand} {v.model}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
+                  {vehicleAssignBlock}
                   <Button size="sm" variant="outline" className="w-full h-7 text-xs" onClick={() => setDetail(d)} data-testid={`button-driver-details-${d.id}`}>Voir les détails</Button>
                 </CardContent>
               </Card>

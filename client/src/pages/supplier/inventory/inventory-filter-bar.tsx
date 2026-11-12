@@ -10,14 +10,14 @@ export type InventoryFilterState = InventoryFilters & { sort: InventorySort };
 export const EMPTY_INVENTORY_FILTERS: InventoryFilterState = { search: "", sort: "name_asc" };
 
 const SORT_OPTIONS: { value: InventorySort; label: string }[] = [
-  { value: "name_asc", label: "Name (A–Z)" },
-  { value: "name_desc", label: "Name (Z–A)" },
-  { value: "stock_asc", label: "Stock (Low–High)" },
-  { value: "stock_desc", label: "Stock (High–Low)" },
-  { value: "price_asc", label: "Price (Low–High)" },
-  { value: "price_desc", label: "Price (High–Low)" },
-  { value: "updated_desc", label: "Recently Updated" },
-  { value: "created_desc", label: "Recently Added" },
+  { value: "name_asc", label: "Nom (A–Z)" },
+  { value: "name_desc", label: "Nom (Z–A)" },
+  { value: "stock_asc", label: "Stock (croissant)" },
+  { value: "stock_desc", label: "Stock (décroissant)" },
+  { value: "price_asc", label: "Prix (croissant)" },
+  { value: "price_desc", label: "Prix (décroissant)" },
+  { value: "updated_desc", label: "Récemment modifiés" },
+  { value: "created_desc", label: "Récemment ajoutés" },
 ];
 
 export function InventoryFilterBar({
@@ -54,7 +54,7 @@ export function InventoryFilterBar({
           <Input
             ref={searchInputRef}
             className="pl-9"
-            placeholder="Search by name, SKU, or barcode..."
+            placeholder="Rechercher par nom, SKU ou code-barres..."
             value={filters.search ?? ""}
             onChange={(e) => set("search", e.target.value)}
             onBlur={() => { if (!filters.search) setSearchOpen(false); }}
@@ -64,43 +64,43 @@ export function InventoryFilterBar({
       </div>
 
       <Select value={filters.categoryId ? String(filters.categoryId) : "__all__"} onValueChange={(v) => set("categoryId", v === "__all__" ? undefined : Number(v))}>
-        <SelectTrigger className="w-[150px] shrink-0" data-testid="select-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
+        <SelectTrigger className="w-[150px] shrink-0" data-testid="select-filter-category"><SelectValue placeholder="Catégorie" /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="__all__">All Categories</SelectItem>
+          <SelectItem value="__all__">Toutes les catégories</SelectItem>
           {categories.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
         </SelectContent>
       </Select>
 
       <Select value={filters.brandId ? String(filters.brandId) : "__all__"} onValueChange={(v) => set("brandId", v === "__all__" ? undefined : Number(v))}>
-        <SelectTrigger className="w-[140px] shrink-0" data-testid="select-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
+        <SelectTrigger className="w-[140px] shrink-0" data-testid="select-filter-brand"><SelectValue placeholder="Marque" /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="__all__">All Brands</SelectItem>
+          <SelectItem value="__all__">Toutes les marques</SelectItem>
           {brands.map((b) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
         </SelectContent>
       </Select>
 
       <Select value={filters.status ?? "__all__"} onValueChange={(v) => set("status", v === "__all__" ? undefined : (v as any))}>
-        <SelectTrigger className="w-[130px] shrink-0" data-testid="select-filter-status"><SelectValue placeholder="Status" /></SelectTrigger>
+        <SelectTrigger className="w-[130px] shrink-0" data-testid="select-filter-status"><SelectValue placeholder="Statut" /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="__all__">All Status</SelectItem>
-          <SelectItem value="ACTIVE">Active</SelectItem>
-          <SelectItem value="HIDDEN">Hidden</SelectItem>
-          <SelectItem value="DRAFT">Draft</SelectItem>
+          <SelectItem value="__all__">Tous les statuts</SelectItem>
+          <SelectItem value="ACTIVE">Actif</SelectItem>
+          <SelectItem value="HIDDEN">Masqué</SelectItem>
+          <SelectItem value="DRAFT">Brouillon</SelectItem>
         </SelectContent>
       </Select>
 
       <Select value={filters.stockStatus ?? "__all__"} onValueChange={(v) => set("stockStatus", v === "__all__" ? undefined : (v as any))}>
-        <SelectTrigger className="w-[150px] shrink-0" data-testid="select-filter-stock-status"><SelectValue placeholder="Stock Status" /></SelectTrigger>
+        <SelectTrigger className="w-[150px] shrink-0" data-testid="select-filter-stock-status"><SelectValue placeholder="Niveau de stock" /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="__all__">All Stock</SelectItem>
-          <SelectItem value="IN_STOCK">In Stock</SelectItem>
-          <SelectItem value="LOW_STOCK">Low Stock</SelectItem>
-          <SelectItem value="OUT_OF_STOCK">Out of Stock</SelectItem>
+          <SelectItem value="__all__">Tous les niveaux de stock</SelectItem>
+          <SelectItem value="IN_STOCK">En stock</SelectItem>
+          <SelectItem value="LOW_STOCK">Stock faible</SelectItem>
+          <SelectItem value="OUT_OF_STOCK">Rupture de stock</SelectItem>
         </SelectContent>
       </Select>
 
       <Select value={filters.sort} onValueChange={(v) => set("sort", v as InventorySort)}>
-        <SelectTrigger className="w-[170px] shrink-0" data-testid="select-sort"><SelectValue placeholder="Sort" /></SelectTrigger>
+        <SelectTrigger className="w-[170px] shrink-0" data-testid="select-sort"><SelectValue placeholder="Trier" /></SelectTrigger>
         <SelectContent>
           {SORT_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
         </SelectContent>
@@ -109,11 +109,11 @@ export function InventoryFilterBar({
       <div className="flex items-center gap-2 shrink-0 sm:ml-auto">
         {hasActiveFilters && (
           <Button variant="outline" size="sm" onClick={onClear} className="text-muted-foreground" data-testid="button-clear-inventory-filters">
-            <X className="w-4 h-4 mr-1" />Clear
+            <X className="w-4 h-4 mr-1" />Effacer
           </Button>
         )}
         <Button variant="outline" size="sm" onClick={onExport} data-testid="button-export-inventory">
-          <Download className="w-4 h-4 mr-1.5" />Export CSV
+          <Download className="w-4 h-4 mr-1.5" />Exporter en CSV
         </Button>
       </div>
     </div>

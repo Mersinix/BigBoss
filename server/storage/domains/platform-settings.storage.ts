@@ -7,6 +7,7 @@ import {
   heroActionSettings, type HeroService, type HeroActionSettingsMap,
   serviceHeroConfigs, type ServiceHeroConfig, type ServiceHeroConfigMap, type ServiceHeroHeight, type ServiceHeroHAlign, type ServiceHeroVAlign,
   accountDarkModeSettings, type DarkModeAccount, type AccountDarkModeSettingsMap, type AccountThemeMode,
+  promotionSettings, promotionTypeSettings, type PromotionType, type PromotionTypeSettingsMap,
 } from "@shared/schema";
 
 // Stage 2 — Batch 20 business-domain consolidation. Merges Landing Config
@@ -311,5 +312,60 @@ export class PlatformSettingsStorage {
       await db.insert(accountDarkModeSettings).values({ account, mode });
     }
     return this.getAccountDarkModeSettings();
+  }
+
+  // ── Promotion Settings (Admin → System Management → Promotion) ──────────────
+  // Global Supplier Promotions tab visibility — mirrors getMessagingSettings exactly
+  // (single auto-seeded row, default true = today's behavior unchanged).
+  async getPromotionSettings(): Promise<{ globalVisible: boolean }> {
+    const [row] = await db.select().from(promotionSettings).limit(1);
+    if (row) return { globalVisible: row.globalVisible };
+    const [created] = await db.insert(promotionSettings).values({}).returning();
+    return { globalVisible: created.globalVisible };
+  }
+
+  async updatePromotionSettings(updates: Partial<{ globalVisible: boolean }>): Promise<{ globalVisible: boolean }> {
+    const current = await this.getPromotionSettings();
+    const next = { ...current, ...updates };
+    const [row] = await db.select({ id: promotionSettings.id }).from(promotionSettings).limit(1);
+    if (row) {
+      await db.update(promotionSettings).set({ ...next, updatedAt: new Date() }).where(eq(promotionSettings.id, row.id));
+    } else {
+      await db.insert(promotionSettings).values(next);
+    }
+    return next;
+  }
+
+  // Per-type availability in the Supplier promotion creation/editing Type picklist —
+  // mirrors getHeroActionSettings/getAccountDarkModeSettings exactly (auto-seeds a row
+  // per existing promotionTypeEnum value, default true for every type so introducing
+  // this control never silently hides a type suppliers already rely on).
+  private readonly ALL_PROMOTION_TYPES: PromotionType[] = [
+    'PERCENTAGE', 'FIXED_AMOUNT', 'BUY_X_GET_Y', 'QUANTITY_TIER', 'CATEGORY_DISCOUNT',
+    'FREE_SHIPPING', 'GIFT', 'MIN_ORDER_AMOUNT', 'MIN_QUANTITY', 'FIRST_ORDER',
+  ];
+
+  async getPromotionTypeSettings(): Promise<PromotionTypeSettingsMap> {
+    const rows = await db.select().from(promotionTypeSettings);
+    const map = {} as PromotionTypeSettingsMap;
+    for (const type of this.ALL_PROMOTION_TYPES) map[type] = true;
+    for (const row of rows) map[row.type as PromotionType] = row.enabled;
+    const missing = this.ALL_PROMOTION_TYPES.filter((t) => !rows.some((r) => r.type === t));
+    if (missing.length) {
+      for (const type of missing) {
+        await db.insert(promotionTypeSettings).values({ type }).onConflictDoNothing();
+      }
+    }
+    return map;
+  }
+
+  async setPromotionTypeEnabled(type: PromotionType, enabled: boolean): Promise<PromotionTypeSettingsMap> {
+    const existing = await db.select().from(promotionTypeSettings).where(eq(promotionTypeSettings.type, type));
+    if (existing.length) {
+      await db.update(promotionTypeSettings).set({ enabled, updatedAt: new Date() }).where(eq(promotionTypeSettings.type, type));
+    } else {
+      await db.insert(promotionTypeSettings).values({ type, enabled });
+    }
+    return this.getPromotionTypeSettings();
   }
 }

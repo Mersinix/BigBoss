@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
+import { PasswordInputField } from "@/components/settings/password-input-field";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { getAvatarUrl } from "@/lib/avatar";
@@ -82,7 +83,7 @@ const ALL_ROLES = [
   "SUPER_ADMIN", "ADMIN", "SUPPLIER", "CAFE_OWNER", "DELIVERY_COMPANY",
   "DRIVER", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "MAINTENANCE"
 ];
-const REGISTERABLE_ROLES = ["CAFE_OWNER", "SUPPLIER", "DELIVERY_COMPANY", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "MAINTENANCE"];
+const REGISTERABLE_ROLES = ["CAFE_OWNER", "SUPPLIER", "DELIVERY_COMPANY", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "MAINTENANCE", "ADMIN", "SUPER_ADMIN"];
 const APPROVABLE_ROLES = ["CAFE_OWNER", "SUPPLIER", "DELIVERY_COMPANY", "PRINTER", "MARKETING", "BARISTA_ACADEMY", "BARISTA_MARKETPLACE", "MAINTENANCE"];
 
 // ── MultiChip inline multi-select ─────────────────────────────────────────────
@@ -132,7 +133,7 @@ function UserDetailDialog({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
   const [form, setForm] = useState({
-    name: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", locationAddress: "",
+    name: "", email: "", phone: "", isWhatsapp: false, profileImageUrl: "", coverImageUrl: "", locationAddress: "",
     governorates: [] as string[],
     printCategories: [] as string[],
     marketingCategories: [] as string[],
@@ -148,6 +149,11 @@ function UserDetailDialog({
         phone: u.phone ?? "",
         isWhatsapp: !!u.isWhatsapp,
         profileImageUrl: u.profileImageUrl ?? "",
+        // The actual saved profile field — never the computed displayCoverImageUrl that
+        // GET /api/admin/users returns for card-rendering fallback purposes (Supplier Store
+        // cover / Coffee Owner profile-photo cover). This input must reflect and edit only
+        // u.coverImageUrl itself.
+        coverImageUrl: u.coverImageUrl ?? "",
         locationAddress: u.locationAddress ?? "",
         governorates: u.governorates ?? [],
         printCategories: u.printCategories ?? [],
@@ -205,6 +211,7 @@ function UserDetailDialog({
       phone: form.phone.trim() || null,
       isWhatsapp: form.isWhatsapp,
       profileImageUrl: form.profileImageUrl.trim() || null,
+      coverImageUrl: form.coverImageUrl.trim() || null,
       locationAddress: form.locationAddress.trim() || null,
       governorates: form.governorates.length > 0 ? form.governorates : null,
       printCategories: form.printCategories.length > 0 ? form.printCategories : null,
@@ -292,6 +299,11 @@ function UserDetailDialog({
                 <Input data-testid="input-detail-picture" type="url" value={form.profileImageUrl}
                   onChange={e => setForm(f => ({ ...f, profileImageUrl: e.target.value }))} placeholder="https://…" className="flex-1" />
               </div>
+            </div>
+            <div className="space-y-1.5 col-span-2">
+              <Label>Cover (URL)</Label>
+              <Input data-testid="input-detail-cover" type="url" value={form.coverImageUrl}
+                onChange={e => setForm(f => ({ ...f, coverImageUrl: e.target.value }))} placeholder="https://…" />
             </div>
             <div className="space-y-1.5 col-span-2">
               <div className="flex items-center justify-between gap-2">
@@ -428,7 +440,7 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState("CAFE_OWNER");
   const [form, setForm] = useState({
-    email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "",
+    email: "", phone: "", isWhatsapp: false, profileImageUrl: "", coverImageUrl: "", password: "",
     firstName: "", lastName: "",
     cafeName: "", companyName: "", contactName: "",
   });
@@ -436,7 +448,7 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
 
   const reset = () => {
     setRole("CAFE_OWNER");
-    setForm({ email: "", phone: "", isWhatsapp: false, profileImageUrl: "", password: "", firstName: "", lastName: "", cafeName: "", companyName: "", contactName: "" });
+    setForm({ email: "", phone: "", isWhatsapp: false, profileImageUrl: "", coverImageUrl: "", password: "", firstName: "", lastName: "", cafeName: "", companyName: "", contactName: "" });
     setErrors({});
   };
 
@@ -457,6 +469,8 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
         if (form.firstName.trim().length < 2) e.firstName = "Prénom requis";
         break;
       case "DELIVERY_COMPANY":
+      case "ADMIN":
+      case "SUPER_ADMIN":
         if (form.firstName.trim().length < 2) e.firstName = "Prénom requis";
         if (form.lastName.trim().length < 2) e.lastName = "Nom requis";
         break;
@@ -471,7 +485,10 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
   const buildName = () => {
     switch (role) {
       case "CAFE_OWNER": return `${form.firstName} — ${form.cafeName}`;
-      case "DELIVERY_COMPANY": return `${form.firstName} ${form.lastName}`;
+      case "DELIVERY_COMPANY":
+      case "ADMIN":
+      case "SUPER_ADMIN":
+        return `${form.firstName} ${form.lastName}`;
       default: return form.companyName;
     }
   };
@@ -484,7 +501,9 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
     const payload: any = {
       role, name: buildName(),
       email: form.email, phone: form.phone, isWhatsapp: form.isWhatsapp,
-      profileImageUrl: form.profileImageUrl.trim() || null, password: form.password,
+      profileImageUrl: form.profileImageUrl.trim() || null,
+      coverImageUrl: form.coverImageUrl.trim() || null,
+      password: form.password,
     };
     // Governorates/categories/specialties/services are no longer collected at creation
     // time (task: "Simplify Admin → Users → Add User Form") — the server already treats
@@ -553,7 +572,7 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
               </div>
             </>
           )}
-          {role === "DELIVERY_COMPANY" && (
+          {["DELIVERY_COMPANY", "ADMIN", "SUPER_ADMIN"].includes(role) && (
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Prénom *</Label>
@@ -567,7 +586,7 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
               </div>
             </div>
           )}
-          {!["CAFE_OWNER", "DELIVERY_COMPANY"].includes(role) && (
+          {!["CAFE_OWNER", "DELIVERY_COMPANY", "ADMIN", "SUPER_ADMIN"].includes(role) && (
             <>
               <div className="space-y-1.5">
                 <Label>Nom de l'entreprise *</Label>
@@ -605,8 +624,24 @@ function AddUserModal({ onRefresh }: { onRefresh: () => void }) {
             <Input data-testid="input-user-picture" type="url" value={form.profileImageUrl} onChange={sf("profileImageUrl")} placeholder="https://…" />
           </div>
           <div className="space-y-1.5">
+            <Label>Cover (URL)</Label>
+            <Input data-testid="input-user-cover" type="url" value={form.coverImageUrl} onChange={sf("coverImageUrl")} placeholder="https://…" />
+          </div>
+          <div className="space-y-1.5">
             <Label>Mot de passe *</Label>
-            <Input data-testid="input-user-password" type="password" value={form.password} onChange={sf("password")} placeholder="Min. 8 car., 1 majuscule, 1 chiffre, 1 symbole" />
+            {/* autoComplete="new-password" (not "current-password") tells the browser this is
+                a credential being SET for someone else, not a login field to autofill from
+                saved passwords — combined with the form value always starting at "" (reset()
+                runs on every close, and this component unmounts/remounts with the Dialog, so
+                PasswordInputField's own internal show/hide state also starts fresh every time). */}
+            <PasswordInputField
+              value={form.password}
+              onChange={(v) => setForm(f => ({ ...f, password: v }))}
+              autoComplete="new-password"
+              testId="input-user-password"
+              toggleTestId="button-toggle-user-password"
+              ariaLabel="mot de passe du nouvel utilisateur"
+            />
             {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
           </div>
 
@@ -818,20 +853,40 @@ export default function UsersPage() {
                 const sc = statusConfig[userStatus] ?? statusConfig.approved;
                 const Icon = sc.icon;
                 const canApprove = APPROVABLE_ROLES.includes(u.role);
+                // Same "border flags the noteworthy states" pattern as Admin → Marketing's
+                // mapped account cards (APPROVED/REJECTED get a colored border-2 there);
+                // adapted here to the account's own status concept rather than copying
+                // Marketing's fuchsia literally, since Admin Users spans every role color.
+                const borderColor = userStatus === "pending" ? "border-amber-400" : userStatus === "rejected" ? "border-red-400" : "border-border";
+                // For SUPPLIER accounts, the server already resolves this to the Supplier's
+                // own cover, falling back to their Store's first configured cover image when
+                // the Supplier has none of their own (see GET /api/admin/users) — every other
+                // role gets back exactly their own coverImageUrl here, unchanged.
+                const coverImageUrl = (u as any).displayCoverImageUrl as string | null | undefined;
 
                 return (
-                  <Card key={u.id} className="hover:shadow-md transition-shadow" data-testid={`card-user-${u.id}`}>
-                    <CardContent className="p-4 space-y-3">
-                      <div
-                        className="flex items-start gap-3 cursor-pointer"
-                        onClick={() => setSelectedUserId(u.id)}
-                        data-testid={`button-user-detail-${u.id}`}
-                      >
-                        <Avatar className="w-9 h-9">
+                  <div
+                    key={u.id}
+                    className={`relative bg-card rounded-2xl border-2 ${borderColor} shadow-sm overflow-hidden hover:shadow-md transition-shadow`}
+                    data-testid={`card-user-${u.id}`}
+                  >
+                    {/* Cover — same aspect-[16/9] cover-image treatment as Marketing's mapped
+                        account cards, using the account's own coverImageUrl (Part 1/2 of this
+                        task) with the same centered-icon fallback when none is set. */}
+                    <div className="aspect-[16/9] bg-muted overflow-hidden cursor-pointer" onClick={() => setSelectedUserId(u.id)} data-testid={`button-user-detail-${u.id}`}>
+                      {coverImageUrl ? (
+                        <img src={coverImageUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center"><Users className="w-10 h-10 text-muted-foreground/40" /></div>
+                      )}
+                    </div>
+                    <CardContent className="p-4 space-y-3 cursor-pointer" onClick={() => setSelectedUserId(u.id)}>
+                      <div className="flex items-start gap-3 -mt-9">
+                        <Avatar className="border-2 border-background shadow-sm">
                           <AvatarImage src={getAvatarUrl(u as any)} alt={u.name} />
                           <AvatarFallback>{u.name?.charAt(0)}</AvatarFallback>
                         </Avatar>
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 mt-5">
                           <h3 className="font-semibold truncate hover:text-primary transition-colors">{u.name}</h3>
                           <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                         </div>
@@ -847,7 +902,7 @@ export default function UsersPage() {
                       <p className="text-xs text-muted-foreground">
                         {u.createdAt ? `Inscrit le ${new Date(u.createdAt).toLocaleDateString("fr-FR")}` : "—"}
                       </p>
-                      <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t">
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t" onClick={(e) => e.stopPropagation()}>
                         {canApprove && (
                           <>
                             {userStatus !== "approved" && (
@@ -887,7 +942,7 @@ export default function UsersPage() {
                         </Button>
                       </div>
                     </CardContent>
-                  </Card>
+                  </div>
                 );
               })}
             </div>

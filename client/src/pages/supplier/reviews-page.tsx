@@ -29,7 +29,7 @@ function Stars({ rating }: { rating: number }) {
 
 function formatDate(d: Date | string | null) {
   if (!d) return "";
-  return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return new Date(d).toLocaleDateString("fr-FR", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function ReportDialog({ open, onClose, reviewId }: { open: boolean; onClose: () => void; reviewId: number }) {
@@ -39,11 +39,11 @@ function ReportDialog({ open, onClose, reviewId }: { open: boolean; onClose: () 
   const report = useMutation({
     mutationFn: () => apiRequest("POST", `/api/reviews/${reviewId}/report`, { reason }),
     onSuccess: () => {
-      toast({ title: "Review reported", description: "The admin will review your report." });
+      toast({ title: "Avis signalé", description: "L'administration examinera votre signalement." });
       setReason("");
       onClose();
     },
-    onError: () => toast({ title: "Error reporting review", variant: "destructive" }),
+    onError: () => toast({ title: "Erreur lors du signalement de l'avis", variant: "destructive" }),
   });
 
   return (
@@ -53,26 +53,26 @@ function ReportDialog({ open, onClose, reviewId }: { open: boolean; onClose: () 
           <X className="w-4 h-4" />
         </button>
         <DialogHeader>
-          <DialogTitle>Report Inappropriate Review</DialogTitle>
+          <DialogTitle>Signaler un avis inapproprié</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          <p className="text-sm text-muted-foreground">Describe why this review is inappropriate. The admin will review your report before taking action.</p>
+          <p className="text-sm text-muted-foreground">Décrivez pourquoi cet avis est inapproprié. L'administration examinera votre signalement avant d'agir.</p>
           <Textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="e.g. Contains false information, offensive language…"
+            placeholder="ex. Contient de fausses informations, un langage offensant…"
             rows={3}
             className="resize-none"
           />
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>Annuler</Button>
           <Button
             onClick={() => report.mutate()}
             disabled={!reason.trim() || report.isPending}
             variant="destructive"
           >
-            {report.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Submit Report"}
+            {report.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Envoyer le signalement"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -95,7 +95,7 @@ function ReviewCard({ review, onReport }: { review: SupplierProductReview & { ca
             <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-sm text-foreground">{review.cafeName}</span>
-                {isReported && <Badge variant="outline" className="text-xs border-orange-300 dark:border-orange-500/30 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30">Reported</Badge>}
+                {isReported && <Badge variant="outline" className="text-xs border-orange-300 dark:border-orange-500/30 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30">Signalé</Badge>}
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-muted-foreground">{formatDate(review.createdAt)}</span>
@@ -105,7 +105,7 @@ function ReviewCard({ review, onReport }: { review: SupplierProductReview & { ca
                   className="h-7 px-2 text-muted-foreground hover:text-destructive"
                   onClick={() => onReport(review.id)}
                   disabled={isReported}
-                  title={isReported ? "Already reported" : "Report this review"}
+                  title={isReported ? "Déjà signalé" : "Signaler cet avis"}
                 >
                   <Flag className="w-3.5 h-3.5" />
                 </Button>
@@ -113,7 +113,7 @@ function ReviewCard({ review, onReport }: { review: SupplierProductReview & { ca
             </div>
             {review.productName && (
               <p className="text-xs text-muted-foreground mb-1.5">
-                Product: <span className="font-medium text-foreground">{review.productName}</span>
+                Produit : <span className="font-medium text-foreground">{review.productName}</span>
               </p>
             )}
             <Stars rating={review.rating} />
@@ -227,8 +227,8 @@ export default function ReviewsPage() {
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
-        title="Reviews"
-        subtitle="Customer feedback on your products and service."
+        title="Avis"
+        subtitle="Avis des clients sur vos produits et votre service."
         action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
@@ -241,7 +241,7 @@ export default function ReviewsPage() {
             <CardContent className="p-5 flex items-center gap-4">
               <div className="bg-amber-500/10 rounded-xl p-3"><Star className="w-5 h-5 text-amber-500" /></div>
               <div>
-                <p className="text-xs text-muted-foreground">Product Avg Rating</p>
+                <p className="text-xs text-muted-foreground">Note moy. produits</p>
                 <p className="text-2xl font-bold">{productAvg}{productReviews.length > 0 ? " / 5" : ""}</p>
               </div>
             </CardContent>
@@ -250,7 +250,7 @@ export default function ReviewsPage() {
             <CardContent className="p-5 flex items-center gap-4">
               <div className="bg-primary/10 rounded-xl p-3"><Package className="w-5 h-5 text-primary" /></div>
               <div>
-                <p className="text-xs text-muted-foreground">Product Reviews</p>
+                <p className="text-xs text-muted-foreground">Avis sur les produits</p>
                 <p className="text-2xl font-bold">{productReviews.length}</p>
               </div>
             </CardContent>
@@ -259,7 +259,7 @@ export default function ReviewsPage() {
             <CardContent className="p-5 flex items-center gap-4">
               <div className="bg-green-500/10 rounded-xl p-3"><Store className="w-5 h-5 text-green-600" /></div>
               <div>
-                <p className="text-xs text-muted-foreground">Supplier Reviews ({supplierAvg}{supplierReviews.length > 0 ? " / 5" : ""})</p>
+                <p className="text-xs text-muted-foreground">Avis fournisseur ({supplierAvg}{supplierReviews.length > 0 ? " / 5" : ""})</p>
                 <p className="text-2xl font-bold">{supplierReviews.length}</p>
               </div>
             </CardContent>
@@ -273,7 +273,7 @@ export default function ReviewsPage() {
             <CardContent className="p-5 flex items-center gap-4">
               <div className="bg-amber-500/10 rounded-xl p-3"><Star className="w-5 h-5 text-amber-500" /></div>
               <div>
-                <p className="text-xs text-muted-foreground">Product Avg Rating</p>
+                <p className="text-xs text-muted-foreground">Note moy. produits</p>
                 <p className="text-2xl font-bold">{productAvg}{productReviews.length > 0 ? " / 5" : ""}</p>
               </div>
             </CardContent>
@@ -282,7 +282,7 @@ export default function ReviewsPage() {
             <CardContent className="p-5 flex items-center gap-4">
               <div className="bg-primary/10 rounded-xl p-3"><Package className="w-5 h-5 text-primary" /></div>
               <div>
-                <p className="text-xs text-muted-foreground">Product Reviews</p>
+                <p className="text-xs text-muted-foreground">Avis sur les produits</p>
                 <p className="text-2xl font-bold">{productReviews.length}</p>
               </div>
             </CardContent>
@@ -291,7 +291,7 @@ export default function ReviewsPage() {
             <CardContent className="p-5 flex items-center gap-4">
               <div className="bg-green-500/10 rounded-xl p-3"><Store className="w-5 h-5 text-green-600" /></div>
               <div>
-                <p className="text-xs text-muted-foreground">Supplier Reviews ({supplierAvg}{supplierReviews.length > 0 ? " / 5" : ""})</p>
+                <p className="text-xs text-muted-foreground">Avis fournisseur ({supplierAvg}{supplierReviews.length > 0 ? " / 5" : ""})</p>
                 <p className="text-2xl font-bold">{supplierReviews.length}</p>
               </div>
             </CardContent>
@@ -312,7 +312,7 @@ export default function ReviewsPage() {
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <Package className="w-4 h-4" /> Product Reviews
+            <Package className="w-4 h-4" /> Avis produits
             {productReviews.length > 0 && (
               <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab === "products" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
                 {productReviews.length}
@@ -327,7 +327,7 @@ export default function ReviewsPage() {
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <Store className="w-4 h-4" /> Supplier Reviews
+            <Store className="w-4 h-4" /> Avis fournisseur
             {supplierReviews.length > 0 && (
               <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeTab === "supplier" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
                 {supplierReviews.length}
@@ -342,10 +342,10 @@ export default function ReviewsPage() {
         <div className="flex flex-wrap gap-3">
           <Select value={categoryFilter || "__all__"} onValueChange={v => { setCategoryFilter(v === "__all__" ? "" : v); setSubCategoryFilter(""); }}>
             <SelectTrigger className="w-48 h-9 text-sm">
-              <SelectValue placeholder="All Categories" />
+              <SelectValue placeholder="Toutes les catégories" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">All Categories</SelectItem>
+              <SelectItem value="__all__">Toutes les catégories</SelectItem>
               {categories.map((c: any) => (
                 <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>
               ))}
@@ -353,10 +353,10 @@ export default function ReviewsPage() {
           </Select>
           <Select value={subCategoryFilter || "__all__"} onValueChange={v => setSubCategoryFilter(v === "__all__" ? "" : v)} disabled={!categoryFilter}>
             <SelectTrigger className="w-48 h-9 text-sm">
-              <SelectValue placeholder={categoryFilter ? "All Sub-categories" : "Pick category first"} />
+              <SelectValue placeholder={categoryFilter ? "Toutes les sous-catégories" : "Choisir une catégorie d'abord"} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">All Sub-categories</SelectItem>
+              <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
               {filteredSubs.map((s: any) => (
                 <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
               ))}
@@ -364,7 +364,7 @@ export default function ReviewsPage() {
           </Select>
           {(categoryFilter || subCategoryFilter) && (
             <Button variant="outline" size="sm" className="h-9" onClick={() => { setCategoryFilter(""); setSubCategoryFilter(""); }}>
-              Clear filters
+              Effacer les filtres
             </Button>
           )}
         </div>
@@ -374,11 +374,11 @@ export default function ReviewsPage() {
       {reviews.length === 0 ? (
         <div className="rounded-2xl border border-border/50 p-16 text-center text-muted-foreground">
           <Star className="w-10 h-10 mx-auto mb-3 opacity-20" />
-          <p className="font-medium">No reviews yet</p>
+          <p className="font-medium">Aucun avis trouvé</p>
           <p className="text-sm mt-1">
             {activeTab === "products"
-              ? "Product reviews from cafe owners will appear here."
-              : "Supplier reviews from cafe owners will appear here."}
+              ? "Les avis sur les produits laissés par les cafés apparaîtront ici."
+              : "Les avis sur le fournisseur laissés par les cafés apparaîtront ici."}
           </p>
         </div>
       ) : (
@@ -399,7 +399,7 @@ export default function ReviewsPage() {
           end={pagination.end}
           onPageChange={pagination.setPage}
           onPageSizeChange={pagination.setPageSize}
-          itemLabel="reviews"
+          itemLabel="avis"
         />
       )}
 

@@ -1182,9 +1182,7 @@ export default function CartPage() {
         packItems={orderablePackItems}
         deliveryAddress={activeDeliveryAddress}
         courierInstructions={courierInstructions}
-        promoEval={promoEval}
-        discountCodeAmount={discountCodeAmount}
-        discountCodeLabel={appliedDiscountCode?.code}
+        discountCode={appliedDiscountCode ? { code: appliedDiscountCode.code, supplierId: appliedDiscountCode.supplierId } : null}
         isSubmitting={createOrder.isPending || isPreparingOrder}
         onConfirm={handleConfirmOrder}
       />

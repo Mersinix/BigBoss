@@ -23,6 +23,7 @@ import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 import { PackImageGallery } from "@/components/pack-image-gallery";
 import { ModalGrabber } from "@/components/shared/modal-grabber";
 import { useCoverZoomStyle, computeCoverZoomScale, getAdjustmentFor } from "@/lib/image-adjustment";
+import { PromotionDetailsModal, type PromotionBadgeTarget } from "@/components/promotion-details-modal";
 
 // ── Promotion helpers ─────────────────────────────────────────────────────────
 
@@ -41,8 +42,11 @@ function calcPromoPrice(basePrice: number, promo: ListingPromotion): number | nu
     return Math.max(0, Math.round(basePrice * (1 - promo.discountValue / 10000)));
   }
   if (promo.type === 'FIXED_AMOUNT') {
-    // discountValue is in milli-DT; price is in cents (1 DT = 100 cents = 1000 milli-DT → 1 cent = 10 milli-DT)
-    return Math.max(0, basePrice - Math.round(promo.discountValue / 10));
+    // discountValue is cents for this type (shared/schema.ts's column comment), the
+    // same unit as basePrice — no conversion needed. (A prior version of this
+    // function incorrectly treated it as milli-DT; see
+    // PROMOTION_MINIMUM_ORDER_ELIGIBILITY_THEME_REALTIME_REPORT.md.)
+    return Math.max(0, basePrice - promo.discountValue);
   }
   return null;
 }
@@ -83,16 +87,17 @@ function Stars({ rating, size = "sm" }: { rating: number; size?: "sm" | "xs" }) 
 // ── Variant Row ───────────────────────────────────────────────────────────────
 
 function VariantRow({
-  variant, listing, product, promotions = [], isDark = false,
+  variant, listing, product, promotions = [], isDark = false, onOpenPromotion,
 }: {
   variant: MarketplaceVariant;
   listing: MarketplaceListing;
   product: MarketplaceProduct;
   promotions?: ListingPromotion[];
   isDark?: boolean;
+  onOpenPromotion: (target: PromotionBadgeTarget) => void;
 }) {
   const fmt = useFormatCurrency();
-  const { addItem, replaceItem, getItemQuantity } = useCart();
+  const { addItem, replaceItem, getItemQuantity, items: cartItems } = useCart();
   const { toast } = useToast();
   // Set only when this modal was opened from the Cart's "Choisir un autre fournisseur"
   // action on a line the supplier cancelled — see hooks/use-quick-view.ts. Every variant
@@ -118,7 +123,26 @@ function VariantRow({
     return eligible[0];
   }, [promotions]);
 
-  const promoPrice = bestPricePromo ? calcPromoPrice(variant.price, bestPricePromo) : null;
+  // This supplier's current cart subtotal (original, undiscounted prices — see the
+  // double-discount fix above), used to decide whether a minimum-order-gated
+  // promotion is ALREADY eligible. Reactive to cart changes automatically (zustand
+  // selector), so adding/removing items elsewhere updates this immediately, no
+  // page refresh needed (task: "Realtime Synchronization Without Page Refresh").
+  const supplierCartSubtotal = useMemo(
+    () => cartItems.filter(i => i.supplierId === listing.supplierId).reduce((s, i) => s + i.unitPrice * i.quantity, 0),
+    [cartItems, listing.supplierId],
+  );
+  // A price-affecting promotion with a configured minimum order value is only
+  // "active" once the supplier's CURRENT cart subtotal already satisfies it — never
+  // assumed eligible just because the product belongs to the targeted category/type
+  // (task: "Do not assume the promotion is eligible simply because the product
+  // belongs to the assigned category"). Adding the item being viewed is not counted
+  // toward the minimum ahead of time, since the condition "cannot be evaluated until
+  // the cart is known" per the task's own instruction — showing a discounted price
+  // for an add-to-cart action that hasn't happened yet would be the same kind of
+  // false "already applicable" claim this task explicitly forbids.
+  const minOrderMet = bestPricePromo?.minimumOrderValue == null || supplierCartSubtotal >= bestPricePromo.minimumOrderValue;
+  const promoPrice = bestPricePromo && minOrderMet ? calcPromoPrice(variant.price, bestPricePromo) : null;
 
   const handleAdd = () => {
     if (outOfStock) return;
@@ -130,7 +154,12 @@ function VariantRow({
       subCategoryName: product.subCategoryLabel?.name ?? null,
       supplierId: listing.supplierId,
       supplierName: listing.supplierName, flavorName: variant.flavorName ?? null,
-      sizeName: variant.sizeName ?? null, unitPrice: promoPrice ?? variant.price,
+      // Always the original, undiscounted price — never promoPrice. The cart/checkout's
+      // own promotion evaluation (usePromotionEvaluation, server-side at order creation)
+      // is the single place a promotion discount is applied; baking it into unitPrice here
+      // made that evaluation discount an already-discounted price a second time (the
+      // "double discount" bug — see PROMOTION_DOUBLE_DISCOUNT_FIX_AND_DETAILS_MODAL_REPORT.md).
+      sizeName: variant.sizeName ?? null, unitPrice: variant.price,
     };
     if (replaceTarget) {
       replaceItem(
@@ -158,11 +187,42 @@ function VariantRow({
   const stepHover   = isDark ? "hover:bg-gray-700"    : "hover:bg-secondary";
   const stepText    = isDark ? "text-gray-200"        : "";
 
-  // Promo badge rendered below the variant label
+  // Promo badge rendered below the variant label — clickable: opens the
+  // Promotion Details modal for this exact promotion/listing/variant (task:
+  // "Clickable Promotion Badges in Product Detail Modal"). Never navigates
+  // away from or closes the product detail modal itself. Two distinct visual
+  // states (task: "Clearly distinguish between a potentially available
+  // promotion and an active discount"): a filled badge when the minimum order
+  // condition (if any) is already met by the current cart, a muted outline
+  // badge plus an explanatory line when it isn't — never a false "active"
+  // claim either way. The badge itself stays clickable in both states so the
+  // Coffee Owner can always open the Promotion Details modal to see the
+  // exact condition.
   const promoBadge = bestPricePromo && (
-    <span className="inline-flex items-center gap-1 bg-rose-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full mt-0.5">
-      <Zap className="w-2.5 h-2.5" />{bestPricePromo.label}
-    </span>
+    minOrderMet ? (
+      <button
+        type="button"
+        onClick={() => onOpenPromotion({ promotionId: bestPricePromo.promotionId, listingId: listing.id, flavorId: variant.flavorId, sizeId: variant.sizeId })}
+        className="inline-flex items-center gap-1 bg-rose-500/90 hover:bg-rose-600 transition-colors text-white text-[10px] font-bold px-2 py-0.5 rounded-full mt-0.5"
+        data-testid={`button-promo-badge-${listing.id}-${variant.flavorId ?? 0}-${variant.sizeId ?? 0}`}
+      >
+        <Zap className="w-2.5 h-2.5" />{bestPricePromo.label}
+      </button>
+    ) : (
+      <div className="flex flex-col gap-0.5 mt-0.5 max-w-[220px]">
+        <button
+          type="button"
+          onClick={() => onOpenPromotion({ promotionId: bestPricePromo.promotionId, listingId: listing.id, flavorId: variant.flavorId, sizeId: variant.sizeId })}
+          className={`inline-flex items-center gap-1 self-start border text-[10px] font-bold px-2 py-0.5 rounded-full transition-colors ${isDark ? "border-gray-600 text-gray-300 hover:border-gray-500" : "border-border text-muted-foreground hover:border-primary/50"}`}
+          data-testid={`button-promo-badge-${listing.id}-${variant.flavorId ?? 0}-${variant.sizeId ?? 0}`}
+        >
+          <Zap className="w-2.5 h-2.5" />{bestPricePromo.label}
+        </button>
+        <span className={`text-[10px] leading-tight ${isDark ? "text-gray-500" : "text-muted-foreground"}`}>
+          Ajoutez des produits éligibles pour atteindre le montant minimum de commande.
+        </span>
+      </div>
+    )
   );
 
   // Shown only in replacement mode, on the row matching the originally cancelled
@@ -259,7 +319,7 @@ function VariantRow({
 // ── Supplier Section ──────────────────────────────────────────────────────────
 
 function SupplierSection({
-  listing, product, visibleVariants, reviewStats, distanceKm, promotions = [], isDark = false,
+  listing, product, visibleVariants, reviewStats, distanceKm, promotions = [], isDark = false, onOpenPromotion,
 }: {
   listing: MarketplaceListing;
   product: MarketplaceProduct;
@@ -268,6 +328,7 @@ function SupplierSection({
   distanceKm?: number;
   promotions?: ListingPromotion[];
   isDark?: boolean;
+  onOpenPromotion: (target: PromotionBadgeTarget) => void;
 }) {
   const cardBorder = isDark ? "bg-gray-800 border-gray-700/60" : "border-border/50";
   const headerBg   = isDark ? "bg-gray-800/50"   : "bg-secondary/30";
@@ -297,12 +358,15 @@ function SupplierSection({
           <div className="flex items-center gap-1.5 flex-wrap">
             <p className={nameCls}>{listing.supplierName}</p>
             {supplierBadgePromos.map((promo, i) => (
-              <span
+              <button
+                type="button"
                 key={`${promo.promotionId}-${i}`}
-                className="inline-flex items-center gap-1 bg-blue-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full"
+                onClick={() => onOpenPromotion({ promotionId: promo.promotionId, listingId: listing.id, flavorId: null, sizeId: null })}
+                className="inline-flex items-center gap-1 bg-blue-500/90 hover:bg-blue-600 transition-colors text-white text-[10px] font-bold px-2 py-0.5 rounded-full"
+                data-testid={`button-promo-badge-supplier-${listing.id}-${promo.promotionId}`}
               >
                 <Zap className="w-2.5 h-2.5" />{promo.label}
-              </span>
+              </button>
             ))}
           </div>
           <div className="flex items-center gap-2 flex-wrap mt-0.5">
@@ -330,6 +394,7 @@ function SupplierSection({
             product={product}
             promotions={pricePromos}
             isDark={isDark}
+            onOpenPromotion={onOpenPromotion}
           />
         ))}
       </div>
@@ -512,6 +577,12 @@ export function ProductDetailContent({
   const [reviewModalOpen,   setReviewModalOpen]   = useState(false);
   const [activeImageIdx,    setActiveImageIdx]    = useState(0);
   const [supplierSort,      setSupplierSort]      = useState<"nearest" | "cheapest" | null>(null);
+  // Which promotion badge's details modal is open, if any — set by either
+  // VariantRow's or SupplierSection's badge onClick, cleared on close. Lives
+  // here (not inside VariantRow/SupplierSection) so the modal renders once,
+  // as a sibling of the product detail modal itself, never nested inside a
+  // gesture-bound scroll container (same placement principle as auxModals).
+  const [promoTarget, setPromoTarget] = useState<PromotionBadgeTarget | null>(null);
 
   // ── Modal-only: dark theme ────────────────────────────────────────────────
   const { isDark, toggle: toggleTheme } = useThemeStore();
@@ -604,6 +675,7 @@ export function ProductDetailContent({
     setSelectedFlavorId(null);
     setSelectedSizeId(null);
     setReviewModalOpen(false);
+    setPromoTarget(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productId]);
 
@@ -660,10 +732,16 @@ export function ProductDetailContent({
   // ── Best promotional price for the header (store context only) ───────────────
   const headerBestPromoPrice = useMemo(() => {
     if (supplierId == null || !product) return null;
+    // This store's current cart subtotal (original, undiscounted prices), same
+    // minimum-order eligibility check as VariantRow's — a minimum-order-gated
+    // promotion must not be shown as already active in the header either just
+    // because the product is in a targeted category/type.
+    const supplierCartSubtotal = items.filter(i => i.supplierId === supplierId).reduce((s, i) => s + i.unitPrice * i.quantity, 0);
     // Scope promotions to the store supplier's listings only
     const storeListingIdSet = new Set(storeListings.map(l => l.id));
     const eligible = listingPromotions.filter(
-      p => storeListingIdSet.has(p.listingId) && VARIANT_PRICE_TYPES.has(p.type),
+      p => storeListingIdSet.has(p.listingId) && VARIANT_PRICE_TYPES.has(p.type)
+        && (p.minimumOrderValue == null || supplierCartSubtotal >= p.minimumOrderValue),
     );
     if (!eligible.length) return null;
     const pct = eligible.filter(p => ['PERCENTAGE', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER'].includes(p.type));
@@ -673,7 +751,7 @@ export function ProductDetailContent({
     const promoPrice = calcPromoPrice(product.bestPrice, best);
     // Only return the promo price when it is strictly less than the base price
     return promoPrice != null && promoPrice < product.bestPrice ? promoPrice : null;
-  }, [supplierId, product, listingPromotions, storeListings]);
+  }, [supplierId, product, listingPromotions, storeListings, items]);
 
   const cartCount = items.reduce((s, i) => s + i.quantity, 0);
 
@@ -1196,6 +1274,7 @@ export function ProductDetailContent({
               distanceKm={distanceKm}
               promotions={listingPromotions.filter(p => p.listingId === listing.id)}
               isDark={isModal && isDark}
+              onOpenPromotion={setPromoTarget}
             />
           );
         })
@@ -1226,6 +1305,7 @@ export function ProductDetailContent({
         onSubmit={(rating, comment) => submitProductReview.mutateAsync({ rating, comment })}
         isSubmitting={submitProductReview.isPending}
       />
+      <PromotionDetailsModal target={promoTarget} onClose={() => setPromoTarget(null)} isDark={dk} />
     </>
   );
 
@@ -1366,6 +1446,7 @@ export function ProductDetailContent({
                         distanceKm={distanceKm}
                         promotions={listingPromotions.filter(p => p.listingId === listing.id)}
                         isDark={isModal && isDark}
+                        onOpenPromotion={setPromoTarget}
                       />
                     );
                   })

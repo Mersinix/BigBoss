@@ -2,10 +2,12 @@ import { Link, useLocation } from "wouter";
 import { Bell, MessageCircle, Star } from "lucide-react";
 import { useMessagingSettings } from "@/hooks/use-messaging-settings";
 
+// `key` drives the filtering logic below and data-testid (stable, never translated);
+// `label` is the French display text shown on the tab itself.
 const ALL_TABS = [
-  { href: "/supplier/messages", label: "Messages", icon: MessageCircle },
-  { href: "/supplier/notifications", label: "Notifications", icon: Bell },
-  { href: "/supplier/reviews", label: "Reviews", icon: Star },
+  { key: "messages", href: "/supplier/messages", label: "Messages", icon: MessageCircle },
+  { key: "notifications", href: "/supplier/notifications", label: "Notifications", icon: Bell },
+  { key: "reviews", href: "/supplier/reviews", label: "Avis", icon: Star },
 ];
 
 /**
@@ -19,18 +21,18 @@ const ALL_TABS = [
 export function SupplierCommunicationSwitcher() {
   const [location] = useLocation();
   const { settings: messagingSettings } = useMessagingSettings();
-  const tabs = ALL_TABS.filter((t) => t.label !== "Messages" || messagingSettings.globalVisible);
+  const tabs = ALL_TABS.filter((t) => t.key !== "messages" || messagingSettings.globalVisible);
   return (
     <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
       <div className="flex gap-1 bg-secondary/40 rounded-xl p-1 w-max min-w-full sm:w-fit">
-        {tabs.map(({ href, label, icon: Icon }) => {
+        {tabs.map(({ key, href, label, icon: Icon }) => {
           const active = location === href;
           return (
             <Link
               key={href}
               href={href}
               className={`flex items-center gap-2 py-2 px-4 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${active ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              data-testid={`tab-supplier-communication-${label.toLowerCase()}`}
+              data-testid={`tab-supplier-communication-${key}`}
             >
               <Icon className="w-4 h-4" />{label}
             </Link>

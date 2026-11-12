@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil, Trash2, Folder, Tag, Ruler, Award, Layers, ToggleLeft, ToggleRight, Search, CheckCircle, XCircle, Clock, Building2, ChevronDown, ChevronUp, Snowflake, X, GripVertical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -18,6 +17,7 @@ import type { CategoryWithCount, SubCategoryWithDetails, FlavorWithCount, SizeWi
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { CatalogSuggestionCard } from "@/components/shared/catalog-suggestion-card";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -29,7 +29,7 @@ function ActiveToggle({ active, onChange }: { active: boolean; onChange: (v: boo
       className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full transition-colors ${active ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400" : "bg-secondary text-muted-foreground"}`}
     >
       {active ? <ToggleRight className="w-3.5 h-3.5" /> : <ToggleLeft className="w-3.5 h-3.5" />}
-      {active ? "Active" : "Inactive"}
+      {active ? "Actif" : "Inactif"}
     </button>
   );
 }
@@ -41,12 +41,12 @@ function DeleteConfirm({ open, onClose, onConfirm, name, warning }: { open: bool
         <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-delete-confirm">
           <X className="w-4 h-4" />
         </button>
-        <DialogHeader><DialogTitle>Delete "{name}"?</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground">This action cannot be undone.</p>
+        <DialogHeader><DialogTitle>Supprimer « {name} » ?</DialogTitle></DialogHeader>
+        <p className="text-sm text-muted-foreground">Cette action est irréversible.</p>
         {warning && <p className="text-sm text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 rounded-md px-3 py-2">{warning}</p>}
         <div className="flex gap-2 justify-end mt-2">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button variant="destructive" onClick={onConfirm} data-testid="button-confirm-delete">Delete Anyway</Button>
+          <Button variant="outline" onClick={onClose}>Annuler</Button>
+          <Button variant="destructive" onClick={onConfirm} data-testid="button-confirm-delete">Supprimer quand même</Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -63,7 +63,7 @@ function MultiSelectList({ label, items, selected, onChange, badgeItems }: { lab
     <div className="space-y-1.5">
       <Label>{label}</Label>
       <div className="border rounded-lg p-2 max-h-32 overflow-y-auto space-y-1 bg-background">
-        {items.length === 0 && <p className="text-xs text-muted-foreground px-1 py-1">None available</p>}
+        {items.length === 0 && <p className="text-xs text-muted-foreground px-1 py-1">Aucun élément disponible</p>}
         {items.map(item => (
           <label key={item.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-secondary/50 cursor-pointer">
             <input type="checkbox" checked={selected.includes(item.id)} onChange={() => toggle(item.id)} className="rounded" />
@@ -165,23 +165,23 @@ function CategoriesTab() {
         : apiRequest("POST", "/api/categories", data),
     onSuccess: () => {
       invalidateCats();
-      toast({ title: editing ? "Category updated" : "Category created" });
+      toast({ title: editing ? "Catégorie mise à jour" : "Catégorie créée" });
       setDialogOpen(false); setEditing(null); setForm({ name: "", icon: "", description: "", isActive: true });
     },
-    onError: (err: any) => toast({ title: err?.message ?? "Error", variant: "destructive" }),
+    onError: (err: any) => toast({ title: err?.message ?? "Erreur", variant: "destructive" }),
   });
 
   const toggleActive = useMutation({
     mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
       apiRequest("PATCH", `/api/categories/${id}`, { isActive }),
     onSuccess: () => invalidateCats(),
-    onError: () => toast({ title: "Error", variant: "destructive" }),
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
   const remove = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/categories/${id}`),
-    onSuccess: () => { invalidateCats(); toast({ title: "Deleted" }); setDeleting(null); setDialogOpen(false); setEditing(null); },
-    onError: () => toast({ title: "Error", variant: "destructive" }),
+    onSuccess: () => { invalidateCats(); toast({ title: "Supprimée" }); setDeleting(null); setDialogOpen(false); setEditing(null); },
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
   const openAdd = () => { setEditing(null); setForm({ name: "", icon: "", description: "", isActive: true }); setDialogOpen(true); };
@@ -190,7 +190,7 @@ function CategoriesTab() {
   const bulkOrder = useMutation({
     mutationFn: (orders: { id: number; displayOrder: number }[]) => apiRequest("PATCH", "/api/categories/bulk-order", { orders }),
     onSuccess: () => invalidateCats(),
-    onError: () => toast({ title: "Failed to save order", variant: "destructive" }),
+    onError: () => toast({ title: "Échec de l'enregistrement de l'ordre", variant: "destructive" }),
   });
   const { sorted: sortedCats, handleDragStart, handleDragOver, handleDrop } = useDragReorder(cats, (orders) => bulkOrder.mutate(orders));
 
@@ -199,8 +199,8 @@ function CategoriesTab() {
   const pageCats = sortedCats.slice(pagination.start, pagination.end);
 
   const handleSave = () => {
-    if (!form.name.trim()) return toast({ title: "Name is required", variant: "destructive" });
-    if (isDuplicate(form.name)) return toast({ title: "A category with this name already exists", variant: "destructive" });
+    if (!form.name.trim()) return toast({ title: "Le nom est requis", variant: "destructive" });
+    if (isDuplicate(form.name)) return toast({ title: "Une catégorie avec ce nom existe déjà", variant: "destructive" });
     upsert.mutate(form);
   };
 
@@ -209,8 +209,8 @@ function CategoriesTab() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <p className="text-sm text-muted-foreground">{cats.length} categories defined · drag cards to reorder</p>
-        <Button size="sm" onClick={openAdd} data-testid="button-add-category"><Plus className="w-4 h-4 mr-1.5" />Add Category</Button>
+        <p className="text-sm text-muted-foreground">{cats.length} catégories définies · glissez les cartes pour réorganiser</p>
+        <Button size="sm" onClick={openAdd} data-testid="button-add-category"><Plus className="w-4 h-4 mr-1.5" />Ajouter une catégorie</Button>
       </div>
 
       {isLoading ? (
@@ -220,7 +220,7 @@ function CategoriesTab() {
       ) : cats.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground border rounded-lg">
           <Folder className="w-8 h-8 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">No categories yet. Add one to get started.</p>
+          <p className="text-sm">Aucune catégorie pour le moment. Ajoutez-en une pour commencer.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -254,8 +254,8 @@ function CategoriesTab() {
                   {c.description && <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{c.description}</p>}
                 </div>
                 <div className="flex items-center gap-2 flex-wrap mt-1">
-                  <Badge variant="secondary" className="text-[11px]">{c.subCategoryCount} sub-cats</Badge>
-                  <Badge variant="outline" className="text-[11px]">{c.productCount} products</Badge>
+                  <Badge variant="secondary" className="text-[11px]">{c.subCategoryCount} sous-cat.</Badge>
+                  <Badge variant="outline" className="text-[11px]">{c.productCount} produits</Badge>
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-1">{c.createdBy || "—"}</p>
               </div>
@@ -274,7 +274,7 @@ function CategoriesTab() {
           end={pagination.end}
           onPageChange={pagination.setPage}
           onPageSizeChange={pagination.setPageSize}
-          itemLabel="categories"
+          itemLabel="catégories"
         />
       )}
 
@@ -283,25 +283,25 @@ function CategoriesTab() {
           <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={closeDialog} aria-label="Close" data-testid="button-close-category-dialog">
             <X className="w-4 h-4" />
           </button>
-          <DialogHeader><DialogTitle>{editing ? "Edit Category" : "New Category"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? "Modifier la catégorie" : "Nouvelle catégorie"}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-1">
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5 col-span-1">
-                <Label>Icon (emoji)</Label>
+                <Label>Icône (emoji)</Label>
                 <Input data-testid="input-cat-icon" value={form.icon} onChange={e => setForm(f => ({ ...f, icon: e.target.value }))} placeholder="☕" className="text-center text-lg" />
               </div>
               <div className="space-y-1.5 col-span-2">
-                <Label>Name *</Label>
-                <Input data-testid="input-cat-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Coffee Beans" />
-                {isDuplicate(form.name) && form.name && <p className="text-xs text-destructive">Name already exists</p>}
+                <Label>Nom *</Label>
+                <Input data-testid="input-cat-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="ex. Grains de café" />
+                {isDuplicate(form.name) && form.name && <p className="text-xs text-destructive">Ce nom existe déjà</p>}
               </div>
             </div>
             <div className="space-y-1.5">
               <Label>Description</Label>
-              <Input data-testid="input-cat-desc" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief description" />
+              <Input data-testid="input-cat-desc" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brève description" />
             </div>
             <div className="flex items-center justify-between">
-              <Label>Active</Label>
+              <Label>Actif</Label>
               <ActiveToggle active={form.isActive} onChange={v => setForm(f => ({ ...f, isActive: v }))} />
             </div>
             <div className="flex gap-2 justify-end items-center">
@@ -312,12 +312,12 @@ function CategoriesTab() {
                   onClick={() => setDeleting(editing)}
                   data-testid="button-delete-category"
                 >
-                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Supprimer
                 </Button>
               )}
-              <Button variant="outline" onClick={closeDialog}>Cancel</Button>
+              <Button variant="outline" onClick={closeDialog}>Annuler</Button>
               <Button onClick={handleSave} disabled={!form.name.trim() || isDuplicate(form.name) || upsert.isPending} data-testid="button-save-category">
-                {upsert.isPending ? "Saving…" : editing ? "Save Changes" : "Create"}
+                {upsert.isPending ? "Enregistrement…" : editing ? "Enregistrer" : "Créer"}
               </Button>
             </div>
           </div>
@@ -330,7 +330,7 @@ function CategoriesTab() {
           onClose={() => setDeleting(null)}
           name={deleting.name}
           warning={deleting.subCategoryCount > 0 || deleting.productCount > 0
-            ? `This category has ${deleting.subCategoryCount} sub-categories and ${deleting.productCount} products linked. Deleting it will remove all related data.`
+            ? `Cette catégorie a ${deleting.subCategoryCount} sous-catégorie(s) et ${deleting.productCount} produit(s) liés. La supprimer supprimera également toutes les données associées.`
             : undefined}
           onConfirm={() => remove.mutate(deleting.id)}
         />
@@ -368,23 +368,23 @@ function SubCategoriesTab() {
         : apiRequest("POST", "/api/subcategories", { ...data, categoryId: parseInt(data.categoryId) }),
     onSuccess: () => {
       invalidateSubs();
-      toast({ title: editing ? "Updated" : "Created" });
+      toast({ title: editing ? "Mise à jour effectuée" : "Créée" });
       setDialogOpen(false); setEditing(null); setForm({ name: "", categoryId: "", description: "", icon: "", isActive: true });
     },
-    onError: (err: any) => toast({ title: err?.message ?? "Error", variant: "destructive" }),
+    onError: (err: any) => toast({ title: err?.message ?? "Erreur", variant: "destructive" }),
   });
 
   const toggleActive = useMutation({
     mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
       apiRequest("PATCH", `/api/subcategories/${id}`, { isActive }),
     onSuccess: () => invalidateSubs(),
-    onError: () => toast({ title: "Error", variant: "destructive" }),
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
   const remove = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/subcategories/${id}`),
-    onSuccess: () => { invalidateSubs(); toast({ title: "Deleted" }); setDeleting(null); setDialogOpen(false); setEditing(null); },
-    onError: () => toast({ title: "Error", variant: "destructive" }),
+    onSuccess: () => { invalidateSubs(); toast({ title: "Supprimée" }); setDeleting(null); setDialogOpen(false); setEditing(null); },
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
   const openAdd = () => { setEditing(null); setForm({ name: "", categoryId: cats[0] ? String(cats[0].id) : "", description: "", icon: "", isActive: true }); setDialogOpen(true); };
@@ -395,9 +395,9 @@ function SubCategoriesTab() {
   };
 
   const handleSave = () => {
-    if (!form.name.trim()) return toast({ title: "Name is required", variant: "destructive" });
-    if (!form.categoryId) return toast({ title: "Category is required", variant: "destructive" });
-    if (isDuplicate(form.name)) return toast({ title: "This sub-category name already exists in this category", variant: "destructive" });
+    if (!form.name.trim()) return toast({ title: "Le nom est requis", variant: "destructive" });
+    if (!form.categoryId) return toast({ title: "La catégorie est requise", variant: "destructive" });
+    if (isDuplicate(form.name)) return toast({ title: "Ce nom de sous-catégorie existe déjà dans cette catégorie", variant: "destructive" });
     upsert.mutate(form);
   };
 
@@ -406,7 +406,7 @@ function SubCategoriesTab() {
   const bulkOrder = useMutation({
     mutationFn: (orders: { id: number; displayOrder: number }[]) => apiRequest("PATCH", "/api/subcategories/bulk-order", { orders }),
     onSuccess: () => invalidateSubs(),
-    onError: () => toast({ title: "Failed to save order", variant: "destructive" }),
+    onError: () => toast({ title: "Échec de l'enregistrement de l'ordre", variant: "destructive" }),
   });
   // Order is global across all sub-categories (not re-scoped per parent-category
   // filter) — sort the FULL list first, then apply the filter, same as Admin
@@ -422,23 +422,23 @@ function SubCategoriesTab() {
     <div className="space-y-4">
       <div className="flex justify-between items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2 min-w-0 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
-          <p className="text-sm text-muted-foreground shrink-0">{subs.length} sub-categories · drag to reorder</p>
+          <p className="text-sm text-muted-foreground shrink-0">{subs.length} sous-catégories · glissez pour réorganiser</p>
           <Select value={filterCat} onValueChange={setFilterCat}>
             <SelectTrigger className="h-8 w-44 text-sm shrink-0" data-testid="select-filter-cat">
-              <SelectValue placeholder="All categories" />
+              <SelectValue placeholder="Toutes les catégories" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
+              <SelectItem value="all">Toutes les catégories</SelectItem>
               {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
             </SelectContent>
           </Select>
           {filterCat !== "all" && (
             <Button variant="outline" size="sm" className="text-muted-foreground shrink-0" onClick={() => setFilterCat("all")} data-testid="button-clear-subcat-filters">
-              <X className="w-3.5 h-3.5 mr-1" />Clear
+              <X className="w-3.5 h-3.5 mr-1" />Effacer
             </Button>
           )}
         </div>
-        <Button size="sm" onClick={openAdd} data-testid="button-add-subcat"><Plus className="w-4 h-4 mr-1.5" />Add Sub-category</Button>
+        <Button size="sm" onClick={openAdd} data-testid="button-add-subcat"><Plus className="w-4 h-4 mr-1.5" />Ajouter une sous-catégorie</Button>
       </div>
 
       {isLoading ? (
@@ -448,7 +448,7 @@ function SubCategoriesTab() {
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground border rounded-lg">
           <Layers className="w-8 h-8 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">No sub-categories found.</p>
+          <p className="text-sm">Aucune sous-catégorie trouvée.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -501,7 +501,7 @@ function SubCategoriesTab() {
           end={pagination.end}
           onPageChange={pagination.setPage}
           onPageSizeChange={pagination.setPageSize}
-          itemLabel="sub-categories"
+          itemLabel="sous-catégories"
         />
       )}
 
@@ -510,12 +510,12 @@ function SubCategoriesTab() {
           <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={closeDialog} aria-label="Close" data-testid="button-close-subcategory-dialog">
             <X className="w-4 h-4" />
           </button>
-          <DialogHeader><DialogTitle>{editing ? "Edit Sub-category" : "New Sub-category"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? "Modifier la sous-catégorie" : "Nouvelle sous-catégorie"}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-1">
             <div className="space-y-1.5">
-              <Label>Parent Category *</Label>
+              <Label>Catégorie parente *</Label>
               <Select value={form.categoryId} onValueChange={v => setForm(f => ({ ...f, categoryId: v }))}>
-                <SelectTrigger data-testid="select-subcat-parent"><SelectValue placeholder="Select a category" /></SelectTrigger>
+                <SelectTrigger data-testid="select-subcat-parent"><SelectValue placeholder="Sélectionnez une catégorie" /></SelectTrigger>
                 <SelectContent>
                   {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
                 </SelectContent>
@@ -523,21 +523,21 @@ function SubCategoriesTab() {
             </div>
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5 col-span-1">
-                <Label>Icon (emoji)</Label>
+                <Label>Icône (emoji)</Label>
                 <Input data-testid="input-subcat-icon" value={form.icon} onChange={e => setForm(f => ({ ...f, icon: e.target.value }))} placeholder="🗂" className="text-center text-lg" />
               </div>
               <div className="space-y-1.5 col-span-2">
-                <Label>Name *</Label>
-                <Input data-testid="input-subcat-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Arabica Beans" />
-                {isDuplicate(form.name) && form.name && <p className="text-xs text-destructive">Name already exists in this category</p>}
+                <Label>Nom *</Label>
+                <Input data-testid="input-subcat-name" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="ex. Grains Arabica" />
+                {isDuplicate(form.name) && form.name && <p className="text-xs text-destructive">Ce nom existe déjà dans cette catégorie</p>}
               </div>
             </div>
             <div className="space-y-1.5">
               <Label>Description</Label>
-              <Input data-testid="input-subcat-desc" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief description" />
+              <Input data-testid="input-subcat-desc" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brève description" />
             </div>
             <div className="flex items-center justify-between">
-              <Label>Active</Label>
+              <Label>Actif</Label>
               <ActiveToggle active={form.isActive} onChange={v => setForm(f => ({ ...f, isActive: v }))} />
             </div>
             <div className="flex gap-2 justify-end items-center">
@@ -548,12 +548,12 @@ function SubCategoriesTab() {
                   onClick={() => setDeleting(editing)}
                   data-testid="button-delete-subcat"
                 >
-                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Supprimer
                 </Button>
               )}
-              <Button variant="outline" onClick={closeDialog}>Cancel</Button>
+              <Button variant="outline" onClick={closeDialog}>Annuler</Button>
               <Button onClick={handleSave} disabled={!form.name.trim() || !form.categoryId || isDuplicate(form.name) || upsert.isPending} data-testid="button-save-subcat">
-                {upsert.isPending ? "Saving…" : editing ? "Save Changes" : "Create"}
+                {upsert.isPending ? "Enregistrement…" : editing ? "Enregistrer" : "Créer"}
               </Button>
             </div>
           </div>
@@ -615,7 +615,7 @@ function TaxonomyCrudTab({
   const bulkOrder = useMutation({
     mutationFn: (orders: { id: number; displayOrder: number }[]) => apiRequest("PATCH", `${apiPath}/bulk-order`, { orders }),
     onSuccess: () => invalidateTaxonomy(),
-    onError: () => toast({ title: "Failed to save order", variant: "destructive" }),
+    onError: () => toast({ title: "Échec de l'enregistrement de l'ordre", variant: "destructive" }),
   });
   // Order is global across all items of this entity (not re-scoped per category/
   // sub-category filter) — sort the FULL list first, then apply filters, same as
@@ -651,23 +651,23 @@ function TaxonomyCrudTab({
       editing ? apiRequest("PATCH", `${apiPath}/${editing.id}`, data) : apiRequest("POST", apiPath, data),
     onSuccess: () => {
       invalidateTaxonomy();
-      toast({ title: editing ? "Updated" : "Created" });
+      toast({ title: editing ? "Mise à jour effectuée" : "Créé(e)" });
       setDialogOpen(false); setEditing(null); resetForm();
     },
-    onError: (err: any) => toast({ title: err?.message ?? "Error", variant: "destructive" }),
+    onError: (err: any) => toast({ title: err?.message ?? "Erreur", variant: "destructive" }),
   });
 
   const toggleActive = useMutation({
     mutationFn: ({ id, isActive }: { id: number; isActive: boolean }) =>
       apiRequest("PATCH", `${apiPath}/${id}`, { isActive }),
     onSuccess: () => invalidateTaxonomy(),
-    onError: () => toast({ title: "Error", variant: "destructive" }),
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
   const remove = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `${apiPath}/${id}`),
-    onSuccess: () => { invalidateTaxonomy(); toast({ title: "Deleted" }); setDeleting(null); setDialogOpen(false); setEditing(null); },
-    onError: () => toast({ title: "Error", variant: "destructive" }),
+    onSuccess: () => { invalidateTaxonomy(); toast({ title: "Supprimé(e)" }); setDeleting(null); setDialogOpen(false); setEditing(null); },
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
   const resetForm = () => {
@@ -705,8 +705,8 @@ function TaxonomyCrudTab({
 
   const handleSave = () => {
     const name = formName.trim();
-    if (!name) return toast({ title: "Name is required", variant: "destructive" });
-    if (isDuplicate(name)) return toast({ title: `A ${title.toLowerCase()} with this name already exists`, variant: "destructive" });
+    if (!name) return toast({ title: "Le nom est requis", variant: "destructive" });
+    if (isDuplicate(name)) return toast({ title: `Un(e) ${title.toLowerCase()} avec ce nom existe déjà`, variant: "destructive" });
     const payload: any = {
       name,
       description: formDescription.trim() || null,
@@ -725,32 +725,32 @@ function TaxonomyCrudTab({
       {/* Table header with filter */}
       <div className="flex justify-between items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2 min-w-0 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
-          <p className="text-sm text-muted-foreground shrink-0">{items.length} {title.toLowerCase()}s defined · drag to reorder</p>
+          <p className="text-sm text-muted-foreground shrink-0">{items.length} {title.toLowerCase()}s définies · glissez pour réorganiser</p>
           <Select value={filterCatId} onValueChange={v => { setFilterCatId(v); setFilterSubCatId("all"); }}>
             <SelectTrigger className="h-8 w-36 text-sm shrink-0">
-              <SelectValue placeholder="All categories" />
+              <SelectValue placeholder="Toutes les catégories" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
+              <SelectItem value="all">Toutes les catégories</SelectItem>
               {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
             </SelectContent>
           </Select>
           <Select value={filterSubCatId} onValueChange={setFilterSubCatId} disabled={filterCatId === "all" && filterSubs.length === 0}>
             <SelectTrigger className="h-8 w-40 text-sm shrink-0">
-              <SelectValue placeholder="All sub-cats" />
+              <SelectValue placeholder="Toutes les sous-cat." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All sub-cats</SelectItem>
+              <SelectItem value="all">Toutes les sous-cat.</SelectItem>
               {filterSubs.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
             </SelectContent>
           </Select>
           {(filterCatId !== "all" || filterSubCatId !== "all") && (
             <Button variant="outline" size="sm" className="text-muted-foreground shrink-0" onClick={() => { setFilterCatId("all"); setFilterSubCatId("all"); }} data-testid={`button-clear-${testPrefix}-filters`}>
-              <X className="w-3.5 h-3.5 mr-1" />Clear
+              <X className="w-3.5 h-3.5 mr-1" />Effacer
             </Button>
           )}
         </div>
-        <Button size="sm" onClick={openAdd} data-testid={`button-add-${testPrefix}`}><Plus className="w-4 h-4 mr-1.5" />Add {title}</Button>
+        <Button size="sm" onClick={openAdd} data-testid={`button-add-${testPrefix}`}><Plus className="w-4 h-4 mr-1.5" />Ajouter {testPrefix === "brand" ? "une marque" : testPrefix === "size" ? "une taille" : "une saveur"}</Button>
       </div>
 
       {isLoading ? (
@@ -760,7 +760,7 @@ function TaxonomyCrudTab({
       ) : filteredItems.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground border rounded-lg">
           <Icon className="w-8 h-8 mx-auto mb-2 opacity-30" />
-          <p className="text-sm">{items.length === 0 ? `No ${title.toLowerCase()}s yet.` : "No results match the selected filter."}</p>
+          <p className="text-sm">{items.length === 0 ? `Aucune ${title.toLowerCase()} pour le moment.` : "Aucun résultat ne correspond au filtre sélectionné."}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -803,7 +803,7 @@ function TaxonomyCrudTab({
                   }
                 </div>
                 <div className="flex items-center justify-between mt-1">
-                  <Badge variant="outline" className="text-[11px]">{item.productCount} products</Badge>
+                  <Badge variant="outline" className="text-[11px]">{item.productCount} produits</Badge>
                   <p className="text-[11px] text-muted-foreground">{item.createdBy || "—"}</p>
                 </div>
               </div>
@@ -832,15 +832,15 @@ function TaxonomyCrudTab({
           <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => { setDialogOpen(false); setEditing(null); resetForm(); }} aria-label="Close" data-testid="button-close-flavor-size-brand-dialog">
             <X className="w-4 h-4" />
           </button>
-          <DialogHeader><DialogTitle>{editing ? `Edit ${title}` : `New ${title}`}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? `Modifier : ${title}` : `Nouvelle ${title.toLowerCase()}`}</DialogTitle></DialogHeader>
           <div className="space-y-4 mt-1">
             {/* Category picklist */}
             <div className="space-y-1.5">
-              <Label>Category</Label>
+              <Label>Catégorie</Label>
               <Select value={formCategoryId} onValueChange={handleCategoryChange}>
-                <SelectTrigger data-testid={`select-${testPrefix}-category`}><SelectValue placeholder="Select a category (optional)" /></SelectTrigger>
+                <SelectTrigger data-testid={`select-${testPrefix}-category`}><SelectValue placeholder="Sélectionnez une catégorie (optionnel)" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">None</SelectItem>
+                  <SelectItem value="__none__">Aucune</SelectItem>
                   {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -848,7 +848,7 @@ function TaxonomyCrudTab({
 
             {/* SubCategory multiselect */}
             <MultiSelectList
-              label="Sub-categories"
+              label="Sous-catégories"
               items={formCategoryId && formCategoryId !== "__none__" ? modalSubs : subs}
               selected={formSubCategoryIds}
               onChange={setFormSubCategoryIds}
@@ -858,7 +858,7 @@ function TaxonomyCrudTab({
             {/* Icon + Name row */}
             <div className="grid grid-cols-3 gap-3">
               <div className="space-y-1.5">
-                <Label>Icon (emoji)</Label>
+                <Label>Icône (emoji)</Label>
                 <Input
                   data-testid={`input-${testPrefix}-icon`}
                   value={formIcon}
@@ -868,14 +868,14 @@ function TaxonomyCrudTab({
                 />
               </div>
               <div className="space-y-1.5 col-span-2">
-                <Label>Name *</Label>
+                <Label>Nom *</Label>
                 <Input
                   data-testid={`input-${testPrefix}-name`}
                   value={formName}
                   onChange={e => setFormName(e.target.value)}
-                  placeholder={`e.g. ${title === "Flavor" ? "Vanilla" : title === "Size" ? "Large" : "Lavazza"}`}
+                  placeholder={`ex. ${testPrefix === "flavor" ? "Vanille" : testPrefix === "size" ? "Grand" : "Lavazza"}`}
                 />
-                {isDuplicate(formName) && formName && <p className="text-xs text-destructive">Name already exists</p>}
+                {isDuplicate(formName) && formName && <p className="text-xs text-destructive">Ce nom existe déjà</p>}
               </div>
             </div>
 
@@ -886,7 +886,7 @@ function TaxonomyCrudTab({
                 data-testid={`input-${testPrefix}-description`}
                 value={formDescription}
                 onChange={e => setFormDescription(e.target.value)}
-                placeholder="Brief description"
+                placeholder="Brève description"
               />
             </div>
             {extraFields?.filter(f => f.key === "value").map(f => (
@@ -903,7 +903,7 @@ function TaxonomyCrudTab({
             ))}
 
             <div className="flex items-center justify-between">
-              <Label>Active</Label>
+              <Label>Actif</Label>
               <ActiveToggle active={formIsActive} onChange={setFormIsActive} />
             </div>
             <div className="flex gap-2 justify-end items-center">
@@ -914,12 +914,12 @@ function TaxonomyCrudTab({
                   onClick={() => setDeleting(editing)}
                   data-testid={`button-delete-${testPrefix}`}
                 >
-                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Supprimer
                 </Button>
               )}
-              <Button variant="outline" onClick={() => { setDialogOpen(false); setEditing(null); resetForm(); }}>Cancel</Button>
+              <Button variant="outline" onClick={() => { setDialogOpen(false); setEditing(null); resetForm(); }}>Annuler</Button>
               <Button onClick={handleSave} disabled={!formName.trim() || isDuplicate(formName) || upsert.isPending} data-testid={`button-save-${testPrefix}`}>
-                {upsert.isPending ? "Saving…" : editing ? "Save Changes" : "Create"}
+                {upsert.isPending ? "Enregistrement…" : editing ? "Enregistrer" : "Créer"}
               </Button>
             </div>
           </div>
@@ -1475,13 +1475,13 @@ function CategoryRequestsSection() {
 // ── SUPPLIER CATEGORIES SECTION ───────────────────────────────────────────────
 
 const TYPE_LABELS: Record<string, string> = {
-  category: 'Category', subcategory: 'Sub-category', brand: 'Brand', flavor: 'Flavor', size: 'Size',
+  category: 'Catégorie', subcategory: 'Sous-catégorie', brand: 'Marque', flavor: 'Saveur', size: 'Taille',
 };
 
 function SuggestionStatusBadge({ status }: { status: string }) {
-  if (status === 'PENDING') return <Badge className="bg-amber-400 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0 text-xs">Pending</Badge>;
-  if (status === 'ACTIVE') return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-0 text-xs">Approved</Badge>;
-  if (status === 'REJECTED') return <Badge className="bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 border-0 text-xs">Rejected</Badge>;
+  if (status === 'PENDING') return <Badge className="bg-amber-400 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0 text-xs">En attente</Badge>;
+  if (status === 'ACTIVE') return <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-0 text-xs">Approuvée</Badge>;
+  if (status === 'REJECTED') return <Badge className="bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-300 border-0 text-xs">Refusée</Badge>;
   return <Badge variant="secondary" className="text-xs">{status}</Badge>;
 }
 
@@ -1507,24 +1507,24 @@ function SupplierCategoriesSection() {
       qc.invalidateQueries({ queryKey: ["/api/flavors"] });
       qc.invalidateQueries({ queryKey: ["/api/sizes"] });
       qc.invalidateQueries({ queryKey: ["/api/brands"] });
-      toast({ title: "Suggestion approved", description: "The item is now active in the catalog." });
+      toast({ title: "Proposition approuvée", description: "L'élément est maintenant actif dans le catalogue." });
       pagination.resetPage();
     },
-    onError: () => toast({ title: "Error approving", variant: "destructive" }),
+    onError: () => toast({ title: "Erreur lors de l'approbation", variant: "destructive" }),
   });
 
   const edit = useMutation({
     mutationFn: ({ type, id, data }: { type: string; id: number; data: any }) =>
       apiRequest("PATCH", `/api/admin/catalog-suggestions/${type}/${id}`, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/catalog-suggestions"] }); toast({ title: "Updated" }); setEditTarget(null); },
-    onError: () => toast({ title: "Error", variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/catalog-suggestions"] }); toast({ title: "Mise à jour effectuée" }); setEditTarget(null); },
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
   const remove = useMutation({
     mutationFn: ({ type, id }: { type: string; id: number }) =>
       apiRequest("DELETE", `/api/admin/catalog-suggestions/${type}/${id}`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/catalog-suggestions"] }); toast({ title: "Deleted" }); setDeleteTarget(null); pagination.resetPage(); },
-    onError: () => toast({ title: "Error", variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/catalog-suggestions"] }); toast({ title: "Supprimée" }); setDeleteTarget(null); pagination.resetPage(); },
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
   let filtered = suggestions;
@@ -1544,24 +1544,25 @@ function SupplierCategoriesSection() {
 
   return (
     <div className="space-y-4">
-      {/* Stats */}
+      {/* Stats — same bordered, shadow-none stat card style as Category Management's own
+          section header (task: "Supplier & Admin Categories — UI Standardization"). */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card className="border shadow-none">
           <CardContent className="p-4 flex items-center gap-3">
             <div className="rounded-lg p-2 bg-amber-50 dark:bg-amber-950/30"><Clock className="w-4 h-4 text-amber-600" /></div>
-            <div><p className="text-xl font-bold leading-none">{pendingCount}</p><p className="text-xs text-muted-foreground mt-0.5">Pending</p></div>
+            <div><p className="text-xl font-bold leading-none">{pendingCount}</p><p className="text-xs text-muted-foreground mt-0.5">En attente</p></div>
           </CardContent>
         </Card>
         <Card className="border shadow-none">
           <CardContent className="p-4 flex items-center gap-3">
             <div className="rounded-lg p-2 bg-emerald-50 dark:bg-emerald-950/30"><CheckCircle className="w-4 h-4 text-emerald-600" /></div>
-            <div><p className="text-xl font-bold leading-none">{suggestions.filter(s => s.status === 'ACTIVE').length}</p><p className="text-xs text-muted-foreground mt-0.5">Approved</p></div>
+            <div><p className="text-xl font-bold leading-none">{suggestions.filter(s => s.status === 'ACTIVE').length}</p><p className="text-xs text-muted-foreground mt-0.5">Approuvées</p></div>
           </CardContent>
         </Card>
         <Card className="border shadow-none">
           <CardContent className="p-4 flex items-center gap-3">
             <div className="rounded-lg p-2 bg-red-50 dark:bg-red-950/30"><XCircle className="w-4 h-4 text-red-600" /></div>
-            <div><p className="text-xl font-bold leading-none">{suggestions.filter(s => s.status === 'REJECTED').length}</p><p className="text-xs text-muted-foreground mt-0.5">Rejected</p></div>
+            <div><p className="text-xl font-bold leading-none">{suggestions.filter(s => s.status === 'REJECTED').length}</p><p className="text-xs text-muted-foreground mt-0.5">Rejetées</p></div>
           </CardContent>
         </Card>
         <Card className="border shadow-none">
@@ -1575,85 +1576,70 @@ function SupplierCategoriesSection() {
       {/* Filters */}
       <div className="flex items-center gap-3 overflow-x-auto pb-1 -mb-1 [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible sm:pb-0 sm:mb-0" style={{ scrollbarWidth: "none" }}>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-44 h-8 text-sm shrink-0" data-testid="select-type-filter"><SelectValue placeholder="All types" /></SelectTrigger>
+          <SelectTrigger className="w-44 h-8 text-sm shrink-0" data-testid="select-type-filter"><SelectValue placeholder="Tous les types" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
+            <SelectItem value="all">Tous les types</SelectItem>
             {Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-36 h-8 text-sm shrink-0" data-testid="select-status-filter"><SelectValue placeholder="All statuses" /></SelectTrigger>
+          <SelectTrigger className="w-36 h-8 text-sm shrink-0" data-testid="select-status-filter"><SelectValue placeholder="Tous les statuts" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All statuses</SelectItem>
-            <SelectItem value="PENDING">Pending</SelectItem>
-            <SelectItem value="ACTIVE">Approved</SelectItem>
-            <SelectItem value="REJECTED">Rejected</SelectItem>
+            <SelectItem value="all">Tous les statuts</SelectItem>
+            <SelectItem value="PENDING">En attente</SelectItem>
+            <SelectItem value="ACTIVE">Approuvée</SelectItem>
+            <SelectItem value="REJECTED">Rejetée</SelectItem>
           </SelectContent>
         </Select>
         {(typeFilter !== "all" || statusFilter !== "all") && (
           <Button variant="outline" size="sm" className="text-muted-foreground shrink-0" onClick={() => { setTypeFilter("all"); setStatusFilter("all"); }} data-testid="button-clear-suggestions-filters">
-            <X className="w-3.5 h-3.5 mr-1" />Clear
+            <X className="w-3.5 h-3.5 mr-1" />Effacer
           </Button>
         )}
-        <p className="text-sm text-muted-foreground shrink-0">{filtered.length} suggestion{filtered.length !== 1 ? 's' : ''}</p>
+        <p className="text-sm text-muted-foreground shrink-0">{filtered.length} proposition{filtered.length !== 1 ? 's' : ''}</p>
       </div>
 
-      {/* Table */}
+      {/* Suggestions — card grid (Category Management's own visual language), replacing
+          the previous Table layout, while preserving every existing action/filter/stat. */}
       {isLoading ? (
-        <div className="space-y-2">{[...Array(4)].map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-40 rounded-2xl" />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground border rounded-lg">
+          <Layers className="w-8 h-8 mx-auto mb-2 opacity-30" />
+          <p className="text-sm">{suggestions.length === 0 ? "Aucune proposition de fournisseur pour le moment." : "Aucune proposition ne correspond aux filtres actuels."}</p>
+        </div>
       ) : (
-        <div className="rounded-lg border overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Supplier</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Submitted</TableHead>
-                <TableHead className="w-36" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {pageSuggestions.map(s => (
-                <TableRow key={`${s.type}-${s.id}`} data-testid={`row-suggestion-${s.type}-${s.id}`}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {s.icon && <span className="text-lg">{s.icon}</span>}
-                      <div>
-                        <p className="font-medium text-sm">{s.name}</p>
-                        {s.description && <p className="text-xs text-muted-foreground">{s.description}</p>}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell><Badge variant="secondary" className="text-xs">{TYPE_LABELS[s.type] ?? s.type}</Badge></TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{s.supplierName ?? '—'}</TableCell>
-                  <TableCell><SuggestionStatusBadge status={s.status} /></TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{s.createdAt ? new Date(s.createdAt).toLocaleDateString() : '—'}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1 justify-end">
-                      {s.status === 'PENDING' && (
-                        <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
-                          onClick={() => approve.mutate({ type: s.type, id: s.id })} disabled={approve.isPending}
-                          data-testid={`button-approve-suggestion-${s.id}`}>
-                          <CheckCircle className="w-3.5 h-3.5 mr-1" />Approve
-                        </Button>
-                      )}
-                      <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => openEdit(s)} data-testid={`button-edit-suggestion-${s.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
-                      <Button size="icon" variant="outline" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(s)} data-testid={`button-delete-suggestion-${s.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {filtered.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                    {suggestions.length === 0 ? "No supplier suggestions yet." : "No suggestions match the current filters."}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {pageSuggestions.map(s => (
+            <CatalogSuggestionCard
+              key={`${s.type}-${s.id}`}
+              testId={`card-suggestion-${s.type}-${s.id}`}
+              icon={s.icon}
+              name={s.name}
+              description={s.description}
+              badges={<>
+                <Badge variant="secondary" className="text-xs">{TYPE_LABELS[s.type] ?? s.type}</Badge>
+                <SuggestionStatusBadge status={s.status} />
+              </>}
+              meta={<>
+                <Building2 className="w-3 h-3 inline mr-1 -mt-0.5" />Fournisseur : {s.supplierName ?? '—'}
+                {s.createdAt && <> · Envoyée le {new Date(s.createdAt).toLocaleDateString('fr-FR')}</>}
+              </>}
+              actions={<div className="flex gap-1.5 justify-end w-full">
+                {s.status === 'PENDING' && (
+                  <Button size="sm" className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                    onClick={() => approve.mutate({ type: s.type, id: s.id })} disabled={approve.isPending}
+                    data-testid={`button-approve-suggestion-${s.id}`}>
+                    <CheckCircle className="w-3.5 h-3.5 mr-1" />Approuver
+                  </Button>
+                )}
+                <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => openEdit(s)} data-testid={`button-edit-suggestion-${s.id}`}><Pencil className="w-3.5 h-3.5" /></Button>
+                <Button size="icon" variant="outline" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget(s)} data-testid={`button-delete-suggestion-${s.id}`}><Trash2 className="w-3.5 h-3.5" /></Button>
+              </div>}
+            />
+          ))}
         </div>
       )}
 
@@ -1667,7 +1653,7 @@ function SupplierCategoriesSection() {
           end={pagination.end}
           onPageChange={pagination.setPage}
           onPageSizeChange={pagination.setPageSize}
-          itemLabel="suggestions"
+          itemLabel="propositions"
         />
       )}
 
@@ -1678,15 +1664,15 @@ function SupplierCategoriesSection() {
             <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setEditTarget(null)} aria-label="Close" data-testid="button-close-edit-suggestion">
               <X className="w-4 h-4" />
             </button>
-            <DialogHeader><DialogTitle>Edit Suggestion</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>Modifier la proposition</DialogTitle></DialogHeader>
             <div className="space-y-4 mt-1">
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
-                  <Label>Icon</Label>
+                  <Label>Icône</Label>
                   <Input value={editForm.icon} onChange={e => setEditForm(f => ({ ...f, icon: e.target.value }))} className="text-center text-lg" placeholder="☕" />
                 </div>
                 <div className="space-y-1.5 col-span-2">
-                  <Label>Name *</Label>
+                  <Label>Nom *</Label>
                   <Input value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} />
                 </div>
               </div>
@@ -1695,20 +1681,20 @@ function SupplierCategoriesSection() {
                 <Input value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>Status</Label>
+                <Label>Statut</Label>
                 <Select value={editForm.status} onValueChange={v => setEditForm(f => ({ ...f, status: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="PENDING">Pending</SelectItem>
-                    <SelectItem value="ACTIVE">Approved (Active)</SelectItem>
-                    <SelectItem value="REJECTED">Rejected</SelectItem>
+                    <SelectItem value="PENDING">En attente</SelectItem>
+                    <SelectItem value="ACTIVE">Approuvée (active)</SelectItem>
+                    <SelectItem value="REJECTED">Rejetée</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => setEditTarget(null)}>Cancel</Button>
+                <Button variant="outline" onClick={() => setEditTarget(null)}>Annuler</Button>
                 <Button onClick={() => edit.mutate({ type: editTarget.type, id: editTarget.id, data: editForm })} disabled={!editForm.name.trim() || edit.isPending}>
-                  {edit.isPending ? "Saving…" : "Save Changes"}
+                  {edit.isPending ? "Enregistrement…" : "Enregistrer"}
                 </Button>
               </div>
             </div>
@@ -1752,24 +1738,24 @@ export default function AdminCategoriesPage() {
   const { data: brnds = [] } = useQuery<BrandWithCount[]>({ queryKey: ["/api/brands"] });
 
   const stats = [
-    { label: "Categories", value: cats.length, icon: Folder, color: "text-blue-600 bg-blue-50 dark:bg-blue-950/30" },
-    { label: "Sub-categories", value: subs.length, icon: Layers, color: "text-purple-600 bg-purple-50 dark:bg-purple-950/30" },
-    { label: "Flavors", value: flavs.length, icon: Tag, color: "text-pink-600 bg-pink-50 dark:bg-pink-950/30" },
-    { label: "Sizes", value: szs.length, icon: Ruler, color: "text-amber-600 bg-amber-50 dark:bg-amber-950/30" },
-    { label: "Brands", value: brnds.length, icon: Award, color: "text-green-600 bg-green-50 dark:bg-green-950/30" },
+    { label: "Catégories", value: cats.length, icon: Folder, color: "text-blue-600 bg-blue-50 dark:bg-blue-950/30" },
+    { label: "Sous-catégories", value: subs.length, icon: Layers, color: "text-purple-600 bg-purple-50 dark:bg-purple-950/30" },
+    { label: "Saveurs", value: flavs.length, icon: Tag, color: "text-pink-600 bg-pink-50 dark:bg-pink-950/30" },
+    { label: "Tailles", value: szs.length, icon: Ruler, color: "text-amber-600 bg-amber-50 dark:bg-amber-950/30" },
+    { label: "Marques", value: brnds.length, icon: Award, color: "text-green-600 bg-green-50 dark:bg-green-950/30" },
   ];
 
   const sections = [
-    { key: 'management' as const, label: 'Category Management' },
-    { key: 'category-requests' as const, label: 'Category Requests' },
-    { key: 'supplier-cats' as const, label: 'Supplier Categories' },
+    { key: 'management' as const, label: 'Gestion des catégories' },
+    { key: 'category-requests' as const, label: 'Demandes de catégories' },
+    { key: 'supplier-cats' as const, label: 'Catégories des fournisseurs' },
   ];
 
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
-        title="Categories"
-        subtitle="Manage product taxonomy, review category requests, and approve supplier suggestions."
+        title="Catégories"
+        subtitle="Gérez la taxonomie des produits, examinez les demandes de catégories et approuvez les propositions des fournisseurs."
       />
 
       {/* Section switcher — same visual/scrolling design as the Admin System Management
@@ -1805,30 +1791,30 @@ export default function AdminCategoriesPage() {
                 bg-background/shadow-sm chip. */}
             <div className="mb-2 overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
               <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
-                <TabsTrigger value="categories" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-categories"><Folder className="w-4 h-4 mr-1.5" />Categories</TabsTrigger>
-                <TabsTrigger value="subcategories" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-subcategories"><Layers className="w-4 h-4 mr-1.5" />Sub-categories</TabsTrigger>
-                <TabsTrigger value="flavors" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-flavors"><Tag className="w-4 h-4 mr-1.5" />Flavors</TabsTrigger>
-                <TabsTrigger value="sizes" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-sizes"><Ruler className="w-4 h-4 mr-1.5" />Sizes</TabsTrigger>
-                <TabsTrigger value="brands" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-brands"><Award className="w-4 h-4 mr-1.5" />Brands</TabsTrigger>
+                <TabsTrigger value="categories" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-categories"><Folder className="w-4 h-4 mr-1.5" />Catégories</TabsTrigger>
+                <TabsTrigger value="subcategories" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-subcategories"><Layers className="w-4 h-4 mr-1.5" />Sous-catégories</TabsTrigger>
+                <TabsTrigger value="flavors" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-flavors"><Tag className="w-4 h-4 mr-1.5" />Saveurs</TabsTrigger>
+                <TabsTrigger value="sizes" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-sizes"><Ruler className="w-4 h-4 mr-1.5" />Tailles</TabsTrigger>
+                <TabsTrigger value="brands" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-brands"><Award className="w-4 h-4 mr-1.5" />Marques</TabsTrigger>
               </TabsList>
             </div>
             <TabsContent value="categories">
-              <Card className="border shadow-none"><CardHeader className="pb-0 pt-4 px-4"><CardTitle className="text-base flex items-center gap-2"><Folder className="w-4 h-4" />Categories</CardTitle></CardHeader><CardContent className="p-4"><CategoriesTab /></CardContent></Card>
+              <Card className="border shadow-none"><CardHeader className="pb-0 pt-4 px-4"><CardTitle className="text-base flex items-center gap-2"><Folder className="w-4 h-4" />Catégories</CardTitle></CardHeader><CardContent className="p-4"><CategoriesTab /></CardContent></Card>
             </TabsContent>
             <TabsContent value="subcategories">
-              <Card className="border shadow-none"><CardHeader className="pb-0 pt-4 px-4"><CardTitle className="text-base flex items-center gap-2"><Layers className="w-4 h-4" />Sub-categories</CardTitle></CardHeader><CardContent className="p-4"><SubCategoriesTab /></CardContent></Card>
+              <Card className="border shadow-none"><CardHeader className="pb-0 pt-4 px-4"><CardTitle className="text-base flex items-center gap-2"><Layers className="w-4 h-4" />Sous-catégories</CardTitle></CardHeader><CardContent className="p-4"><SubCategoriesTab /></CardContent></Card>
             </TabsContent>
             <TabsContent value="flavors">
-              <Card className="border shadow-none"><CardHeader className="pb-0 pt-4 px-4"><CardTitle className="text-base flex items-center gap-2"><Tag className="w-4 h-4" />Flavors</CardTitle></CardHeader>
-              <CardContent className="p-4"><TaxonomyCrudTab title="Flavor" icon={Tag} apiPath="/api/flavors" queryKey="/api/flavors" testPrefix="flavor" cats={cats} subs={subs} /></CardContent></Card>
+              <Card className="border shadow-none"><CardHeader className="pb-0 pt-4 px-4"><CardTitle className="text-base flex items-center gap-2"><Tag className="w-4 h-4" />Saveurs</CardTitle></CardHeader>
+              <CardContent className="p-4"><TaxonomyCrudTab title="Saveur" icon={Tag} apiPath="/api/flavors" queryKey="/api/flavors" testPrefix="flavor" cats={cats} subs={subs} /></CardContent></Card>
             </TabsContent>
             <TabsContent value="sizes">
-              <Card className="border shadow-none"><CardHeader className="pb-0 pt-4 px-4"><CardTitle className="text-base flex items-center gap-2"><Ruler className="w-4 h-4" />Sizes</CardTitle></CardHeader>
-              <CardContent className="p-4"><TaxonomyCrudTab title="Size" icon={Ruler} apiPath="/api/sizes" queryKey="/api/sizes" testPrefix="size" extraFields={[{ key: "value", label: "Value / Unit", placeholder: "e.g. 500ml, 1kg", hint: "The measurable size unit (optional)" }]} cats={cats} subs={subs} /></CardContent></Card>
+              <Card className="border shadow-none"><CardHeader className="pb-0 pt-4 px-4"><CardTitle className="text-base flex items-center gap-2"><Ruler className="w-4 h-4" />Tailles</CardTitle></CardHeader>
+              <CardContent className="p-4"><TaxonomyCrudTab title="Taille" icon={Ruler} apiPath="/api/sizes" queryKey="/api/sizes" testPrefix="size" extraFields={[{ key: "value", label: "Valeur / Unité", placeholder: "ex. 500ml, 1kg", hint: "L'unité de mesure de la taille (optionnel)" }]} cats={cats} subs={subs} /></CardContent></Card>
             </TabsContent>
             <TabsContent value="brands">
-              <Card className="border shadow-none"><CardHeader className="pb-0 pt-4 px-4"><CardTitle className="text-base flex items-center gap-2"><Award className="w-4 h-4" />Brands</CardTitle></CardHeader>
-              <CardContent className="p-4"><TaxonomyCrudTab title="Brand" icon={Award} apiPath="/api/brands" queryKey="/api/brands" testPrefix="brand" cats={cats} subs={subs} /></CardContent></Card>
+              <Card className="border shadow-none"><CardHeader className="pb-0 pt-4 px-4"><CardTitle className="text-base flex items-center gap-2"><Award className="w-4 h-4" />Marques</CardTitle></CardHeader>
+              <CardContent className="p-4"><TaxonomyCrudTab title="Marque" icon={Award} apiPath="/api/brands" queryKey="/api/brands" testPrefix="brand" cats={cats} subs={subs} /></CardContent></Card>
             </TabsContent>
           </Tabs>
         </>

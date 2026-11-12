@@ -14,7 +14,7 @@ const STOCK_BADGE: Record<StockStatus, string> = {
   LOW_STOCK: "bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400",
   OUT_OF_STOCK: "bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400",
 };
-const STOCK_LABEL: Record<StockStatus, string> = { IN_STOCK: "In Stock", LOW_STOCK: "Low Stock", OUT_OF_STOCK: "Out of Stock" };
+const STOCK_LABEL: Record<StockStatus, string> = { IN_STOCK: "En stock", LOW_STOCK: "Stock faible", OUT_OF_STOCK: "Rupture de stock" };
 
 export function InventoryTable({
   items, isLoading, selectedIds, onToggleSelect, onToggleSelectAll,
@@ -45,15 +45,15 @@ export function InventoryTable({
   };
 
   if (isLoading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading inventory...</div>;
+    return <div className="p-6 text-sm text-muted-foreground">Chargement de l'inventaire...</div>;
   }
   if (!items.length) {
     return (
       <div className="p-12 flex flex-col items-center gap-3 text-center">
         <Package className="w-10 h-10 text-muted-foreground opacity-40" />
         <div>
-          <p className="font-medium">No products match your filters</p>
-          <p className="text-sm text-muted-foreground mt-1">Try adjusting your search or filters.</p>
+          <p className="font-medium">Aucun produit ne correspond à vos filtres</p>
+          <p className="text-sm text-muted-foreground mt-1">Essayez d'ajuster votre recherche ou vos filtres.</p>
         </div>
       </div>
     );
@@ -65,13 +65,13 @@ export function InventoryTable({
         <TableHeader className="bg-secondary/30">
           <TableRow className="hover:bg-transparent">
             <TableHead className="w-10"><Checkbox checked={allSelected} onCheckedChange={onToggleSelectAll} data-testid="checkbox-select-all" /></TableHead>
-            <TableHead>Product</TableHead>
+            <TableHead>Produit</TableHead>
             <TableHead>SKU</TableHead>
-            <TableHead>Category</TableHead>
+            <TableHead>Catégorie</TableHead>
             <TableHead>Stock</TableHead>
-            <TableHead>Price</TableHead>
-            <TableHead>Value</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead>Prix</TableHead>
+            <TableHead>Valeur</TableHead>
+            <TableHead>Statut</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -108,10 +108,10 @@ export function InventoryTable({
                               {isExpanded
                                 ? <ChevronDown className="w-2.5 h-2.5" />
                                 : <ChevronRight className="w-2.5 h-2.5" />}
-                              {item.variants.length} Variant{item.variants.length !== 1 ? "s" : ""}
+                              {item.variants.length} Variante{item.variants.length !== 1 ? "s" : ""}
                             </button>
                           )}
-                          {item.hasPacks && <Badge variant="outline" className="text-[10px] px-1.5 py-0"><Layers className="w-2.5 h-2.5 mr-0.5" />In Pack</Badge>}
+                          {item.hasPacks && <Badge variant="outline" className="text-[10px] px-1.5 py-0"><Layers className="w-2.5 h-2.5 mr-0.5" />En pack</Badge>}
                         </div>
                       </div>
                     </div>
@@ -120,7 +120,7 @@ export function InventoryTable({
                   <TableCell className="text-sm text-muted-foreground">{item.categoryName || "—"}</TableCell>
                   <TableCell>
                     {item.hasVariants ? (
-                      <span className="text-xs text-muted-foreground italic">See variants ↓</span>
+                      <span className="text-xs text-muted-foreground italic">Voir les variantes ↓</span>
                     ) : (
                       <>
                         <span className={item.stockStatus !== "IN_STOCK" ? "font-semibold" : ""}>
@@ -135,14 +135,14 @@ export function InventoryTable({
                   <TableCell>
                     <div className="flex flex-col gap-1">
                       <Badge variant="secondary" className={`${STOCK_BADGE[item.stockStatus]} border-0 w-fit`}>{STOCK_LABEL[item.stockStatus]}</Badge>
-                      {item.visibility === "HIDDEN" && <Badge variant="outline" className="w-fit text-[10px] px-1.5 py-0">Hidden</Badge>}
-                      {item.productStatus === "PENDING" && <Badge variant="outline" className="w-fit text-[10px] px-1.5 py-0">Draft</Badge>}
+                      {item.visibility === "HIDDEN" && <Badge variant="outline" className="w-fit text-[10px] px-1.5 py-0">Masqué</Badge>}
+                      {item.productStatus === "PENDING" && <Badge variant="outline" className="w-fit text-[10px] px-1.5 py-0">Brouillon</Badge>}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
                       {!item.hasVariants && (
-                        <Button size="icon" variant="outline" className="h-8 w-8" title="Quick adjust stock" onClick={() => onAdjust(item)} data-testid={`button-adjust-${item.listingId}`}>
+                        <Button size="icon" variant="outline" className="h-8 w-8" title="Ajuster rapidement le stock" onClick={() => onAdjust(item)} data-testid={`button-adjust-${item.listingId}`}>
                           <Plus className="w-3.5 h-3.5" />
                         </Button>
                       )}
@@ -151,14 +151,14 @@ export function InventoryTable({
                           <Button size="icon" variant="outline" className="h-8 w-8" data-testid={`button-menu-${item.listingId}`}><MoreVertical className="w-3.5 h-3.5" /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => onHistory(item)} data-testid={`menu-history-${item.listingId}`}><History className="w-3.5 h-3.5 mr-2" />Stock History</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => onEdit(item)} data-testid={`menu-edit-${item.listingId}`}><Pencil className="w-3.5 h-3.5 mr-2" />Edit Details</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onHistory(item)} data-testid={`menu-history-${item.listingId}`}><History className="w-3.5 h-3.5 mr-2" />Historique du stock</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onEdit(item)} data-testid={`menu-edit-${item.listingId}`}><Pencil className="w-3.5 h-3.5 mr-2" />Modifier les détails</DropdownMenuItem>
                           <DropdownMenuItem onClick={() => onToggleVisibility(item)} data-testid={`menu-visibility-${item.listingId}`}>
-                            {item.visibility === "VISIBLE" ? <><EyeOff className="w-3.5 h-3.5 mr-2" />Hide Product</> : <><Eye className="w-3.5 h-3.5 mr-2" />Show Product</>}
+                            {item.visibility === "VISIBLE" ? <><EyeOff className="w-3.5 h-3.5 mr-2" />Masquer le produit</> : <><Eye className="w-3.5 h-3.5 mr-2" />Afficher le produit</>}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => onDelete(item)} className="text-destructive" data-testid={`menu-delete-${item.listingId}`}>
-                            <Trash2 className="w-3.5 h-3.5 mr-2" />Remove
+                            <Trash2 className="w-3.5 h-3.5 mr-2" />Supprimer
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -205,7 +205,7 @@ export function InventoryTable({
                     <TableCell className="text-right">
                       <Button
                         size="icon" variant="outline" className="h-8 w-8"
-                        title={`Adjust stock — ${variant.variantName}`}
+                        title={`Ajuster le stock — ${variant.variantName}`}
                         onClick={() => onAdjustVariant(item, variant)}
                         data-testid={`button-adjust-variant-${variant.variantId}`}
                       >

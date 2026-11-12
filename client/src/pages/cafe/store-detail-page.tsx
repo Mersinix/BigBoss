@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { useFavorites } from "@/hooks/use-favorites";
+import { useCart } from "@/hooks/use-cart";
 import { useStoreFavorites } from "@/hooks/use-store-favorites";
 import { calculateDistance, formatDistance } from "@/lib/distance";
 import { useCoverZoomStyle, getAdjustmentFor } from "@/lib/image-adjustment";
@@ -335,13 +336,25 @@ function calcStorePromoPrice(basePrice: number, promo: { type: string; discountV
     return Math.max(0, Math.round(basePrice * (1 - promo.discountValue / 10000)));
   }
   if (promo.type === 'FIXED_AMOUNT') {
-    return Math.max(0, basePrice - Math.round(promo.discountValue / 10));
+    // discountValue is cents for this type (shared/schema.ts's column comment),
+    // the same unit as basePrice — no conversion needed.
+    return Math.max(0, basePrice - promo.discountValue);
   }
   return null;
 }
 
-function bestStorePromoPrice(basePrice: number, promos: { type: string; discountValue: number }[]): number | null {
-  const eligible = promos.filter(p => STORE_PRICE_PROMO_TYPES.has(p.type));
+// `supplierCartSubtotal` (cents, original undiscounted prices) is this store's
+// current cart subtotal — a price-affecting promotion with a configured
+// minimumOrderValue must already be satisfied by it before this grid card shows a
+// discounted teaser price, mirroring product-detail-content.tsx's identical
+// eligibility check (task: "Do not assume the promotion is eligible simply because
+// the product belongs to the assigned category").
+function bestStorePromoPrice(
+  basePrice: number,
+  promos: { type: string; discountValue: number; minimumOrderValue: number | null }[],
+  supplierCartSubtotal: number,
+): number | null {
+  const eligible = promos.filter(p => STORE_PRICE_PROMO_TYPES.has(p.type) && (p.minimumOrderValue == null || supplierCartSubtotal >= p.minimumOrderValue));
   if (!eligible.length) return null;
   const pct = eligible.filter(p => ['PERCENTAGE', 'CATEGORY_DISCOUNT', 'MIN_QUANTITY', 'FIRST_ORDER'].includes(p.type));
   const best = pct.length
@@ -389,6 +402,11 @@ function StoreProductCard({
   const faved = useFavorites((s) => !!s.shop[product.id]);
   const toggleShop = useFavorites((s) => s.toggleShop);
   const openQuickView = useQuickView((s) => s.open);
+  const cartItems = useCart((s) => s.items);
+  const supplierCartSubtotal = useMemo(
+    () => cartItems.filter(i => i.supplierId === supplierId).reduce((s, i) => s + i.unitPrice * i.quantity, 0),
+    [cartItems, supplierId],
+  );
 
   const avgRating = product.avgRating ?? 0;
   const reviewCount = product.reviewCount ?? 0;
@@ -491,7 +509,7 @@ function StoreProductCard({
     {/* Price */}
     {(() => {
       const discounted = product.bestPrice != null && (product.listingPromotions?.length ?? 0) > 0
-        ? bestStorePromoPrice(product.bestPrice, product.listingPromotions ?? [])
+        ? bestStorePromoPrice(product.bestPrice, product.listingPromotions ?? [], supplierCartSubtotal)
         : null;
       return (
         <div className="flex items-center gap-1.5 min-w-0">

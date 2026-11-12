@@ -6,11 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { getAvatarUrl } from "@/lib/avatar";
-import { User, CreditCard, MapPin, Building2, FileText, Landmark, Lock, LogOut, X } from "lucide-react";
+import { User, MapPin, Bell, Building2, FileText, Landmark, Lock, LogOut, X, Save, RefreshCw } from "lucide-react";
 import { NotificationPreferencesCard } from "@/components/settings/notification-preferences-card";
 import { AccountAddressCard } from "@/components/settings/account-address-card";
 import type { SettingsCardHandle } from "@/components/settings/settings-card-handle";
@@ -146,15 +147,19 @@ function BankingModal({ open, onClose, user }: { open: boolean; onClose: () => v
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
+type Section = "compte" | "localisation" | "notifications" | "securite";
+
 export default function SupplierSettingsPage() {
   const { user, logout, isLoggingOut } = useAuth();
   const { toast } = useToast();
+  const [section, setSection] = useState<Section>("compte");
   const [profile, setProfile] = useState({
     name: user?.name || "Premium Beans Co",
     email: user?.email || "",
     phone: (user as any)?.phone || "+216 71 234 567",
     isWhatsapp: (user as any)?.isWhatsapp ?? false,
     profileImageUrl: (user as any)?.profileImageUrl ?? "",
+    coverImageUrl: (user as any)?.coverImageUrl ?? "",
   });
   const [companyOpen, setCompanyOpen] = useState(false);
   const [legalOpen, setLegalOpen] = useState(false);
@@ -184,20 +189,40 @@ export default function SupplierSettingsPage() {
     }
   };
 
-  const save = async () => {
+  // Main header "Enregistrer" button — saves only the currently active section, through
+  // the exact same persistence each section already used before this redesign (task:
+  // "one main Enregistrer button... must correctly save the editable settings belonging to
+  // the currently active section" / "do not overwrite fields belonging to other sections").
+  const [saving, setSaving] = useState(false);
+
+  const saveCompte = async () => {
+    await apiRequest("PATCH", "/api/auth/me/profile", {
+      name: profile.name, phone: profile.phone,
+      isWhatsapp: profile.isWhatsapp, profileImageUrl: profile.profileImageUrl.trim() || null,
+      coverImageUrl: profile.coverImageUrl.trim() || null,
+    });
+    await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+    toast({ title: "Sauvegardé", description: "Profil mis à jour." });
+  };
+
+  // AccountAddressCard's ref-driven save (standalone={false}) never toasts itself — it's a
+  // no-op when nothing changed (its own internal `dirty` guard), and throws on failure, so
+  // this wrapper provides the French success/error feedback exactly like the page's own
+  // previous single combined save already did.
+  const saveLocalisation = async () => {
+    await addressRef.current?.save();
+    toast({ title: "Sauvegardé", description: "Localisation mise à jour." });
+  };
+
+  const handleMainSave = async () => {
+    setSaving(true);
     try {
-      await apiRequest("PATCH", "/api/auth/me/profile", {
-        name: profile.name, phone: profile.phone,
-        isWhatsapp: profile.isWhatsapp, profileImageUrl: profile.profileImageUrl.trim() || null,
-      });
-      // AccountAddressCard's own save is no longer triggered by its own button (removed
-      // when it became ref-driven for the 7 service-account Settings pages) — this
-      // existing "Sauvegarder" button now also covers Localisation, so it isn't lost.
-      await addressRef.current?.save();
-      await queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      toast({ title: "Sauvegardé", description: "Profil mis à jour." });
+      if (section === "compte") await saveCompte();
+      else if (section === "localisation") await saveLocalisation();
     } catch {
       toast({ title: "Erreur", description: "Impossible de sauvegarder.", variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -207,132 +232,173 @@ export default function SupplierSettingsPage() {
     { icon: Landmark, title: "Coordonnées bancaires", desc: "RIB/IBAN pour les virements", onClick: () => setBankingOpen(true), testId: "button-banking-details" },
   ];
 
+  // Notifications and Sécurité already persist independently (notification toggles save
+  // immediately on change; password change has its own dedicated button) — the main header
+  // button has nothing of its own to save there, so it is hidden rather than shown as a
+  // confusing no-op (task: "do not introduce an unnecessary second save action").
+  const showMainSave = section === "compte" || section === "localisation";
+
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
         title="Paramètres"
         subtitle="Gérez votre profil fournisseur et vos préférences."
+        action={showMainSave && (
+          <Button onClick={handleMainSave} disabled={saving} data-testid="button-save-settings" className="gap-2">
+            {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            {saving ? "Enregistrement…" : "Enregistrer"}
+          </Button>
+        )}
       />
 
-      {/* Profile Card */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold flex items-center gap-2"><User className="w-4 h-4" /> Profil</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-4 mb-2">
-            <Avatar className="w-14 h-14 border-2 border-primary/20">
-              <AvatarImage src={getAvatarUrl(profile)} alt={profile.name} />
-              <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">{profile.name.charAt(0)}</AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="font-semibold text-foreground">{profile.name}</p>
-              <p className="text-xs text-muted-foreground">Fournisseur · {user?.status === "approved" ? "Vérifié" : "En attente"}</p>
-            </div>
-          </div>
-          <Separator />
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="sname">Nom de contact</Label>
-              <Input id="sname" data-testid="input-sname" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="semail">Email</Label>
-              <Input id="semail" data-testid="input-semail" value={profile.email} disabled className="opacity-60" />
-            </div>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <Label htmlFor="sphone">Téléphone</Label>
-                <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
-                  <input type="checkbox" data-testid="checkbox-supplier-whatsapp" className="w-3.5 h-3.5 rounded border-border/50 accent-primary"
-                    checked={profile.isWhatsapp} onChange={(e) => setProfile({ ...profile, isWhatsapp: e.target.checked })} />
-                  WhatsApp
-                </label>
+      {/* Section switcher — same horizontally-scrollable Tabs pattern used throughout the
+          app's other in-page switchers, so all four options stay reachable on mobile. */}
+      <Tabs value={section} onValueChange={(v) => setSection(v as Section)}>
+        <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+          <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
+            <TabsTrigger value="compte" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-settings-compte"><User className="w-3.5 h-3.5 mr-1.5" />Compte</TabsTrigger>
+            <TabsTrigger value="localisation" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-settings-localisation"><MapPin className="w-3.5 h-3.5 mr-1.5" />Localisation</TabsTrigger>
+            <TabsTrigger value="notifications" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-settings-notifications"><Bell className="w-3.5 h-3.5 mr-1.5" />Notifications</TabsTrigger>
+            <TabsTrigger value="securite" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-settings-securite"><Lock className="w-3.5 h-3.5 mr-1.5" />Sécurité</TabsTrigger>
+          </TabsList>
+        </div>
+      </Tabs>
+
+      {/* ── Compte — Profil + Informations commerciales together (task §8) ── */}
+      {section === "compte" && (
+        <div className="flex flex-col gap-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2"><User className="w-4 h-4" /> Profil</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-4 mb-2">
+                <Avatar className="w-14 h-14 border-2 border-primary/20">
+                  <AvatarImage src={getAvatarUrl(profile)} alt={profile.name} />
+                  <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">{profile.name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-semibold text-foreground">{profile.name}</p>
+                  <p className="text-xs text-muted-foreground">Fournisseur · {user?.status === "approved" ? "Vérifié" : "En attente"}</p>
+                </div>
               </div>
-              <Input id="sphone" data-testid="input-sphone" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="spicture">Photo de profil (URL)</Label>
-              <Input id="spicture" data-testid="input-spicture" type="url" value={profile.profileImageUrl} onChange={(e) => setProfile({ ...profile, profileImageUrl: e.target.value })} placeholder="https://…" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Business sections */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold">Informations commerciales</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {settingsSections.map((section) => (
-            <button
-              key={section.title}
-              data-testid={section.testId}
-              onClick={section.onClick}
-              className="w-full flex items-center gap-4 p-3 rounded-xl border border-border/40 hover:border-primary/30 hover:bg-secondary/30 transition-all text-left"
-            >
-              <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
-                <section.icon className="w-4 h-4 text-primary" />
+              <Separator />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="sname">Nom de contact</Label>
+                  <Input id="sname" data-testid="input-sname" value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="semail">Email</Label>
+                  <Input id="semail" data-testid="input-semail" value={profile.email} disabled className="opacity-60" />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor="sphone">Téléphone</Label>
+                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                      <input type="checkbox" data-testid="checkbox-supplier-whatsapp" className="w-3.5 h-3.5 rounded border-border/50 accent-primary"
+                        checked={profile.isWhatsapp} onChange={(e) => setProfile({ ...profile, isWhatsapp: e.target.checked })} />
+                      WhatsApp
+                    </label>
+                  </div>
+                  <Input id="sphone" data-testid="input-sphone" value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="spicture">Photo de profil (URL)</Label>
+                  <Input id="spicture" data-testid="input-spicture" type="url" value={profile.profileImageUrl} onChange={(e) => setProfile({ ...profile, profileImageUrl: e.target.value })} placeholder="https://…" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="scover">Cover (URL)</Label>
+                  <Input id="scover" data-testid="input-scover" type="url" value={profile.coverImageUrl} onChange={(e) => setProfile({ ...profile, coverImageUrl: e.target.value })} placeholder="https://…" />
+                </div>
               </div>
-              <div className="flex-1">
-                <p className="font-medium text-sm">{section.title}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{section.desc}</p>
+            </CardContent>
+          </Card>
+
+          {/* Business sections — each still saves independently through its own modal/API
+              call (task §8: "preserve that mechanism" — nothing here is lifted into the
+              parent `profile` state, so the main Enregistrer button never touches it). */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">Informations commerciales</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {settingsSections.map((s) => (
+                <button
+                  key={s.title}
+                  data-testid={s.testId}
+                  onClick={s.onClick}
+                  className="w-full flex items-center gap-4 p-3 rounded-xl border border-border/40 hover:border-primary/30 hover:bg-secondary/30 transition-all text-left"
+                >
+                  <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
+                    <s.icon className="w-4 h-4 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">{s.title}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{s.desc}</p>
+                  </div>
+                  <span className="text-xs text-primary font-medium">Modifier</span>
+                </button>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ── Localisation — kept mounted (just hidden) rather than conditionally rendered
+          when another tab is active, so AddressDetailsFields' own internal `dirty`/details
+          draft state survives switching away and back (task: "Switching sections must
+          preserve unsaved changes" — a component that owns its own state, unlike Compte's
+          fields which already live in this page's own `profile` state, would otherwise lose
+          unsaved edits on unmount/remount). ── */}
+      <div className={section === "localisation" ? "" : "hidden"}>
+        <AccountAddressCard ref={addressRef} />
+      </div>
+
+      {/* ── Notifications — unchanged, already saves each toggle immediately ── */}
+      {section === "notifications" && <NotificationPreferencesCard role="SUPPLIER" />}
+
+      {/* ── Sécurité — unchanged, independent of the main Enregistrer button ── */}
+      {section === "securite" && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2"><Lock className="w-4 h-4" /> Sécurité</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Mot de passe actuel</Label>
+                <PasswordInputField
+                  value={currentPassword}
+                  onChange={setCurrentPassword}
+                  autoComplete="current-password"
+                  testId="input-supplier-current-password"
+                  toggleTestId="button-toggle-supplier-current-password"
+                  ariaLabel="mot de passe actuel"
+                />
               </div>
-              <span className="text-xs text-primary font-medium">Modifier</span>
-            </button>
-          ))}
-        </CardContent>
-      </Card>
-
-      <AccountAddressCard ref={addressRef} />
-
-      <NotificationPreferencesCard role="SUPPLIER" />
-
-      {/* Sécurité — same content/layout as Admin → Paramètres (admin/settings-page.tsx),
-          styled with this page's own Card/CardHeader convention so it sits naturally
-          among the sections above rather than introducing SectionCard's slightly
-          different header size on this one page. */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-semibold flex items-center gap-2"><Lock className="w-4 h-4" /> Sécurité</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Mot de passe actuel</Label>
-              <PasswordInputField
-                value={currentPassword}
-                onChange={setCurrentPassword}
-                autoComplete="current-password"
-                testId="input-supplier-current-password"
-                toggleTestId="button-toggle-supplier-current-password"
-                ariaLabel="mot de passe actuel"
-              />
+              <div className="space-y-1.5">
+                <Label>Nouveau mot de passe</Label>
+                <PasswordInputField
+                  value={newPassword}
+                  onChange={setNewPassword}
+                  autoComplete="new-password"
+                  testId="input-supplier-new-password"
+                  toggleTestId="button-toggle-supplier-new-password"
+                  ariaLabel="nouveau mot de passe"
+                />
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Nouveau mot de passe</Label>
-              <PasswordInputField
-                value={newPassword}
-                onChange={setNewPassword}
-                autoComplete="new-password"
-                testId="input-supplier-new-password"
-                toggleTestId="button-toggle-supplier-new-password"
-                ariaLabel="nouveau mot de passe"
-              />
-            </div>
-          </div>
-          <Button className="mt-4" variant="outline" onClick={changePassword} disabled={changingPassword || !currentPassword || !newPassword} data-testid="button-supplier-change-password">
-            Changer le mot de passe
-          </Button>
-          <Separator className="my-4" />
-          <Button variant="outline" className="text-destructive hover:text-destructive gap-2" onClick={() => logout()} disabled={isLoggingOut} data-testid="button-supplier-logout">
-            <LogOut className="w-4 h-4" /> Se déconnecter
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Button data-testid="button-save-settings" onClick={save} className="w-fit">Sauvegarder</Button>
+            <Button className="mt-4" variant="outline" onClick={changePassword} disabled={changingPassword || !currentPassword || !newPassword} data-testid="button-supplier-change-password">
+              Changer le mot de passe
+            </Button>
+            <Separator className="my-4" />
+            <Button variant="outline" className="text-destructive hover:text-destructive gap-2" onClick={() => logout()} disabled={isLoggingOut} data-testid="button-supplier-logout">
+              <LogOut className="w-4 h-4" /> Se déconnecter
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <CompanyDetailsModal open={companyOpen} onClose={() => setCompanyOpen(false)} user={user} />
       <LegalTaxModal open={legalOpen} onClose={() => setLegalOpen(false)} user={user} />

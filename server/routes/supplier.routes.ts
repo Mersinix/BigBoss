@@ -1210,7 +1210,9 @@ export function registerSupplierRoutes(app: Express): void {
         const supplierId = parseInt(req.params.supplierId);
         const cafeId = req.session?.userId ? req.session.userId : undefined;
         const promos = await storage.getActivePromotionsForSupplier(supplierId, cafeId);
-        // Return only public-safe fields
+        // Return only public-safe fields. discountValue/freeShippingMinAmount/
+        // minimumOrderValue are stored in cents (shared/schema.ts's column comments),
+        // the same unit as every other price in the app — passed through as-is.
         res.json(promos.map(p => ({
           id: p.id, name: p.name, description: p.description, type: p.type,
           discountValue: p.discountValue, buyQuantity: p.buyQuantity, getQuantity: p.getQuantity,

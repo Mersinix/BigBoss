@@ -1040,11 +1040,21 @@ export function ProductDetailContent({
   // can reorder them (title + nav row first, badges second) while the
   // full-page layout keeps its original order (badges, then title) — task:
   // "Fix Pack and Product Detail Modal Header Layout".
+  // Prefer the canonical, live-joined category name (categoryLabel.name — resolved
+  // fresh from the categories table on every /api/marketplace request, see
+  // server/storage.ts's buildTaxonomyCache/enrichProduct) over `product.category`, a
+  // denormalized text snapshot stored on the product row itself that is never
+  // rewritten when the admin renames the linked category elsewhere. subCategoryLabel/
+  // brandLabel below were already resolved this same canonical way — this was the one
+  // remaining badge still reading the stale snapshot directly. Same fallback already
+  // used by the Shop grid card and Store page (browse-products.tsx, store-detail-page.tsx)
+  // for a legacy product that has a free-text category but no categoryId link at all.
+  const categoryDisplayName = product.categoryLabel?.name ?? product.category;
   const categoryBadges = (
     <div className="flex flex-wrap gap-2">
-      {product.category && (
+      {categoryDisplayName && (
         <Badge variant="secondary" className={isModal && dk ? "bg-gray-700 text-gray-200 border-gray-600" : ""}>
-          {product.category}
+          {categoryDisplayName}
         </Badge>
       )}
       {product.subCategoryLabel && (

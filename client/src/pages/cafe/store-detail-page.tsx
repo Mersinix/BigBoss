@@ -511,18 +511,26 @@ function StoreProductCard({
       const discounted = product.bestPrice != null && (product.listingPromotions?.length ?? 0) > 0
         ? bestStorePromoPrice(product.bestPrice, product.listingPromotions ?? [], supplierCartSubtotal)
         : null;
-      return (
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className={`font-bold text-sm ${t.textPrice}`}>
-            {discounted != null ? fmt(discounted) : product.bestPrice != null ? fmt(product.bestPrice) : "—"}
-          </span>
-          {discounted != null && discounted < product.bestPrice! && (
-            <span className={`text-xs line-through whitespace-nowrap ${t.textMuted}`}>
-              {fmt(product.bestPrice!)}
-            </span>
-          )}
-        </div>
-      );
+     return (
+  <div className="flex items-center gap-1.5 min-w-0">
+
+    <span className={`font-bold text-sm ${t.textPrice}`}>
+      {discounted != null
+        ? fmt(discounted)
+        : product.bestPrice != null
+          ? fmt(product.bestPrice)
+          : "—"}
+    </span>
+
+    {discounted != null &&
+      product.bestPrice != null &&
+      discounted < product.bestPrice && (
+        <span className={`text-xs line-through whitespace-nowrap ${t.textMuted}`}>
+          {fmt(product.bestPrice)}
+        </span>
+      )}
+  </div>
+);
     })()}
 
     {/* Distance */}

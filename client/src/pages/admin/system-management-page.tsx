@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Ban, Moon, Sun, SunMoon, Car, Store, ShieldCheck, LogIn, AlertTriangle, X, RotateCcw, Save, Palette, Tag, Percent, DollarSign, BarChart3, Gift, Star } from "lucide-react";
+import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Ban, Moon, Sun, SunMoon, Car, Store, ShieldCheck, LogIn, AlertTriangle, X, RotateCcw, Save, Palette, Tag, Percent, DollarSign, BarChart3, Gift, Star, Ticket } from "lucide-react";
 import { useDeliveryPricingSettings, useUpdateDeliveryPricingSettings, VEHICLE_TYPE_LABELS, type DeliveryVehicleType, type DeliveryPricingSettings, useFinancialLedgerEntries, type FinancialLedgerFilters, useAdminSettlements, useApproveSettlement, useVoidSettlement, type SettlementFilters, useSettlementPayments, useCreatePayment, useConfirmPayment, useFailPayment, useReversePayment, type PaymentMethod, useAdminCodReconciliations, useReconcileCod, useAdminRefunds, useRequestRefund, useConfirmRefund, useFailRefund, useCancelRefund, useAdminAdjustments, useCreateAdjustment, useAdminFinancialSummary } from "@/hooks/use-delivery-ecosystem";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -40,7 +40,15 @@ import type { LandingConfig, HeroSlide } from "@shared/schema";
 // too long"). Purely a UI reorganization — every component below still renders exactly as
 // before, just conditionally by active tab instead of always stacked.
 
-type SystemManagementSection = "landing" | "delivery" | "services" | "messages" | "global" | "promotion";
+// "promotion" → "supplier" (task: "Supplier System Management — Rename Promotion
+// Section & Add Discount Code Visibility Controls"): this used to be a single
+// Promotion-only settings section; it now hosts an internal switcher (Promotion /
+// Codes promotionnels, see SUPPLIER_SUB_SECTIONS below) — the id/type rename is a
+// purely internal identifier change (never user-facing on its own) to keep the code
+// readable now that this top-level tab covers more than just Promotions. Only the
+// displayed label actually needed to change per the task; renaming the id too avoids
+// a confusingly-named "promotion" tab that now also contains Discount Codes settings.
+type SystemManagementSection = "landing" | "delivery" | "services" | "messages" | "global" | "supplier";
 
 const SYSTEM_MANAGEMENT_SECTIONS: { id: SystemManagementSection; label: string; icon: any }[] = [
   { id: "landing",  label: "Landing Page",     icon: LayoutTemplate },
@@ -48,7 +56,16 @@ const SYSTEM_MANAGEMENT_SECTIONS: { id: SystemManagementSection; label: string; 
   { id: "services", label: "Services",         icon: Zap },
   { id: "messages", label: "Messages System",  icon: MessageSquare },
   { id: "global",   label: "Global Settings",  icon: Sliders },
-  { id: "promotion", label: "Promotion",       icon: Tag },
+  { id: "supplier", label: "Supplier",         icon: Store },
+];
+
+// Internal switcher inside the "Supplier" top-level tab (task's Part 2): Promotion
+// (the existing, unmodified settings — see PromotionSettingsSection) and Codes
+// promotionnels (new — see DiscountCodeSettingsSection).
+type SupplierSubSection = "promotion" | "discount-codes";
+const SUPPLIER_SUB_SECTIONS: { id: SupplierSubSection; label: string; icon: any }[] = [
+  { id: "promotion", label: "Promotion", icon: Tag },
+  { id: "discount-codes", label: "Codes promotionnels", icon: Ticket },
 ];
 
 // ── Service visibility ────────────────────────────────────────────────────────
@@ -327,6 +344,109 @@ function PromotionSettingsSection() {
         </CardContent>
       </Card>
     </>
+  );
+}
+
+// ── Discount Codes (Supplier) visibility ───────────────────────────────────────
+// New sub-tab under "Supplier" (task: "Supplier System Management — Rename
+// Promotion Section & Add Discount Code Visibility Controls"). Same single
+// auto-seeded settings row + Switch/Badge pattern as PromotionSettingsSection
+// above, against the new /api/discount-code-settings + PATCH
+// /api/admin/discount-code-settings endpoints. Two independent settings —
+// see server/routes/shop-catalog.routes.ts's requireDiscountCodesEnabled and
+// the newCodeButtonVisible check inside POST /api/discount-codes for backend
+// enforcement; this UI never deletes/deactivates/modifies existing codes.
+type DiscountCodeSettingsAdmin = { tabVisible: boolean; newCodeButtonVisible: boolean };
+
+function DiscountCodeSettingsSection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: settings } = useQuery<DiscountCodeSettingsAdmin>({ queryKey: ["/api/discount-code-settings"] });
+  const [local, setLocal] = useState<DiscountCodeSettingsAdmin | null>(null);
+
+  useEffect(() => {
+    if (settings) setLocal(settings);
+  }, [settings]);
+
+  const value = local ?? settings;
+
+  const saveMutation = useMutation({
+    mutationFn: (updates: Partial<DiscountCodeSettingsAdmin>) =>
+      apiRequest("PATCH", "/api/admin/discount-code-settings", updates),
+    onSuccess: async (response) => {
+      const saved = await response.json();
+      setLocal(saved);
+      queryClient.setQueryData(["/api/discount-code-settings"], saved);
+      toast({ title: "Paramètres des codes promotionnels mis à jour" });
+    },
+    onError: (error: any) => toast({ variant: "destructive", title: "Échec de la mise à jour", description: error?.message }),
+  });
+
+  const statusBadgeClass = (enabled: boolean) => enabled
+    ? "bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-400 dark:border-green-500/30"
+    : "bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-500/15 dark:text-gray-400 dark:border-gray-500/30";
+
+  const update = (field: keyof DiscountCodeSettingsAdmin, next: boolean) => {
+    if (!value) return;
+    setLocal({ ...value, [field]: next });
+    saveMutation.mutate({ [field]: next });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-3">
+          <div className="bg-sky-500/10 rounded-xl p-3"><Ticket className="w-5 h-5 text-sky-600" /></div>
+          <div>
+            <CardTitle className="text-base">Codes promotionnels</CardTitle>
+            <CardDescription className="pt-1">Contrôlez l'accès à la fonctionnalité Codes promotionnels dans l'espace fournisseur.</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!value ? <Skeleton className="h-32 w-full" /> : (
+          <>
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+              <div>
+                <p className="text-sm font-medium">Onglet Codes promotionnels</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Autorisez les fournisseurs à accéder à la gestion de leurs codes promotionnels dans leur espace fournisseur.</p>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <Badge variant="outline" className={`text-xs ${statusBadgeClass(value.tabVisible)}`} data-testid="badge-discount-codes-tab-status">
+                  {value.tabVisible ? "Visible" : "Masqué"}
+                </Badge>
+                <Switch
+                  checked={value.tabVisible}
+                  onCheckedChange={(checked) => update("tabVisible", checked)}
+                  disabled={saveMutation.isPending}
+                  aria-label="Onglet Codes promotionnels"
+                  data-testid="switch-discount-codes-tab-visible"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+              <div>
+                <p className="text-sm font-medium">Bouton Nouveau code</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Autorisez les fournisseurs à créer de nouveaux codes promotionnels.</p>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <Badge variant="outline" className={`text-xs ${statusBadgeClass(value.newCodeButtonVisible)}`} data-testid="badge-discount-codes-new-button-status">
+                  {value.newCodeButtonVisible ? "Visible" : "Masqué"}
+                </Badge>
+                <Switch
+                  checked={value.newCodeButtonVisible}
+                  onCheckedChange={(checked) => update("newCodeButtonVisible", checked)}
+                  disabled={saveMutation.isPending}
+                  aria-label="Bouton Nouveau code"
+                  data-testid="switch-discount-codes-new-button-visible"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">Masquer l'un ou l'autre ne supprime, ne désactive ni ne modifie les codes déjà créés par les fournisseurs ; l'historique d'utilisation et les commandes restent inchangés.</p>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -2872,6 +2992,7 @@ export default function SystemManagementPage() {
   // Landing Page is the default/open tab (task requirement — Admin must see Landing Page
   // configuration immediately on entering System Management, no extra click).
   const [activeSection, setActiveSection] = useState<SystemManagementSection>("landing");
+  const [supplierSubSection, setSupplierSubSection] = useState<SupplierSubSection>("promotion");
 
   const { data: states, isLoading } = useQuery<ServiceStatesMap>({ queryKey: ["/api/system-services"] });
   const { order: savedOrder } = useServiceOrder();
@@ -3021,9 +3142,34 @@ export default function SystemManagementPage() {
         </>
       )}
 
-      {/* ── Promotion (Supplier Promotions tab + type availability) ── */}
-      {activeSection === "promotion" && (
-        <PromotionSettingsSection />
+      {/* ── Supplier (Promotion + Codes promotionnels — internal switcher, Part 2) ── */}
+      {activeSection === "supplier" && (
+        <>
+          <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+            <div className="flex gap-1 bg-secondary/40 rounded-xl p-1 w-max min-w-full sm:w-fit">
+              {SUPPLIER_SUB_SECTIONS.map(({ id, label, icon: Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setSupplierSubSection(id)}
+                  className={`flex items-center gap-2 py-2 px-4 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${supplierSubSection === id ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  data-testid={`tab-supplier-sub-${id}`}
+                >
+                  <Icon className="w-4 h-4" />{label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Existing Promotion settings — unchanged, only relocated under this sub-tab */}
+          {supplierSubSection === "promotion" && (
+            <PromotionSettingsSection />
+          )}
+
+          {supplierSubSection === "discount-codes" && (
+            <DiscountCodeSettingsSection />
+          )}
+        </>
       )}
     </div>
   );

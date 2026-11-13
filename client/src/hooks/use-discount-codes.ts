@@ -36,17 +36,24 @@ export type DiscountCodeFormInput = {
 
 // ── Supplier: list / stats / usage ──────────────────────────────────────────
 
-export function useDiscountCodes() {
+// `enabled` (default true) lets the Supplier Discount Codes page skip the fetch
+// entirely while its own tab is hidden by Admin → System Management → Supplier →
+// Codes promotionnels (same optional-enabled convention promotions-page.tsx uses
+// for usePromotionSettings().globalVisible) instead of firing a request that the
+// backend's requireDiscountCodesEnabled would reject with 403 anyway.
+export function useDiscountCodes(enabled = true) {
   return useQuery<DiscountCode[]>({
     queryKey: [BASE],
     queryFn: () => fetchJSON(BASE),
+    enabled,
   });
 }
 
-export function useDiscountCodeStats() {
+export function useDiscountCodeStats(enabled = true) {
   return useQuery<DiscountCodeStats>({
     queryKey: [`${BASE}/stats`],
     queryFn: () => fetchJSON(`${BASE}/stats`),
+    enabled,
   });
 }
 

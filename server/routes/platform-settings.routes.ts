@@ -166,6 +166,29 @@ export function registerPlatformSettingsRoutes(app: Express): void {
       }
     });
 
+    // ── Discount Code Settings (Admin → System Management → Supplier → Codes
+    // promotionnels) ────────────────────────────────────────────────────────────
+    app.get("/api/discount-code-settings", async (_req, res) => {
+      try {
+        res.json(await storage.getDiscountCodeSettings());
+      } catch { res.status(500).json({ message: "Failed to load discount code settings" }); }
+    });
+
+    app.patch("/api/admin/discount-code-settings", requireAdmin, async (req, res) => {
+      try {
+        const body = z.object({
+          tabVisible: z.boolean().optional(),
+          newCodeButtonVisible: z.boolean().optional(),
+        }).strict().parse(req.body);
+        const settings = await storage.updateDiscountCodeSettings(body);
+        broadcast("discount_code_settings_updated", settings);
+        res.json(settings);
+      } catch (err) {
+        if (err instanceof z.ZodError) return res.status(400).json({ message: "Invalid discount code settings" });
+        res.status(500).json({ message: "Failed to update discount code settings" });
+      }
+    });
+
     app.get("/api/system-service-order", async (_req, res) => {
       try {
         res.json(await storage.getServiceOrder());

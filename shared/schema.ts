@@ -3327,6 +3327,23 @@ export const promotionTypeSettings = pgTable("promotion_type_settings", {
 export type PromotionTypeSetting = typeof promotionTypeSettings.$inferSelect;
 export type PromotionTypeSettingsMap = Record<PromotionType, boolean>;
 
+// Admin-controlled Supplier Discount Codes feature AVAILABILITY (task: "Supplier
+// System Management — Rename Promotion Section & Add Discount Code Visibility
+// Controls") — a separate, dedicated single-row table, same shape/pattern as
+// promotionSettings just above, not merged into it: Discount Codes and Promotions
+// are two independent mechanisms (see the discountCodes table's own note below) that
+// happen to share an Admin System Management "Supplier" switcher group, not a single
+// settings row. Two independent booleans, both defaulting to true (today's behavior):
+// tabVisible gates the whole /supplier/discount-codes page/API; newCodeButtonVisible
+// independently gates only the ability to CREATE a new code, never existing ones.
+export const discountCodeSettings = pgTable("discount_code_settings", {
+  id: serial("id").primaryKey(),
+  tabVisible: boolean("tab_visible").notNull().default(true),
+  newCodeButtonVisible: boolean("new_code_button_visible").notNull().default(true),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export type DiscountCodeSettings = typeof discountCodeSettings.$inferSelect;
+
 // ── Discount Codes ─────────────────────────────────────────────────────────────
 // A completely separate mechanism from Promotions above: Promotions apply
 // automatically based on eligibility rules, Discount Codes are entered by the

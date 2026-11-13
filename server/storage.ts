@@ -2942,6 +2942,14 @@ export class DatabaseStorage implements IStorage {
     return this.platformSettingsDomain.setPromotionTypeEnabled(type, enabled);
   }
 
+  async getDiscountCodeSettings(): Promise<{ tabVisible: boolean; newCodeButtonVisible: boolean }> {
+    return this.platformSettingsDomain.getDiscountCodeSettings();
+  }
+
+  async updateDiscountCodeSettings(updates: Partial<{ tabVisible: boolean; newCodeButtonVisible: boolean }>): Promise<{ tabVisible: boolean; newCodeButtonVisible: boolean }> {
+    return this.platformSettingsDomain.updateDiscountCodeSettings(updates);
+  }
+
   async getPrinterCategoryMapping(printerId: number): Promise<{ categories: string[]; subCategories: string[] }> {
     return this.printDomain.getPrinterCategoryMapping(printerId);
   }

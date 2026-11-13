@@ -288,6 +288,8 @@ export interface IStorage {
   updatePromotionSettings(updates: Partial<{ globalVisible: boolean }>): Promise<{ globalVisible: boolean }>;
   getPromotionTypeSettings(): Promise<import("@shared/schema").PromotionTypeSettingsMap>;
   setPromotionTypeEnabled(type: import("@shared/schema").PromotionType, enabled: boolean): Promise<import("@shared/schema").PromotionTypeSettingsMap>;
+  getDiscountCodeSettings(): Promise<{ tabVisible: boolean; newCodeButtonVisible: boolean }>;
+  updateDiscountCodeSettings(updates: Partial<{ tabVisible: boolean; newCodeButtonVisible: boolean }>): Promise<{ tabVisible: boolean; newCodeButtonVisible: boolean }>;
 
   // Google/Facebook sign-in — admin on/off toggle only (never credentials, see
   // server/oauth.ts for the env-var-driven "configured" check).

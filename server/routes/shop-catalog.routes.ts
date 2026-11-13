@@ -1152,8 +1152,23 @@ export function registerShopCatalogRoutes(app: Express): void {
     // in at checkout, rather than an automatically-applied eligibility rule. See the note
     // on shared/schema.ts's discountCodes table.
 
+    // Admin → System Management → Supplier → Codes promotionnels's "Onglet Codes
+    // promotionnels" toggle (task: "Supplier System Management — Rename Promotion
+    // Section & Add Discount Code Visibility Controls"). Mirrors requirePromotionsEnabled
+    // exactly — gates only the Supplier-facing management endpoints below, never the
+    // Coffee-Owner-facing /api/discount-codes/validate route (a separate section further
+    // down, untouched) or order creation. Always runs after requireSupplier, so it only
+    // ever applies to a confirmed SUPPLIER-role request.
+    const requireDiscountCodesEnabled = async (req: any, res: any, next: any) => {
+      const settings = await storage.getDiscountCodeSettings();
+      if (!settings.tabVisible) {
+        return res.status(403).json({ message: "Cette fonctionnalité est temporairement indisponible." });
+      }
+      next();
+    };
+
     // GET /api/discount-codes — supplier's own codes list
-    app.get('/api/discount-codes', requireSupplier, async (req: any, res) => {
+    app.get('/api/discount-codes', requireSupplier, requireDiscountCodesEnabled, async (req: any, res) => {
       try {
         const codes = await storage.getDiscountCodes(req.supplier.id);
         res.json(codes);
@@ -1161,7 +1176,7 @@ export function registerShopCatalogRoutes(app: Express): void {
     });
 
     // GET /api/discount-codes/stats — supplier dashboard stats
-    app.get('/api/discount-codes/stats', requireSupplier, async (req: any, res) => {
+    app.get('/api/discount-codes/stats', requireSupplier, requireDiscountCodesEnabled, async (req: any, res) => {
       try {
         const stats = await storage.getDiscountCodeStats(req.supplier.id);
         res.json(stats);
@@ -1169,7 +1184,7 @@ export function registerShopCatalogRoutes(app: Express): void {
     });
 
     // GET /api/discount-codes/:id/usage — redemption history for one code
-    app.get('/api/discount-codes/:id/usage', requireSupplier, async (req: any, res) => {
+    app.get('/api/discount-codes/:id/usage', requireSupplier, requireDiscountCodesEnabled, async (req: any, res) => {
       try {
         const code = await storage.getDiscountCode(parseInt(req.params.id), req.supplier.id);
         if (!code) return res.status(404).json({ message: 'Not found' });
@@ -1178,9 +1193,18 @@ export function registerShopCatalogRoutes(app: Express): void {
       } catch { res.status(500).json({ message: 'Error' }); }
     });
 
-    // POST /api/discount-codes — create
-    app.post('/api/discount-codes', requireSupplier, async (req: any, res) => {
+    // POST /api/discount-codes — create. Gated independently by BOTH the tab-visibility
+    // setting (requireDiscountCodesEnabled — if the whole tab is hidden, creation is
+    // naturally impossible too) AND "Bouton Nouveau code" specifically — the one route
+    // where that second, narrower setting applies; it never affects GET/PUT/PATCH/DELETE,
+    // which must keep working on existing codes regardless (task: "Tab Visible + Button
+    // Masqué: Suppliers can access existing codes but cannot create new ones").
+    app.post('/api/discount-codes', requireSupplier, requireDiscountCodesEnabled, async (req: any, res) => {
       try {
+        const buttonSettings = await storage.getDiscountCodeSettings();
+        if (!buttonSettings.newCodeButtonVisible) {
+          return res.status(403).json({ message: "La création de nouveaux codes promotionnels est temporairement désactivée." });
+        }
         const body = z.object({
           code: z.string().trim().min(3).max(40),
           discountType: z.enum(['PERCENTAGE', 'FIXED_AMOUNT']),
@@ -1208,7 +1232,7 @@ export function registerShopCatalogRoutes(app: Express): void {
     });
 
     // PUT /api/discount-codes/:id — update
-    app.put('/api/discount-codes/:id', requireSupplier, async (req: any, res) => {
+    app.put('/api/discount-codes/:id', requireSupplier, requireDiscountCodesEnabled, async (req: any, res) => {
       try {
         const body = z.object({
           code: z.string().trim().min(3).max(40).optional(),
@@ -1233,7 +1257,7 @@ export function registerShopCatalogRoutes(app: Express): void {
     });
 
     // PATCH /api/discount-codes/:id/status — quick activate/deactivate
-    app.patch('/api/discount-codes/:id/status', requireSupplier, async (req: any, res) => {
+    app.patch('/api/discount-codes/:id/status', requireSupplier, requireDiscountCodesEnabled, async (req: any, res) => {
       try {
         const { isActive } = z.object({ isActive: z.boolean() }).parse(req.body);
         const updated = await storage.updateDiscountCode(parseInt(req.params.id), req.supplier.id, { isActive } as any);
@@ -1246,7 +1270,7 @@ export function registerShopCatalogRoutes(app: Express): void {
     // DELETE /api/discount-codes/:id — remove (soft-delete, see isRemoved
     // column comment in shared/schema.ts — never a hard DELETE, so existing
     // discount_code_usage/order history is never orphaned or lost).
-    app.delete('/api/discount-codes/:id', requireSupplier, async (req: any, res) => {
+    app.delete('/api/discount-codes/:id', requireSupplier, requireDiscountCodesEnabled, async (req: any, res) => {
       try {
         const updated = await storage.removeDiscountCode(parseInt(req.params.id), req.supplier.id);
         if (!updated) return res.status(404).json({ message: 'Not found' });

@@ -8,6 +8,7 @@ import {
   serviceHeroConfigs, type ServiceHeroConfig, type ServiceHeroConfigMap, type ServiceHeroHeight, type ServiceHeroHAlign, type ServiceHeroVAlign,
   accountDarkModeSettings, type DarkModeAccount, type AccountDarkModeSettingsMap, type AccountThemeMode,
   promotionSettings, promotionTypeSettings, type PromotionType, type PromotionTypeSettingsMap,
+  discountCodeSettings,
 } from "@shared/schema";
 
 // Stage 2 — Batch 20 business-domain consolidation. Merges Landing Config
@@ -367,5 +368,30 @@ export class PlatformSettingsStorage {
       await db.insert(promotionTypeSettings).values({ type, enabled });
     }
     return this.getPromotionTypeSettings();
+  }
+
+  // ── Discount Code Settings (Admin → System Management → Supplier → Codes
+  // promotionnels) ─────────────────────────────────────────────────────────────
+  // Single auto-seeded row, identical get/update shape to getPromotionSettings/
+  // updatePromotionSettings just above — two independent booleans instead of one.
+  async getDiscountCodeSettings(): Promise<{ tabVisible: boolean; newCodeButtonVisible: boolean }> {
+    const [row] = await db.select().from(discountCodeSettings).limit(1);
+    if (row) return { tabVisible: row.tabVisible, newCodeButtonVisible: row.newCodeButtonVisible };
+    const [created] = await db.insert(discountCodeSettings).values({}).returning();
+    return { tabVisible: created.tabVisible, newCodeButtonVisible: created.newCodeButtonVisible };
+  }
+
+  async updateDiscountCodeSettings(
+    updates: Partial<{ tabVisible: boolean; newCodeButtonVisible: boolean }>,
+  ): Promise<{ tabVisible: boolean; newCodeButtonVisible: boolean }> {
+    const current = await this.getDiscountCodeSettings();
+    const next = { ...current, ...updates };
+    const [row] = await db.select({ id: discountCodeSettings.id }).from(discountCodeSettings).limit(1);
+    if (row) {
+      await db.update(discountCodeSettings).set({ ...next, updatedAt: new Date() }).where(eq(discountCodeSettings.id, row.id));
+    } else {
+      await db.insert(discountCodeSettings).values(next);
+    }
+    return next;
   }
 }

@@ -100,6 +100,7 @@ import {
   type AcademyCourseCard, type AcademyRegistrationWithParties, type AcademyCourseSessionWithCourse,
   type AcademyRegistrationStatus, type AcademySessionStatus,
   type AcademyReport,
+  type SupplierStoreSettings,
 } from "@shared/schema";
 import { encodeMaintenanceSubSkillKey } from "@shared/maintenance-sub-skill-key";
 import { eq, and, inArray, ne, sql, notInArray, asc, desc } from "drizzle-orm";
@@ -107,7 +108,7 @@ import { ProspectingStorage } from "./storage/domains/prospecting.storage";
 import { NotificationsStorage } from "./storage/domains/notifications.storage";
 import { SupplierStorage } from "./storage/domains/supplier.storage";
 import { PromotionsStorage } from "./storage/domains/promotions.storage";
-import { PlatformSettingsStorage } from "./storage/domains/platform-settings.storage";
+import { PlatformSettingsStorage, type SupplierTabSettingsShape } from "./storage/domains/platform-settings.storage";
 import { DiscountCodesStorage } from "./storage/domains/discount-codes.storage";
 import { AuthProviderSettingsStorage } from "./storage/domains/auth-provider-settings.storage";
 import { LoginSecuritySettingsStorage } from "./storage/domains/login-security-settings.storage";
@@ -2948,6 +2949,22 @@ export class DatabaseStorage implements IStorage {
 
   async updateDiscountCodeSettings(updates: Partial<{ tabVisible: boolean; newCodeButtonVisible: boolean }>): Promise<{ tabVisible: boolean; newCodeButtonVisible: boolean }> {
     return this.platformSettingsDomain.updateDiscountCodeSettings(updates);
+  }
+
+  async getSupplierTabSettings(): Promise<SupplierTabSettingsShape & { performanceTabVisible: boolean }> {
+    return this.platformSettingsDomain.getSupplierTabSettings();
+  }
+
+  async updateSupplierTabSettings(updates: Partial<SupplierTabSettingsShape>): Promise<SupplierTabSettingsShape & { performanceTabVisible: boolean }> {
+    return this.platformSettingsDomain.updateSupplierTabSettings(updates);
+  }
+
+  async getSupplierStoreSettings(): Promise<Omit<SupplierStoreSettings, "id" | "updatedAt">> {
+    return this.platformSettingsDomain.getSupplierStoreSettings();
+  }
+
+  async updateSupplierStoreSettings(updates: Partial<Omit<SupplierStoreSettings, "id" | "updatedAt">>): Promise<Omit<SupplierStoreSettings, "id" | "updatedAt">> {
+    return this.platformSettingsDomain.updateSupplierStoreSettings(updates);
   }
 
   async getPrinterCategoryMapping(printerId: number): Promise<{ categories: string[]; subCategories: string[] }> {

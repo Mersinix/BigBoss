@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Redirect } from "wouter";
+import { useSupplierTabSettings, performanceRedirectTarget } from "@/hooks/use-supplier-tab-settings";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -24,6 +26,12 @@ import { SupplierPerformanceSwitcher } from "@/components/supplier/supplier-perf
 // dashboard-kit.tsx) so the two "Earnings" tabs read as one financial product.
 export default function SupplierEarningsPage() {
   const fmt = useFormatCurrency();
+  // Admin → System Management → Supplier → Onglet's "Visibilité de l'onglet
+  // Performance" group (task: "Admin Supplier Settings — Supplier Performance
+  // Tab Visibility Management") — redirect to another enabled Performance tab
+  // (or a safe Supplier page) if Earnings is currently disabled.
+  const { settings: performanceSettings } = useSupplierTabSettings();
+  const redirectTo = performanceRedirectTarget(performanceSettings, "/supplier/earnings");
   const { data: orders = [] } = useQuery<OrderWithDetails[]>({ queryKey: ["/api/orders"] });
   const [preset, setPreset] = useState<DateRangePreset>("30d");
   const [custom, setCustom] = useState({ from: "", to: "" });
@@ -61,6 +69,10 @@ export default function SupplierEarningsPage() {
     if (prev === 0) return last > 0 ? 100 : 0;
     return ((last - prev) / prev) * 100;
   }, [series]);
+
+  if (redirectTo) {
+    return <Redirect to={redirectTo} />;
+  }
 
   return (
     <div className="flex flex-col gap-6 py-4 px-3 -mx-6 sm:py-6 sm:px-6 sm:mx-0">

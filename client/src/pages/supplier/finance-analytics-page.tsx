@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Redirect } from "wouter";
+import { useSupplierTabSettings, performanceRedirectTarget } from "@/hooks/use-supplier-tab-settings";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, LineChart, Line } from "recharts";
 import { TrendingUp, ShoppingBag, Package, Percent, Users, Layers, XCircle } from "lucide-react";
@@ -22,6 +24,12 @@ const tooltipStyle = { contentStyle: { background: "hsl(var(--card))", border: "
 // data even on a shared/misconfigured query cache.
 export default function FinanceAnalyticsPage() {
   const fmt = useFormatCurrency();
+  // Admin → System Management → Supplier → Onglet's "Visibilité de l'onglet
+  // Performance" group (task: "Admin Supplier Settings — Supplier Performance
+  // Tab Visibility Management") — redirect to another enabled Performance tab
+  // (or a safe Supplier page) if Analytics is currently disabled.
+  const { settings: performanceSettings } = useSupplierTabSettings();
+  const redirectTo = performanceRedirectTarget(performanceSettings, "/supplier/analytics");
   const { data: orders = [] } = useQuery<OrderWithDetails[]>({ queryKey: ["/api/orders"] });
   const { data: listings = [] } = useQuery<any[]>({ queryKey: ["/api/supplier/listings"] });
   const [preset, setPreset] = useState<DateRangePreset>("30d");
@@ -37,6 +45,10 @@ export default function FinanceAnalyticsPage() {
   const customers = useMemo(() => topCustomers(lines, 5), [lines]);
   const products = useMemo(() => topProducts(lines, 5), [lines]);
   const packs = useMemo(() => topPacks(lines, 5), [lines]);
+
+  if (redirectTo) {
+    return <Redirect to={redirectTo} />;
+  }
 
   return (
     <div className="flex flex-col gap-6 py-4 px-3 -mx-6 sm:py-6 sm:px-6 sm:mx-0">

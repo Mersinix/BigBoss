@@ -12,12 +12,13 @@ import { DateRangeFilter } from "@/components/analytics/date-range-filter";
 import { resolveDateRange, type DateRangePreset } from "@/lib/marketplace-analytics";
 import {
   Coffee, Plus, Search, MapPin, Phone, Mail, Loader2, X, Clock, CheckCircle, XCircle,
-  User as UserIcon, Filter, ClipboardList, AlertCircle,
+  User as UserIcon, Filter, ClipboardList, AlertCircle, Lock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useSupplierTabSettings } from "@/hooks/use-supplier-tab-settings";
 import type { SupplierCafeRegistration } from "@shared/schema";
 
 const registrationStatusConfig: Record<string, { label: string; className: string; icon: any }> = {
@@ -97,7 +98,13 @@ function matchesSearch(r: SupplierCafeRegistration, query: string): boolean {
 }
 
 export default function CafesPage() {
-  const { data: registrations = [], isLoading } = useSupplierCafeRegistrations();
+  // Admin → System Management → Supplier → Onglet (task: "Admin Supplier Settings
+  // — Add Tab Visibility Management"). Also checked directly through the normal
+  // URL, same "clean UX, backend is the real enforcement" principle as the other
+  // Supplier feature-gate pages. Reactive — kept in sync by use-realtime.ts's
+  // supplier_tab_settings_updated handler.
+  const { settings: supplierTabSettings } = useSupplierTabSettings();
+  const { data: registrations = [], isLoading } = useSupplierCafeRegistrations(supplierTabSettings.cafesTabVisible);
   const isMobile = useIsMobile();
   const [kpiModalOpen, setKpiModalOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -164,6 +171,19 @@ export default function CafesPage() {
       </Card>
     </>
   );
+
+  if (!supplierTabSettings.cafesTabVisible) {
+    return (
+      <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
+        <DashboardHero title="Cafes" subtitle="Inscrivez de nouveaux cafés et suivez le statut de vos demandes d'inscription." />
+        <div className="rounded-2xl border border-border/50 p-16 text-center text-muted-foreground">
+          <Lock className="w-10 h-10 mx-auto mb-3 opacity-20" />
+          <p className="font-medium">Cette fonctionnalité est temporairement indisponible.</p>
+          <p className="text-sm mt-1">Contactez votre administrateur pour plus d'informations.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">

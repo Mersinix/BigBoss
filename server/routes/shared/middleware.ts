@@ -70,3 +70,32 @@ export const requireDriver = async (req: any, res: any, next: any) => {
   (req as any).driver = user;
   next();
 };
+
+// Admin → System Management → Supplier → Onglet's "Onglet Cafés" toggle (task:
+// "Admin Supplier Settings — Add Tab Visibility Management"). Shared between
+// supplier.routes.ts (GET /api/supplier/cafes) and cafe-registrations.routes.ts
+// (GET/POST /api/supplier/cafe-registrations — the route that actually backs the
+// Supplier "Cafés" page today). Only ever chained after requireApprovedSupplier,
+// so it only ever applies to a confirmed SUPPLIER-role request.
+export const requireCafesTabEnabled = async (req: any, res: any, next: any) => {
+  const settings = await storage.getSupplierTabSettings();
+  if (!settings.cafesTabVisible) {
+    return res.status(403).json({ message: "Cette fonctionnalité est temporairement indisponible." });
+  }
+  next();
+};
+
+// Admin → System Management → Supplier → Store's "Onglet Store" toggle (task:
+// "Admin Supplier Settings — Add Tab Visibility Management" — Store). Gates the
+// whole /supplier/store page/API. Only ever chained after requireApprovedSupplier.
+// Individual-control/field enforcement (Boutique ouverte, Visible sur la
+// marketplace, Images/Vidéo, max cover images, Musique d'ambiance, URL de la
+// vidéo) is handled inline inside PUT /api/supplier/store, since each only
+// blocks its own field rather than the whole endpoint.
+export const requireStoreTabEnabled = async (req: any, res: any, next: any) => {
+  const settings = await storage.getSupplierStoreSettings();
+  if (!settings.storeTabVisible) {
+    return res.status(403).json({ message: "Cette fonctionnalité est temporairement indisponible." });
+  }
+  next();
+};

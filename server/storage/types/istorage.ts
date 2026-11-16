@@ -48,7 +48,9 @@ import type {
   SubCategoryWithDetails, SubOrder, SupplierCafeRegistration, SupplierCategoryMapping, SupplierListingWithProduct,
   SupplierProductListing, SupplierProductReview, SupplierProductVariant, SupplierStore,
   SupplierVariantWithLabels, User, orders,
+  SupplierStoreSettings,
 } from "@shared/schema";
+import type { SupplierTabSettingsShape } from "../domains/platform-settings.storage";
 import type { RedactedDelivery } from "../../storage";
 
 export interface IStorage {
@@ -290,6 +292,10 @@ export interface IStorage {
   setPromotionTypeEnabled(type: import("@shared/schema").PromotionType, enabled: boolean): Promise<import("@shared/schema").PromotionTypeSettingsMap>;
   getDiscountCodeSettings(): Promise<{ tabVisible: boolean; newCodeButtonVisible: boolean }>;
   updateDiscountCodeSettings(updates: Partial<{ tabVisible: boolean; newCodeButtonVisible: boolean }>): Promise<{ tabVisible: boolean; newCodeButtonVisible: boolean }>;
+  getSupplierTabSettings(): Promise<SupplierTabSettingsShape & { performanceTabVisible: boolean }>;
+  updateSupplierTabSettings(updates: Partial<SupplierTabSettingsShape>): Promise<SupplierTabSettingsShape & { performanceTabVisible: boolean }>;
+  getSupplierStoreSettings(): Promise<Omit<SupplierStoreSettings, "id" | "updatedAt">>;
+  updateSupplierStoreSettings(updates: Partial<Omit<SupplierStoreSettings, "id" | "updatedAt">>): Promise<Omit<SupplierStoreSettings, "id" | "updatedAt">>;
 
   // Google/Facebook sign-in — admin on/off toggle only (never credentials, see
   // server/oauth.ts for the env-var-driven "configured" check).

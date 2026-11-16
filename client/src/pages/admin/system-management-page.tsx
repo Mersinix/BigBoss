@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Ban, Moon, Sun, SunMoon, Car, Store, ShieldCheck, LogIn, AlertTriangle, X, RotateCcw, Save, Palette, Tag, Percent, DollarSign, BarChart3, Gift, Star, Ticket } from "lucide-react";
+import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Ban, Moon, Sun, SunMoon, Car, Store, ShieldCheck, LogIn, AlertTriangle, X, RotateCcw, Save, Palette, Tag, Percent, DollarSign, BarChart3, Gift, Star, Ticket, Coffee, Video, Music, LayoutDashboard, TrendingUp } from "lucide-react";
 import { useDeliveryPricingSettings, useUpdateDeliveryPricingSettings, VEHICLE_TYPE_LABELS, type DeliveryVehicleType, type DeliveryPricingSettings, useFinancialLedgerEntries, type FinancialLedgerFilters, useAdminSettlements, useApproveSettlement, useVoidSettlement, type SettlementFilters, useSettlementPayments, useCreatePayment, useConfirmPayment, useFailPayment, useReversePayment, type PaymentMethod, useAdminCodReconciliations, useReconcileCod, useAdminRefunds, useRequestRefund, useConfirmRefund, useFailRefund, useCancelRefund, useAdminAdjustments, useCreateAdjustment, useAdminFinancialSummary } from "@/hooks/use-delivery-ecosystem";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -62,8 +62,20 @@ const SYSTEM_MANAGEMENT_SECTIONS: { id: SystemManagementSection; label: string; 
 // Internal switcher inside the "Supplier" top-level tab (task's Part 2): Promotion
 // (the existing, unmodified settings — see PromotionSettingsSection) and Codes
 // promotionnels (new — see DiscountCodeSettingsSection).
-type SupplierSubSection = "promotion" | "discount-codes";
+// "Onglet" (task: "Admin Supplier Settings — Add Tab Visibility Management") added
+// as a third sub-section — controls visibility of the existing Returns and Cafés
+// Supplier nav tabs (see SupplierTabVisibilitySection below), independent of the
+// other two sub-sections.
+// "Store" (task: "Admin Supplier Settings — Add Tab Visibility Management" — Store)
+// added as a fourth sub-section — controls global visibility of the existing
+// Supplier Store page/controls/fields (see StoreSettingsSection below). Order
+// follows the task's own "Expected switcher: Onglet | Store | Promotion | Codes
+// promotionnels" — a pure reordering of the switcher's display order, the
+// Promotion/Codes promotionnels settings and components themselves are untouched.
+type SupplierSubSection = "tabs" | "store" | "promotion" | "discount-codes";
 const SUPPLIER_SUB_SECTIONS: { id: SupplierSubSection; label: string; icon: any }[] = [
+  { id: "tabs", label: "Onglet", icon: Eye },
+  { id: "store", label: "Store", icon: Store },
   { id: "promotion", label: "Promotion", icon: Tag },
   { id: "discount-codes", label: "Codes promotionnels", icon: Ticket },
 ];
@@ -447,6 +459,433 @@ function DiscountCodeSettingsSection() {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+// ── Supplier Tab Visibility (Returns / Cafés / Performance) ───────────────────
+// New sub-tab under "Supplier" (task: "Admin Supplier Settings — Add Tab
+// Visibility Management"). Same single auto-seeded settings row + Switch/Badge
+// pattern as DiscountCodeSettingsSection above, against the new
+// /api/supplier-tab-settings + PATCH /api/admin/supplier-tab-settings endpoints.
+// Two independent settings — see server/routes/shared/middleware.ts's
+// requireCafesTabEnabled and the SUPPLIER-scoped checks inside GET/PATCH
+// /api/returns for backend enforcement; this UI never deletes/modifies existing
+// returns or café data.
+// dashboardTabVisible/analyticsTabVisible/earningsTabVisible (task: "Admin
+// Supplier Settings — Supplier Performance Tab Visibility Management") are
+// three further independent settings on this exact same row;
+// performanceTabVisible is NEVER sent in a PATCH — it's always derived
+// server-side from those three (see platform-settings.storage.ts) and shown
+// here purely as a read-only status, never its own Switch.
+type SupplierTabSettingsAdmin = {
+  returnsTabVisible: boolean;
+  cafesTabVisible: boolean;
+  dashboardTabVisible: boolean;
+  analyticsTabVisible: boolean;
+  earningsTabVisible: boolean;
+  performanceTabVisible: boolean;
+};
+
+function SupplierTabVisibilitySection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: settings } = useQuery<SupplierTabSettingsAdmin>({ queryKey: ["/api/supplier-tab-settings"] });
+  const [local, setLocal] = useState<SupplierTabSettingsAdmin | null>(null);
+
+  useEffect(() => {
+    if (settings) setLocal(settings);
+  }, [settings]);
+
+  const value = local ?? settings;
+
+  const saveMutation = useMutation({
+    mutationFn: (updates: Partial<SupplierTabSettingsAdmin>) =>
+      apiRequest("PATCH", "/api/admin/supplier-tab-settings", updates),
+    onSuccess: async (response) => {
+      const saved = await response.json();
+      setLocal(saved);
+      queryClient.setQueryData(["/api/supplier-tab-settings"], saved);
+      toast({ title: "Paramètres des onglets mis à jour" });
+    },
+    onError: (error: any) => toast({ variant: "destructive", title: "Échec de la mise à jour", description: error?.message }),
+  });
+
+  const statusBadgeClass = (enabled: boolean) => enabled
+    ? "bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-400 dark:border-green-500/30"
+    : "bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-500/15 dark:text-gray-400 dark:border-gray-500/30";
+
+  const update = (field: keyof SupplierTabSettingsAdmin, next: boolean) => {
+    if (!value) return;
+    setLocal({ ...value, [field]: next });
+    saveMutation.mutate({ [field]: next });
+  };
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-3">
+            <div className="bg-indigo-500/10 rounded-xl p-3"><Eye className="w-5 h-5 text-indigo-600" /></div>
+            <div>
+              <CardTitle className="text-base">Visibilité des onglets</CardTitle>
+              <CardDescription className="pt-1">Contrôlez l'accès aux onglets Retours et Cafés dans l'espace fournisseur.</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!value ? <Skeleton className="h-32 w-full" /> : (
+            <>
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="bg-muted rounded-lg p-2 shrink-0"><RotateCcw className="w-4 h-4 text-foreground/70" /></div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Onglet Retours</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Contrôlez l'accès à l'onglet Retours dans l'espace fournisseur.</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <Badge variant="outline" className={`text-xs ${statusBadgeClass(value.returnsTabVisible)}`} data-testid="badge-supplier-tab-returns-status">
+                    {value.returnsTabVisible ? "Visible" : "Masqué"}
+                  </Badge>
+                  <Switch
+                    checked={value.returnsTabVisible}
+                    onCheckedChange={(checked) => update("returnsTabVisible", checked)}
+                    disabled={saveMutation.isPending}
+                    aria-label="Onglet Retours"
+                    data-testid="switch-supplier-tab-returns-visible"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="bg-muted rounded-lg p-2 shrink-0"><Coffee className="w-4 h-4 text-foreground/70" /></div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Onglet Cafés</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Contrôlez l'accès à l'onglet Cafés dans l'espace fournisseur.</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <Badge variant="outline" className={`text-xs ${statusBadgeClass(value.cafesTabVisible)}`} data-testid="badge-supplier-tab-cafes-status">
+                    {value.cafesTabVisible ? "Visible" : "Masqué"}
+                  </Badge>
+                  <Switch
+                    checked={value.cafesTabVisible}
+                    onCheckedChange={(checked) => update("cafesTabVisible", checked)}
+                    disabled={saveMutation.isPending}
+                    aria-label="Onglet Cafés"
+                    data-testid="switch-supplier-tab-cafes-visible"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">Masquer l'un ou l'autre ne supprime, ne modifie ni ne désactive les retours ou les cafés déjà existants ; ces réglages sont indépendants l'un de l'autre.</p>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ── Visibilité de l'onglet Performance ── task: "Admin Supplier Settings —
+          Supplier Performance Tab Visibility Management". The parent "Onglet
+          Performance" row is READ-ONLY (Badge only, no Switch) — its value is
+          always derived server-side from the three child settings below, so
+          there is no independently editable parent control to conflict with them. */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-3">
+            <div className="bg-indigo-500/10 rounded-xl p-3"><LayoutDashboard className="w-5 h-5 text-indigo-600" /></div>
+            <div>
+              <CardTitle className="text-base">Visibilité de l'onglet Performance</CardTitle>
+              <CardDescription className="pt-1">Contrôlez l'accès à l'espace Performance et à ses différentes sections dans l'espace fournisseur.</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!value ? <Skeleton className="h-48 w-full" /> : (
+            <>
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3 bg-muted/30" data-testid="row-supplier-tab-performance-parent">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="bg-muted rounded-lg p-2 shrink-0"><Eye className="w-4 h-4 text-foreground/70" /></div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Onglet Performance</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Contrôlez la visibilité de l'espace Performance dans l'espace fournisseur.</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <Badge variant="outline" className={`text-xs ${statusBadgeClass(value.performanceTabVisible)}`} data-testid="badge-supplier-tab-performance-status">
+                    {value.performanceTabVisible ? "Visible" : "Masqué"}
+                  </Badge>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground -mt-1">Visible dès qu'au moins un des trois onglets ci-dessous est activé ; masqué uniquement si les trois sont désactivés. Ce statut est automatique et ne se configure pas directement.</p>
+
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="bg-muted rounded-lg p-2 shrink-0"><LayoutDashboard className="w-4 h-4 text-foreground/70" /></div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Onglet Dashboard</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Autorisez les fournisseurs à accéder au tableau de bord de leur espace Performance.</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <Badge variant="outline" className={`text-xs ${statusBadgeClass(value.dashboardTabVisible)}`} data-testid="badge-supplier-tab-dashboard-status">
+                    {value.dashboardTabVisible ? "Visible" : "Masqué"}
+                  </Badge>
+                  <Switch
+                    checked={value.dashboardTabVisible}
+                    onCheckedChange={(checked) => update("dashboardTabVisible", checked)}
+                    disabled={saveMutation.isPending}
+                    aria-label="Onglet Dashboard"
+                    data-testid="switch-supplier-tab-dashboard-visible"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="bg-muted rounded-lg p-2 shrink-0"><BarChart3 className="w-4 h-4 text-foreground/70" /></div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Onglet Analytics</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Autorisez les fournisseurs à accéder aux statistiques et analyses de leur espace Performance.</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <Badge variant="outline" className={`text-xs ${statusBadgeClass(value.analyticsTabVisible)}`} data-testid="badge-supplier-tab-analytics-status">
+                    {value.analyticsTabVisible ? "Visible" : "Masqué"}
+                  </Badge>
+                  <Switch
+                    checked={value.analyticsTabVisible}
+                    onCheckedChange={(checked) => update("analyticsTabVisible", checked)}
+                    disabled={saveMutation.isPending}
+                    aria-label="Onglet Analytics"
+                    data-testid="switch-supplier-tab-analytics-visible"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="bg-muted rounded-lg p-2 shrink-0"><TrendingUp className="w-4 h-4 text-foreground/70" /></div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Onglet Earnings</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Autorisez les fournisseurs à accéder aux revenus de leur espace Performance.</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <Badge variant="outline" className={`text-xs ${statusBadgeClass(value.earningsTabVisible)}`} data-testid="badge-supplier-tab-earnings-status">
+                    {value.earningsTabVisible ? "Visible" : "Masqué"}
+                  </Badge>
+                  <Switch
+                    checked={value.earningsTabVisible}
+                    onCheckedChange={(checked) => update("earningsTabVisible", checked)}
+                    disabled={saveMutation.isPending}
+                    aria-label="Onglet Earnings"
+                    data-testid="switch-supplier-tab-earnings-visible"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">Ces trois réglages sont indépendants : masquer l'un ne modifie, ne supprime ni ne réinitialise jamais les données, statistiques, revenus ou calculs des deux autres.</p>
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
+// ── Store (Supplier) global configuration ──────────────────────────────────────
+// New sub-tab under "Supplier" (task: "Admin Supplier Settings — Add Tab
+// Visibility Management" — Store). Global configuration applied to EVERY
+// supplier's existing Store page (/supplier/store) — never stores or touches any
+// individual supplier's own store data (name/description/media/hours stay in
+// supplierStores, entirely supplier-owned). Against the new
+// /api/supplier-store-settings + PATCH /api/admin/supplier-store-settings
+// endpoints; see server/routes/shared/middleware.ts's requireStoreTabEnabled and
+// the per-field checks inside PUT /api/supplier/store for backend enforcement.
+type SupplierStoreSettingsAdmin = {
+  storeTabVisible: boolean;
+  openControlVisible: boolean;
+  marketplaceVisibilityControlVisible: boolean;
+  imagesTabVisible: boolean;
+  videoTabVisible: boolean;
+  maxCoverImages: number;
+  musicVisible: boolean;
+  videoUrlFieldVisible: boolean;
+  hoursTabVisible: boolean;
+};
+
+function StoreSettingsSection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: settings } = useQuery<SupplierStoreSettingsAdmin>({ queryKey: ["/api/supplier-store-settings"] });
+  const [local, setLocal] = useState<SupplierStoreSettingsAdmin | null>(null);
+  const [maxInput, setMaxInput] = useState("5");
+
+  useEffect(() => {
+    if (settings) {
+      setLocal(settings);
+      setMaxInput(String(settings.maxCoverImages));
+    }
+  }, [settings]);
+
+  const value = local ?? settings;
+
+  const saveMutation = useMutation({
+    mutationFn: (updates: Partial<SupplierStoreSettingsAdmin>) =>
+      apiRequest("PATCH", "/api/admin/supplier-store-settings", updates),
+    onSuccess: async (response) => {
+      const saved = await response.json();
+      setLocal(saved);
+      setMaxInput(String(saved.maxCoverImages));
+      queryClient.setQueryData(["/api/supplier-store-settings"], saved);
+      toast({ title: "Paramètres de la boutique mis à jour" });
+    },
+    onError: (error: any) => {
+      toast({ variant: "destructive", title: "Échec de la mise à jour", description: error?.message });
+      if (local) setMaxInput(String(local.maxCoverImages));
+    },
+  });
+
+  const statusBadgeClass = (enabled: boolean) => enabled
+    ? "bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-400 dark:border-green-500/30"
+    : "bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-500/15 dark:text-gray-400 dark:border-gray-500/30";
+
+  const update = (field: keyof SupplierStoreSettingsAdmin, next: boolean) => {
+    if (!value) return;
+    setLocal({ ...value, [field]: next });
+    saveMutation.mutate({ [field]: next });
+  };
+
+  const updateMax = (raw: string) => {
+    setMaxInput(raw);
+    const next = Number(raw);
+    if (raw.trim() !== "" && Number.isInteger(next) && next >= 1 && next <= 5) {
+      saveMutation.mutate({ maxCoverImages: next });
+    }
+  };
+
+  const ToggleRow = ({ icon: Icon, title, description, field }: { icon: any; title: string; description: string; field: keyof SupplierStoreSettingsAdmin }) => {
+    if (!value) return null;
+    const enabled = value[field] as boolean;
+    return (
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3" data-testid={`row-store-${field}`}>
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="bg-muted rounded-lg p-2 shrink-0"><Icon className="w-4 h-4 text-foreground/70" /></div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium">{title}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <Badge variant="outline" className={`text-xs ${statusBadgeClass(enabled)}`} data-testid={`badge-store-${field}-status`}>
+            {enabled ? "Visible" : "Masqué"}
+          </Badge>
+          <Switch
+            checked={enabled}
+            onCheckedChange={(checked) => update(field, checked)}
+            disabled={saveMutation.isPending}
+            aria-label={title}
+            data-testid={`switch-store-${field}`}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <>
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-3">
+            <div className="bg-emerald-500/10 rounded-xl p-3"><Store className="w-5 h-5 text-emerald-600" /></div>
+            <div>
+              <CardTitle className="text-base">Boutique fournisseur</CardTitle>
+              <CardDescription className="pt-1">Contrôlez l'accès à la gestion de la boutique dans l'espace fournisseur.</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!value ? <Skeleton className="h-16 w-full" /> : (
+            <ToggleRow icon={Store} title="Onglet Store" description="Contrôlez l'accès à la gestion de la boutique dans l'espace fournisseur." field="storeTabVisible" />
+          )}
+          <p className="text-xs text-muted-foreground">Masquer cet onglet ne supprime ni ne modifie les informations, médias ou horaires déjà enregistrés par les fournisseurs.</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-3">
+            <div className="bg-emerald-500/10 rounded-xl p-3"><LayoutTemplate className="w-5 h-5 text-emerald-600" /></div>
+            <div>
+              <CardTitle className="text-base">Détails de la boutique</CardTitle>
+              <CardDescription className="pt-1">Contrôlez les contrôles disponibles sur la page Détails de la boutique du fournisseur.</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!value ? <Skeleton className="h-32 w-full" /> : (
+            <>
+              <ToggleRow icon={Store} title="Afficher le contrôle « Boutique ouverte »" description="Autorisez les fournisseurs à gérer l'ouverture et la fermeture de leur boutique." field="openControlVisible" />
+              <ToggleRow icon={Eye} title="Afficher le contrôle « Visible sur la marketplace »" description="Autorisez les fournisseurs à gérer la visibilité de leur boutique sur la marketplace." field="marketplaceVisibilityControlVisible" />
+            </>
+          )}
+          <p className="text-xs text-muted-foreground">Masquer l'un ou l'autre ne réinitialise jamais sa valeur enregistrée ; Nom de la boutique, Description et URL du logo restent toujours modifiables.</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-3">
+            <div className="bg-emerald-500/10 rounded-xl p-3"><Image className="w-5 h-5 text-emerald-600" /></div>
+            <div>
+              <CardTitle className="text-base">Médias d'arrière-plan</CardTitle>
+              <CardDescription className="pt-1">Contrôlez les modes et fonctionnalités disponibles pour les médias d'arrière-plan de la boutique.</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!value ? <Skeleton className="h-64 w-full" /> : (
+            <>
+              <ToggleRow icon={Image} title="Onglet Images" description="Autorisez les fournisseurs à configurer des images de couverture pour leur boutique." field="imagesTabVisible" />
+              <ToggleRow icon={Video} title="Onglet Vidéo" description="Autorisez les fournisseurs à configurer une vidéo d'arrière-plan pour leur boutique." field="videoTabVisible" />
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+                <div>
+                  <p className="text-sm font-medium">Nombre maximum d'images de couverture</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Définissez le nombre maximal d'images de couverture qu'un fournisseur peut ajouter à sa boutique (1 à 5).</p>
+                </div>
+                <Input
+                  type="number" min={1} max={5} className="w-20"
+                  value={maxInput}
+                  onChange={(e) => updateMax(e.target.value)}
+                  disabled={saveMutation.isPending}
+                  aria-label="Nombre maximum d'images de couverture"
+                  data-testid="input-store-max-cover-images"
+                />
+              </div>
+              <ToggleRow icon={Music} title="Musique d'ambiance" description="Autorisez les fournisseurs à configurer une musique d'ambiance pour leur boutique." field="musicVisible" />
+              <ToggleRow icon={Video} title="URL de la vidéo" description="Autorisez les fournisseurs à configurer l'URL de leur vidéo d'arrière-plan." field="videoUrlFieldVisible" />
+            </>
+          )}
+          <p className="text-xs text-muted-foreground">Réduire le nombre maximum ne supprime jamais les images déjà enregistrées par un fournisseur ; seul l'ajout de nouvelles images au-delà de la limite est bloqué.</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-3">
+            <div className="bg-emerald-500/10 rounded-xl p-3"><Clock className="w-5 h-5 text-emerald-600" /></div>
+            <div>
+              <CardTitle className="text-base">Horaires d'ouverture</CardTitle>
+              <CardDescription className="pt-1">Contrôlez l'accès à la configuration des horaires d'ouverture dans l'espace fournisseur.</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {!value ? <Skeleton className="h-16 w-full" /> : (
+            <ToggleRow icon={Clock} title="Onglet Horaires d'ouverture" description="Contrôlez l'accès à la configuration des horaires d'ouverture dans l'espace fournisseur." field="hoursTabVisible" />
+          )}
+          <p className="text-xs text-muted-foreground">Masquer cet onglet ne réinitialise jamais les horaires, créneaux ou jours de fermeture déjà enregistrés.</p>
+        </CardContent>
+      </Card>
+    </>
   );
 }
 
@@ -3168,6 +3607,14 @@ export default function SystemManagementPage() {
 
           {supplierSubSection === "discount-codes" && (
             <DiscountCodeSettingsSection />
+          )}
+
+          {supplierSubSection === "tabs" && (
+            <SupplierTabVisibilitySection />
+          )}
+
+          {supplierSubSection === "store" && (
+            <StoreSettingsSection />
           )}
         </>
       )}

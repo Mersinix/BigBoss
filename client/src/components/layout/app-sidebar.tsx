@@ -5,6 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useMessagingSettings } from "@/hooks/use-messaging-settings";
 import { usePromotionSettings } from "@/hooks/use-promotion-settings";
 import { useDiscountCodeSettings } from "@/hooks/use-discount-code-settings";
+import { useSupplierTabSettings, firstVisiblePerformanceUrl } from "@/hooks/use-supplier-tab-settings";
+import { useSupplierStoreSettings } from "@/hooks/use-supplier-store-settings";
 import {
   Store, Package, ShoppingCart, LayoutDashboard,
   ClipboardList, Truck, Users, LogOut, Coffee,
@@ -90,6 +92,8 @@ export function AppSidebar() {
   const { settings: messagingSettings } = useMessagingSettings();
   const { settings: promotionSettings } = usePromotionSettings();
   const { settings: discountCodeSettings } = useDiscountCodeSettings();
+  const { settings: supplierTabSettings } = useSupplierTabSettings();
+  const { settings: supplierStoreSettings } = useSupplierStoreSettings();
 
   const hasMessages = user && MESSAGES_URLS.has(
     user.role === "ADMIN" || user.role === "SUPER_ADMIN" ? "/admin/messages"
@@ -174,9 +178,25 @@ export function AppSidebar() {
         {
           label: "MAIN",
           items: [
-            { title: "Performance", url: "/", icon: Activity, activeUrls: ["/", "/supplier/analytics", "/supplier/earnings"] },
-            { title: "Cafes", url: "/supplier/cafes", icon: Coffee },
-            { title: "Store", url: "/supplier/store", icon: Store },
+            // Admin → System Management → Supplier → Onglet's "Visibilité de l'onglet
+            // Performance" group (task: "Admin Supplier Settings — Supplier
+            // Performance Tab Visibility Management") — the whole nav entry is hidden
+            // when all three of Dashboard/Analytics/Earnings are disabled
+            // (performanceTabVisible is derived server-side from exactly that), and
+            // its target URL always points at the first currently-enabled tab so
+            // clicking "Performance" never lands on a tab that immediately redirects
+            // away. Kept live by use-realtime.ts's supplier_tab_settings_updated handler.
+            ...(supplierTabSettings.performanceTabVisible ? [{ title: "Performance", url: firstVisiblePerformanceUrl(supplierTabSettings), icon: Activity, activeUrls: ["/", "/supplier/analytics", "/supplier/earnings"] }] : []),
+            // Admin → System Management → Supplier → Onglet's "Onglet Cafés" toggle
+            // (task: "Admin Supplier Settings — Add Tab Visibility Management") —
+            // same reactive hide pattern as Promotions/Discount Codes above, kept in
+            // sync by use-realtime.ts's supplier_tab_settings_updated handler.
+            ...(supplierTabSettings.cafesTabVisible ? [{ title: "Cafes", url: "/supplier/cafes", icon: Coffee }] : []),
+            // Admin → System Management → Supplier → Store's "Onglet Store" toggle
+            // (task: "Admin Supplier Settings — Add Tab Visibility Management" —
+            // Store) — same reactive hide pattern as Cafes/Returns above, kept in
+            // sync by use-realtime.ts's supplier_store_settings_updated handler.
+            ...(supplierStoreSettings.storeTabVisible ? [{ title: "Store", url: "/supplier/store", icon: Store }] : []),
             { title: "Categories", url: "/supplier/categories", icon: Folder },
             { title: "Products", url: "/supplier/products", icon: Package },
             { title: "Inventory", url: "/supplier/inventory", icon: Warehouse },
@@ -187,7 +207,8 @@ export function AppSidebar() {
           items: [
             { title: "Orders", url: "/orders", icon: ClipboardList },
             { title: "Order Delivery", url: "/supplier/delivery-status", icon: MapPin },
-            { title: "Returns", url: "/supplier/returns", icon: RotateCcw },
+            // Admin → System Management → Supplier → Onglet's "Onglet Retours" toggle.
+            ...(supplierTabSettings.returnsTabVisible ? [{ title: "Returns", url: "/supplier/returns", icon: RotateCcw }] : []),
             { title: "Payouts", url: "/supplier/payouts", icon: Wallet },
             { title: "Invoices", url: "/supplier/invoices", icon: FileText },
           ],

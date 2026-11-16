@@ -3344,6 +3344,60 @@ export const discountCodeSettings = pgTable("discount_code_settings", {
 });
 export type DiscountCodeSettings = typeof discountCodeSettings.$inferSelect;
 
+// Admin-controlled visibility of two existing Supplier nav tabs — Returns
+// (/supplier/returns) and Cafés (/supplier/cafes) — task: "Admin Supplier
+// Settings — Add Tab Visibility Management". Same single-row pattern as
+// promotionSettings/discountCodeSettings above, surfaced under Admin → System
+// Management → Supplier → Onglet. Two independent booleans, both defaulting to
+// true (today's behavior) — this never touches the returns or cafés data itself,
+// only whether a SUPPLIER can reach the tab/page/API for each.
+export const supplierTabSettings = pgTable("supplier_tab_settings", {
+  id: serial("id").primaryKey(),
+  returnsTabVisible: boolean("returns_tab_visible").notNull().default(true),
+  cafesTabVisible: boolean("cafes_tab_visible").notNull().default(true),
+  // Admin → System Management → Supplier → Onglet's "Visibilité de l'onglet
+  // Performance" group (task: "Admin Supplier Settings — Supplier Performance Tab
+  // Visibility Management"). Three independent settings for the Supplier's
+  // existing consolidated "Performance" nav entry (Dashboard "/", Analytics
+  // "/supplier/analytics", Earnings "/supplier/earnings" — see
+  // client/src/components/supplier/supplier-performance-switcher.tsx). The
+  // Performance PARENT tab's own visibility is always DERIVED from these three
+  // (visible iff at least one is true) — deliberately never its own stored
+  // column, so there is no way for it to drift out of sync with its children
+  // (task's own explicit "do not introduce a separate independently editable
+  // parent toggle").
+  dashboardTabVisible: boolean("dashboard_tab_visible").notNull().default(true),
+  analyticsTabVisible: boolean("analytics_tab_visible").notNull().default(true),
+  earningsTabVisible: boolean("earnings_tab_visible").notNull().default(true),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export type SupplierTabSettings = typeof supplierTabSettings.$inferSelect;
+
+// Admin-controlled global visibility of the existing Supplier Store page
+// (/supplier/store) and of individual controls/fields within it — task: "Admin
+// Supplier Settings — Add Tab Visibility Management" (Store). Same single-row
+// pattern as supplierTabSettings above, surfaced under Admin → System
+// Management → Supplier → Store. This is GLOBAL configuration applied to every
+// supplier — it never stores or touches any individual supplier's own
+// supplierStores row (name/description/isOpen/visibility/media/hours remain
+// entirely supplier-owned data); it only controls whether a SUPPLIER can see/
+// reach each tab, control or field. maxCoverImages defaults to 5 to preserve
+// today's hardcoded limit (client/src/pages/supplier/store-page.tsx).
+export const supplierStoreSettings = pgTable("supplier_store_settings", {
+  id: serial("id").primaryKey(),
+  storeTabVisible: boolean("store_tab_visible").notNull().default(true),
+  openControlVisible: boolean("open_control_visible").notNull().default(true),
+  marketplaceVisibilityControlVisible: boolean("marketplace_visibility_control_visible").notNull().default(true),
+  imagesTabVisible: boolean("images_tab_visible").notNull().default(true),
+  videoTabVisible: boolean("video_tab_visible").notNull().default(true),
+  maxCoverImages: integer("max_cover_images").notNull().default(5),
+  musicVisible: boolean("music_visible").notNull().default(true),
+  videoUrlFieldVisible: boolean("video_url_field_visible").notNull().default(true),
+  hoursTabVisible: boolean("hours_tab_visible").notNull().default(true),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export type SupplierStoreSettings = typeof supplierStoreSettings.$inferSelect;
+
 // ── Discount Codes ─────────────────────────────────────────────────────────────
 // A completely separate mechanism from Promotions above: Promotions apply
 // automatically based on eligibility rules, Discount Codes are entered by the

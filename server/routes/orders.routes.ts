@@ -667,6 +667,16 @@ export function registerOrdersRoutes(app: Express): void {
         const user = await storage.getUser(userId);
         if (!user) return res.status(401).json({ message: 'Unauthorized' });
         const isAdmin = user.role === 'ADMIN' || user.role === 'SUPER_ADMIN';
+        // Admin → System Management → Supplier → Onglet's "Onglet Retours" toggle
+        // (task: "Admin Supplier Settings — Add Tab Visibility Management"). Scoped
+        // to the SUPPLIER role only — a Café owner's own view of their requests, and
+        // Admin's full view, are never affected by this setting.
+        if (user.role === 'SUPPLIER') {
+          const tabSettings = await storage.getSupplierTabSettings();
+          if (!tabSettings.returnsTabVisible) {
+            return res.status(403).json({ message: "Cette fonctionnalité est temporairement indisponible." });
+          }
+        }
         const filters = isAdmin ? undefined
           : user.role === 'CAFE_OWNER' ? { cafeId: userId }
           : user.role === 'SUPPLIER'   ? { supplierId: userId }
@@ -704,6 +714,14 @@ export function registerOrdersRoutes(app: Express): void {
         const user = await storage.getUser(req.session.userId!);
         if (!user || !(['SUPPLIER','ADMIN','SUPER_ADMIN'].includes(user.role))) {
           return res.status(403).json({ message: 'Forbidden' });
+        }
+        // Same "Onglet Retours" enforcement as GET /api/returns above — scoped to
+        // SUPPLIER only, Admin/SUPER_ADMIN's ability to process returns is unaffected.
+        if (user.role === 'SUPPLIER') {
+          const tabSettings = await storage.getSupplierTabSettings();
+          if (!tabSettings.returnsTabVisible) {
+            return res.status(403).json({ message: "Cette fonctionnalité est temporairement indisponible." });
+          }
         }
         const returnId = parseInt(req.params.id);
         if (isNaN(returnId)) return res.status(400).json({ message: 'Invalid return id' });

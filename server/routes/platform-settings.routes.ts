@@ -189,6 +189,62 @@ export function registerPlatformSettingsRoutes(app: Express): void {
       }
     });
 
+    // ── Supplier Tab Settings (Admin → System Management → Supplier → Onglet)
+    // ──────────────────────────────────────────────────────────────────────────
+    app.get("/api/supplier-tab-settings", async (_req, res) => {
+      try {
+        res.json(await storage.getSupplierTabSettings());
+      } catch { res.status(500).json({ message: "Failed to load supplier tab settings" }); }
+    });
+
+    app.patch("/api/admin/supplier-tab-settings", requireAdmin, async (req, res) => {
+      try {
+        const body = z.object({
+          returnsTabVisible: z.boolean().optional(),
+          cafesTabVisible: z.boolean().optional(),
+          dashboardTabVisible: z.boolean().optional(),
+          analyticsTabVisible: z.boolean().optional(),
+          earningsTabVisible: z.boolean().optional(),
+        }).strict().parse(req.body);
+        const settings = await storage.updateSupplierTabSettings(body);
+        broadcast("supplier_tab_settings_updated", settings);
+        res.json(settings);
+      } catch (err) {
+        if (err instanceof z.ZodError) return res.status(400).json({ message: "Invalid supplier tab settings" });
+        res.status(500).json({ message: "Failed to update supplier tab settings" });
+      }
+    });
+
+    // ── Supplier Store Settings (Admin → System Management → Supplier → Store)
+    // ──────────────────────────────────────────────────────────────────────────
+    app.get("/api/supplier-store-settings", async (_req, res) => {
+      try {
+        res.json(await storage.getSupplierStoreSettings());
+      } catch { res.status(500).json({ message: "Failed to load supplier store settings" }); }
+    });
+
+    app.patch("/api/admin/supplier-store-settings", requireAdmin, async (req, res) => {
+      try {
+        const body = z.object({
+          storeTabVisible: z.boolean().optional(),
+          openControlVisible: z.boolean().optional(),
+          marketplaceVisibilityControlVisible: z.boolean().optional(),
+          imagesTabVisible: z.boolean().optional(),
+          videoTabVisible: z.boolean().optional(),
+          maxCoverImages: z.number().int().min(1).max(5).optional(),
+          musicVisible: z.boolean().optional(),
+          videoUrlFieldVisible: z.boolean().optional(),
+          hoursTabVisible: z.boolean().optional(),
+        }).strict().parse(req.body);
+        const settings = await storage.updateSupplierStoreSettings(body);
+        broadcast("supplier_store_settings_updated", settings);
+        res.json(settings);
+      } catch (err) {
+        if (err instanceof z.ZodError) return res.status(400).json({ message: "Invalid supplier store settings" });
+        res.status(500).json({ message: "Failed to update supplier store settings" });
+      }
+    });
+
     app.get("/api/system-service-order", async (_req, res) => {
       try {
         res.json(await storage.getServiceOrder());

@@ -4,7 +4,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
+import { Link, Redirect } from "wouter";
+import { useSupplierTabSettings, performanceRedirectTarget } from "@/hooks/use-supplier-tab-settings";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import { DollarSign, ShoppingBag, Package, AlertCircle, Layers, Users, AlertTriangle } from "lucide-react";
 import type { OrderWithDetails } from "@shared/schema";
@@ -40,6 +41,14 @@ const STATUS_ORDER = ["PENDING", "CONFIRMED", "PREPARING", "READY", "IN_DELIVERY
 // the previous pass, this only restructures the presentation.
 export default function SupplierDashboard() {
   const fmt = useFormatCurrency();
+  // Admin → System Management → Supplier → Onglet's "Visibilité de l'onglet
+  // Performance" group (task: "Admin Supplier Settings — Supplier Performance
+  // Tab Visibility Management") — "/" is the shared home route for every role
+  // (see App.tsx's SmartDashboard), so it can't show a dead-end gate the way
+  // Returns/Cafés do; instead, if Dashboard is currently disabled for Suppliers,
+  // redirect to another enabled Performance tab or a safe Supplier page.
+  const { settings: performanceSettings } = useSupplierTabSettings();
+  const redirectTo = performanceRedirectTarget(performanceSettings, "/");
   const { data: orders = [], isLoading } = useQuery<OrderWithDetails[]>({ queryKey: ["/api/orders"] });
   const { data: listings = [] } = useQuery<any[]>({ queryKey: ["/api/supplier/listings"] });
   // Delivery System V2 Phase 5C.2 — own SUPPLIER-mode deliveries' driver settlement
@@ -90,6 +99,10 @@ export default function SupplierDashboard() {
     () => [...orders].sort((a, b) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime()).slice(0, 6),
     [orders],
   );
+
+  if (redirectTo) {
+    return <Redirect to={redirectTo} />;
+  }
 
   if (isLoading) {
     return <div className="flex flex-col gap-4 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">{[1, 2, 3].map((i) => <div key={i} className="h-24 rounded-xl bg-muted animate-pulse" />)}</div>;

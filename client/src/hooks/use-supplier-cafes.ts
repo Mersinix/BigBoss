@@ -29,7 +29,9 @@ const REGISTRATIONS_KEY = ["/api/supplier/cafe-registrations"];
 // Café registration requests submitted by the current Supplier via "Inscriptions" — not
 // real accounts yet, just requests awaiting Admin review (see shared/schema.ts
 // supplierCafeRegistrations). Replaces the old useCreateSupplierCafe instant-approval flow.
-export function useSupplierCafeRegistrations() {
+// `enabled` (default true) lets the Supplier Cafés page skip the fetch entirely while its
+// own tab is hidden by Admin → System Management → Supplier → Onglet.
+export function useSupplierCafeRegistrations(enabled = true) {
   return useQuery<SupplierCafeRegistration[]>({
     queryKey: REGISTRATIONS_KEY,
     queryFn: async () => {
@@ -37,6 +39,7 @@ export function useSupplierCafeRegistrations() {
       if (!res.ok) throw new Error("Failed to fetch registrations");
       return res.json();
     },
+    enabled,
   });
 }
 

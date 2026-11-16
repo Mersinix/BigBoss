@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Store, Image as ImageIcon, RefreshCw, Save, Heart, Package,
-  Video, Music, Clock, Plus, Trash2, ChevronLeft, Zap, Star, MapPin, Info,
+  Video, Music, Clock, Plus, Trash2, ChevronLeft, Zap, Star, MapPin, Info, Lock,
 } from "lucide-react";
 import { CoverSlideshow } from "@/pages/cafe/store-detail-page";
 import { AvailabilityModal } from "@/components/shared/availability-modal";
@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { SupplierStore, OpeningHoursMap, OpeningDayHours } from "@shared/schema";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
+import { useSupplierStoreSettings } from "@/hooks/use-supplier-store-settings";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -72,12 +73,25 @@ export default function StorePage() {
   const qc = useQueryClient();
   const isDark = useThemeStore((s) => s.isDark);
 
+  // Admin → System Management → Supplier → Store (task: "Admin Supplier Settings
+  // — Add Tab Visibility Management" — Store) — global, backend-authoritative
+  // visibility of this whole page plus its individual controls/fields. Kept live
+  // by use-realtime.ts's supplier_store_settings_updated handler.
+  const { settings: storeSettings } = useSupplierStoreSettings();
+
   const { data: store, isLoading } = useQuery<SupplierStore | null>({
     queryKey: ["/api/supplier/store"],
+    enabled: storeSettings.storeTabVisible,
   });
 
   const [infoOpen, setInfoOpen] = useState(false);
   const [section, setSection] = useState<Section>("details");
+
+  // If Horaires d'ouverture is hidden while this section is active, fall back to
+  // Détails rather than leaving the page on a tab that no longer has a trigger.
+  useEffect(() => {
+    if (section === "hours" && !storeSettings.hoursTabVisible) setSection("details");
+  }, [section, storeSettings.hoursTabVisible]);
 
   const [form, setForm] = useState({
     name: "",
@@ -123,6 +137,19 @@ export default function StorePage() {
     }
   }, [isLoading, store]);
 
+  // Keep the active media mode consistent with what Admin currently allows —
+  // only runs after the initial seed, and only forces a switch when the
+  // CURRENTLY selected mode becomes unavailable (never overrides a deliberate
+  // choice between two modes that both remain visible).
+  useEffect(() => {
+    if (!seededRef.current) return;
+    if (form.mediaType === "IMAGE" && !storeSettings.imagesTabVisible && storeSettings.videoTabVisible) {
+      setForm((f) => ({ ...f, mediaType: "VIDEO" }));
+    } else if (form.mediaType === "VIDEO" && !storeSettings.videoTabVisible && storeSettings.imagesTabVisible) {
+      setForm((f) => ({ ...f, mediaType: "IMAGE" }));
+    }
+  }, [storeSettings.imagesTabVisible, storeSettings.videoTabVisible, form.mediaType]);
+
   const invalidate = () => qc.invalidateQueries({ queryKey: ["/api/supplier/store"] });
 
   // Three independent saves — one per section, each PUTting only its own fields to the
@@ -132,10 +159,16 @@ export default function StorePage() {
   // two sections' already-saved values).
   const saveDetails = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("PUT", "/api/supplier/store", {
+      // Nom/Description/URL du logo always save. isOpen/visibility are only
+      // included when Admin currently allows that control — otherwise the
+      // backend would reject this whole PUT (403) just because the request
+      // touched a hidden field, blocking the fields that must stay editable.
+      const payload: Record<string, unknown> = {
         name: form.name, description: form.description, logoUrl: form.logoUrl,
-        isOpen: form.isOpen, visibility: form.visibility,
-      });
+      };
+      if (storeSettings.openControlVisible) payload.isOpen = form.isOpen;
+      if (storeSettings.marketplaceVisibilityControlVisible) payload.visibility = form.visibility;
+      const res = await apiRequest("PUT", "/api/supplier/store", payload);
       return res.json();
     },
     onSuccess: () => {
@@ -147,14 +180,27 @@ export default function StorePage() {
 
   const saveMedia = useMutation({
     mutationFn: async () => {
-      const cleanUrls = form.coverUrls.filter(Boolean);
-      const res = await apiRequest("PUT", "/api/supplier/store", {
-        mediaType: form.mediaType,
-        coverUrl: cleanUrls[0] ?? form.coverUrl,
-        coverUrls: cleanUrls,
-        videoUrl: form.videoUrl,
-        musicUrl: form.musicUrl,
-      });
+      // Only include fields Admin currently allows — see saveDetails above for why
+      // (a hidden field in the payload would 403 the whole PUT, not just itself).
+      const payload: Record<string, unknown> = {};
+      if (
+        (form.mediaType === "IMAGE" && storeSettings.imagesTabVisible) ||
+        (form.mediaType === "VIDEO" && storeSettings.videoTabVisible)
+      ) {
+        payload.mediaType = form.mediaType;
+      }
+      if (storeSettings.imagesTabVisible) {
+        const cleanUrls = form.coverUrls.filter(Boolean);
+        payload.coverUrl = cleanUrls[0] ?? form.coverUrl;
+        payload.coverUrls = cleanUrls;
+      }
+      if (storeSettings.videoTabVisible && storeSettings.videoUrlFieldVisible) {
+        payload.videoUrl = form.videoUrl;
+      }
+      if (storeSettings.musicVisible) {
+        payload.musicUrl = form.musicUrl;
+      }
+      const res = await apiRequest("PUT", "/api/supplier/store", payload);
       return res.json();
     },
     onSuccess: (updated: any) => {
@@ -197,7 +243,7 @@ export default function StorePage() {
   };
 
   const addCoverUrl = () => {
-    if (form.coverUrls.length >= 5) return;
+    if (form.coverUrls.length >= storeSettings.maxCoverImages) return;
     setForm((p) => ({ ...p, coverUrls: [...p.coverUrls, ""] }));
   };
 
@@ -212,6 +258,25 @@ export default function StorePage() {
       return { ...p, coverUrls: urls };
     });
   };
+
+  // Admin → System Management → Supplier → Store's "Onglet Store" toggle —
+  // blocks the page entirely (nav entry already hidden by app-sidebar.tsx; this
+  // also covers direct URL navigation), same gate pattern as Returns/Cafés.
+  if (!storeSettings.storeTabVisible) {
+    return (
+      <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
+        <DashboardHero
+          title={<span className="flex items-center gap-2"><Store className="w-6 h-6 text-primary" />Ma boutique</span>}
+          subtitle="Configurez l'apparence de votre boutique pour les Coffee Owners sur la marketplace."
+        />
+        <div className="rounded-2xl border border-border/50 p-16 text-center text-muted-foreground">
+          <Lock className="w-10 h-10 mx-auto mb-3 opacity-20" />
+          <p className="font-medium">Cette fonctionnalité est temporairement indisponible.</p>
+          <p className="text-sm mt-1">Contactez votre administrateur pour plus d'informations.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -355,9 +420,13 @@ export default function StorePage() {
             <TabsTrigger value="media" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-store-media">
               <ImageIcon className="w-3.5 h-3.5 mr-1.5" />Médias d'arrière-plan
             </TabsTrigger>
-            <TabsTrigger value="hours" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-store-hours">
-              <Clock className="w-3.5 h-3.5 mr-1.5" />Horaires d'ouverture
-            </TabsTrigger>
+            {/* Admin → System Management → Supplier → Store's "Onglet Horaires d'ouverture"
+                toggle — hidden here, not rendered as a disabled/broken trigger. */}
+            {storeSettings.hoursTabVisible && (
+              <TabsTrigger value="hours" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-store-hours">
+                <Clock className="w-3.5 h-3.5 mr-1.5" />Horaires d'ouverture
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
       </Tabs>
@@ -379,21 +448,30 @@ export default function StorePage() {
               <Label htmlFor="store-logo">URL du logo</Label>
               <Input id="store-logo" data-testid="input-store-logo" value={form.logoUrl} onChange={(e) => update("logoUrl", e.target.value)} placeholder="https://…" />
             </div>
-            <div className="flex items-center justify-between rounded-xl border p-3">
-              <div>
-                <p className="text-sm font-medium">Boutique ouverte</p>
-                <p className="text-xs text-muted-foreground">Indiquez si votre boutique accepte actuellement les commandes.</p>
+            {/* Admin → System Management → Supplier → Store's "Afficher le contrôle
+                'Boutique ouverte'" toggle — hiding it never resets form.isOpen, it only
+                stops this row (and the ability to PUT isOpen) from being reachable. */}
+            {storeSettings.openControlVisible && (
+              <div className="flex items-center justify-between rounded-xl border p-3">
+                <div>
+                  <p className="text-sm font-medium">Boutique ouverte</p>
+                  <p className="text-xs text-muted-foreground">Indiquez si votre boutique accepte actuellement les commandes.</p>
+                </div>
+                <Switch checked={form.isOpen} onCheckedChange={(v) => update("isOpen", v)} data-testid="switch-store-open" />
               </div>
-              <Switch checked={form.isOpen} onCheckedChange={(v) => update("isOpen", v)} data-testid="switch-store-open" />
-            </div>
-            <div className="flex items-center justify-between rounded-xl border p-3">
-              <div>
-                <p className="text-sm font-medium">Visible sur la marketplace</p>
-                <p className="text-xs text-muted-foreground">Masquez votre boutique sans affecter vos produits.</p>
+            )}
+            {/* Admin → System Management → Supplier → Store's "Afficher le contrôle
+                'Visible sur la marketplace'" toggle — same preserve-saved-value principle. */}
+            {storeSettings.marketplaceVisibilityControlVisible && (
+              <div className="flex items-center justify-between rounded-xl border p-3">
+                <div>
+                  <p className="text-sm font-medium">Visible sur la marketplace</p>
+                  <p className="text-xs text-muted-foreground">Masquez votre boutique sans affecter vos produits.</p>
+                </div>
+                <Switch checked={form.visibility === "VISIBLE"} onCheckedChange={(v) => update("visibility", v ? "VISIBLE" : "HIDDEN")} data-testid="switch-store-visibility" />
               </div>
-              <Switch checked={form.visibility === "VISIBLE"} onCheckedChange={(v) => update("visibility", v ? "VISIBLE" : "HIDDEN")} data-testid="switch-store-visibility" />
-            </div>
-            {form.visibility === "HIDDEN" && (
+            )}
+            {storeSettings.marketplaceVisibilityControlVisible && form.visibility === "HIDDEN" && (
               <p className="text-xs text-muted-foreground">Cette fiche boutique est masquée sur la marketplace. Vos produits restent affichés normalement.</p>
             )}
             {store?.approvalStatus === "REJECTED" && (
@@ -410,80 +488,111 @@ export default function StorePage() {
       {section === "media" && (
         <Card>
           <CardContent className="p-5 space-y-4">
-            <SectionHeader title="Médias d'arrière-plan" onSave={() => saveMedia.mutate()} saving={saveMedia.isPending} testId="button-save-store-media" />
-
-            {/* Media type toggle */}
-            <div className="inline-flex rounded-lg border p-1 bg-muted/40 w-full">
-              <button
-                className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-sm font-medium rounded-md transition-colors ${form.mediaType === "IMAGE" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
-                onClick={() => update("mediaType", "IMAGE")}
-                data-testid="btn-media-image"
-              >
-                <ImageIcon className="w-4 h-4" />Images
-              </button>
-              <button
-                className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-sm font-medium rounded-md transition-colors ${form.mediaType === "VIDEO" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
-                onClick={() => update("mediaType", "VIDEO")}
-                data-testid="btn-media-video"
-              >
-                <Video className="w-4 h-4" />Vidéo
-              </button>
-            </div>
-
-            {form.mediaType === "IMAGE" ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Images de couverture <span className="text-xs text-muted-foreground">({form.coverUrls.filter(Boolean).length}/5)</span></Label>
-                  {form.coverUrls.length < 5 && (
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={addCoverUrl} data-testid="btn-add-image">
-                      <Plus className="w-3 h-3 mr-1" />Ajouter une image
-                    </Button>
-                  )}
-                </div>
-                {form.coverUrls.map((url, i) => (
-                  <div key={i} className="flex gap-2">
-                    <Input
-                      value={url}
-                      onChange={(e) => setCoverUrl(i, e.target.value)}
-                      placeholder={`URL de l'image ${i + 1} — https://…`}
-                      className="flex-1"
-                      data-testid={`input-cover-url-${i}`}
-                    />
-                    {form.coverUrls.length > 1 && (
-                      <Button size="icon" variant="outline" className="h-9 w-9 shrink-0 text-destructive hover:text-destructive" onClick={() => removeCoverUrl(i)} data-testid={`btn-remove-image-${i}`}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-                <p className="text-xs text-muted-foreground">Ajoutez jusqu'à 5 images. Elles défilent automatiquement sous forme de diaporama.</p>
+            {!storeSettings.imagesTabVisible && !storeSettings.videoTabVisible ? (
+              // Admin → System Management → Supplier → Store's "Onglet Images" and
+              // "Onglet Vidéo" toggles, both Masqué — graceful empty state rather than
+              // a broken/empty switcher (never deletes any saved media).
+              <div className="text-center text-muted-foreground py-10">
+                <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-20" />
+                <p className="text-sm font-medium">Aucune option de média n'est disponible pour le moment.</p>
+                <p className="text-xs mt-1">Contactez votre administrateur pour plus d'informations.</p>
               </div>
             ) : (
-              <div className="space-y-1.5">
-                <Label htmlFor="video-url">URL de la vidéo</Label>
-                <Input
-                  id="video-url"
-                  value={form.videoUrl}
-                  onChange={(e) => update("videoUrl", e.target.value)}
-                  placeholder="https://… (mp4, intégration YouTube, etc.)"
-                  data-testid="input-video-url"
-                />
-                <p className="text-xs text-muted-foreground">Collez une URL de vidéo directe. La vidéo sera lue en arrière-plan de votre boutique.</p>
-              </div>
-            )}
+              <>
+                <SectionHeader title="Médias d'arrière-plan" onSave={() => saveMedia.mutate()} saving={saveMedia.isPending} testId="button-save-store-media" />
 
-            <div className="pt-2 border-t space-y-2">
-              <Label htmlFor="music-url" className="flex items-center gap-2"><Music className="w-3.5 h-3.5" />Musique d'ambiance</Label>
-              <Input
-                id="music-url"
-                value={form.musicUrl}
-                onChange={(e) => update("musicUrl", e.target.value)}
-                placeholder="https://www.youtube.com/watch?v=…"
-                data-testid="input-music-url"
-              />
-              <p className="text-[11px] text-muted-foreground">URL de la musique (YouTube)</p>
-              <p className="text-xs text-muted-foreground">La musique est diffusée automatiquement lorsque les propriétaires de cafés visitent votre boutique. Elle concerne uniquement votre boutique.</p>
-            </div>
+                {/* Media type toggle — only shown when BOTH modes are available; a
+                    single visible mode is shown directly below without a one-option
+                    switcher (task requirement). */}
+                {storeSettings.imagesTabVisible && storeSettings.videoTabVisible && (
+                  <div className="inline-flex rounded-lg border p-1 bg-muted/40 w-full">
+                    <button
+                      className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-sm font-medium rounded-md transition-colors ${form.mediaType === "IMAGE" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
+                      onClick={() => update("mediaType", "IMAGE")}
+                      data-testid="btn-media-image"
+                    >
+                      <ImageIcon className="w-4 h-4" />Images
+                    </button>
+                    <button
+                      className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-sm font-medium rounded-md transition-colors ${form.mediaType === "VIDEO" ? "bg-background shadow-sm" : "text-muted-foreground"}`}
+                      onClick={() => update("mediaType", "VIDEO")}
+                      data-testid="btn-media-video"
+                    >
+                      <Video className="w-4 h-4" />Vidéo
+                    </button>
+                  </div>
+                )}
+
+                {form.mediaType === "IMAGE" && storeSettings.imagesTabVisible && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label>Images de couverture <span className="text-xs text-muted-foreground">({form.coverUrls.filter(Boolean).length}/{storeSettings.maxCoverImages})</span></Label>
+                      {form.coverUrls.length < storeSettings.maxCoverImages && (
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={addCoverUrl} data-testid="btn-add-image">
+                          <Plus className="w-3 h-3 mr-1" />Ajouter une image
+                        </Button>
+                      )}
+                    </div>
+                    {form.coverUrls.map((url, i) => (
+                      <div key={i} className="flex gap-2">
+                        <Input
+                          value={url}
+                          onChange={(e) => setCoverUrl(i, e.target.value)}
+                          placeholder={`URL de l'image ${i + 1} — https://…`}
+                          className="flex-1"
+                          data-testid={`input-cover-url-${i}`}
+                        />
+                        {form.coverUrls.length > 1 && (
+                          <Button size="icon" variant="outline" className="h-9 w-9 shrink-0 text-destructive hover:text-destructive" onClick={() => removeCoverUrl(i)} data-testid={`btn-remove-image-${i}`}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                    <p className="text-xs text-muted-foreground">
+                      {form.coverUrls.filter(Boolean).length >= storeSettings.maxCoverImages
+                        ? `Limite atteinte : votre administrateur autorise au maximum ${storeSettings.maxCoverImages} image(s) de couverture.`
+                        : `Ajoutez jusqu'à ${storeSettings.maxCoverImages} images. Elles défilent automatiquement sous forme de diaporama.`}
+                    </p>
+                  </div>
+                )}
+
+                {form.mediaType === "VIDEO" && storeSettings.videoTabVisible && (
+                  storeSettings.videoUrlFieldVisible ? (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="video-url">URL de la vidéo</Label>
+                      <Input
+                        id="video-url"
+                        value={form.videoUrl}
+                        onChange={(e) => update("videoUrl", e.target.value)}
+                        placeholder="https://… (mp4, intégration YouTube, etc.)"
+                        data-testid="input-video-url"
+                      />
+                      <p className="text-xs text-muted-foreground">Collez une URL de vidéo directe. La vidéo sera lue en arrière-plan de votre boutique.</p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">Cette fonctionnalité est temporairement indisponible.</p>
+                  )
+                )}
+
+                {/* Admin → System Management → Supplier → Store's "Musique d'ambiance"
+                    toggle — applies in both Images and Vidéo modes, same shared URL. */}
+                {storeSettings.musicVisible && (
+                  <div className="pt-2 border-t space-y-2">
+                    <Label htmlFor="music-url" className="flex items-center gap-2"><Music className="w-3.5 h-3.5" />Musique d'ambiance</Label>
+                    <Input
+                      id="music-url"
+                      value={form.musicUrl}
+                      onChange={(e) => update("musicUrl", e.target.value)}
+                      placeholder="https://www.youtube.com/watch?v=…"
+                      data-testid="input-music-url"
+                    />
+                    <p className="text-[11px] text-muted-foreground">URL de la musique (YouTube)</p>
+                    <p className="text-xs text-muted-foreground">La musique est diffusée automatiquement lorsque les propriétaires de cafés visitent votre boutique. Elle concerne uniquement votre boutique.</p>
+                  </div>
+                )}
+              </>
+            )}
           </CardContent>
         </Card>
       )}

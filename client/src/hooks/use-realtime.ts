@@ -35,6 +35,12 @@ const DISCOUNT_CODE_EVENTS = ["discount_code_updated"];
 // separate from DISCOUNT_CODE_EVENTS above, which is about individual code records
 // changing, not the feature's own availability settings.
 const DISCOUNT_CODE_SETTINGS_EVENTS = ["discount_code_settings_updated"];
+// Admin → System Management → Supplier → Onglet (task: "Admin Supplier Settings —
+// Add Tab Visibility Management") — Returns/Cafés Supplier nav tab visibility.
+const SUPPLIER_TAB_SETTINGS_EVENTS = ["supplier_tab_settings_updated"];
+// Admin → System Management → Supplier → Store (task: "Admin Supplier
+// Settings — Add Tab Visibility Management" — Store).
+const SUPPLIER_STORE_SETTINGS_EVENTS = ["supplier_store_settings_updated"];
 const ORDER_EVENTS = ["order_created", "order_status_changed", "suborder_status_changed", "suborder_items_cancelled", "order_deleted"];
 const DELIVERY_EVENTS = ["delivery_created", "delivery_accepted", "delivery_assigned", "delivery_status_changed"];
 // Smart Driver Dispatch System (task: "BigBossCoffee — Smart Driver Dispatch System",
@@ -261,6 +267,12 @@ export function useRealtime(userId?: number) {
           }
           if (DISCOUNT_CODE_SETTINGS_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/discount-code-settings"] });
+          }
+          if (SUPPLIER_TAB_SETTINGS_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/supplier-tab-settings"] });
+          }
+          if (SUPPLIER_STORE_SETTINGS_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/supplier-store-settings"] });
           }
           if (SYSTEM_SERVICES_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/system-services"] });

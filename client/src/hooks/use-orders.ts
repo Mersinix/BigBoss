@@ -377,7 +377,10 @@ export type CreateReturnRequest = {
   reason: string;
 };
 
-export function useReturns() {
+// `enabled` (default true) lets the Supplier Returns page skip the fetch entirely
+// while its own tab is hidden by Admin → System Management → Supplier → Onglet,
+// instead of firing a request the backend would reject with 403 anyway.
+export function useReturns(enabled = true) {
   return useQuery<OrderReturnRow[]>({
     queryKey: ["/api/returns"],
     queryFn: async () => {
@@ -385,6 +388,7 @@ export function useReturns() {
       if (!res.ok) throw new Error("Failed to fetch returns");
       return res.json();
     },
+    enabled,
   });
 }
 

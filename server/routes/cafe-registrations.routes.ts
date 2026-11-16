@@ -1,4 +1,4 @@
-import { requireAdmin, requireApprovedSupplier } from "./shared/middleware";
+import { requireAdmin, requireApprovedSupplier, requireCafesTabEnabled } from "./shared/middleware";
 import { isValidRegistrationPassword, registrationPasswordMessage } from "./shared/helpers";
 import { storage } from "../storage";
 import { broadcast } from "../ws";
@@ -42,7 +42,10 @@ const rejectSchema = z.object({
 export function registerCafeRegistrationRoutes(app: Express): void {
   // ── Supplier side ──────────────────────────────────────────────────────────
 
-  app.get('/api/supplier/cafe-registrations', requireApprovedSupplier, async (req, res) => {
+  // Admin → System Management → Supplier → Onglet's "Onglet Cafés" toggle (task:
+  // "Admin Supplier Settings — Add Tab Visibility Management") — this is the route
+  // that actually backs the Supplier "Cafés" page today (its "Inscriptions" view).
+  app.get('/api/supplier/cafe-registrations', requireApprovedSupplier, requireCafesTabEnabled, async (req, res) => {
     try {
       res.json(await storage.getSupplierCafeRegistrations(req.session.userId!));
     } catch (err: any) {
@@ -50,7 +53,7 @@ export function registerCafeRegistrationRoutes(app: Express): void {
     }
   });
 
-  app.post('/api/supplier/cafe-registrations', requireApprovedSupplier, async (req, res) => {
+  app.post('/api/supplier/cafe-registrations', requireApprovedSupplier, requireCafesTabEnabled, async (req, res) => {
     try {
       const data = registrationCreateSchema.parse(req.body);
       const registration = await storage.createSupplierCafeRegistration(req.session.userId!, data);

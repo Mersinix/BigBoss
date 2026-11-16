@@ -1,4 +1,4 @@
-import { requireAuth, requireAdmin, requireApprovedSupplier } from "./shared/middleware";
+import { requireAuth, requireAdmin, requireApprovedSupplier, requireCafesTabEnabled, requireStoreTabEnabled } from "./shared/middleware";
 import { storage } from "../storage";
 import { broadcast } from "../ws";
 import { z } from "zod";
@@ -120,7 +120,7 @@ export function registerSupplierRoutes(app: Express): void {
     // Not a separate café-user system — these are ordinary CAFE_OWNER users, reachable
     // everywhere a café account normally is. ──────────────────────────────────────────
 
-    app.get('/api/supplier/cafes', requireApprovedSupplier, async (req, res) => {
+    app.get('/api/supplier/cafes', requireApprovedSupplier, requireCafesTabEnabled, async (req, res) => {
       try {
         res.json(await storage.getSupplierCafes(req.session.userId!));
       } catch (err: any) {
@@ -933,14 +933,14 @@ export function registerSupplierRoutes(app: Express): void {
 
     // ── Supplier Store (own public store profile) ────────────────────────────────
 
-    app.get('/api/supplier/store', requireApprovedSupplier, async (req: any, res) => {
+    app.get('/api/supplier/store', requireApprovedSupplier, requireStoreTabEnabled, async (req: any, res) => {
       try {
         const store = await storage.getSupplierStore(req.session.userId);
         res.json(store ?? null);
       } catch { res.status(500).json({ message: 'Error' }); }
     });
 
-    app.put('/api/supplier/store', requireApprovedSupplier, async (req: any, res) => {
+    app.put('/api/supplier/store', requireApprovedSupplier, requireStoreTabEnabled, async (req: any, res) => {
       try {
         const { coverUrl, logoUrl, name, description, isOpen, visibility, mediaType, coverUrls, videoUrl, musicUrl, openingHours } = req.body ?? {};
         if (visibility !== undefined && !['VISIBLE', 'HIDDEN'].includes(visibility)) {
@@ -952,6 +952,36 @@ export function registerSupplierRoutes(app: Express): void {
         if (coverUrls !== undefined && (!Array.isArray(coverUrls) || coverUrls.length > 5)) {
           return res.status(400).json({ message: 'coverUrls must be an array of up to 5 URLs' });
         }
+
+        // Admin → System Management → Supplier → Store's per-control/field visibility
+        // (task: "Admin Supplier Settings — Add Tab Visibility Management" — Store).
+        // Each only blocks its OWN field via direct API — unlike requireStoreTabEnabled
+        // above, a single hidden control never blocks the rest of this PUT.
+        const storeSettings = await storage.getSupplierStoreSettings();
+        const denied = (msg = 'Cette fonctionnalité est temporairement indisponible.') => { res.status(403).json({ message: msg }); return true; };
+        if (isOpen !== undefined && !storeSettings.openControlVisible) return void denied();
+        if (visibility !== undefined && !storeSettings.marketplaceVisibilityControlVisible) return void denied();
+        if (mediaType === 'IMAGE' && !storeSettings.imagesTabVisible) return void denied();
+        if (mediaType === 'VIDEO' && !storeSettings.videoTabVisible) return void denied();
+        if (coverUrls !== undefined && !storeSettings.imagesTabVisible) return void denied();
+        if (videoUrl !== undefined && !(storeSettings.videoTabVisible && storeSettings.videoUrlFieldVisible)) return void denied();
+        if (musicUrl !== undefined && !storeSettings.musicVisible) return void denied();
+        if (openingHours !== undefined && !storeSettings.hoursTabVisible) return void denied();
+
+        // Admin-configurable max cover images — never deletes existing images; only
+        // blocks a request that would INCREASE the saved count beyond the configured
+        // maximum (so reducing the max from 5 to 3 never drops an existing 5th image,
+        // and unrelated saves of a supplier who already has more than the new max
+        // keep working normally).
+        if (coverUrls !== undefined && Array.isArray(coverUrls)) {
+          const existingStore = await storage.getSupplierStore(req.session.userId);
+          const existingCount = Array.isArray(existingStore?.coverUrls) ? existingStore!.coverUrls.filter(Boolean).length : 0;
+          const newCount = coverUrls.filter(Boolean).length;
+          if (newCount > existingCount && newCount > storeSettings.maxCoverImages) {
+            return res.status(400).json({ message: `Le nombre maximum d'images de couverture autorisé est de ${storeSettings.maxCoverImages}.` });
+          }
+        }
+
         const store = await storage.upsertSupplierStore(req.session.userId, {
           coverUrl, logoUrl, name, description, isOpen, visibility,
           mediaType, coverUrls, videoUrl, musicUrl, openingHours,

@@ -9,11 +9,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { RotateCcw, CheckCircle, Clock, XCircle, AlertCircle, Loader2, Box, X } from "lucide-react";
+import { RotateCcw, CheckCircle, Clock, XCircle, AlertCircle, Loader2, Box, X, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { OrderReturnRow } from "@/hooks/use-orders";
 import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useSupplierTabSettings } from "@/hooks/use-supplier-tab-settings";
 
 // ── Status config ──────────────────────────────────────────────────────────────
 
@@ -168,7 +169,13 @@ function ReviewModal({
 // ── Main page ──────────────────────────────────────────────────────────────────
 
 export default function ReturnsPage() {
-  const { data: returns = [], isLoading } = useReturns();
+  // Admin → System Management → Supplier → Onglet (task: "Admin Supplier Settings
+  // — Add Tab Visibility Management"). Also checked directly through the normal
+  // URL, same "clean UX, backend is the real enforcement" principle as the
+  // Promotions/Discount Codes pages' own gates. Reactive — kept in sync by
+  // use-realtime.ts's supplier_tab_settings_updated handler.
+  const { settings: supplierTabSettings } = useSupplierTabSettings();
+  const { data: returns = [], isLoading } = useReturns(supplierTabSettings.returnsTabVisible);
   const [reviewing, setReviewing] = useState<OrderReturnRow | null>(null);
   const isMobile = useIsMobile();
   const [kpiModalOpen, setKpiModalOpen] = useState(false);
@@ -180,6 +187,19 @@ export default function ReturnsPage() {
     resolved:   returns.filter(r => r.status === "RESOLVED").length,
     rejected:   returns.filter(r => r.status === "REJECTED").length,
   };
+
+  if (!supplierTabSettings.returnsTabVisible) {
+    return (
+      <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
+        <DashboardHero title="Retours" subtitle="Gérez les demandes de retour et de remboursement de vos clients." />
+        <div className="rounded-2xl border border-border/50 p-16 text-center text-muted-foreground">
+          <Lock className="w-10 h-10 mx-auto mb-3 opacity-20" />
+          <p className="font-medium">Cette fonctionnalité est temporairement indisponible.</p>
+          <p className="text-sm mt-1">Contactez votre administrateur pour plus d'informations.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

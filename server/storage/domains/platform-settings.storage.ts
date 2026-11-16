@@ -9,7 +9,22 @@ import {
   accountDarkModeSettings, type DarkModeAccount, type AccountDarkModeSettingsMap, type AccountThemeMode,
   promotionSettings, promotionTypeSettings, type PromotionType, type PromotionTypeSettingsMap,
   discountCodeSettings,
+  supplierTabSettings,
+  supplierStoreSettings, type SupplierStoreSettings,
 } from "@shared/schema";
+
+// Persisted + admin-editable shape of supplierTabSettings — deliberately
+// excludes `performanceTabVisible`, which getSupplierTabSettings/
+// updateSupplierTabSettings below always derive fresh, never store or accept
+// as an update (task: "Admin Supplier Settings — Supplier Performance Tab
+// Visibility Management").
+export type SupplierTabSettingsShape = {
+  returnsTabVisible: boolean;
+  cafesTabVisible: boolean;
+  dashboardTabVisible: boolean;
+  analyticsTabVisible: boolean;
+  earningsTabVisible: boolean;
+};
 
 // Stage 2 — Batch 20 business-domain consolidation. Merges Landing Config
 // (Batch 6) and Platform Services (Batch 7) into one PlatformSettingsStorage
@@ -391,6 +406,78 @@ export class PlatformSettingsStorage {
       await db.update(discountCodeSettings).set({ ...next, updatedAt: new Date() }).where(eq(discountCodeSettings.id, row.id));
     } else {
       await db.insert(discountCodeSettings).values(next);
+    }
+    return next;
+  }
+
+  // ── Supplier Tab Settings (Admin → System Management → Supplier → Onglet) ──────
+  // Visibility of the existing Returns and Cafés Supplier nav tabs, plus (task:
+  // "Admin Supplier Settings — Supplier Performance Tab Visibility Management")
+  // Dashboard/Analytics/Earnings within the Supplier's consolidated "Performance"
+  // nav entry. Same single auto-seeded row, identical get/update shape to
+  // getDiscountCodeSettings above. `performanceTabVisible` is ALWAYS derived from
+  // the three Performance child settings (never its own stored column or an
+  // accepted update field) — see supplierTabSettings' own comment in
+  // shared/schema.ts for why.
+  async getSupplierTabSettings(): Promise<SupplierTabSettingsShape & { performanceTabVisible: boolean }> {
+    const [row] = await db.select().from(supplierTabSettings).limit(1);
+    const stored: SupplierTabSettingsShape = row
+      ? {
+          returnsTabVisible: row.returnsTabVisible, cafesTabVisible: row.cafesTabVisible,
+          dashboardTabVisible: row.dashboardTabVisible, analyticsTabVisible: row.analyticsTabVisible,
+          earningsTabVisible: row.earningsTabVisible,
+        }
+      : await (async () => {
+          const [created] = await db.insert(supplierTabSettings).values({}).returning();
+          return {
+            returnsTabVisible: created.returnsTabVisible, cafesTabVisible: created.cafesTabVisible,
+            dashboardTabVisible: created.dashboardTabVisible, analyticsTabVisible: created.analyticsTabVisible,
+            earningsTabVisible: created.earningsTabVisible,
+          };
+        })();
+    return { ...stored, performanceTabVisible: stored.dashboardTabVisible || stored.analyticsTabVisible || stored.earningsTabVisible };
+  }
+
+  async updateSupplierTabSettings(
+    updates: Partial<SupplierTabSettingsShape>,
+  ): Promise<SupplierTabSettingsShape & { performanceTabVisible: boolean }> {
+    const { performanceTabVisible: _derived, ...current } = await this.getSupplierTabSettings();
+    const next: SupplierTabSettingsShape = { ...current, ...updates };
+    const [row] = await db.select({ id: supplierTabSettings.id }).from(supplierTabSettings).limit(1);
+    if (row) {
+      await db.update(supplierTabSettings).set({ ...next, updatedAt: new Date() }).where(eq(supplierTabSettings.id, row.id));
+    } else {
+      await db.insert(supplierTabSettings).values(next);
+    }
+    return { ...next, performanceTabVisible: next.dashboardTabVisible || next.analyticsTabVisible || next.earningsTabVisible };
+  }
+
+  // ── Supplier Store Settings (Admin → System Management → Supplier → Store) ───
+  // Global visibility of the existing Supplier Store page (/supplier/store) and
+  // of its individual controls/fields — never touches any supplier's own
+  // supplierStores row. Same single auto-seeded row, identical get/update shape
+  // to getSupplierTabSettings above.
+  async getSupplierStoreSettings(): Promise<Omit<SupplierStoreSettings, "id" | "updatedAt">> {
+    const [row] = await db.select().from(supplierStoreSettings).limit(1);
+    if (row) {
+      const { id, updatedAt, ...rest } = row;
+      return rest;
+    }
+    const [created] = await db.insert(supplierStoreSettings).values({}).returning();
+    const { id, updatedAt, ...rest } = created;
+    return rest;
+  }
+
+  async updateSupplierStoreSettings(
+    updates: Partial<Omit<SupplierStoreSettings, "id" | "updatedAt">>,
+  ): Promise<Omit<SupplierStoreSettings, "id" | "updatedAt">> {
+    const current = await this.getSupplierStoreSettings();
+    const next = { ...current, ...updates };
+    const [row] = await db.select({ id: supplierStoreSettings.id }).from(supplierStoreSettings).limit(1);
+    if (row) {
+      await db.update(supplierStoreSettings).set({ ...next, updatedAt: new Date() }).where(eq(supplierStoreSettings.id, row.id));
+    } else {
+      await db.insert(supplierStoreSettings).values(next);
     }
     return next;
   }

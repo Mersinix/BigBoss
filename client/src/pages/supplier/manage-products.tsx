@@ -904,7 +904,7 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
         <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-edit-listing">
           <X className="w-4 h-4" />
         </button>
-        <DialogHeader><DialogTitle>Edit Pricing & Stock — Variant Builder</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Edit Pricing & Stock</DialogTitle></DialogHeader>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
           {/* Left – Builder */}
           <div className="space-y-4">
@@ -1641,7 +1641,15 @@ function AdminProductsTab({
   const qc = useQueryClient();
   const [filters, setFilters] = useState<SimpleFilters>(EMPTY_SIMPLE);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [detailProduct, setDetailProduct] = useState<AdminProductWithListing | null>(null);
+  // Tracks the ID only, not a snapshot of the product object (task: "Real-time
+  // synchronization between Admin Product Management and the Supplier Mapped
+  // Products Product Preview Modal") — the actual product data shown in the
+  // modal is looked up fresh from the live `allAdminProducts` query below on
+  // every render (see `detailProduct` useMemo), so an admin edit that triggers
+  // the existing product_updated → "/api/supplier/admin-products" realtime
+  // invalidation reaches an already-open modal automatically, without closing
+  // or reopening it.
+  const [detailProductId, setDetailProductId] = useState<number | null>(null);
   const [addingProduct, setAddingProduct] = useState<AdminProductWithListing | null>(null);
   const [adminProdSearchOpen, setAdminProdSearchOpen] = useState(false);
   const adminProdSearchInputRef = useRef<HTMLInputElement>(null);
@@ -1722,6 +1730,14 @@ function AdminProductsTab({
     },
     enabled: hasMappings,
   });
+
+  // Re-derived from the live query on every render (not a stale click-time
+  // snapshot) so the open Product Preview Modal always reflects the latest
+  // saved admin product data — see detailProductId above.
+  const detailProduct = useMemo(
+    () => (detailProductId != null ? ((allAdminProducts as any[]).find((p: any) => p.id === detailProductId) ?? null) : null),
+    [allAdminProducts, detailProductId],
+  );
 
   // Narrow by selected category/subcategory (client-side)
   const adminProducts = useMemo(() => {
@@ -1900,7 +1916,7 @@ function AdminProductsTab({
           ) : viewMode === "grid" ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
               {pageDisplayed.map((p: AdminProductWithListing) => (
-                <div key={p.id} className="border rounded-lg overflow-hidden bg-card hover:shadow-sm transition-shadow cursor-pointer" onClick={() => setDetailProduct(p)} data-testid={`card-admin-product-${p.id}`}>
+                <div key={p.id} className="border rounded-lg overflow-hidden bg-card hover:shadow-sm transition-shadow cursor-pointer" onClick={() => setDetailProductId(p.id)} data-testid={`card-admin-product-${p.id}`}>
                   <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
                     {p.imageUrl ? (
                       <div style={{ width: "100%", height: "100%", transform: `scale(${computeCoverZoomScale(getAdjustmentFor(p.imageAdjustments, p.imageUrl))})`, transformOrigin: "center" }}>
@@ -1934,7 +1950,7 @@ function AdminProductsTab({
                 </TableHeader>
                 <TableBody>
                   {pageDisplayed.map(p => (
-                    <TableRow key={p.id} className="hover:bg-secondary/20 cursor-pointer" onClick={() => setDetailProduct(p)} data-testid={`row-admin-product-${p.id}`}>
+                    <TableRow key={p.id} className="hover:bg-secondary/20 cursor-pointer" onClick={() => setDetailProductId(p.id)} data-testid={`row-admin-product-${p.id}`}>
                       <TableCell className="p-3">
                         {p.imageUrl ? (
                           <div className="w-12 h-12 rounded-lg overflow-hidden border border-border/50">
@@ -1986,8 +2002,8 @@ function AdminProductsTab({
         <ProductDetailModal
           product={detailProduct}
           open={!!detailProduct}
-          onClose={() => setDetailProduct(null)}
-          onAdd={() => { setAddingProduct(detailProduct); setDetailProduct(null); }}
+          onClose={() => setDetailProductId(null)}
+          onAdd={() => { setAddingProduct(detailProduct); setDetailProductId(null); }}
         />
       )}
 

@@ -3431,7 +3431,7 @@ export default function SystemManagementPage() {
   // Landing Page is the default/open tab (task requirement — Admin must see Landing Page
   // configuration immediately on entering System Management, no extra click).
   const [activeSection, setActiveSection] = useState<SystemManagementSection>("landing");
-  const [supplierSubSection, setSupplierSubSection] = useState<SupplierSubSection>("promotion");
+  const [supplierSubSection, setSupplierSubSection] = useState<SupplierSubSection>("tabs");
 
   const { data: states, isLoading } = useQuery<ServiceStatesMap>({ queryKey: ["/api/system-services"] });
   const { order: savedOrder } = useServiceOrder();

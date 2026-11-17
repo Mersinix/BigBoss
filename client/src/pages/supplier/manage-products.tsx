@@ -142,13 +142,29 @@ function ProductDetailModal({
   const { wrapperStyle: detailCropStyle } = useCoverZoomStyle(getAdjustmentFor(product.imageAdjustments, gallery.activeUrl));
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent hideClose className="sm:max-w-md p-0 rounded-2xl overflow-hidden">
+      {/* max-h-[90vh] + overflow-y-auto directly on DialogContent (task: "Fix
+          Vertical Scrolling — entire modal, not just the bottom section") — ONE
+          scroll container for the whole modal (image included), not a split
+          fixed-header/scrollable-body layout: the image, thumbnails and info
+          are now plain stacked children of this single scrolling element, so
+          there is exactly one scrollbar and it covers the full content, top to
+          bottom. overflow-x-hidden prevents any horizontal scrollbar;
+          rounded-2xl still clips correctly under overflow-y-auto (clipping only
+          needs a non-"visible" overflow value, not specifically "hidden"). */}
+      <DialogContent hideClose className="sm:max-w-md p-0 rounded-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
         <div className="flex flex-col">
           {/* Image header — full width, first section of the modal; close
               button lives on the image's top-right corner (task: "Redesign
               the Supplier Admin Product detail modal"), reusing the same
               onClose handler/modal state as before — no second close path. */}
-          <div className="w-full h-56 sm:h-64 relative shrink-0 bg-secondary overflow-hidden">
+          {/* Height increased to 1.5× (h-56/h-64 → h-[21rem]/h-96 = 224px/256px →
+              336px/384px) — task: "Supplier — Admin Products Mapped Product Preview
+              Image Height". object-cover + the existing cover-zoom wrapper
+              (detailCropStyle) are left exactly as before — a taller box only
+              reveals more of the image under the same fit behavior, it never
+              introduces new cropping, so object-contain isn't needed here; name/
+              description/badges/actions below are unaffected (separate flex section). */}
+          <div className="w-full h-[21rem] sm:h-96 relative bg-secondary overflow-hidden">
             {gallery.activeUrl ? (
               <div style={detailCropStyle}>
                 <img src={gallery.activeUrl} alt="" className="w-full h-full object-cover" />
@@ -187,7 +203,9 @@ function ProductDetailModal({
               ))}
             </div>
           )}
-          {/* Name below the image, description below the name (task's explicit order) */}
+          {/* Name below the image, description below the name (task's explicit order).
+              A plain flow child now — it scrolls as part of the single DialogContent
+              scroll area above, together with the image/thumbnails, not on its own. */}
           <div className="p-4 space-y-3">
             <div>
               <DialogTitle className="font-bold text-lg leading-tight">{product.name}</DialogTitle>

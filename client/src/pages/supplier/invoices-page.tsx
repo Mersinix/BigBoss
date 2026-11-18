@@ -56,8 +56,8 @@ export default function InvoicesPage() {
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
-        title="Invoices"
-        subtitle="Manage and track all your invoices."
+        title="Factures"
+        subtitle="Gérez et suivez toutes vos factures."
         action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
@@ -66,19 +66,19 @@ export default function InvoicesPage() {
           <Card>
             <CardContent className="p-5 flex items-center gap-4">
               <div className="bg-primary/10 rounded-xl p-3"><FileText className="w-5 h-5 text-primary" /></div>
-              <div><p className="text-xs text-muted-foreground">Total Invoices</p><p className="text-2xl font-bold">{nonCancelled.length}</p></div>
+              <div><p className="text-xs text-muted-foreground">Total des factures</p><p className="text-2xl font-bold">{nonCancelled.length}</p></div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-5 flex items-center gap-4">
               <div className="bg-green-500/10 rounded-xl p-3"><DollarSign className="w-5 h-5 text-green-600" /></div>
-              <div><p className="text-xs text-muted-foreground">Collected</p><p className="text-2xl font-bold text-green-600">{fmt(totalCollected)}</p></div>
+              <div><p className="text-xs text-muted-foreground">Encaissé</p><p className="text-2xl font-bold text-green-600">{fmt(totalCollected)}</p></div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-5 flex items-center gap-4">
               <div className="bg-amber-500/10 rounded-xl p-3"><DollarSign className="w-5 h-5 text-amber-600" /></div>
-              <div><p className="text-xs text-muted-foreground">Outstanding</p><p className="text-2xl font-bold text-amber-600">{fmt(totalOutstanding)}</p></div>
+              <div><p className="text-xs text-muted-foreground">En attente</p><p className="text-2xl font-bold text-amber-600">{fmt(totalOutstanding)}</p></div>
             </CardContent>
           </Card>
         </div>
@@ -89,19 +89,19 @@ export default function InvoicesPage() {
           <Card>
             <CardContent className="p-5 flex items-center gap-4">
               <div className="bg-primary/10 rounded-xl p-3"><FileText className="w-5 h-5 text-primary" /></div>
-              <div><p className="text-xs text-muted-foreground">Total Invoices</p><p className="text-2xl font-bold">{nonCancelled.length}</p></div>
+              <div><p className="text-xs text-muted-foreground">Total des factures</p><p className="text-2xl font-bold">{nonCancelled.length}</p></div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-5 flex items-center gap-4">
               <div className="bg-green-500/10 rounded-xl p-3"><DollarSign className="w-5 h-5 text-green-600" /></div>
-              <div><p className="text-xs text-muted-foreground">Collected</p><p className="text-2xl font-bold text-green-600">{fmt(totalCollected)}</p></div>
+              <div><p className="text-xs text-muted-foreground">Encaissé</p><p className="text-2xl font-bold text-green-600">{fmt(totalCollected)}</p></div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-5 flex items-center gap-4">
               <div className="bg-amber-500/10 rounded-xl p-3"><DollarSign className="w-5 h-5 text-amber-600" /></div>
-              <div><p className="text-xs text-muted-foreground">Outstanding</p><p className="text-2xl font-bold text-amber-600">{fmt(totalOutstanding)}</p></div>
+              <div><p className="text-xs text-muted-foreground">En attente</p><p className="text-2xl font-bold text-amber-600">{fmt(totalOutstanding)}</p></div>
             </CardContent>
           </Card>
         </div>
@@ -121,7 +121,7 @@ export default function InvoicesPage() {
           {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-56 w-full rounded-2xl" />)}
         </div>
       ) : rows.length === 0 ? (
-        <Card><CardContent className="p-12 text-center text-muted-foreground">No invoices yet</CardContent></Card>
+        <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune facture pour le moment</CardContent></Card>
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

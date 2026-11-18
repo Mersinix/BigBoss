@@ -87,9 +87,9 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
   const deliveryFee = subOrders.reduce((s, so: any) => s + (so.delivery?.cafeOwnerFeeShareCents ?? 0), 0);
   const grandTotal = linesTotal + deliveryFee;
   const paymentMethod = (order as any).paymentMethod ?? "CASH_ON_DELIVERY";
-  const paymentLabel = paymentMethod === "CASH_ON_DELIVERY" ? "Cash on Delivery"
-    : paymentMethod === "CREDIT_CARD" ? "Credit Card"
-    : paymentMethod === "MOBILE_PAYMENT" ? "Mobile Payment" : "Bank Transfer";
+  const paymentLabel = paymentMethod === "CASH_ON_DELIVERY" ? "Paiement à la livraison"
+    : paymentMethod === "CREDIT_CARD" ? "Carte bancaire"
+    : paymentMethod === "MOBILE_PAYMENT" ? "Paiement mobile" : "Virement bancaire";
   // Same DELIVERED-derived "collected" convention already used across Payments/Earnings/
   // Payouts (see lib/financial-rows.ts) — orders.paymentStatus itself never changes from
   // PENDING (only COD is supported), so it is not a usable live signal.

@@ -122,10 +122,10 @@ export function AppSidebar() {
     if (isAdmin) {
       return [
          {
-          label: "MANAGEMENT",
+          label: "GESTION",
           items: [
-            { title: "Prospecting ⭐", url: "/admin/prospecting", icon: Target },
-            { title: "System Management", url: "/admin/system-management", icon: Sliders },
+            { title: "Prospection ⭐", url: "/admin/prospecting", icon: Target },
+            { title: "Gestion du système", url: "/admin/system-management", icon: Sliders },
             { title: "Performance", url: "/", icon: Activity, activeUrls: ["/", "/admin/analytics", "/admin/earnings"] },
             { title: "Communication", url: "/admin/messages", icon: MessageCircle, activeUrls: ["/admin/messages", "/admin/notifications",  "/admin/reviews", "/admin/reports"] },
 
@@ -135,38 +135,38 @@ export function AppSidebar() {
           label: "SERVICES",
           items: [
             { title: "MAINTENANCE", url: "/admin/maintenance", icon: Wrench },
-            { title: "PRINT", url: "/admin/print", icon: Printer },
+            { title: "IMPRIMERIE", url: "/admin/print", icon: Printer },
             { title: "BARISTA", url: "/admin/barista", icon: Coffee },
-            { title: "ACADEMY", url: "/admin/academy", icon: GraduationCap },
+            { title: "ACADÉMIE", url: "/admin/academy", icon: GraduationCap },
             { title: "MARKETING", url: "/admin/marketing", icon: Megaphone },
           ],
         },
         {
-          label: "USERS & PERMISSIONS",
+          label: "UTILISATEURS ET PERMISSIONS",
           items: [
-            { title: "Users", url: "/admin/users", icon: Users },
-            { title: "Roles & Permissions", url: "/admin/roles", icon: ShieldCheck },
-            { title: "Suppliers", url: "/admin/suppliers", icon: Store },
+            { title: "Utilisateurs", url: "/admin/users", icon: Users },
+            { title: "Rôles et permissions", url: "/admin/roles", icon: ShieldCheck },
+            { title: "Fournisseurs", url: "/admin/suppliers", icon: Store },
           ],
         },
         {
-          label: "MAIN",
+          label: "PRINCIPAL",
           items: [
-            { title: "Categories", url: "/admin/categories", icon: Folder },
-            { title: "Products", url: "/admin/products", icon: Package },
-            { title: "Stores", url: "/admin/stores", icon: Store },
-            { title: "Orders", url: "/orders", icon: ClipboardList },
-            { title: "Delivery", url: "/admin/delivery", icon: Truck },
-            { title: "Invoices", url: "/admin/invoices", icon: FileText },
-            { title: "Payments", url: "/admin/payments", icon: DollarSign },
+            { title: "Catégories", url: "/admin/categories", icon: Folder },
+            { title: "Produits", url: "/admin/products", icon: Package },
+            { title: "Boutiques", url: "/admin/stores", icon: Store },
+            { title: "Commandes", url: "/orders", icon: ClipboardList },
+            { title: "Livraison", url: "/admin/delivery", icon: Truck },
+            { title: "Factures", url: "/admin/invoices", icon: FileText },
+            { title: "Paiements", url: "/admin/payments", icon: DollarSign },
 
 
           ],
         },
         {
-          label: "ACCOUNT",
+          label: "COMPTE",
           items: [
-            { title: "Settings", url: "/admin/settings", icon: Settings },
+            { title: "Paramètres", url: "/admin/settings", icon: Settings },
           ],
         },
       ];
@@ -174,9 +174,9 @@ export function AppSidebar() {
 
     if (user.role === "SUPPLIER") {
       return [
-       
+
         {
-          label: "MAIN",
+          label: "PRINCIPAL",
           items: [
             // Admin → System Management → Supplier → Onglet's "Visibilité de l'onglet
             // Performance" group (task: "Admin Supplier Settings — Supplier
@@ -191,26 +191,26 @@ export function AppSidebar() {
             // (task: "Admin Supplier Settings — Add Tab Visibility Management") —
             // same reactive hide pattern as Promotions/Discount Codes above, kept in
             // sync by use-realtime.ts's supplier_tab_settings_updated handler.
-            ...(supplierTabSettings.cafesTabVisible ? [{ title: "Cafes", url: "/supplier/cafes", icon: Coffee }] : []),
+            ...(supplierTabSettings.cafesTabVisible ? [{ title: "Cafés", url: "/supplier/cafes", icon: Coffee }] : []),
             // Admin → System Management → Supplier → Store's "Onglet Store" toggle
             // (task: "Admin Supplier Settings — Add Tab Visibility Management" —
             // Store) — same reactive hide pattern as Cafes/Returns above, kept in
             // sync by use-realtime.ts's supplier_store_settings_updated handler.
-            ...(supplierStoreSettings.storeTabVisible ? [{ title: "Store", url: "/supplier/store", icon: Store }] : []),
-            { title: "Categories", url: "/supplier/categories", icon: Folder },
-            { title: "Products", url: "/supplier/products", icon: Package },
-            { title: "Inventory", url: "/supplier/inventory", icon: Warehouse },
+            ...(supplierStoreSettings.storeTabVisible ? [{ title: "Boutique", url: "/supplier/store", icon: Store }] : []),
+            { title: "Catégories", url: "/supplier/categories", icon: Folder },
+            { title: "Produits", url: "/supplier/products", icon: Package },
+            { title: "Stock", url: "/supplier/inventory", icon: Warehouse },
           ],
         },
         {
-          label: "ORDERS",
+          label: "COMMANDES",
           items: [
-            { title: "Orders", url: "/orders", icon: ClipboardList },
-            { title: "Order Delivery", url: "/supplier/delivery-status", icon: MapPin },
+            { title: "Commandes", url: "/orders", icon: ClipboardList },
+            { title: "Livraison des commandes", url: "/supplier/delivery-status", icon: MapPin },
             // Admin → System Management → Supplier → Onglet's "Onglet Retours" toggle.
-            ...(supplierTabSettings.returnsTabVisible ? [{ title: "Returns", url: "/supplier/returns", icon: RotateCcw }] : []),
-            { title: "Payouts", url: "/supplier/payouts", icon: Wallet },
-            { title: "Invoices", url: "/supplier/invoices", icon: FileText },
+            ...(supplierTabSettings.returnsTabVisible ? [{ title: "Retours", url: "/supplier/returns", icon: RotateCcw }] : []),
+            { title: "Paiements", url: "/supplier/payouts", icon: Wallet },
+            { title: "Factures", url: "/supplier/invoices", icon: FileText },
           ],
         },
          {
@@ -228,17 +228,17 @@ export function AppSidebar() {
             // Section & Add Discount Code Visibility Controls") — same reactive hide
             // pattern as Promotions above, kept in sync by use-realtime.ts's
             // discount_code_settings_updated handler.
-            ...(discountCodeSettings.tabVisible ? [{ title: "Discount Codes", url: "/supplier/discount-codes", icon: Ticket }] : []),
+            ...(discountCodeSettings.tabVisible ? [{ title: "Codes promotionnels", url: "/supplier/discount-codes", icon: Ticket }] : []),
           ],
         },
         {
-          label: "ACCOUNT",
+          label: "COMPTE",
           items: [
-            { title: "Settings", url: "/supplier/settings", icon: Settings },
-             { title: "Help Center", url: "/supplier/help", icon: HelpCircle },
+            { title: "Paramètres", url: "/supplier/settings", icon: Settings },
+             { title: "Centre d'aide", url: "/supplier/help", icon: HelpCircle },
           ],
         },
-        
+
       ];
     }
 
@@ -301,6 +301,16 @@ export function AppSidebar() {
   };
 
   const navGroups = getNavGroups();
+  // Scoped to the Supplier and Admin roles only (tasks: "Translate Supplier
+  // Sidebar into French", "Translate Admin Sidebar into French") — every
+  // other role (Barista Academy, etc.) keeps its existing English "Sign
+  // Out"/raw role string in this shared footer, unchanged. SUPER_ADMIN is
+  // not in either task's translation table, so its own role label stays the
+  // existing raw "SUPER ADMIN" — only "Sign Out" is shared with it (same
+  // admin nav, same unambiguous action) since isAdmin covers both.
+  const isSupplier = user.role === "SUPPLIER";
+  const roleLabel = isSupplier ? "FOURNISSEUR" : user.role === "ADMIN" ? "ADMINISTRATEUR" : user.role.replace(/_/g, " ");
+  const signOutLabel = isSupplier || isAdmin ? "Déconnexion" : "Sign Out";
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
@@ -366,7 +376,7 @@ export function AppSidebar() {
           <div className="flex flex-col overflow-hidden flex-1 group-data-[collapsible=icon]:hidden">
             <span className="font-semibold text-sm truncate text-sidebar-foreground">{user.name}</span>
             <span className="text-xs text-muted-foreground truncate">
-              {user.role.replace(/_/g, " ")}
+              {roleLabel}
             </span>
           </div>
         </div>
@@ -374,12 +384,12 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               asChild
-              tooltip="Sign Out"
+              tooltip={signOutLabel}
               className="rounded-lg text-muted-foreground py-4"
             >
               <button onClick={() => logout()} className="w-full flex items-center gap-3">
                 <LogOut className="w-4 h-4" />
-                <span className="font-medium text-sm group-data-[collapsible=icon]:hidden">Sign Out</span>
+                <span className="font-medium text-sm group-data-[collapsible=icon]:hidden">{signOutLabel}</span>
               </button>
             </SidebarMenuButton>
           </SidebarMenuItem>

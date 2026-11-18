@@ -10,6 +10,16 @@ import {
   PAYOUT_STATUS_META, PAYMENT_COLLECTION_META, invoiceNumber, payoutReference, type FinancialRow,
 } from "@/lib/financial-rows";
 
+// Displayed label only for the raw delivery-status badge below — never the
+// value itself. Same French wording already used for this exact status enum
+// in client/src/components/cafe/order-details-modal.tsx's own
+// DELIVERY_STATUS_META map, kept in sync here rather than imported to avoid
+// coupling this shared modal to that unrelated Coffee-Owner-facing component.
+const DELIVERY_STATUS_LABELS: Record<string, string> = {
+  AVAILABLE: "En attente de collecte", ACCEPTED: "Prise en charge", ASSIGNED: "Chauffeur assigné",
+  PICKED_UP: "Collectée", IN_TRANSIT: "En transit", DELIVERED: "Livrée", CANCELLED: "Livraison annulée",
+};
+
 // Payment/payout details — same visual language as OrderInvoiceModal (the Invoice details
 // modal), but surfaces payment-specific figures (gross/commission/net/payout status) instead
 // of a line-item breakdown. Every figure comes straight from the same FinancialRow already
@@ -142,7 +152,7 @@ export default function PaymentDetailsModal({
                 <div className="flex items-center gap-2">
                   <Truck className="w-4 h-4 text-indigo-500" />
                   <span className={`text-sm font-semibold ${t.textPrimary}`}>Livraison</span>
-                  <Badge variant="outline" className="ml-auto text-[10px]">{delivery.status}</Badge>
+                  <Badge variant="outline" className="ml-auto text-[10px]">{DELIVERY_STATUS_LABELS[delivery.status] ?? delivery.status}</Badge>
                 </div>
                 <div className={`flex justify-between text-xs ${t.textMuted}`}>
                   <span>Frais de livraison</span>
@@ -180,7 +190,7 @@ export default function PaymentDetailsModal({
               <span className={`rounded-lg px-2.5 py-1 ${collectionMeta.className}`}>Paiement : {collectionMeta.label}</span>
               <span className={`rounded-lg px-2.5 py-1 ${payoutMeta.className}`}>Payout : {payoutMeta.label}</span>
               <span className={`rounded-lg px-2.5 py-1 ${t.dk ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700"}`}>
-                {row.paymentMethod === "CASH_ON_DELIVERY" ? "Cash on Delivery" : row.paymentMethod}
+                {row.paymentMethod === "CASH_ON_DELIVERY" ? "Paiement à la livraison" : row.paymentMethod}
               </span>
             </div>
             <DialogFooter>

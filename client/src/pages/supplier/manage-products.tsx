@@ -89,7 +89,7 @@ function MultiSelectList({ label, items, selected, onChange }: { label: string; 
     <div className="space-y-1.5">
       <Label>{label}</Label>
       <div className="border rounded-lg p-2 max-h-32 overflow-y-auto space-y-1 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
-        {items.length === 0 && <p className="text-xs text-muted-foreground px-1 py-1">None available from admin product</p>}
+        {items.length === 0 && <p className="text-xs text-muted-foreground px-1 py-1">Aucun disponible pour ce produit du catalogue</p>}
         {items.map(item => (
           <label key={item.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-secondary/50 cursor-pointer">
             <input type="checkbox" checked={selected.includes(item.id)} onChange={() => toggle(item.id)} className="rounded" />
@@ -111,16 +111,16 @@ function NoSelectionEmptyState({ onGoToCategories, needsSubCategory }: { onGoToC
       </div>
       <div>
         <p className="font-semibold text-base">
-          {needsSubCategory ? "Select a sub-category to view products" : "Select a category to get started"}
+          {needsSubCategory ? "Sélectionnez une sous-catégorie pour voir les produits" : "Sélectionnez une catégorie pour commencer"}
         </p>
         <p className="text-sm text-muted-foreground mt-1 max-w-xs">
           {needsSubCategory
-            ? "Go to Categories → My Categories and click a sub-category name to filter products here."
-            : "Go to Categories → My Categories, select a category and a sub-category to see products here."}
+            ? "Allez dans Catégories → Mes catégories et cliquez sur le nom d'une sous-catégorie pour filtrer les produits ici."
+            : "Allez dans Catégories → Mes catégories, sélectionnez une catégorie puis une sous-catégorie pour voir les produits ici."}
         </p>
       </div>
       <Button variant="outline" onClick={onGoToCategories} className="gap-2" data-testid="button-go-to-categories">
-        <Layers className="w-4 h-4" />Go to My Categories
+        <Layers className="w-4 h-4" />Aller à Mes catégories
       </Button>
     </div>
   );
@@ -178,7 +178,7 @@ function ProductDetailModal({
               type="button"
               className="absolute top-3 right-3 w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:bg-black/55 transition-colors"
               onClick={onClose}
-              aria-label="Close"
+              aria-label="Fermer"
               data-testid="button-close-product-detail"
             >
               <X className="w-4 h-4 text-white" />
@@ -218,11 +218,11 @@ function ProductDetailModal({
             <div className="flex justify-end pt-1">
               {product.myListing ? (
                 <span className="inline-flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400 font-medium px-2">
-                  <CheckCircle2 className="w-4 h-4" />Already in My Products
+                  <CheckCircle2 className="w-4 h-4" />Déjà dans Mes produits
                 </span>
               ) : (
                 <Button onClick={onAdd} data-testid="button-add-from-detail">
-                  <Plus className="w-4 h-4 mr-1.5" />Add to My Products
+                  <Plus className="w-4 h-4 mr-1.5" />Ajouter à Mes produits
                 </Button>
               )}
             </div>
@@ -367,14 +367,14 @@ function VariantGroupBuilder({
         return (
           <div key={g.id} className="border rounded-lg p-3 space-y-3 bg-secondary/20">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Variant group {idx + 1}</p>
+              <p className="text-sm font-medium">Groupe de variantes {idx + 1}</p>
               {groups.length > 1 && (
-                <Button type="button" size="sm" variant="outline" className="h-7 text-destructive" onClick={() => remove(g.id)}>Remove</Button>
+                <Button type="button" size="sm" variant="outline" className="h-7 text-destructive" onClick={() => remove(g.id)}>Supprimer</Button>
               )}
             </div>
             {sizes.length > 0 && (
               <div className="space-y-1">
-                <Label className="text-xs">Size</Label>
+                <Label className="text-xs">Taille</Label>
                 <Select
                   value={g.sizeId || "__none__"}
                   onValueChange={v => {
@@ -387,9 +387,9 @@ function VariantGroupBuilder({
                     update(g.id, { sizeId: newSizeId, flavorIds: filteredFlavorIds, flavorStocks: newStocks });
                   }}
                 >
-                  <SelectTrigger className="h-9"><SelectValue placeholder="Select size (optional)" /></SelectTrigger>
+                  <SelectTrigger className="h-9"><SelectValue placeholder="Sélectionner une taille (facultatif)" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">Any / no size</SelectItem>
+                    <SelectItem value="__none__">Toutes / aucune taille</SelectItem>
                     {availableSizes.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -397,7 +397,7 @@ function VariantGroupBuilder({
             )}
             {flavors.length > 0 && (
               <MultiSelectList
-                label="Flavors (multi-select)"
+                label="Parfums (sélection multiple)"
                 items={availableFlavors}
                 selected={g.flavorIds}
                 onChange={ids => {
@@ -408,12 +408,12 @@ function VariantGroupBuilder({
               />
             )}
             <div className="space-y-1">
-              <Label className="text-xs">Price ({symbol})</Label>
+              <Label className="text-xs">Prix ({symbol})</Label>
               <Input type="number" step="0.01" min="0" value={g.price} onChange={e => update(g.id, { price: e.target.value })} placeholder="0.00" />
             </div>
             {hasFlavors ? (
               <div className="space-y-2">
-                <Label className="text-xs">Stock per Flavor</Label>
+                <Label className="text-xs">Stock par parfum</Label>
                 {selectedFlavors.map(f => (
                   <div key={f.id} className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground flex-1 truncate">{f.name}</span>
@@ -438,10 +438,10 @@ function VariantGroupBuilder({
         );
       })}
       <Button type="button" variant="outline" size="sm" onClick={addGroup} disabled={!canAddMore} className="w-full">
-        <Plus className="w-4 h-4 mr-1" />Add variant group
+        <Plus className="w-4 h-4 mr-1" />Ajouter un groupe de variantes
       </Button>
       {!canAddMore && (
-        <p className="text-xs text-muted-foreground text-center">All size/flavor combinations are already assigned.</p>
+        <p className="text-xs text-muted-foreground text-center">Toutes les combinaisons taille/parfum sont déjà attribuées.</p>
       )}
     </div>
   );
@@ -462,14 +462,14 @@ function VariantMatrix({ entries, onChange }: { entries: VEntry[]; onChange: (en
       <table className="w-full text-sm">
         <thead className="bg-secondary/40">
           <tr>
-            <th className="text-left p-2.5 font-medium text-muted-foreground">Variant</th>
-            <th className="text-center p-2.5 font-medium text-muted-foreground">Price ({symbol})</th>
-            <th className="text-center p-2.5 font-medium text-muted-foreground">Qty in Stock</th>
+            <th className="text-left p-2.5 font-medium text-muted-foreground">Variante</th>
+            <th className="text-center p-2.5 font-medium text-muted-foreground">Prix ({symbol})</th>
+            <th className="text-center p-2.5 font-medium text-muted-foreground">Qté en stock</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border/50">
           {entries.map((e, i) => {
-            const label = [e.flavorName, e.sizeName].filter(Boolean).join(" · ") || "Default";
+            const label = [e.flavorName, e.sizeName].filter(Boolean).join(" · ") || "Par défaut";
             return (
               <tr key={i} className="hover:bg-secondary/20 transition-colors">
                 <td className="p-2.5 font-medium">{label}</td>
@@ -537,7 +537,7 @@ function ListingLivePreview({
 
   return (
     <div className="lg:sticky lg:top-0">
-      <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Live Preview</Label>
+      <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Aperçu en direct</Label>
       <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
         <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
           {gallery.activeUrl ? (
@@ -578,9 +578,9 @@ function ListingLivePreview({
           {'categoryLabel' in product && <TaxBadges product={product as ProductWithTaxonomy} />}
           {hasVariantData && (
             <div className="pt-2 border-t space-y-1.5">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Variants</p>
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Variantes</p>
               {previewEntries.map((e, i) => {
-                const label = [e.flavorName, e.sizeName].filter(Boolean).join(" · ") || "Default";
+                const label = [e.flavorName, e.sizeName].filter(Boolean).join(" · ") || "Par défaut";
                 const price = parseFloat(e.price);
                 const qty = parseInt(e.qty) || 0;
                 return (
@@ -589,7 +589,7 @@ function ListingLivePreview({
                     <div className="flex items-center gap-2 shrink-0">
                       {price > 0 && <span className="font-medium">{fmtDecimal(price)}</span>}
                       <span className={`text-xs px-1.5 py-0.5 rounded-md ${qty > 0 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" : "bg-secondary text-muted-foreground"}`}>
-                        {qty > 0 ? `${qty} en stock` : "No stock"}
+                        {qty > 0 ? `${qty} en stock` : "Aucun stock"}
                       </span>
                     </div>
                   </div>
@@ -655,14 +655,14 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
       });
     },
     onSuccess: () => {
-      toast({ title: "Added to your products!" });
+      toast({ title: "Ajouté à vos produits !" });
       qc.invalidateQueries({ queryKey: ["/api/supplier/listings"] });
       qc.invalidateQueries({ queryKey: ["/api/supplier/admin-products"] });
       invalidateMarketplace(qc);
       onSuccess();
       onClose();
     },
-    onError: (err: any) => toast({ title: extractApiErrorMessage(err, "Error"), variant: "destructive" }),
+    onError: (err: any) => toast({ title: extractApiErrorMessage(err, "Erreur"), variant: "destructive" }),
   });
 
   const entries = useMemo(() => groupsToEntries(groups, availableFlavors, availableSizes), [groups, availableFlavors, availableSizes]);
@@ -671,24 +671,24 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent hideClose className="sm:max-w-4xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
-        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-add-listing">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Fermer" data-testid="button-close-add-listing">
           <X className="w-4 h-4" />
         </button>
         <DialogHeader>
-          <DialogTitle>Add to My Products — Variant Builder</DialogTitle>
+          <DialogTitle>Ajouter à Mes produits — Générateur de variantes</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
           {/* Left – Builder */}
           <div className="space-y-4">
-           
+
 
             <div>
               <VariantGroupBuilder flavors={availableFlavors} sizes={availableSizes} groups={groups} onChange={setGroups} />
-              <p className="text-xs text-muted-foreground mt-1.5">Products only appear in the shop when price &gt; 0 and stock &gt; 0.</p>
+              <p className="text-xs text-muted-foreground mt-1.5">Les produits n'apparaissent dans la boutique que lorsque le prix est supérieur à 0 et le stock supérieur à 0.</p>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Pack availability (optional)</Label>
+              <Label className="text-sm font-medium">Disponibilité en pack (facultatif)</Label>
               <label className="flex items-start gap-2 p-3 rounded-lg border bg-secondary/20 cursor-pointer hover:bg-secondary/30 transition-colors">
                 <input
                   type="checkbox"
@@ -698,24 +698,24 @@ function AddListingModal({ product, flavs, szs, onClose, onSuccess }: {
                   data-testid="checkbox-only-for-pack"
                 />
                 <span className="text-sm">
-                  <span className="font-medium">Add to Pack</span>
+                  <span className="font-medium">Ajouter au pack</span>
                   <span className="block text-xs text-muted-foreground">
                     {onlyForPack
-                      ? "Product will appear in both My Products and Pack Products."
-                      : "Product will only appear in My Products (not available in Packs)."}
+                      ? "Le produit apparaîtra à la fois dans Mes produits et dans les Produits en pack."
+                      : "Le produit apparaîtra uniquement dans Mes produits (non disponible dans les packs)."}
                   </span>
                 </span>
               </label>
             </div>
 
             <div className="flex flex-wrap gap-2 justify-end pt-2">
-              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button variant="outline" onClick={onClose}>Annuler</Button>
               <Button
                 onClick={() => add.mutate()}
                 disabled={add.isPending || !hasAnyPrice}
                 data-testid="button-confirm-add-listing"
               >
-                {add.isPending ? "Adding…" : "Add"}
+                {add.isPending ? "Ajout en cours…" : "Ajouter"}
               </Button>
             </div>
           </div>
@@ -765,9 +765,9 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
       setIsIndividuallyVisible((v: boolean) => !v);
       qc.invalidateQueries({ queryKey: ["/api/supplier/listings"] });
       invalidateMarketplace(qc, listing.productId);
-      toast({ title: isIndividuallyVisible ? "Product hidden from Shop" : "Product visible in Shop" });
+      toast({ title: isIndividuallyVisible ? "Produit masqué de la boutique" : "Produit visible dans la boutique" });
     },
-    onError: () => toast({ title: "Failed to update visibility", variant: "destructive" }),
+    onError: () => toast({ title: "Échec de la mise à jour de la visibilité", variant: "destructive" }),
   });
 
   // Task: "Prevent removing products used in packs" — packUsageCount comes
@@ -894,17 +894,17 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
         })),
       });
     },
-    onSuccess: () => { toast({ title: "Variants updated" }); onSuccess(); onClose(); },
-    onError: (err: any) => toast({ title: extractApiErrorMessage(err, "Error updating"), variant: "destructive" }),
+    onSuccess: () => { toast({ title: "Variantes mises à jour" }); onSuccess(); onClose(); },
+    onError: (err: any) => toast({ title: extractApiErrorMessage(err, "Erreur lors de la mise à jour"), variant: "destructive" }),
   });
 
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent hideClose className="sm:max-w-4xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
-        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-edit-listing">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Fermer" data-testid="button-close-edit-listing">
           <X className="w-4 h-4" />
         </button>
-        <DialogHeader><DialogTitle>Edit Pricing & Stock</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Modifier le prix et le stock</DialogTitle></DialogHeader>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
           {/* Left – Builder */}
           <div className="space-y-4">
@@ -912,18 +912,18 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
               <div className="flex items-start gap-2 p-3 rounded-lg border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300" data-testid="banner-incomplete-listing">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                 <p className="text-xs">
-                  This listing has no configured variant — it is currently <strong>invisible to Coffee Owners</strong> in
-                  the marketplace. Add at least one size/flavor combination with a price and stock below, then Save to fix it.
+                  Cette fiche n'a aucune variante configurée — elle est actuellement <strong>invisible pour les propriétaires de café</strong> sur
+                  la marketplace. Ajoutez au moins une combinaison taille/parfum avec un prix et un stock ci-dessous, puis enregistrez pour corriger ce problème.
                 </p>
               </div>
             )}
             <div>
               <VariantGroupBuilder flavors={availableFlavors} sizes={availableSizes} groups={groups} onChange={handleGroupsChange} />
-              <p className="text-xs text-muted-foreground mt-1.5">Variants with qty 0 will be hidden from café customers.</p>
+              <p className="text-xs text-muted-foreground mt-1.5">Les variantes avec une quantité de 0 seront masquées aux propriétaires de café.</p>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-sm font-medium">Pack availability (optional)</Label>
+              <Label className="text-sm font-medium">Disponibilité en pack (facultatif)</Label>
               <label className="flex items-start gap-2 p-3 rounded-lg border bg-secondary/20 cursor-pointer hover:bg-secondary/30 transition-colors">
                 <input
                   type="checkbox"
@@ -933,11 +933,11 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
                   data-testid="checkbox-edit-only-for-pack"
                 />
                 <span className="text-sm">
-                  <span className="font-medium">Add to Pack</span>
+                  <span className="font-medium">Ajouter au pack</span>
                   <span className="block text-xs text-muted-foreground">
                     {onlyForPack
-                      ? "Product will appear in both My Products and Pack Products."
-                      : "Product will only appear in My Products (not available in Packs)."}
+                      ? "Le produit apparaîtra à la fois dans Mes produits et dans les Produits en pack."
+                      : "Le produit apparaîtra uniquement dans Mes produits (non disponible dans les packs)."}
                   </span>
                 </span>
               </label>
@@ -945,7 +945,7 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
 
             {usedInPacks && (
               <p className="text-xs text-muted-foreground -mt-2" data-testid="text-remove-blocked-reason">
-                This product cannot be removed because it is used in {listing.packUsageCount} pack{listing.packUsageCount === 1 ? "" : "s"}.
+                Ce produit ne peut pas être supprimé car il est utilisé dans {listing.packUsageCount} pack{listing.packUsageCount === 1 ? "" : "s"}.
               </p>
             )}
 
@@ -959,7 +959,7 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
                   disabled={usedInPacks}
                   data-testid="button-delete-listing-modal"
                 >
-                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Remove
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Supprimer
                 </Button>
               )}
               <Button
@@ -970,15 +970,15 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
                 data-testid="button-toggle-listing-visibility"
               >
                 {toggleIndividualVisibility.isPending ? (
-                  "Updating…"
+                  "Mise à jour…"
                 ) : isIndividuallyVisible ? (
-                  <><EyeOff className="w-3.5 h-3.5 mr-1.5" />Hide</>
+                  <><EyeOff className="w-3.5 h-3.5 mr-1.5" />Masquer</>
                 ) : (
-                  <><Eye className="w-3.5 h-3.5 mr-1.5" />Show</>
+                  <><Eye className="w-3.5 h-3.5 mr-1.5" />Afficher</>
                 )}
               </Button>
               <Button type="button" onClick={() => save.mutate()} disabled={save.isPending} data-testid="button-save-listing">
-                {save.isPending ? "Saving…" : "Save"}
+                {save.isPending ? "Enregistrement…" : "Enregistrer"}
               </Button>
             </div>
           </div>
@@ -998,6 +998,11 @@ function EditListingModal({ listing, flavs, szs, onClose, onSuccess, onDelete }:
 
 // ── Status Badge ─────────────────────────────────────────────────────────────
 
+// Display-only French labels for the raw status enum — `status` itself
+// (used above/elsewhere for the `cls` lookup and any comparisons) is never
+// translated, only what's rendered to the Supplier.
+const STATUS_LABELS: Record<string, string> = { PENDING: "En attente", ACTIVE: "Actif", REJECTED: "Refusé" };
+
 function StatusBadge({ status }: { status: string }) {
   const cls: Record<string, string> = {
   PENDING:
@@ -1009,7 +1014,7 @@ function StatusBadge({ status }: { status: string }) {
 };
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls[status] ?? "bg-secondary text-muted-foreground"}`}>
-      {status}
+      {STATUS_LABELS[status] ?? status}
     </span>
   );
 }
@@ -1099,14 +1104,14 @@ function SupplierProductFormModal({ open, onClose, editing, cats, subs, flavs, s
         : apiRequest("POST", "/api/supplier/created-products", data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/supplier/created-products"] });
-      toast({ title: editing ? "Product updated" : "Product submitted for review!" });
+      toast({ title: editing ? "Produit mis à jour" : "Produit soumis pour validation !" });
       onClose();
     },
-    onError: () => toast({ title: "Error saving product", variant: "destructive" }),
+    onError: () => toast({ title: "Erreur lors de l'enregistrement du produit", variant: "destructive" }),
   });
 
   const handleSave = () => {
-    if (!form.name.trim()) return toast({ title: "Product name is required", variant: "destructive" });
+    if (!form.name.trim()) return toast({ title: "Le nom du produit est requis", variant: "destructive" });
     save.mutate({
       name: form.name.trim(),
       description: form.description.trim() || null,
@@ -1125,58 +1130,58 @@ function SupplierProductFormModal({ open, onClose, editing, cats, subs, flavs, s
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent hideClose className="sm:max-w-4xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
-        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-supplier-product-form">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Fermer" data-testid="button-close-supplier-product-form">
           <X className="w-4 h-4" />
         </button>
         <DialogHeader>
-          <DialogTitle>{editing ? "Edit Product" : "Create New Product"}</DialogTitle>
-          {!editing && <p className="text-sm text-muted-foreground mt-1">Submitted products go to admin for review and approval.</p>}
+          <DialogTitle>{editing ? "Modifier le produit" : "Créer un nouveau produit"}</DialogTitle>
+          {!editing && <p className="text-sm text-muted-foreground mt-1">Les produits soumis sont envoyés à l'administrateur pour validation et approbation.</p>}
         </DialogHeader>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
           {/* Left – Form */}
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Product Name *</Label>
-              <Input data-testid="input-sprod-name" value={form.name} onChange={e => setField("name", e.target.value)} placeholder="e.g. Single Origin Ethiopia 250g" />
+              <Label>Nom du produit *</Label>
+              <Input data-testid="input-sprod-name" value={form.name} onChange={e => setField("name", e.target.value)} placeholder="ex. Éthiopie Origine Unique 250g" />
             </div>
             <div className="space-y-1.5">
               <Label>Description</Label>
-              <Input data-testid="input-sprod-desc" value={form.description} onChange={e => setField("description", e.target.value)} placeholder="Brief description" />
+              <Input data-testid="input-sprod-desc" value={form.description} onChange={e => setField("description", e.target.value)} placeholder="Brève description" />
             </div>
             <div className="space-y-1.5">
-              <Label>Image URL</Label>
+              <Label>URL de l'image</Label>
               <Input data-testid="input-sprod-image" value={form.imageUrl} onChange={e => setField("imageUrl", e.target.value)} placeholder="https://…" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Category</Label>
+                <Label>Catégorie</Label>
                 <Select value={form.categoryId} onValueChange={v => setField("categoryId", v === "__none__" ? "" : v)}>
-                  <SelectTrigger data-testid="select-sprod-category"><SelectValue placeholder="Select…" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-sprod-category"><SelectValue placeholder="Sélectionner…" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">None</SelectItem>
+                    <SelectItem value="__none__">Aucune</SelectItem>
                     {supplierCats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Sub-category</Label>
+                <Label>Sous-catégorie</Label>
                 <Select value={form.subCategoryId} onValueChange={v => setField("subCategoryId", v === "__none__" ? "" : v)} disabled={!form.categoryId}>
-                  <SelectTrigger data-testid="select-sprod-subcat"><SelectValue placeholder={form.categoryId ? "Select…" : "Pick category first"} /></SelectTrigger>
+                  <SelectTrigger data-testid="select-sprod-subcat"><SelectValue placeholder={form.categoryId ? "Sélectionner…" : "Choisissez d'abord une catégorie"} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">None</SelectItem>
+                    <SelectItem value="__none__">Aucune</SelectItem>
                     {filteredSubs.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            <MultiSelectList label="Flavors" items={filteredFlavs} selected={form.flavorIds} onChange={ids => setField("flavorIds", ids)} />
-            <MultiSelectList label="Sizes" items={filteredSzs} selected={form.sizeIds} onChange={ids => setField("sizeIds", ids)} />
+            <MultiSelectList label="Parfums" items={filteredFlavs} selected={form.flavorIds} onChange={ids => setField("flavorIds", ids)} />
+            <MultiSelectList label="Tailles" items={filteredSzs} selected={form.sizeIds} onChange={ids => setField("sizeIds", ids)} />
             <div className="space-y-1.5">
-              <Label>Brand</Label>
+              <Label>Marque</Label>
               <Select value={form.brandId} onValueChange={v => setField("brandId", v === "__none__" ? "" : v)}>
-                <SelectTrigger data-testid="select-sprod-brand"><SelectValue placeholder="Select…" /></SelectTrigger>
+                <SelectTrigger data-testid="select-sprod-brand"><SelectValue placeholder="Sélectionner…" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">None</SelectItem>
+                  <SelectItem value="__none__">Aucune</SelectItem>
                   {filteredBrnds.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -1189,19 +1194,19 @@ function SupplierProductFormModal({ open, onClose, editing, cats, subs, flavs, s
                   onClick={onDelete}
                   data-testid="button-delete-sprod-modal"
                 >
-                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />Supprimer
                 </Button>
               )}
-              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button variant="outline" onClick={onClose}>Annuler</Button>
               <Button onClick={handleSave} disabled={save.isPending || !form.name.trim()} data-testid="button-save-sprod">
-                {save.isPending ? "Saving…" : editing ? "Save Changes" : "Submit for Review"}
+                {save.isPending ? "Enregistrement…" : editing ? "Enregistrer les modifications" : "Soumettre pour validation"}
               </Button>
             </div>
           </div>
 
           {/* Right – Live Preview */}
           <div className="lg:sticky lg:top-0">
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Live Preview</Label>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Aperçu en direct</Label>
             <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
               <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
                 {form.imageUrl ? (
@@ -1211,7 +1216,7 @@ function SupplierProductFormModal({ open, onClose, editing, cats, subs, flavs, s
                 )}
               </div>
               <div className="p-4 space-y-2">
-                <p className="font-semibold text-lg leading-tight">{form.name || "Product name"}</p>
+                <p className="font-semibold text-lg leading-tight">{form.name || "Nom du produit"}</p>
                 {form.description && <p className="text-sm text-muted-foreground line-clamp-3">{form.description}</p>}
                 <div className="flex flex-wrap gap-1 pt-1">
                   {form.categoryId && <Badge variant="secondary" className="text-xs">{supplierCats.find(c => String(c.id) === form.categoryId)?.name}</Badge>}
@@ -1271,9 +1276,9 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
     mutationFn: (id: number) => apiRequest("DELETE", `/api/supplier/created-products/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/supplier/created-products"] });
-      toast({ title: "Product deleted" });
+      toast({ title: "Produit supprimé" });
     },
-    onError: () => toast({ title: "Error deleting product", variant: "destructive" }),
+    onError: () => toast({ title: "Erreur lors de la suppression du produit", variant: "destructive" }),
   });
 
   // Always routes through the same AlertDialog now (task: "Standardize
@@ -1287,7 +1292,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
       const usage = res.ok ? await res.json() as { packs: PackUsage[] } : { packs: [] };
       setDeleteTarget({ id: product.id, name: product.name, packs: usage.packs });
     } catch {
-      toast({ title: "Unable to check Pack usage", variant: "destructive" });
+      toast({ title: "Impossible de vérifier l'utilisation dans les packs", variant: "destructive" });
     }
   };
 
@@ -1356,10 +1361,10 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
       <div className="flex gap-3 flex-wrap">
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
           <Plus className="w-4 h-4 text-primary" />
-          <span className="text-sm font-medium">{totalCount} product{totalCount !== 1 ? 's' : ''} created</span>
+          <span className="text-sm font-medium">{totalCount} produit{totalCount !== 1 ? 's' : ''} créé{totalCount !== 1 ? 's' : ''}</span>
         </div>
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">{pendingCount} pending review · {approvedCount} approved</span>
+          <span className="text-sm text-muted-foreground">{pendingCount} en attente de validation · {approvedCount} approuvé{approvedCount !== 1 ? 's' : ''}</span>
         </div>
       </div>
 
@@ -1386,7 +1391,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
                   ref={newProdSearchInputRef}
                   data-testid="input-new-product-search"
                   className="pl-9"
-                  placeholder="Search products…"
+                  placeholder="Rechercher des produits…"
                   value={filters.search}
                   onChange={e => setFilter("search", e.target.value)}
                   onBlur={() => { if (!filters.search) setNewProdSearchOpen(false); }}
@@ -1396,9 +1401,9 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
             {/* Category */}
             <div className="w-[150px] shrink-0">
               <Select value={filters.categoryId} onValueChange={v => setFilter("categoryId", v)}>
-                <SelectTrigger data-testid="select-new-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
+                <SelectTrigger data-testid="select-new-filter-category"><SelectValue placeholder="Catégorie" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">All Categories</SelectItem>
+                  <SelectItem value="__all__">Toutes les catégories</SelectItem>
                   {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -1406,9 +1411,9 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
             {/* SubCategory */}
             <div className="w-[150px] shrink-0">
               <Select value={filters.subCategoryId} onValueChange={v => setFilter("subCategoryId", v)} disabled={!filters.categoryId}>
-                <SelectTrigger data-testid="select-new-filter-subcat"><SelectValue placeholder="Sub-category" /></SelectTrigger>
+                <SelectTrigger data-testid="select-new-filter-subcat"><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">All Sub-categories</SelectItem>
+                  <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
                   {filteredSubsForFilter.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -1416,9 +1421,9 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
             {/* Flavor */}
             <div className="w-[130px] shrink-0">
               <Select value={filters.flavorId} onValueChange={v => setFilter("flavorId", v)}>
-                <SelectTrigger data-testid="select-new-filter-flavor"><SelectValue placeholder="Flavor" /></SelectTrigger>
+                <SelectTrigger data-testid="select-new-filter-flavor"><SelectValue placeholder="Parfum" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">All Flavors</SelectItem>
+                  <SelectItem value="__all__">Tous les parfums</SelectItem>
                   {filteredFlavsNew.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -1426,9 +1431,9 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
             {/* Size */}
             <div className="w-[130px] shrink-0">
               <Select value={filters.sizeId} onValueChange={v => setFilter("sizeId", v)}>
-                <SelectTrigger data-testid="select-new-filter-size"><SelectValue placeholder="Size" /></SelectTrigger>
+                <SelectTrigger data-testid="select-new-filter-size"><SelectValue placeholder="Taille" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">All Sizes</SelectItem>
+                  <SelectItem value="__all__">Toutes les tailles</SelectItem>
                   {filteredSzsNew.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -1436,9 +1441,9 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
             {/* Brand */}
             <div className="w-[130px] shrink-0">
               <Select value={filters.brandId} onValueChange={v => setFilter("brandId", v)}>
-                <SelectTrigger data-testid="select-new-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
+                <SelectTrigger data-testid="select-new-filter-brand"><SelectValue placeholder="Marque" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">All Brands</SelectItem>
+                  <SelectItem value="__all__">Toutes les marques</SelectItem>
                   {filteredBrndsNew.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -1446,7 +1451,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
             {/* Clear */}
             {hasActiveFilters && (
               <Button variant="outline" size="sm" onClick={() => setFilters(EMPTY_NEW_FILTERS)} className="text-muted-foreground shrink-0">
-                <X className="w-4 h-4 mr-1" />Clear
+                <X className="w-4 h-4 mr-1" />Effacer
               </Button>
             )}
           </div>
@@ -1455,14 +1460,14 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
 
       {/* Toolbar: action + view toggle */}
       <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">Submit new products for admin review and approval.</p>
+        <p className="text-sm text-muted-foreground">Soumettez de nouveaux produits pour validation et approbation par l'administrateur.</p>
         <div className="flex items-center gap-2">
           <div className="flex gap-1 border rounded-lg p-0.5">
             <button
               onClick={() => setViewMode('list')}
               className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               data-testid="toggle-new-view-list"
-              title="List view"
+              title="Vue liste"
             >
               <LayoutList className="w-4 h-4" />
             </button>
@@ -1470,13 +1475,13 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
               onClick={() => setViewMode('grid')}
               className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               data-testid="toggle-new-view-grid"
-              title="Grid view"
+              title="Vue grille"
             >
               <LayoutGrid className="w-4 h-4" />
             </button>
           </div>
           <Button onClick={() => { setEditingProd(null); setModalOpen(true); }} data-testid="button-create-supplier-product">
-            <Plus className="w-4 h-4 mr-1.5" />New Product
+            <Plus className="w-4 h-4 mr-1.5" />Nouveau produit
           </Button>
         </div>
       </div>
@@ -1488,9 +1493,9 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
         <div className="p-12 flex flex-col items-center gap-3 text-center border rounded-lg bg-secondary/10">
           <Package className="w-10 h-10 text-muted-foreground opacity-40" />
           <div>
-            <p className="font-medium">{hasActiveFilters ? "No products match your filters" : "No products created yet"}</p>
+            <p className="font-medium">{hasActiveFilters ? "Aucun produit ne correspond à vos filtres" : "Aucun produit créé pour le moment"}</p>
             <p className="text-sm text-muted-foreground mt-1">
-              {hasActiveFilters ? "Try adjusting your filters." : "Click \"New Product\" to submit a product for admin approval."}
+              {hasActiveFilters ? "Essayez d'ajuster vos filtres." : "Cliquez sur « Nouveau produit » pour soumettre un produit à l'approbation de l'administrateur."}
             </p>
           </div>
         </div>
@@ -1527,8 +1532,8 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
             <TableHeader className="bg-secondary/30">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-12" />
-                <TableHead>Product</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Produit</TableHead>
+                <TableHead>Statut</TableHead>
                 <TableHead className="w-24 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -1594,31 +1599,31 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{deleteTarget?.packs.length ? "Product used in Pack(s)" : "Delete Product?"}</AlertDialogTitle>
+            <AlertDialogTitle>{deleteTarget?.packs.length ? "Produit utilisé dans des packs" : "Supprimer le produit ?"}</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteTarget?.packs.length ? (
                 <>
-                  <strong>{deleteTarget?.name}</strong> is currently used by one or more Packs.
-                  Confirming removal will delete the product and move every affected Pack from New Packs to Old Packs.
-                  Existing Pack history and orders will be preserved.
+                  <strong>{deleteTarget?.name}</strong> est actuellement utilisé par un ou plusieurs packs.
+                  Confirmer la suppression supprimera le produit et déplacera chaque pack concerné de Nouveaux Packs vers Anciens Packs.
+                  L'historique des packs et des commandes existantes sera conservé.
                   <span className="block mt-2 font-medium">
-                    Affected Packs: {deleteTarget?.packs.map(pack => pack.name).join(", ")}
+                    Packs concernés : {deleteTarget?.packs.map(pack => pack.name).join(", ")}
                   </span>
                 </>
               ) : (
-                <>This will permanently delete <strong>{deleteTarget?.name}</strong> and cannot be undone.</>
+                <>Cette action supprimera définitivement <strong>{deleteTarget?.name}</strong> et ne peut pas être annulée.</>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => { if (deleteTarget) deleteMut.mutate(deleteTarget.id); setDeleteTarget(null); }}
               disabled={deleteMut.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-testid="button-confirm-delete-sprod"
             >
-              {deleteMut.isPending ? "Deleting…" : deleteTarget?.packs.length ? "Delete product and archive Packs" : "Delete"}
+              {deleteMut.isPending ? "Suppression…" : deleteTarget?.packs.length ? "Supprimer le produit et archiver les packs" : "Supprimer"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1777,10 +1782,10 @@ function AdminProductsTab({
       <div className="flex gap-3 flex-wrap">
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
           <Package className="w-4 h-4 text-primary" />
-          <span className="text-sm font-medium">{allAdminProducts.length} products available</span>
+          <span className="text-sm font-medium">{allAdminProducts.length} produits disponibles</span>
         </div>
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">{addedCount} added to my catalog · {mappings.length} categories</span>
+          <span className="text-sm text-muted-foreground">{addedCount} ajouté{addedCount !== 1 ? "s" : ""} à mon catalogue · {mappings.length} catégorie{mappings.length !== 1 ? "s" : ""}</span>
         </div>
       </div>
 
@@ -1811,7 +1816,7 @@ function AdminProductsTab({
                       ref={adminProdSearchInputRef}
                       data-testid="input-search-admin-products"
                       className="pl-9"
-                      placeholder="Search products…"
+                      placeholder="Rechercher des produits…"
                       value={filters.search}
                       onChange={e => setFilter("search", e.target.value)}
                       onBlur={() => { if (!filters.search) setAdminProdSearchOpen(false); }}
@@ -1821,9 +1826,9 @@ function AdminProductsTab({
                 {/* Category */}
                 <div className="w-[150px] shrink-0">
                   <Select value={catIdStr || "__all__"} onValueChange={handleCatChange}>
-                    <SelectTrigger data-testid="select-admin-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
+                    <SelectTrigger data-testid="select-admin-filter-category"><SelectValue placeholder="Catégorie" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">All Categories</SelectItem>
+                      <SelectItem value="__all__">Toutes les catégories</SelectItem>
                       {mappedCats.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -1831,9 +1836,9 @@ function AdminProductsTab({
                 {/* SubCategory */}
                 <div className="w-[150px] shrink-0">
                   <Select value={subCatIdStr || "__all__"} onValueChange={handleSubCatChange} disabled={!catIdStr}>
-                    <SelectTrigger data-testid="select-admin-filter-subcat"><SelectValue placeholder="Sub-category" /></SelectTrigger>
+                    <SelectTrigger data-testid="select-admin-filter-subcat"><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">All Sub-categories</SelectItem>
+                      <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
                       {mappedSubcats.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -1841,9 +1846,9 @@ function AdminProductsTab({
                 {/* Flavor */}
                 <div className="w-[130px] shrink-0">
                   <Select value={filters.flavorId || "__all__"} onValueChange={v => setFilter("flavorId", v)}>
-                    <SelectTrigger data-testid="select-admin-filter-flavor"><SelectValue placeholder="Flavor" /></SelectTrigger>
+                    <SelectTrigger data-testid="select-admin-filter-flavor"><SelectValue placeholder="Parfum" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">All Flavors</SelectItem>
+                      <SelectItem value="__all__">Tous les parfums</SelectItem>
                       {filteredFlavsForFilter.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -1851,9 +1856,9 @@ function AdminProductsTab({
                 {/* Size */}
                 <div className="w-[130px] shrink-0">
                   <Select value={filters.sizeId || "__all__"} onValueChange={v => setFilter("sizeId", v)}>
-                    <SelectTrigger data-testid="select-admin-filter-size"><SelectValue placeholder="Size" /></SelectTrigger>
+                    <SelectTrigger data-testid="select-admin-filter-size"><SelectValue placeholder="Taille" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">All Sizes</SelectItem>
+                      <SelectItem value="__all__">Toutes les tailles</SelectItem>
                       {filteredSzsForFilter.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -1861,9 +1866,9 @@ function AdminProductsTab({
                 {/* Brand */}
                 <div className="w-[130px] shrink-0">
                   <Select value={filters.brandId || "__all__"} onValueChange={v => setFilter("brandId", v)}>
-                    <SelectTrigger data-testid="select-admin-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
+                    <SelectTrigger data-testid="select-admin-filter-brand"><SelectValue placeholder="Marque" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">All Brands</SelectItem>
+                      <SelectItem value="__all__">Toutes les marques</SelectItem>
                       {filteredBrndsForFilter.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -1876,21 +1881,21 @@ function AdminProductsTab({
                       setSelectedCategory(null);
                       setSelectedSubCategory(null);
                     }} className="text-muted-foreground">
-                      <X className="w-4 h-4 mr-1" />Clear
+                      <X className="w-4 h-4 mr-1" />Effacer
                     </Button>
                   )}
                   <div className="flex border rounded-md overflow-hidden">
                     <button
                       onClick={() => setViewMode('list')}
                       className={`p-1.5 transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                      data-testid="toggle-admin-view-list" title="List view"
+                      data-testid="toggle-admin-view-list" title="Vue liste"
                     >
                       <LayoutList className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => setViewMode('grid')}
                       className={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                      data-testid="toggle-admin-view-grid" title="Grid view"
+                      data-testid="toggle-admin-view-grid" title="Vue grille"
                     >
                       <LayoutGrid className="w-4 h-4" />
                     </button>
@@ -1907,9 +1912,9 @@ function AdminProductsTab({
             <div className="p-12 flex flex-col items-center gap-3 text-center border rounded-lg">
               <Package className="w-10 h-10 text-muted-foreground opacity-40" />
               <div>
-                <p className="font-medium">No products available</p>
+                <p className="font-medium">Aucun produit disponible</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {hasActiveFilters ? "Try adjusting your filters." : "No admin products found for your selected category."}
+                  {hasActiveFilters ? "Essayez d'ajuster vos filtres." : "Aucun produit du catalogue trouvé pour la catégorie sélectionnée."}
                 </p>
               </div>
             </div>
@@ -1927,10 +1932,10 @@ function AdminProductsTab({
                   <div className="p-2.5 space-y-1.5">
                     <p className="font-medium text-sm line-clamp-2">{p.name}</p>
                     {p.myListing ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5" />Added</span>
+                      <span className="inline-flex items-center gap-1 text-xs text-emerald-600"><CheckCircle2 className="w-3.5 h-3.5" />Ajouté</span>
                     ) : (
                       <Button size="sm" variant="outline" className="w-full h-7 text-xs" onClick={e => { e.stopPropagation(); setAddingProduct(p); }} data-testid={`button-add-to-my-products-${p.id}`}>
-                        <Plus className="w-3 h-3 mr-1" />Add to My Products
+                        <Plus className="w-3 h-3 mr-1" />Ajouter à Mes produits
                       </Button>
                     )}
                   </div>
@@ -1943,8 +1948,8 @@ function AdminProductsTab({
                 <TableHeader className="bg-secondary/30">
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="w-14" />
-                    <TableHead>Product</TableHead>
-                    <TableHead>Taxonomy</TableHead>
+                    <TableHead>Produit</TableHead>
+                    <TableHead>Classification</TableHead>
                     <TableHead className="text-right w-40">Action</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1970,11 +1975,11 @@ function AdminProductsTab({
                       <TableCell className="text-right" onClick={e => e.stopPropagation()}>
                         {p.myListing ? (
                           <span className="inline-flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1.5 rounded-md font-medium">
-                            <CheckCircle2 className="w-3.5 h-3.5" />Added
+                            <CheckCircle2 className="w-3.5 h-3.5" />Ajouté
                           </span>
                         ) : (
                           <Button size="sm" variant="outline" onClick={() => setAddingProduct(p)} data-testid={`button-add-to-my-products-${p.id}`}>
-                            <Plus className="w-3.5 h-3.5 mr-1" />Add to My Products
+                            <Plus className="w-3.5 h-3.5 mr-1" />Ajouter à Mes produits
                           </Button>
                         )}
                       </TableCell>
@@ -2158,9 +2163,9 @@ function MyProductsTab({
       qc.invalidateQueries({ queryKey: ["/api/supplier/listings"] });
       qc.invalidateQueries({ queryKey: ["/api/supplier/admin-products"] });
       invalidateMarketplace(qc);
-      toast({ title: "Removed from your products" });
+      toast({ title: "Retiré de vos produits" });
     },
-    onError: (err: any) => toast({ title: err?.message ?? "Error removing", variant: "destructive" }),
+    onError: (err: any) => toast({ title: err?.message ?? "Erreur lors de la suppression", variant: "destructive" }),
   });
 
   // Task: "Prevent removing products used in packs" — packUsageCount is
@@ -2171,7 +2176,7 @@ function MyProductsTab({
   // re-checks and rejects regardless (DELETE .../listings/:id → 409).
   const requestRemove = (listing: SupplierListingWithProduct) => {
     if ((listing.packUsageCount ?? 0) > 0) {
-      toast({ title: "Cannot remove", description: "This product is used in one or more packs.", variant: "destructive" });
+      toast({ title: "Impossible de supprimer", description: "Ce produit est utilisé dans un ou plusieurs packs.", variant: "destructive" });
       return;
     }
     setRemoveTarget(listing);
@@ -2183,10 +2188,10 @@ function MyProductsTab({
       <div className="flex gap-3 flex-wrap">
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
           <ShoppingBag className="w-4 h-4 text-primary" />
-          <span className="text-sm font-medium">{visibleListings.length} product{visibleListings.length !== 1 ? 's' : ''} in my catalog</span>
+          <span className="text-sm font-medium">{visibleListings.length} produit{visibleListings.length !== 1 ? 's' : ''} dans mon catalogue</span>
         </div>
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">{inStockCount} en stock · {outOfStockCount} out of stock</span>
+          <span className="text-sm text-muted-foreground">{inStockCount} en stock · {outOfStockCount} en rupture de stock</span>
         </div>
       </div>
 
@@ -2217,7 +2222,7 @@ function MyProductsTab({
                       ref={myProdSearchInputRef}
                       data-testid="input-search-my-products"
                       className="pl-9"
-                      placeholder="Search products…"
+                      placeholder="Rechercher des produits…"
                       value={filters.search}
                       onChange={e => setFilter("search", e.target.value)}
                       onBlur={() => { if (!filters.search) setMyProdSearchOpen(false); }}
@@ -2227,9 +2232,9 @@ function MyProductsTab({
                 {/* Category */}
                 <div className="w-[150px] shrink-0">
                   <Select value={catIdStr || "__all__"} onValueChange={handleCatChange}>
-                    <SelectTrigger data-testid="select-my-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
+                    <SelectTrigger data-testid="select-my-filter-category"><SelectValue placeholder="Catégorie" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">All Categories</SelectItem>
+                      <SelectItem value="__all__">Toutes les catégories</SelectItem>
                       {mappedCats.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -2237,9 +2242,9 @@ function MyProductsTab({
                 {/* SubCategory */}
                 <div className="w-[150px] shrink-0">
                   <Select value={subCatIdStr || "__all__"} onValueChange={handleSubCatChange} disabled={!catIdStr}>
-                    <SelectTrigger data-testid="select-my-filter-subcat"><SelectValue placeholder="Sub-category" /></SelectTrigger>
+                    <SelectTrigger data-testid="select-my-filter-subcat"><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">All Sub-categories</SelectItem>
+                      <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
                       {mappedSubcats.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -2247,9 +2252,9 @@ function MyProductsTab({
                 {/* Flavor */}
                 <div className="w-[130px] shrink-0">
                   <Select value={filters.flavorId || "__all__"} onValueChange={v => setFilter("flavorId", v)}>
-                    <SelectTrigger data-testid="select-my-filter-flavor"><SelectValue placeholder="Flavor" /></SelectTrigger>
+                    <SelectTrigger data-testid="select-my-filter-flavor"><SelectValue placeholder="Parfum" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">All Flavors</SelectItem>
+                      <SelectItem value="__all__">Tous les parfums</SelectItem>
                       {filteredFlavsForFilter.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -2257,9 +2262,9 @@ function MyProductsTab({
                 {/* Size */}
                 <div className="w-[130px] shrink-0">
                   <Select value={filters.sizeId || "__all__"} onValueChange={v => setFilter("sizeId", v)}>
-                    <SelectTrigger data-testid="select-my-filter-size"><SelectValue placeholder="Size" /></SelectTrigger>
+                    <SelectTrigger data-testid="select-my-filter-size"><SelectValue placeholder="Taille" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">All Sizes</SelectItem>
+                      <SelectItem value="__all__">Toutes les tailles</SelectItem>
                       {filteredSzsForFilter.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -2267,9 +2272,9 @@ function MyProductsTab({
                 {/* Brand */}
                 <div className="w-[130px] shrink-0">
                   <Select value={filters.brandId || "__all__"} onValueChange={v => setFilter("brandId", v)}>
-                    <SelectTrigger data-testid="select-my-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
+                    <SelectTrigger data-testid="select-my-filter-brand"><SelectValue placeholder="Marque" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">All Brands</SelectItem>
+                      <SelectItem value="__all__">Toutes les marques</SelectItem>
                       {filteredBrndsForFilter.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -2282,21 +2287,21 @@ function MyProductsTab({
                       setSelectedCategory(null);
                       setSelectedSubCategory(null);
                     }} className="text-muted-foreground">
-                      <X className="w-4 h-4 mr-1" />Clear
+                      <X className="w-4 h-4 mr-1" />Effacer
                     </Button>
                   )}
                   <div className="flex border rounded-md overflow-hidden">
                     <button
                       onClick={() => setViewMode('list')}
                       className={`p-1.5 transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                      data-testid="toggle-my-view-list" title="List view"
+                      data-testid="toggle-my-view-list" title="Vue liste"
                     >
                       <LayoutList className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => setViewMode('grid')}
                       className={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                      data-testid="toggle-my-view-grid" title="Grid view"
+                      data-testid="toggle-my-view-grid" title="Vue grille"
                     >
                       <LayoutGrid className="w-4 h-4" />
                     </button>
@@ -2313,9 +2318,9 @@ function MyProductsTab({
             <div className="p-12 flex flex-col items-center gap-3 text-center border rounded-lg">
               <ShoppingBag className="w-10 h-10 text-muted-foreground opacity-40" />
               <div>
-                <p className="font-medium">No products in your catalog</p>
+                <p className="font-medium">Aucun produit dans votre catalogue</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {hasActiveFilters ? "Try adjusting your filters." : "Go to the Admin Products tab to add products to your catalog."}
+                  {hasActiveFilters ? "Essayez d'ajuster vos filtres." : "Allez dans l'onglet Produits du catalogue pour ajouter des produits à votre catalogue."}
                 </p>
               </div>
             </div>
@@ -2338,7 +2343,7 @@ function MyProductsTab({
                   <div className="p-2.5 space-y-1">
                     <p className="font-medium text-sm line-clamp-2">{l.product.name}</p>
                     <p className="text-sm font-semibold">{fmt(l.price)}</p>
-                    <p className={`text-xs ${l.stock > 0 ? "text-emerald-600" : "text-red-600"}`}>{l.stock > 0 ? `${l.stock} en stock` : "Out of stock"}</p>
+                    <p className={`text-xs ${l.stock > 0 ? "text-emerald-600" : "text-red-600"}`}>{l.stock > 0 ? `${l.stock} en stock` : "Rupture de stock"}</p>
                   </div>
                 </div>
               ))}
@@ -2349,9 +2354,9 @@ function MyProductsTab({
                 <TableHeader className="bg-secondary/30">
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="w-14" />
-                    <TableHead>Product</TableHead>
-                    <TableHead>Taxonomy</TableHead>
-                    <TableHead>Price</TableHead>
+                    <TableHead>Produit</TableHead>
+                    <TableHead>Classification</TableHead>
+                    <TableHead>Prix</TableHead>
                     <TableHead>Stock</TableHead>
                     <TableHead className="text-right w-24">Actions</TableHead>
                   </TableRow>
@@ -2378,7 +2383,7 @@ function MyProductsTab({
                       <TableCell className="font-medium">{fmt(l.price)}</TableCell>
                       <TableCell>
                         <span className={`px-2 py-1 rounded-md text-xs font-medium ${l.stock > 0 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" : "bg-red-100 text-red-700 dark:bg-red-950/30 dark:text-red-400"}`}>
-                          {l.stock > 0 ? `${l.stock} units` : "Out of stock"}
+                          {l.stock > 0 ? `${l.stock} unités` : "Rupture de stock"}
                         </span>
                       </TableCell>
                       <TableCell className="text-right">
@@ -2391,7 +2396,7 @@ function MyProductsTab({
                           className="h-8 w-8 text-destructive hover:text-destructive disabled:text-muted-foreground disabled:hover:text-muted-foreground"
                           onClick={() => requestRemove(l)}
                           disabled={(l.packUsageCount ?? 0) > 0 || removeMutation.isPending}
-                          title={(l.packUsageCount ?? 0) > 0 ? `Used in ${l.packUsageCount} pack${l.packUsageCount === 1 ? "" : "s"} — cannot be removed` : undefined}
+                          title={(l.packUsageCount ?? 0) > 0 ? `Utilisé dans ${l.packUsageCount} pack${l.packUsageCount === 1 ? "" : "s"} — ne peut pas être supprimé` : undefined}
                           data-testid={`button-remove-listing-${l.id}`}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -2431,20 +2436,20 @@ function MyProductsTab({
       <AlertDialog open={!!removeTarget} onOpenChange={(open) => !open && setRemoveTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove from My Products?</AlertDialogTitle>
+            <AlertDialogTitle>Retirer de Mes produits ?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove <strong>{removeTarget?.product.name}</strong> from your products. It will no longer be visible to Coffee Owners in the marketplace.
+              Cette action retirera <strong>{removeTarget?.product.name}</strong> de vos produits. Il ne sera plus visible par les propriétaires de café sur la marketplace.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => { if (removeTarget) removeMutation.mutate(removeTarget.id); setRemoveTarget(null); }}
               disabled={removeMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               data-testid="button-confirm-remove-listing"
             >
-              {removeMutation.isPending ? "Removing…" : "Remove"}
+              {removeMutation.isPending ? "Suppression…" : "Retirer"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -2482,8 +2487,8 @@ export default function ManageProducts() {
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
-        title="Products"
-        subtitle="Browse the admin catalog and manage your product listings with custom pricing and stock."
+        title="Produits"
+        subtitle="Parcourez le catalogue de l'administrateur et gérez vos fiches produits avec des prix et un stock personnalisés."
       />
 
       <Tabs defaultValue="admin-products" className="w-full">
@@ -2493,13 +2498,13 @@ export default function ManageProducts() {
         <div className="mb-2 overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
           <TabsList className="flex items-center justify-start gap-1 bg-secondary/40 rounded-xl p-1 h-auto w-max min-w-full sm:w-fit">
             <TabsTrigger value="admin-products" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-admin-products">
-              <Package className="w-4 h-4 mr-1.5" />Admin Products
+              <Package className="w-4 h-4 mr-1.5" />Produits du catalogue
             </TabsTrigger>
             <TabsTrigger value="my-products" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-my-products">
-              <ShoppingBag className="w-4 h-4 mr-1.5" />My Products
+              <ShoppingBag className="w-4 h-4 mr-1.5" />Mes produits
             </TabsTrigger>
             <TabsTrigger value="new-product" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-new-product">
-              <Plus className="w-4 h-4 mr-1.5" />New Product
+              <Plus className="w-4 h-4 mr-1.5" />Nouveau produit
             </TabsTrigger>
             <TabsTrigger value="pack" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-pack">
               <Layers className="w-4 h-4 mr-1.5" />Pack

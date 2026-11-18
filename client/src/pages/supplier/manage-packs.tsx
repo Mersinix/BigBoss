@@ -72,7 +72,7 @@ function variantGroupLabel(g: VariantGroup): string {
   const flavorPart = g.flavors.length > 0 ? `( ${g.flavors.join(" • ")} )` : "";
   const sizePart = g.sizeName ?? "";
   if (flavorPart && sizePart) return `${flavorPart} · ${sizePart}`;
-  return flavorPart || sizePart || "Default";
+  return flavorPart || sizePart || "Par défaut";
 }
 
 // ── Data hooks ────────────────────────────────────────────────────────────────
@@ -349,7 +349,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
   const flashPreviewPack = useMemo(() => ({
     id: editing?.id ?? -1,
     supplierId: editing?.supplierId ?? -1,
-    name: name || "Pack preview",
+    name: name || "Aperçu du pack",
     description: description || null,
     imageUrl: imageUrls.find(url => url.trim())?.trim() || null,
     imageUrls: imageUrls.map(url => url.trim()).filter(Boolean),
@@ -402,11 +402,11 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
   // Auto-computed pack price from per-variant pack prices
   const autoPackPrice = preview.packTotal / 100; // in dollars
   const priceError = preview.individualTotal > 0 && selectedItems.length > 0 && preview.packTotal >= preview.individualTotal
-    ? "Pack price must be lower than the total original price of the included products"
+    ? "Le prix du pack doit être inférieur au prix total initial des produits inclus"
     : null;
 
   const expirationError = expirationDate && new Date(expirationDate) < new Date(new Date().toDateString())
-    ? "Expiration date cannot be in the past"
+    ? "La date d'expiration ne peut pas être dans le passé"
     : null;
 
   const save = useMutation({
@@ -435,11 +435,11 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/supplier/packs"] });
-      toast({ title: editing ? "Pack updated" : "Pack created" });
+      toast({ title: editing ? "Pack mis à jour" : "Pack créé" });
       if (!editing) onCreated?.();
       onClose();
     },
-    onError: (err: any) => toast({ title: err?.message ?? "Error saving pack", variant: "destructive" }),
+    onError: (err: any) => toast({ title: err?.message ?? "Erreur lors de l'enregistrement du pack", variant: "destructive" }),
   });
 
   // Every selected variant must have its pack variant price filled (> 0)
@@ -450,32 +450,32 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
     return !!group?.flavorDetails.length && (i.flavorIds ?? group.flavorDetails.map(f => f.id)).length === 0;
   }).length;
   const variantPriceError = missingPriceCount > 0
-    ? `${missingPriceCount} selected variant${missingPriceCount > 1 ? "s are" : " is"} missing a Pack Variant Price`
+    ? `${missingPriceCount} variante(s) sélectionnée(s) sans prix de pack défini`
     : null;
-  const flavorError = missingFlavorCount > 0 ? "Select at least one flavor for every selected variant group" : null;
+  const flavorError = missingFlavorCount > 0 ? "Sélectionnez au moins un parfum pour chaque groupe de variantes sélectionné" : null;
   const canSave = name.trim().length > 0 && selectedItems.length >= 2 && !variantPriceError && !flavorError && !priceError && !expirationError;
   // selectedItems.length >= 2 means at least 2 variants selected (each checkbox = one variant group)
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent hideClose className="sm:max-w-5xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
-        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-pack-form">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Fermer" data-testid="button-close-pack-form">
           <X className="w-4 h-4" />
         </button>
-        <DialogHeader><DialogTitle>{editing ? "Edit Pack" : "Create a Pack"}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{editing ? "Modifier le pack" : "Créer un pack"}</DialogTitle></DialogHeader>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
           <div className="space-y-4">
             <div>
-              <Label>Pack name</Label>
-              <Input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Café Starter Bundle" data-testid="input-pack-name" />
+              <Label>Nom du pack</Label>
+              <Input value={name} onChange={e => setName(e.target.value)} placeholder="ex. Pack de démarrage Café" data-testid="input-pack-name" />
             </div>
             <div>
               <Label>Description</Label>
-              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="What's included and why it's a good deal" />
+              <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Ce qui est inclus et pourquoi c'est une bonne offre" />
             </div>
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <Label>Pack images (up to 4)</Label>
+                <Label>Images du pack (4 maximum)</Label>
                 <span className="text-xs text-muted-foreground">{imageUrls.length}/4</span>
               </div>
               <div className="space-y-2">
@@ -484,11 +484,11 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                     <Input
                       value={url}
                       onChange={e => updateImageUrl(index, e.target.value)}
-                      placeholder={`Image URL ${index + 1}`}
+                      placeholder={`URL de l'image ${index + 1}`}
                       data-testid={`input-pack-image-${index + 1}`}
                     />
                     {imageUrls.length > 1 && (
-                      <Button type="button" size="icon" variant="outline" className="shrink-0 text-destructive" onClick={() => removeImageUrl(index)} aria-label={`Remove image ${index + 1}`}>
+                      <Button type="button" size="icon" variant="outline" className="shrink-0 text-destructive" onClick={() => removeImageUrl(index)} aria-label={`Supprimer l'image ${index + 1}`}>
                         <Trash2 className="w-4 h-4" />
                       </Button>
                     )}
@@ -497,28 +497,28 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
               </div>
               {imageUrls.length < 4 && (
                 <Button type="button" variant="outline" size="sm" className="mt-2" onClick={addImageUrl} data-testid="button-add-pack-image">
-                  <Plus className="w-3.5 h-3.5 mr-1.5" />Add image
+                  <Plus className="w-3.5 h-3.5 mr-1.5" />Ajouter une image
                 </Button>
               )}
             </div>
             <div>
-              <Label>FLASH Image URL</Label>
+              <Label>URL de l'image FLASH</Label>
               <Input value={flashImageUrl} onChange={e => setFlashImageUrl(e.target.value)} placeholder="https://…" data-testid="input-pack-flash-image" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Pack price (auto)</Label>
+                <Label>Prix du pack (auto)</Label>
                 <div className="h-9 flex items-center px-3 rounded-md border bg-secondary/30 text-sm font-medium" data-testid="text-pack-auto-price">
                   {selectedItems.length > 0 ? fmt(preview.packTotal) : "—"}
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">Auto-computed from variant pack prices below</p>
+                <p className="text-xs text-muted-foreground mt-1">Calculé automatiquement à partir des prix de pack des variantes ci-dessous</p>
               </div>
               <div>
-                <Label>Packs available (stock)</Label>
+                <Label>Packs disponibles (stock)</Label>
                 <div className="h-9 flex items-center px-3 rounded-md border bg-secondary/30 text-sm text-muted-foreground" data-testid="text-pack-auto-quantity">
                   {selectedItems.length > 0 ? `${preview.autoQuantity} (auto)` : "—"}
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">Auto-computed from variant stock</p>
+                <p className="text-xs text-muted-foreground mt-1">Calculé automatiquement à partir du stock des variantes</p>
               </div>
             </div>
             {variantPriceError && (
@@ -531,24 +531,24 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
               <p className="text-xs text-destructive -mt-2">{flavorError}</p>
             )}
             <div>
-              <Label>Expiration date (optional)</Label>
+              <Label>Date d'expiration (optionnel)</Label>
               <Input type="date" min={new Date().toISOString().slice(0, 10)} value={expirationDate} onChange={e => setExpirationDate(e.target.value)} data-testid="input-pack-expiration" />
               {expirationError && <p className="text-xs text-destructive mt-1">{expirationError}</p>}
             </div>
 
             <div>
               <Label className="mb-2 block">
-                Variants in pack
-                {selectedItems.length < 2 && <span className="text-xs text-amber-600 ml-2">(select at least 2 variants)</span>}
+                Variantes du pack
+                {selectedItems.length < 2 && <span className="text-xs text-amber-600 ml-2">(sélectionnez au moins 2 variantes)</span>}
               </Label>
               {usableListings.length > 0 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
                   <Select value={variantCategoryId || "__all__"} onValueChange={(v) => setVariantCategoryId(v === "__all__" ? "" : v)}>
                     <SelectTrigger className="h-8 text-xs" data-testid="select-variant-filter-category">
-                      <SelectValue placeholder="Category" />
+                      <SelectValue placeholder="Catégorie" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">All categories</SelectItem>
+                      <SelectItem value="__all__">Toutes les catégories</SelectItem>
                       {variantCategoryOptions.map(c => (
                         <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
                       ))}
@@ -556,10 +556,10 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                   </Select>
                   <Select value={variantSubCategoryId || "__all__"} onValueChange={(v) => setVariantSubCategoryId(v === "__all__" ? "" : v)}>
                     <SelectTrigger className="h-8 text-xs" data-testid="select-variant-filter-subcategory">
-                      <SelectValue placeholder="Subcategory" />
+                      <SelectValue placeholder="Sous-catégorie" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">All subcategories</SelectItem>
+                      <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
                       {variantSubCategoryOptions.map(s => (
                         <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
                       ))}
@@ -569,10 +569,10 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
               )}
               <div className="border rounded-lg divide-y max-h-80 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
                 {usableListings.length === 0 && (
-                  <p className="text-sm text-muted-foreground p-3">No pack-eligible products found.</p>
+                  <p className="text-sm text-muted-foreground p-3">Aucun produit éligible pour un pack.</p>
                 )}
                 {usableListings.length > 0 && displayedListings.length === 0 && (
-                  <p className="text-sm text-muted-foreground p-3">No products match the selected filters.</p>
+                  <p className="text-sm text-muted-foreground p-3">Aucun produit ne correspond aux filtres sélectionnés.</p>
                 )}
                 {displayedListings.map(listing => {
                   const groups = getVariantGroups(listing);
@@ -588,7 +588,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                           </div>
                         ) : <Package className="w-4 h-4 text-muted-foreground" />}
                         {listing.product.name}
-                        {(listing as any).onlyForPack && <Badge variant="outline" className="text-[10px]">Pack only</Badge>}
+                        {(listing as any).onlyForPack && <Badge variant="outline" className="text-[10px]">Pack uniquement</Badge>}
                       </div>
                       <div className="space-y-1 pl-6">
                         {groups.map(g => {
@@ -614,7 +614,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                                     ) : (
                                       <span className="ml-1 text-gray-400">{g.totalStock} en stock</span>
                                     )}
-                                    <span className="ml-1 text-gray-400">· Original: {fmt(g.price)}</span>
+                                    <span className="ml-1 text-gray-400">· Prix d'origine : {fmt(g.price)}</span>
                                   </span>
                                 </label>
                                 {checked && (
@@ -625,7 +625,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                                 <div className="space-y-2 pl-5">
                                   {g.flavorDetails.length > 0 && (
                                     <div className="flex flex-wrap gap-1.5">
-                                      <span className="text-xs text-muted-foreground mr-1">Flavors:</span>
+                                      <span className="text-xs text-muted-foreground mr-1">Parfums :</span>
                                       {g.flavorDetails.map(flavor => (
                                         <label key={flavor.id} className="inline-flex items-center gap-1 text-xs cursor-pointer">
                                           <input
@@ -641,7 +641,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                                     </div>
                                   )}
                                   <div className="flex items-center gap-2">
-                                    <span className="text-xs text-muted-foreground shrink-0">Pack price:</span>
+                                    <span className="text-xs text-muted-foreground shrink-0">Prix du pack :</span>
                                     <Input
                                       type="number"
                                       min={0}
@@ -666,21 +666,21 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
             </div>
 
             <div className="flex gap-2 justify-end pt-2">
-              <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <Button variant="outline" onClick={onClose}>Annuler</Button>
               <Button onClick={() => save.mutate()} disabled={save.isPending || !canSave} data-testid="button-save-pack">
-                {save.isPending ? "Saving…" : editing ? "Save Pack" : "Create Pack"}
+                {save.isPending ? "Enregistrement…" : editing ? "Enregistrer le pack" : "Créer le pack"}
               </Button>
             </div>
           </div>
 
           {/* Live preview */}
           <div>
-            <Label className="mb-2 block">Live preview</Label>
+            <Label className="mb-2 block">Aperçu en direct</Label>
             <Card>
               <CardContent className="p-4 space-y-3">
-                 <PackImageGallery imageUrls={imageUrls} alt={name || "Pack preview"} />
+                 <PackImageGallery imageUrls={imageUrls} alt={name || "Aperçu du pack"} />
                 <div>
-                  <p className="font-semibold">{name || "Pack name"}</p>
+                  <p className="font-semibold">{name || "Nom du pack"}</p>
                   <p className="text-sm text-muted-foreground">{description || "Description…"}</p>
                 </div>
                 <div className="flex items-baseline gap-2">
@@ -695,8 +695,8 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                   {preview.brandNames.map(n => <Badge key={n} className="text-xs">{n}</Badge>)}
                 </div>
                 <div className="space-y-1 pt-2 border-t">
-                  <p className="text-xs font-medium text-muted-foreground">Includes:</p>
-                  {preview.rows.length === 0 && <p className="text-xs text-muted-foreground">Select products on the left</p>}
+                  <p className="text-xs font-medium text-muted-foreground">Contient :</p>
+                  {preview.rows.length === 0 && <p className="text-xs text-muted-foreground">Sélectionnez des produits à gauche</p>}
                    {preview.rows.map((r, i) => (
                     <div key={i} className="flex justify-between text-sm">
                        <span>{r.quantity}× {r.productName}{r.flavorNames?.length ? ` (${r.flavorNames.join(" • ")})` : ""}{r.sizeName ? ` — ${r.sizeName}` : ""}</span>
@@ -705,19 +705,19 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                   ))}
                 </div>
                  <Button type="button" variant="outline" className="w-full" onClick={() => setPackDetailPreviewOpen(true)} data-testid="button-open-pack-detail-preview">
-                   <Eye className="w-4 h-4 mr-2" />Open Pack Detail Live Preview
+                   <Eye className="w-4 h-4 mr-2" />Ouvrir l'aperçu détaillé du pack
                  </Button>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-4 space-y-3">
-                <Label className="block">Flash Live preview</Label>
+                <Label className="block">Aperçu Flash en direct</Label>
                  <div className="aspect-[9/16] max-h-64 bg-black rounded-lg overflow-hidden flex items-center justify-center">
-                   {flashImageUrl.trim() ? <img src={flashImageUrl.trim()} className="w-full h-full object-cover" alt="Flash preview" /> : <Zap className="w-8 h-8 text-amber-400" />}
+                   {flashImageUrl.trim() ? <img src={flashImageUrl.trim()} className="w-full h-full object-cover" alt="Aperçu Flash" /> : <Zap className="w-8 h-8 text-amber-400" />}
                  </div>
-                 <p className="text-xs text-muted-foreground">Uses the same Flash presentation, filters, badges, taxonomy, and image behavior as the Coffee Owner view.</p>
+                 <p className="text-xs text-muted-foreground">Utilise la même présentation Flash, les mêmes filtres, badges, taxonomie et comportement d'image que la vue Coffee Owner.</p>
                  <Button type="button" variant="outline" className="w-full" onClick={() => setFlashPreviewOpen(true)}>
-                   <Zap className="w-4 h-4 mr-2" />Open Flash Live Preview
+                   <Zap className="w-4 h-4 mr-2" />Ouvrir l'aperçu Flash en direct
                  </Button>
               </CardContent>
             </Card>
@@ -728,7 +728,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
            onClose={() => setFlashPreviewOpen(false)}
            products={[]}
            packs={[flashPreviewPack]}
-           storeName="Flash Live Preview"
+           storeName="Aperçu Flash en direct"
          />
          {/* Pack Detail Live Preview — a second, independent instance of the
              exact same component the Coffee Owner Shop uses
@@ -766,10 +766,10 @@ function PackPreviewModal({ pack, open, onClose, onEdit, onToggleVisibility, onD
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent hideClose className="sm:max-w-lg max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
-        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-pack-preview">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Fermer" data-testid="button-close-pack-preview">
           <X className="w-4 h-4" />
         </button>
-        <DialogHeader><DialogTitle>Pack Preview</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Aperçu du pack</DialogTitle></DialogHeader>
         <div className="space-y-4 mt-1">
            <PackImageGallery imageUrl={pack.imageUrl} imageUrls={pack.imageUrls} alt={pack.name} />
           <div>
@@ -781,9 +781,9 @@ function PackPreviewModal({ pack, open, onClose, onEdit, onToggleVisibility, onD
             {individualTotal > pack.price && (
               <span className="text-sm text-muted-foreground line-through">{fmt(individualTotal)}</span>
             )}
-            <span className="text-sm text-muted-foreground">{maxQty} available</span>
+            <span className="text-sm text-muted-foreground">{maxQty} disponible{maxQty !== 1 ? "s" : ""}</span>
             <Badge variant={pack.visibility === "VISIBLE" ? "default" : "secondary"} className="text-[10px] ml-auto">
-              {pack.visibility === "VISIBLE" ? "Visible" : "Hidden"}
+              {pack.visibility === "VISIBLE" ? "Visible" : "Masqué"}
             </Badge>
           </div>
           <div className="flex flex-wrap gap-1">
@@ -794,11 +794,11 @@ function PackPreviewModal({ pack, open, onClose, onEdit, onToggleVisibility, onD
           {pack.expirationDate && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Calendar className="w-3.5 h-3.5" />
-              <span>Expires {new Date(pack.expirationDate).toLocaleDateString()}</span>
+              <span>Expire le {new Date(pack.expirationDate).toLocaleDateString()}</span>
             </div>
           )}
           <div className="border rounded-lg divide-y">
-            <p className="text-xs font-medium text-muted-foreground px-3 py-2">Includes:</p>
+            <p className="text-xs font-medium text-muted-foreground px-3 py-2">Contient :</p>
             {pack.items.map(item => (
               <div key={item.id} className="flex items-center gap-3 px-3 py-2">
                 <div className="w-9 h-9 rounded bg-secondary overflow-hidden flex items-center justify-center shrink-0">
@@ -840,34 +840,34 @@ function PackPreviewModal({ pack, open, onClose, onEdit, onToggleVisibility, onD
             <p className="text-xs font-medium text-muted-foreground">Actions</p>
             <div className="flex flex-wrap gap-2">
               <Button size="sm" variant="outline" onClick={() => { onClose(); onEdit(); }} data-testid={`button-edit-pack-${pack.id}`}>
-                <Pencil className="w-3.5 h-3.5 mr-1.5" />Edit
+                <Pencil className="w-3.5 h-3.5 mr-1.5" />Modifier
               </Button>
               <Button size="sm" variant="outline" onClick={onToggleVisibility} data-testid={`button-toggle-visibility-pack-${pack.id}`}>
-                {pack.visibility === "VISIBLE" ? <><EyeOff className="w-3.5 h-3.5 mr-1.5" />Hide</> : <><Eye className="w-3.5 h-3.5 mr-1.5" />Show</>}
+                {pack.visibility === "VISIBLE" ? <><EyeOff className="w-3.5 h-3.5 mr-1.5" />Masquer</> : <><Eye className="w-3.5 h-3.5 mr-1.5" />Afficher</>}
               </Button>
               <Button size="sm" variant="outline" onClick={() => { onClose(); onDuplicate(); }} data-testid={`button-duplicate-pack-${pack.id}`}>
-                <Copy className="w-3.5 h-3.5 mr-1.5" />Duplicate
+                <Copy className="w-3.5 h-3.5 mr-1.5" />Dupliquer
               </Button>
               <Button size="sm" variant="outline" onClick={() => { onClose(); onArchive(); }} data-testid={`button-archive-pack-${pack.id}`}>
-                <Archive className="w-3.5 h-3.5 mr-1.5" />{pack.isArchived ? "Restore" : "Archive"}
+                <Archive className="w-3.5 h-3.5 mr-1.5" />{pack.isArchived ? "Restaurer" : "Archiver"}
               </Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button size="sm" variant="destructive" data-testid={`button-delete-pack-${pack.id}`}>
-                    <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+                    <Trash2 className="w-3.5 h-3.5 mr-1.5" />Supprimer
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Pack?</AlertDialogTitle>
+                    <AlertDialogTitle>Supprimer le pack ?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This will permanently delete <strong>{pack.name}</strong> and cannot be undone.
+                      Cette action supprimera définitivement <strong>{pack.name}</strong> et ne peut pas être annulée.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogCancel>Annuler</AlertDialogCancel>
                     <AlertDialogAction onClick={() => { onClose(); onDelete(); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                      Delete
+                      Supprimer
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -912,9 +912,9 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/supplier/listings"] });
       setSelected(prev => prev.filter(s => s.listingId !== (removeFromPack.variables as number)));
-      toast({ title: "Removed from Pack Products" });
+      toast({ title: "Retiré des produits du pack" });
     },
-    onError: (err: any) => toast({ title: err?.message ?? "Error removing product", variant: "destructive" }),
+    onError: (err: any) => toast({ title: err?.message ?? "Erreur lors du retrait du produit", variant: "destructive" }),
   });
 
   const requestRemoveFromPack = async (listing: SupplierListingWithProduct) => {
@@ -923,7 +923,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
       const usage = res.ok ? await res.json() as { packs: { id: number; name: string; isArchived: boolean }[] } : { packs: [] };
       setRemoveTarget({ listingId: listing.id, name: listing.product.name, packs: usage.packs });
     } catch {
-      toast({ title: "Unable to check Pack usage", variant: "destructive" });
+      toast({ title: "Impossible de vérifier l'utilisation dans les packs", variant: "destructive" });
     }
   };
 
@@ -1038,7 +1038,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
             <Input
               ref={packSearchInputRef}
               className="pl-8"
-              placeholder="Search products…"
+              placeholder="Rechercher des produits…"
               value={search}
               onChange={e => setSearch(e.target.value)}
               onBlur={() => { if (!search) setPackSearchOpen(false); }}
@@ -1052,7 +1052,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
           data-testid="button-create-pack-from-selection"
         >
           <Plus className="w-4 h-4 mr-1.5" />
-          Create Pack
+          Créer un pack
           {selected.length > 0 && <span className="ml-1 bg-white/20 text-xs rounded-full px-1.5">{selected.length}</span>}
         </Button>
       </div>
@@ -1063,10 +1063,10 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
           <div className="w-32 shrink-0">
             <Select value={filterCategory} onValueChange={setFilterCategory}>
               <SelectTrigger className="h-8 text-xs" data-testid="filter-pack-category">
-                <SelectValue placeholder="Category" />
+                <SelectValue placeholder="Catégorie" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">All categories</SelectItem>
+                <SelectItem value="__all__">Toutes les catégories</SelectItem>
                 {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -1076,10 +1076,10 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
           <div className="w-36 shrink-0">
             <Select value={filterSubCategory} onValueChange={setFilterSubCategory}>
               <SelectTrigger className="h-8 text-xs" data-testid="filter-pack-subcategory">
-                <SelectValue placeholder="Sub Category" />
+                <SelectValue placeholder="Sous-catégorie" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">All sub-categories</SelectItem>
+                <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
                 {subCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -1089,10 +1089,10 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
           <div className="w-32 shrink-0">
             <Select value={filterBrand} onValueChange={setFilterBrand}>
               <SelectTrigger className="h-8 text-xs" data-testid="filter-pack-brand">
-                <SelectValue placeholder="Brand" />
+                <SelectValue placeholder="Marque" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">All brands</SelectItem>
+                <SelectItem value="__all__">Toutes les marques</SelectItem>
                 {brands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -1102,10 +1102,10 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
           <div className="w-32 shrink-0">
             <Select value={filterFlavor} onValueChange={setFilterFlavor}>
               <SelectTrigger className="h-8 text-xs" data-testid="filter-pack-flavor">
-                <SelectValue placeholder="Flavor" />
+                <SelectValue placeholder="Parfum" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">All flavors</SelectItem>
+                <SelectItem value="__all__">Tous les parfums</SelectItem>
                 {flavors.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -1115,10 +1115,10 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
           <div className="w-32 shrink-0">
             <Select value={filterSize} onValueChange={setFilterSize}>
               <SelectTrigger className="h-8 text-xs" data-testid="filter-pack-size">
-                <SelectValue placeholder="Size" />
+                <SelectValue placeholder="Taille" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">All sizes</SelectItem>
+                <SelectItem value="__all__">Toutes les tailles</SelectItem>
                 {sizes.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -1126,24 +1126,24 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
         )}
         {hasActiveFilters && (
           <Button variant="outline" size="sm" className="h-8 text-xs px-2 text-muted-foreground shrink-0" onClick={() => { setSearch(""); setFilterCategory("__all__"); setFilterSubCategory("__all__"); setFilterBrand("__all__"); setFilterFlavor("__all__"); setFilterSize("__all__"); }}>
-            Clear filters
+            Effacer les filtres
           </Button>
         )}
       </div>
 
       {!canCreate && selected.length > 0 && (
-        <p className="text-xs text-amber-600">Select at least 2 variants to create a Pack.</p>
+        <p className="text-xs text-amber-600">Sélectionnez au moins 2 variantes pour créer un pack.</p>
       )}
 
       {eligible.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center text-muted-foreground">
             <BoxesIcon className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p>No pack-eligible products yet. Add products to "My Products" first.</p>
+            <p>Aucun produit éligible pour un pack. Ajoutez d'abord des produits dans « Mes produits ».</p>
           </CardContent>
         </Card>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No products match your filters.</p>
+        <p className="text-sm text-muted-foreground">Aucun produit ne correspond à vos filtres.</p>
       ) : (
         <div className="border rounded-lg divide-y">
           {pageFiltered.map(listing => {
@@ -1169,7 +1169,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
                       {listing.product.categoryLabel && <Badge variant="secondary" className="text-[10px]">{listing.product.categoryLabel.name}</Badge>}
                       {listing.product.subCategoryLabel && <Badge variant="outline" className="text-[10px]">{listing.product.subCategoryLabel.name}</Badge>}
                       {listing.product.brandLabel && <Badge variant="outline" className="text-[10px]">{listing.product.brandLabel.name}</Badge>}
-                      {(listing as any).onlyForPack && <Badge className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400 border-0">Pack only</Badge>}
+                      {(listing as any).onlyForPack && <Badge className="text-[10px] bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400 border-0">Pack uniquement</Badge>}
                     </div>
                   </div>
                   <Button
@@ -1179,7 +1179,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
                     onClick={() => requestRemoveFromPack(listing)}
                     data-testid={`button-remove-pack-product-${listing.id}`}
                   >
-                    Remove
+                    Retirer
                   </Button>
                 </div>
                 <div className="space-y-1.5 pl-10">
@@ -1202,7 +1202,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
                         </label>
                         {isChecked && (
                           <div className="flex items-center gap-1">
-                            <Label className="text-xs">Qty:</Label>
+                            <Label className="text-xs">Qté :</Label>
                             <Input
                               type="number"
                               min={1}
@@ -1237,25 +1237,25 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {removeTarget?.packs.length ? "Product used in Pack(s)" : "Remove from Pack Products?"}
+              {removeTarget?.packs.length ? "Produit utilisé dans des packs" : "Retirer des produits du pack ?"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              "{removeTarget?.name}" will no longer be available for new Packs and will stay in My Products.
+              « {removeTarget?.name} » ne sera plus disponible pour de nouveaux packs et restera dans Mes produits.
               {removeTarget?.packs.length
-                ? <> Existing Packs using it will move from New Packs to Old Packs so their history is preserved.
+                ? <> Les packs existants qui l'utilisent passeront des Nouveaux packs vers les Anciens packs afin de préserver leur historique.
                     <span className="block mt-2 font-medium">
-                      Affected Packs: {removeTarget.packs.map(pack => pack.name).join(", ")}
+                      Packs concernés : {removeTarget.packs.map(pack => pack.name).join(", ")}
                     </span>
                   </>
-                : " Existing Packs are not affected."}
+                : " Les packs existants ne sont pas affectés."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => { if (removeTarget) removeFromPack.mutate(removeTarget.listingId); setRemoveTarget(null); }}
             >
-              Remove
+              Retirer
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1295,9 +1295,9 @@ function ActivePackCard({ pack, onPreview }: {
          )}
         <div className="absolute top-2 left-2 flex gap-1">
           <Badge variant={pack.visibility === "VISIBLE" ? "default" : "secondary"} className="text-[10px]">
-            {pack.visibility === "VISIBLE" ? "Visible" : "Hidden"}
+            {pack.visibility === "VISIBLE" ? "Visible" : "Masqué"}
           </Badge>
-          {!pack.isAvailable && !pack.isExpired && <Badge variant="outline" className="text-[10px] bg-white/80 dark:bg-gray-900/80">Out of stock</Badge>}
+          {!pack.isAvailable && !pack.isExpired && <Badge variant="outline" className="text-[10px] bg-white/80 dark:bg-gray-900/80">Rupture de stock</Badge>}
         </div>
       </div>
       <CardContent className="p-3">
@@ -1344,40 +1344,40 @@ function ArchivedPackRow({ pack, onToggleVisibility, onUnarchive, onDelete, onEd
         <div className="flex-1 min-w-0">
           <p className="font-medium truncate">{pack.name}</p>
           <p className="text-xs text-muted-foreground">
-            {pack.items.length} items · {fmt(pack.price)} · {pack.visibility === "VISIBLE" ? "Visible" : "Hidden"}
+            {pack.items.length} article{pack.items.length !== 1 ? "s" : ""} · {fmt(pack.price)} · {pack.visibility === "VISIBLE" ? "Visible" : "Masqué"}
           </p>
           <div className="flex flex-wrap gap-1 mt-1">
             {pack.categoryLabels.map(c => <Badge key={c.id} variant="secondary" className="text-[10px]">{c.name}</Badge>)}
           </div>
         </div>
         <div className="flex gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
-          <Button size="sm" variant="outline" onClick={onEdit} className="h-8 w-8 p-0" title="Edit">
+          <Button size="sm" variant="outline" onClick={onEdit} className="h-8 w-8 p-0" title="Modifier">
             <Pencil className="w-3.5 h-3.5" />
           </Button>
-          <Button size="sm" variant="outline" onClick={onToggleVisibility} className="h-8 w-8 p-0" title={pack.visibility === "VISIBLE" ? "Hide" : "Show"}>
+          <Button size="sm" variant="outline" onClick={onToggleVisibility} className="h-8 w-8 p-0" title={pack.visibility === "VISIBLE" ? "Masquer" : "Afficher"}>
             {pack.visibility === "VISIBLE" ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
           </Button>
-          <Button size="sm" variant="outline" onClick={onUnarchive} className="h-8 px-2 gap-1" title="Restore">
+          <Button size="sm" variant="outline" onClick={onUnarchive} className="h-8 px-2 gap-1" title="Restaurer">
             <ArchiveRestore className="w-3.5 h-3.5" />
-            <span className="text-xs">Restore</span>
+            <span className="text-xs">Restaurer</span>
           </Button>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button size="sm" variant="destructive" className="h-8 w-8 p-0" title="Delete">
+              <Button size="sm" variant="destructive" className="h-8 w-8 p-0" title="Supprimer">
                 <Trash2 className="w-3.5 h-3.5" />
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Delete Pack?</AlertDialogTitle>
+                <AlertDialogTitle>Supprimer le pack ?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will permanently delete <strong>{pack.name}</strong> and cannot be undone.
+                  Cette action supprimera définitivement <strong>{pack.name}</strong> et ne peut pas être annulée.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogCancel>Annuler</AlertDialogCancel>
                 <AlertDialogAction onClick={onDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  Delete
+                  Supprimer
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -1553,16 +1553,16 @@ export function PackTab() {
     mutationFn: (p: PackDetail) => apiRequest("PATCH", `/api/supplier/packs/${p.id}`, { visibility: p.visibility === "VISIBLE" ? "HIDDEN" : "VISIBLE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/supplier/packs"] });
-      toast({ title: "Visibility updated" });
+      toast({ title: "Visibilité mise à jour" });
     },
-    onError: () => toast({ title: "Failed to update visibility", variant: "destructive" }),
+    onError: () => toast({ title: "Échec de la mise à jour de la visibilité", variant: "destructive" }),
   });
 
   const archive = useMutation({
     mutationFn: (p: PackDetail) => apiRequest("PATCH", `/api/supplier/packs/${p.id}`, { isArchived: !p.isArchived }),
     onSuccess: (_, p) => {
       qc.invalidateQueries({ queryKey: ["/api/supplier/packs"] });
-      toast({ title: p.isArchived ? "Pack restored" : "Pack archived" });
+      toast({ title: p.isArchived ? "Pack restauré" : "Pack archivé" });
     },
   });
 
@@ -1570,7 +1570,7 @@ export function PackTab() {
     mutationFn: (id: number) => apiRequest("POST", `/api/supplier/packs/${id}/duplicate`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/supplier/packs"] });
-      toast({ title: "Pack duplicated" });
+      toast({ title: "Pack dupliqué" });
       setActiveTab("packs");
     },
   });
@@ -1579,7 +1579,7 @@ export function PackTab() {
     mutationFn: (id: number) => apiRequest("DELETE", `/api/supplier/packs/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/supplier/packs"] });
-      toast({ title: "Pack deleted" });
+      toast({ title: "Pack supprimé" });
       setPreviewPackId(null);
     },
   });
@@ -1605,20 +1605,20 @@ export function PackTab() {
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="products" data-testid="tab-pack-products">
-            Pack Products
+            Produits du pack
           </TabsTrigger>
           <TabsTrigger value="packs" data-testid="tab-new-packs">
-            New Packs{activePacks.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px]">{activePacks.length}</Badge>}
+            Nouveaux packs{activePacks.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px]">{activePacks.length}</Badge>}
           </TabsTrigger>
           <TabsTrigger value="archived" data-testid="tab-old-packs">
-            Old Packs{archivedPacks.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px]">{archivedPacks.length}</Badge>}
+            Anciens packs{archivedPacks.length > 0 && <Badge variant="secondary" className="ml-1.5 text-[10px]">{archivedPacks.length}</Badge>}
           </TabsTrigger>
         </TabsList>
 
         {/* ── Pack Products ───────────────────────────────────────────────── */}
         <TabsContent value="products" className="mt-4">
           <div className="text-sm text-muted-foreground mb-3">
-            Select at least 2 variants, then click <strong>Create Pack</strong> to bundle them.
+            Sélectionnez au moins 2 variantes, puis cliquez sur <strong>Créer un pack</strong> pour les regrouper.
           </div>
           <PackProductsTab listings={listings} onCreatePack={openCreate} resetSignal={packCreateResetSignal} />
         </TabsContent>
@@ -1626,9 +1626,9 @@ export function PackTab() {
         {/* ── New Packs ───────────────────────────────────────────────────── */}
         <TabsContent value="packs" className="mt-4">
           <div className="flex justify-between items-center mb-3">
-            <p className="text-sm text-muted-foreground">Active packs visible in the marketplace. Click a card to manage it.</p>
+            <p className="text-sm text-muted-foreground">Packs actifs visibles sur la marketplace. Cliquez sur une carte pour la gérer.</p>
             <Button size="sm" variant="outline" onClick={() => openCreate([])}>
-              <Plus className="w-4 h-4 mr-1.5" />Create Pack
+              <Plus className="w-4 h-4 mr-1.5" />Créer un pack
             </Button>
           </div>
 
@@ -1651,7 +1651,7 @@ export function PackTab() {
                   <Input
                     ref={packsSearchInputRef}
                     className="pl-8"
-                    placeholder="Search packs…"
+                    placeholder="Rechercher des packs…"
                     value={packsSearch}
                     onChange={e => setPacksSearch(e.target.value)}
                     onBlur={() => { if (!packsSearch) setPacksSearchOpen(false); }}
@@ -1664,10 +1664,10 @@ export function PackTab() {
                   <div className="w-32 shrink-0">
                     <Select value={packsFilterCategory} onValueChange={setPacksFilterCategory}>
                       <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-category">
-                        <SelectValue placeholder="Category" />
+                        <SelectValue placeholder="Catégorie" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">All categories</SelectItem>
+                        <SelectItem value="__all__">Toutes les catégories</SelectItem>
                         {packsCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1677,10 +1677,10 @@ export function PackTab() {
                   <div className="w-36 shrink-0">
                     <Select value={packsFilterSubCategory} onValueChange={setPacksFilterSubCategory}>
                       <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-subcategory">
-                        <SelectValue placeholder="Sub Category" />
+                        <SelectValue placeholder="Sous-catégorie" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">All sub-categories</SelectItem>
+                        <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
                         {packsSubCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1690,10 +1690,10 @@ export function PackTab() {
                   <div className="w-32 shrink-0">
                     <Select value={packsFilterBrand} onValueChange={setPacksFilterBrand}>
                       <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-brand">
-                        <SelectValue placeholder="Brand" />
+                        <SelectValue placeholder="Marque" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">All brands</SelectItem>
+                        <SelectItem value="__all__">Toutes les marques</SelectItem>
                         {packsBrands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1703,10 +1703,10 @@ export function PackTab() {
                   <div className="w-32 shrink-0">
                     <Select value={packsFilterFlavor} onValueChange={setPacksFilterFlavor}>
                       <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-flavor">
-                        <SelectValue placeholder="Flavor" />
+                        <SelectValue placeholder="Parfum" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">All flavors</SelectItem>
+                        <SelectItem value="__all__">Tous les parfums</SelectItem>
                         {packsFlavors.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1716,10 +1716,10 @@ export function PackTab() {
                   <div className="w-32 shrink-0">
                     <Select value={packsFilterSize} onValueChange={setPacksFilterSize}>
                       <SelectTrigger className="h-8 text-xs" data-testid="filter-new-packs-size">
-                        <SelectValue placeholder="Size" />
+                        <SelectValue placeholder="Taille" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">All sizes</SelectItem>
+                        <SelectItem value="__all__">Toutes les tailles</SelectItem>
                         {packsSizes.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1727,7 +1727,7 @@ export function PackTab() {
                 )}
                 {packsHasActiveFilters && (
                   <Button variant="outline" size="sm" className="h-8 text-xs px-2 text-muted-foreground shrink-0" onClick={() => { setPacksSearch(""); setPacksFilterCategory("__all__"); setPacksFilterSubCategory("__all__"); setPacksFilterBrand("__all__"); setPacksFilterFlavor("__all__"); setPacksFilterSize("__all__"); }}>
-                    Clear filters
+                    Effacer les filtres
                   </Button>
                 )}
               </div>
@@ -1738,11 +1738,11 @@ export function PackTab() {
             <Card>
               <CardContent className="p-8 text-center text-muted-foreground">
                 <Layers className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                <p>No active packs yet. Select variants in the <strong>Pack Products</strong> tab to get started.</p>
+                <p>Aucun pack actif pour le moment. Sélectionnez des variantes dans l'onglet <strong>Produits du pack</strong> pour commencer.</p>
               </CardContent>
             </Card>
           ) : filteredActivePacks.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No packs match your filters.</p>
+            <p className="text-sm text-muted-foreground">Aucun pack ne correspond à vos filtres.</p>
           ) : (
             <>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -1776,7 +1776,7 @@ export function PackTab() {
               <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-muted-foreground" />
               <Input
                 className="pl-8"
-                placeholder="Search old packs…"
+                placeholder="Rechercher les anciens packs…"
                 value={archivedSearch}
                 onChange={e => setArchivedSearch(e.target.value)}
               />
@@ -1787,10 +1787,10 @@ export function PackTab() {
                   <div className="w-32 shrink-0">
                     <Select value={archivedFilterCategory} onValueChange={setArchivedFilterCategory}>
                       <SelectTrigger className="h-8 text-xs" data-testid="filter-old-packs-category">
-                        <SelectValue placeholder="Category" />
+                        <SelectValue placeholder="Catégorie" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">All categories</SelectItem>
+                        <SelectItem value="__all__">Toutes les catégories</SelectItem>
                         {archivedCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1800,10 +1800,10 @@ export function PackTab() {
                   <div className="w-36 shrink-0">
                     <Select value={archivedFilterSubCategory} onValueChange={setArchivedFilterSubCategory}>
                       <SelectTrigger className="h-8 text-xs" data-testid="filter-old-packs-subcategory">
-                        <SelectValue placeholder="Sub Category" />
+                        <SelectValue placeholder="Sous-catégorie" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">All sub-categories</SelectItem>
+                        <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
                         {archivedSubCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1813,10 +1813,10 @@ export function PackTab() {
                   <div className="w-32 shrink-0">
                     <Select value={archivedFilterBrand} onValueChange={setArchivedFilterBrand}>
                       <SelectTrigger className="h-8 text-xs" data-testid="filter-old-packs-brand">
-                        <SelectValue placeholder="Brand" />
+                        <SelectValue placeholder="Marque" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">All brands</SelectItem>
+                        <SelectItem value="__all__">Toutes les marques</SelectItem>
                         {archivedBrands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1826,10 +1826,10 @@ export function PackTab() {
                   <div className="w-32 shrink-0">
                     <Select value={archivedFilterFlavor} onValueChange={setArchivedFilterFlavor}>
                       <SelectTrigger className="h-8 text-xs" data-testid="filter-old-packs-flavor">
-                        <SelectValue placeholder="Flavor" />
+                        <SelectValue placeholder="Parfum" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">All flavors</SelectItem>
+                        <SelectItem value="__all__">Tous les parfums</SelectItem>
                         {archivedFlavors.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1839,10 +1839,10 @@ export function PackTab() {
                   <div className="w-32 shrink-0">
                     <Select value={archivedFilterSize} onValueChange={setArchivedFilterSize}>
                       <SelectTrigger className="h-8 text-xs" data-testid="filter-old-packs-size">
-                        <SelectValue placeholder="Size" />
+                        <SelectValue placeholder="Taille" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">All sizes</SelectItem>
+                        <SelectItem value="__all__">Toutes les tailles</SelectItem>
                         {archivedSizes.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1850,7 +1850,7 @@ export function PackTab() {
                 )}
                 {archivedHasActiveFilters && (
                   <Button variant="outline" size="sm" className="h-8 text-xs px-2 text-muted-foreground shrink-0" onClick={() => { setArchivedSearch(""); clearArchivedFilters(); }}>
-                    Clear filters
+                    Effacer les filtres
                   </Button>
                 )}
               </div>
@@ -1859,11 +1859,11 @@ export function PackTab() {
               <Card>
                 <CardContent className="p-8 text-center text-muted-foreground">
                   <Archive className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                  <p>No archived packs.</p>
+                  <p>Aucun pack archivé.</p>
                 </CardContent>
               </Card>
             ) : filteredArchived.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No packs match your search.</p>
+              <p className="text-sm text-muted-foreground">Aucun pack ne correspond à votre recherche.</p>
             ) : (
               <>
                 <div className="space-y-2">

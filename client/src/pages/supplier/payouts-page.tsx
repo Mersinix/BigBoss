@@ -53,8 +53,8 @@ export default function PayoutsPage() {
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
-        title="Payouts"
-        subtitle="Track your earnings and payout history."
+        title="Paiements"
+        subtitle="Suivez vos revenus et l'historique de vos paiements."
         action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
@@ -118,7 +118,7 @@ export default function PayoutsPage() {
           {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-56 w-full rounded-2xl" />)}
         </div>
       ) : rows.length === 0 ? (
-        <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun payout</CardContent></Card>
+        <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun paiement</CardContent></Card>
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -135,7 +135,7 @@ export default function PayoutsPage() {
             end={pagination.end}
             onPageChange={pagination.setPage}
             onPageSizeChange={pagination.setPageSize}
-            itemLabel="payouts"
+            itemLabel="paiements"
           />
         </>
       )}

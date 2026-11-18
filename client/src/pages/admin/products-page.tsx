@@ -50,10 +50,10 @@ type ProductForm = {
 const EMPTY_FORM: ProductForm = { name: "", description: "", imageUrl: "", additionalImageUrls: [], categoryId: "", subCategoryId: "", flavorIds: [], sizeIds: [], brandId: "", status: "ACTIVE" };
 
 const PRODUCT_STATUSES = [
-  { value: "ACTIVE", label: "Active" },
-  { value: "INACTIVE", label: "Inactive" },
-  { value: "PENDING", label: "Pending" },
-  { value: "FREEZE", label: "Freeze" },
+  { value: "ACTIVE", label: "Actif" },
+  { value: "INACTIVE", label: "Inactif" },
+  { value: "PENDING", label: "En attente" },
+  { value: "FREEZE", label: "Gelé" },
 ];
 
 // ── Delete Confirm ───────────────────────────────────────────────────────────
@@ -62,15 +62,15 @@ function DeleteConfirm({ open, name, onClose, onConfirm, isPending }: { open: bo
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent hideClose className="sm:max-w-sm">
-        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-delete-confirm">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Fermer" data-testid="button-close-delete-confirm">
           <X className="w-4 h-4" />
         </button>
-        <DialogHeader><DialogTitle>Delete "{name}"?</DialogTitle></DialogHeader>
-        <p className="text-sm text-muted-foreground">This will permanently remove the product and all supplier listings referencing it.</p>
+        <DialogHeader><DialogTitle>Supprimer « {name} » ?</DialogTitle></DialogHeader>
+        <p className="text-sm text-muted-foreground">Cette action supprimera définitivement le produit ainsi que toutes les offres des fournisseurs qui y font référence.</p>
         <div className="flex gap-2 justify-end mt-2">
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>Annuler</Button>
           <Button variant="destructive" onClick={onConfirm} disabled={isPending} data-testid="button-confirm-delete">
-            {isPending ? "Deleting…" : "Delete"}
+            {isPending ? "Suppression…" : "Supprimer"}
           </Button>
         </div>
       </DialogContent>
@@ -138,9 +138,9 @@ function computeProductStatus(p: ProductWithTaxonomy): 'active' | 'inactive' {
 function ProductStatusBadge({ product }: { product: ProductWithTaxonomy }) {
   const status = computeProductStatus(product);
   if (status === 'inactive') {
-    return <Badge className="text-xs bg-amber-400 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0">Inactive</Badge>;
+    return <Badge className="text-xs bg-amber-400 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border-0">Inactif</Badge>;
   }
-  return <Badge className="text-xs bg-emerald-300 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-0">Active</Badge>;
+  return <Badge className="text-xs bg-emerald-300 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-0">Actif</Badge>;
 }
 
 // ── Image Adjust Preview ──────────────────────────────────────────────────────
@@ -213,7 +213,7 @@ function MultiSelectList({ label, items, selected, onChange, hint }: {
     <div className="space-y-1.5">
       <Label>{label}</Label>
       <div className="border rounded-lg p-2 max-h-32 overflow-y-auto space-y-1 bg-background [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
-        {items.length === 0 && <p className="text-xs text-muted-foreground px-1 py-1">No options available</p>}
+        {items.length === 0 && <p className="text-xs text-muted-foreground px-1 py-1">Aucune option disponible</p>}
         {items.map(item => (
           <label key={item.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-secondary/50 cursor-pointer">
             <input type="checkbox" checked={selected.includes(item.id)} onChange={() => toggle(item.id)} className="rounded" />
@@ -343,14 +343,14 @@ function ProductFormModal({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/products"] });
       invalidateMarketplace(qc);
-      toast({ title: editing ? "Product updated" : "Product created" });
+      toast({ title: editing ? "Produit mis à jour" : "Produit créé" });
       onClose();
     },
-    onError: (err: any) => toast({ title: err?.message ?? "Error", variant: "destructive" }),
+    onError: (err: any) => toast({ title: err?.message ?? "Erreur", variant: "destructive" }),
   });
 
   const handleSave = () => {
-    if (!form.name.trim()) return toast({ title: "Name is required", variant: "destructive" });
+    if (!form.name.trim()) return toast({ title: "Le nom est requis", variant: "destructive" });
     // Set flavorId/sizeId to primary (first) value for backward compat
     const flavorId = form.flavorIds[0] ?? null;
     const sizeId = form.sizeIds[0] ?? null;
@@ -376,29 +376,29 @@ function ProductFormModal({
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent hideClose className="sm:max-w-4xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
-        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-add-edit-product">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Fermer" data-testid="button-close-add-edit-product">
           <X className="w-4 h-4" />
         </button>
         <DialogHeader>
-          <DialogTitle>{editing ? "Edit Product" : "Add Product to Catalog"}</DialogTitle>
+          <DialogTitle>{editing ? "Modifier le produit" : "Ajouter un produit au catalogue"}</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
           <div className="space-y-4">
           {/* Name */}
           <div className="space-y-1.5">
-            <Label>Product Name *</Label>
-            <Input data-testid="input-prod-name" value={form.name} onChange={e => setField("name", e.target.value)} placeholder="e.g. Lavazza Super Crema 1kg" />
+            <Label>Nom du produit *</Label>
+            <Input data-testid="input-prod-name" value={form.name} onChange={e => setField("name", e.target.value)} placeholder="ex. Lavazza Super Crema 1kg" />
           </div>
 
           {/* Description */}
           <div className="space-y-1.5">
             <Label>Description</Label>
-            <Input data-testid="input-prod-desc" value={form.description} onChange={e => setField("description", e.target.value)} placeholder="Brief description of the product" />
+            <Input data-testid="input-prod-desc" value={form.description} onChange={e => setField("description", e.target.value)} placeholder="Brève description du produit" />
           </div>
 
           {/* Image URL */}
           <div className="space-y-1.5">
-            <Label>Image URL</Label>
+            <Label>URL de l'image</Label>
             <Input data-testid="input-prod-image" value={form.imageUrl} onChange={e => setField("imageUrl", e.target.value)} placeholder="https://..." />
             {form.imageUrl.trim() && (
               <ImageAdjustSlider
@@ -410,7 +410,7 @@ function ProductFormModal({
 
           {/* Additional Images */}
           <div className="space-y-1.5">
-            <Label>Additional Images</Label>
+            <Label>Images supplémentaires</Label>
             <div className="space-y-2">
               {form.additionalImageUrls.map((url, idx) => (
                 <div key={idx} className="space-y-1">
@@ -450,7 +450,7 @@ function ProductFormModal({
                 className="gap-1.5 text-xs"
                 onClick={() => setField("additionalImageUrls", [...form.additionalImageUrls, ""])}
               >
-                <Plus className="w-3.5 h-3.5" /> Add image
+                <Plus className="w-3.5 h-3.5" /> Ajouter une image
               </Button>
             </div>
           </div>
@@ -458,21 +458,21 @@ function ProductFormModal({
           {/* Category + SubCategory */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Category</Label>
+              <Label>Catégorie</Label>
               <Select value={form.categoryId} onValueChange={v => setField("categoryId", v === "__none__" ? "" : v)}>
-                <SelectTrigger data-testid="select-prod-category"><SelectValue placeholder="Select…" /></SelectTrigger>
+                <SelectTrigger data-testid="select-prod-category"><SelectValue placeholder="Sélectionner…" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">None</SelectItem>
+                  <SelectItem value="__none__">Aucune</SelectItem>
                   {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>Sub-category</Label>
+              <Label>Sous-catégorie</Label>
               <Select value={form.subCategoryId} onValueChange={v => setField("subCategoryId", v === "__none__" ? "" : v)} disabled={!form.categoryId}>
-                <SelectTrigger data-testid="select-prod-subcat"><SelectValue placeholder={form.categoryId ? "Select…" : "Pick category first"} /></SelectTrigger>
+                <SelectTrigger data-testid="select-prod-subcat"><SelectValue placeholder={form.categoryId ? "Sélectionner…" : "Choisissez d'abord une catégorie"} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">None</SelectItem>
+                  <SelectItem value="__none__">Aucune</SelectItem>
                   {filteredSubs.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -481,29 +481,29 @@ function ProductFormModal({
 
           {/* Flavor multiselect */}
           <MultiSelectList
-            label="Flavors"
+            label="Parfums"
             items={filteredFlavs}
             selected={form.flavorIds}
             onChange={ids => setField("flavorIds", ids)}
-            hint={form.subCategoryId ? "Filtered by selected sub-category" : form.categoryId ? "Filtered by selected category" : undefined}
+            hint={form.subCategoryId ? "Filtré par la sous-catégorie sélectionnée" : form.categoryId ? "Filtré par la catégorie sélectionnée" : undefined}
           />
 
           {/* Size multiselect */}
           <MultiSelectList
-            label="Sizes"
+            label="Tailles"
             items={filteredSzs}
             selected={form.sizeIds}
             onChange={ids => setField("sizeIds", ids)}
-            hint={form.subCategoryId ? "Filtered by selected sub-category" : form.categoryId ? "Filtered by selected category" : undefined}
+            hint={form.subCategoryId ? "Filtré par la sous-catégorie sélectionnée" : form.categoryId ? "Filtré par la catégorie sélectionnée" : undefined}
           />
 
           {/* Brand (single select) */}
           <div className="space-y-1.5">
-            <Label>Brand</Label>
+            <Label>Marque</Label>
             <Select value={form.brandId} onValueChange={v => setField("brandId", v === "__none__" ? "" : v)}>
-              <SelectTrigger data-testid="select-prod-brand"><SelectValue placeholder="Select…" /></SelectTrigger>
+              <SelectTrigger data-testid="select-prod-brand"><SelectValue placeholder="Sélectionner…" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">None</SelectItem>
+                <SelectItem value="__none__">Aucune</SelectItem>
                 {filteredBrnds.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -512,9 +512,9 @@ function ProductFormModal({
           {/* Status (admin only, shown when editing) */}
           {editing && (
             <div className="space-y-1.5">
-              <Label>Product Status</Label>
+              <Label>Statut du produit</Label>
               <Select value={form.status} onValueChange={v => setField("status", v)}>
-                <SelectTrigger data-testid="select-prod-status"><SelectValue placeholder="Select status…" /></SelectTrigger>
+                <SelectTrigger data-testid="select-prod-status"><SelectValue placeholder="Sélectionner un statut…" /></SelectTrigger>
                 <SelectContent>
                   {PRODUCT_STATUSES.map(s => (
                     <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
@@ -523,7 +523,7 @@ function ProductFormModal({
               </Select>
               {form.status === "FREEZE" && (
                 <p className="text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 dark:text-amber-400 border border-amber-200 dark:border-amber-800 rounded-md px-3 py-2">
-                  Frozen products are hidden from Coffee Owners across the entire marketplace.
+                  Les produits gelés sont masqués aux Coffee Owners sur l'ensemble de la marketplace.
                 </p>
               )}
             </div>
@@ -531,15 +531,15 @@ function ProductFormModal({
 
           {(form.categoryId || form.subCategoryId) && (
             <p className="text-xs text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
-              Flavor and Size options are filtered by sub-category assignment. Select a sub-category to narrow results further.
+              Les options de parfum et de taille sont filtrées selon la sous-catégorie assignée. Sélectionnez une sous-catégorie pour affiner les résultats.
             </p>
           )}
           </div>
 
           <div className="lg:sticky lg:top-0">
-            <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Live Preview</Label>
+            <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Aperçu en direct</Label>
             {(form.imageUrl || form.additionalImageUrls.some(u => u.trim())) && (
-              <p className="text-xs text-muted-foreground mb-1.5">Use the slider beneath each image URL to adjust its crop. Click a thumbnail to preview it.</p>
+              <p className="text-xs text-muted-foreground mb-1.5">Utilisez le curseur sous chaque URL d'image pour ajuster son recadrage. Cliquez sur une vignette pour la prévisualiser.</p>
             )}
             <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
               <ImageAdjustPreview
@@ -568,7 +568,7 @@ function ProductFormModal({
                 </div>
               )}
               <div className="p-4 space-y-2">
-                <p className="font-semibold text-lg leading-tight">{form.name || "Product name"}</p>
+                <p className="font-semibold text-lg leading-tight">{form.name || "Nom du produit"}</p>
                 {form.description && <p className="text-sm text-muted-foreground line-clamp-3">{form.description}</p>}
                 <div className="flex flex-wrap gap-1 pt-1">
                   {form.categoryId && <Badge variant="secondary" className="text-xs">{cats.find(c => String(c.id) === form.categoryId)?.name}</Badge>}
@@ -603,12 +603,12 @@ function ProductFormModal({
               onClick={onDelete}
               data-testid="button-delete-product"
             >
-              <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete
+              <Trash2 className="w-3.5 h-3.5 mr-1.5" />Supprimer
             </Button>
           )}
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>Annuler</Button>
           <Button onClick={handleSave} disabled={save.isPending || !form.name.trim()} data-testid="button-save-product">
-            {save.isPending ? "Saving…" : editing ? "Save Changes" : "Create Product"}
+            {save.isPending ? "Enregistrement…" : editing ? "Enregistrer les modifications" : "Créer le produit"}
           </Button>
         </div>
       </DialogContent>
@@ -700,7 +700,7 @@ function SupplierProductEditModal({
   const filteredBrnds = useMemo(() => filterTaxBySubCat(brnds, subId, catId, catSubIds), [brnds, subId, catId, catSubIds]);
 
   const handleSave = () => {
-    if (!form.name.trim()) return toast({ title: "Name is required", variant: "destructive" });
+    if (!form.name.trim()) return toast({ title: "Le nom est requis", variant: "destructive" });
     const flavorId = form.flavorIds[0] ?? null;
     const sizeId = form.sizeIds[0] ?? null;
     onSave({
@@ -721,46 +721,46 @@ function SupplierProductEditModal({
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent hideClose className="sm:max-w-4xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
-        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-edit-supplier-product">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Fermer" data-testid="button-close-edit-supplier-product">
           <X className="w-4 h-4" />
         </button>
         <DialogHeader>
-          <DialogTitle>Edit Supplier Product</DialogTitle>
+          <DialogTitle>Modifier le produit du fournisseur</DialogTitle>
         </DialogHeader>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <Label>Product Name *</Label>
-              <Input data-testid="input-sp-edit-name" value={form.name} onChange={e => setField("name", e.target.value)} placeholder="e.g. Lavazza Super Crema 1kg" />
+              <Label>Nom du produit *</Label>
+              <Input data-testid="input-sp-edit-name" value={form.name} onChange={e => setField("name", e.target.value)} placeholder="ex. Lavazza Super Crema 1kg" />
             </div>
 
             <div className="space-y-1.5">
               <Label>Description</Label>
-              <Input data-testid="input-sp-edit-desc" value={form.description} onChange={e => setField("description", e.target.value)} placeholder="Brief description of the product" />
+              <Input data-testid="input-sp-edit-desc" value={form.description} onChange={e => setField("description", e.target.value)} placeholder="Brève description du produit" />
             </div>
 
             <div className="space-y-1.5">
-              <Label>Image URL</Label>
+              <Label>URL de l'image</Label>
               <Input data-testid="input-sp-edit-image" value={form.imageUrl} onChange={e => setField("imageUrl", e.target.value)} placeholder="https://..." />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Category</Label>
+                <Label>Catégorie</Label>
                 <Select value={form.categoryId} onValueChange={v => setField("categoryId", v === "__none__" ? "" : v)}>
-                  <SelectTrigger data-testid="select-sp-edit-category"><SelectValue placeholder="Select…" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-sp-edit-category"><SelectValue placeholder="Sélectionner…" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">None</SelectItem>
+                    <SelectItem value="__none__">Aucune</SelectItem>
                     {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Sub-category</Label>
+                <Label>Sous-catégorie</Label>
                 <Select value={form.subCategoryId} onValueChange={v => setField("subCategoryId", v === "__none__" ? "" : v)} disabled={!form.categoryId}>
-                  <SelectTrigger data-testid="select-sp-edit-subcat"><SelectValue placeholder={form.categoryId ? "Select…" : "Pick category first"} /></SelectTrigger>
+                  <SelectTrigger data-testid="select-sp-edit-subcat"><SelectValue placeholder={form.categoryId ? "Sélectionner…" : "Choisissez d'abord une catégorie"} /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__none__">None</SelectItem>
+                    <SelectItem value="__none__">Aucune</SelectItem>
                     {filteredSubs.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -768,27 +768,27 @@ function SupplierProductEditModal({
             </div>
 
             <MultiSelectList
-              label="Flavors"
+              label="Parfums"
               items={filteredFlavs}
               selected={form.flavorIds}
               onChange={ids => setField("flavorIds", ids)}
-              hint={form.subCategoryId ? "Filtered by selected sub-category" : form.categoryId ? "Filtered by selected category" : undefined}
+              hint={form.subCategoryId ? "Filtré par la sous-catégorie sélectionnée" : form.categoryId ? "Filtré par la catégorie sélectionnée" : undefined}
             />
 
             <MultiSelectList
-              label="Sizes"
+              label="Tailles"
               items={filteredSzs}
               selected={form.sizeIds}
               onChange={ids => setField("sizeIds", ids)}
-              hint={form.subCategoryId ? "Filtered by selected sub-category" : form.categoryId ? "Filtered by selected category" : undefined}
+              hint={form.subCategoryId ? "Filtré par la sous-catégorie sélectionnée" : form.categoryId ? "Filtré par la catégorie sélectionnée" : undefined}
             />
 
             <div className="space-y-1.5">
-              <Label>Brand</Label>
+              <Label>Marque</Label>
               <Select value={form.brandId} onValueChange={v => setField("brandId", v === "__none__" ? "" : v)}>
-                <SelectTrigger data-testid="select-sp-edit-brand"><SelectValue placeholder="Select…" /></SelectTrigger>
+                <SelectTrigger data-testid="select-sp-edit-brand"><SelectValue placeholder="Sélectionner…" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__none__">None</SelectItem>
+                  <SelectItem value="__none__">Aucune</SelectItem>
                   {filteredBrnds.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -796,14 +796,14 @@ function SupplierProductEditModal({
 
             {(form.categoryId || form.subCategoryId) && (
               <p className="text-xs text-muted-foreground bg-secondary/50 rounded-md px-3 py-2">
-                Flavor and Size options are filtered by sub-category assignment. Select a sub-category to narrow results further.
+                Les options de parfum et de taille sont filtrées selon la sous-catégorie assignée. Sélectionnez une sous-catégorie pour affiner les résultats.
               </p>
             )}
           </div>
 
           <div className="space-y-4">
             <div>
-              <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Preview</Label>
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground mb-2 block">Aperçu</Label>
               <div className="border rounded-xl overflow-hidden bg-card shadow-sm">
                 <div className="aspect-square bg-secondary flex items-center justify-center overflow-hidden">
                   {form.imageUrl ? (
@@ -813,7 +813,7 @@ function SupplierProductEditModal({
                   )}
                 </div>
                 <div className="p-4 space-y-2">
-                  <p className="font-semibold text-lg leading-tight">{form.name || "Product name"}</p>
+                  <p className="font-semibold text-lg leading-tight">{form.name || "Nom du produit"}</p>
                   {form.description && <p className="text-sm text-muted-foreground line-clamp-3">{form.description}</p>}
                   <div className="flex flex-wrap gap-1 pt-1">
                     {form.categoryId && <Badge variant="secondary" className="text-xs">{cats.find(c => String(c.id) === form.categoryId)?.name}</Badge>}
@@ -841,12 +841,12 @@ function SupplierProductEditModal({
             </div>
 
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1.5">Status</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1.5">Statut</p>
               <SpStatusBadge status={product.status ?? ""} />
             </div>
             {product.creatorName && (
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Submitted by</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Soumis par</p>
                 <p className="text-sm font-medium">{product.creatorName}</p>
               </div>
             )}
@@ -854,16 +854,16 @@ function SupplierProductEditModal({
         </div>
         <div className="flex flex-wrap gap-2 justify-end pt-4 border-t mt-4">
           <Button variant="destructive" onClick={onDelete} data-testid={`button-delete-modal-${product.id}`}>
-            <Trash2 className="w-4 h-4 mr-2" />Delete Product
+            <Trash2 className="w-4 h-4 mr-2" />Supprimer le produit
           </Button>
           {product.status !== 'ACTIVE' && (
             <Button className="bg-emerald-600/55 hover:bg-emerald-700/55 text-white" onClick={onApprove} disabled={isApproving} data-testid={`button-approve-modal-${product.id}`}>
-              <CheckCircle2 className="w-4 h-4 mr-2" />{isApproving ? "Approving…" : "Approve Product"}
+              <CheckCircle2 className="w-4 h-4 mr-2" />{isApproving ? "Approbation…" : "Approuver le produit"}
             </Button>
           )}
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="outline" onClick={onClose}>Annuler</Button>
           <Button onClick={handleSave} disabled={isSaving || !form.name.trim()} data-testid="button-save-sp-product">
-            {isSaving ? "Saving…" : "Save Changes"}
+            {isSaving ? "Enregistrement…" : "Enregistrer les modifications"}
           </Button>
         </div>
       </DialogContent>
@@ -890,27 +890,27 @@ function SpStatusBadge({ status }: { status: string }) {
   if (status === 'PENDING')
     return (
       <Badge className="text-xs font-medium bg-amber-100/70 text-amber-800 dark:bg-amber-400/10 dark:text-amber-300 border border-amber-200/70 dark:border-amber-400/20">
-        Pending
+        En attente
       </Badge>
     );
 
   if (status === 'ACTIVE')
     return (
       <Badge className="text-xs font-medium bg-emerald-100/70 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-400/20">
-        Approved
+        Approuvé
       </Badge>
     );
 
   if (status === 'REJECTED')
     return (
       <Badge className="text-xs font-medium bg-rose-100/70 text-rose-800 dark:bg-rose-400/10 dark:text-rose-300 border border-rose-200/70 dark:border-rose-400/20">
-        Rejected
+        Refusé
       </Badge>
     );
 
   return (
     <Badge className="text-xs font-medium bg-secondary/70 text-muted-foreground border border-border/70">
-      Unknown
+      Inconnu
     </Badge>
   );
 }
@@ -945,10 +945,10 @@ function SupplierProductsSection({
       qc.invalidateQueries({ queryKey: ["/api/admin/supplier-products"] });
       qc.invalidateQueries({ queryKey: ["/api/admin/products"] });
       invalidateMarketplace(qc);
-      toast({ title: "Product approved" });
+      toast({ title: "Produit approuvé" });
       setSelectedProduct(null);
     },
-    onError: () => toast({ title: "Error approving", variant: "destructive" }),
+    onError: () => toast({ title: "Erreur lors de l'approbation", variant: "destructive" }),
   });
 
   const updateSpMut = useMutation({
@@ -957,20 +957,20 @@ function SupplierProductsSection({
       qc.invalidateQueries({ queryKey: ["/api/admin/supplier-products"] });
       qc.invalidateQueries({ queryKey: ["/api/admin/products"] });
       invalidateMarketplace(qc);
-      toast({ title: "Product updated" });
+      toast({ title: "Produit mis à jour" });
     },
-    onError: () => toast({ title: "Error updating", variant: "destructive" }),
+    onError: () => toast({ title: "Erreur lors de la mise à jour", variant: "destructive" }),
   });
 
   const deleteMut = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `/api/admin/products/${id}`),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/supplier-products"] });
-      toast({ title: "Product deleted" });
+      toast({ title: "Produit supprimé" });
       setDeleteTarget(null);
       setSelectedProduct(null);
     },
-    onError: () => toast({ title: "Error deleting", variant: "destructive" }),
+    onError: () => toast({ title: "Erreur lors de la suppression", variant: "destructive" }),
   });
 
   // ── Dynamic filter dropdowns ────────────────────────────────────────────────
@@ -1042,14 +1042,14 @@ function SupplierProductsSection({
       <div className="flex gap-3 flex-wrap">
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
           <Package className="w-4 h-4 text-primary" />
-          <span className="text-sm font-medium">{supplierProducts.length} total products</span>
+          <span className="text-sm font-medium">{supplierProducts.length} produits au total</span>
         </div>
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
           <Clock className="w-4 h-4 text-amber-500" />
-          <span className="text-sm text-muted-foreground">{pendingCount} pending review</span>
+          <span className="text-sm text-muted-foreground">{pendingCount} en attente de révision</span>
         </div>
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">{rejectedCount} rejected</span>
+          <span className="text-sm text-muted-foreground">{rejectedCount} refusé(s)</span>
         </div>
       </div>
 
@@ -1075,7 +1075,7 @@ function SupplierProductsSection({
                     ref={spSearchInputRef}
                     data-testid="input-sp-search"
                     className="pl-9"
-                    placeholder="Search products…"
+                    placeholder="Rechercher des produits…"
                     value={spFilters.search}
                     onChange={e => setSpFilter("search", e.target.value)}
                     onBlur={() => { if (!spFilters.search) setSpSearchOpen(false); }}
@@ -1084,60 +1084,60 @@ function SupplierProductsSection({
               </div>
               <div className="w-[150px] shrink-0">
                 <Select value={spFilters.categoryId} onValueChange={v => setSpFilter("categoryId", v === "__all__" ? "" : v)}>
-                  <SelectTrigger data-testid="select-sp-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-sp-filter-category"><SelectValue placeholder="Catégorie" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__all__">All Categories</SelectItem>
+                    <SelectItem value="__all__">Toutes les catégories</SelectItem>
                     {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="w-[150px] shrink-0">
                 <Select value={spFilters.subCategoryId} onValueChange={v => setSpFilter("subCategoryId", v === "__all__" ? "" : v)} disabled={!spFilters.categoryId}>
-                  <SelectTrigger data-testid="select-sp-filter-subcat"><SelectValue placeholder="Sub-category" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-sp-filter-subcat"><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__all__">All Sub-categories</SelectItem>
+                    <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
                     {filteredSubsSp.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="w-[130px] shrink-0">
                 <Select value={spFilters.flavorId} onValueChange={v => setSpFilter("flavorId", v === "__all__" ? "" : v)}>
-                  <SelectTrigger data-testid="select-sp-filter-flavor"><SelectValue placeholder="Flavor" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-sp-filter-flavor"><SelectValue placeholder="Parfum" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__all__">All Flavors</SelectItem>
+                    <SelectItem value="__all__">Tous les parfums</SelectItem>
                     {filteredFlavsSp.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="w-[130px] shrink-0">
                 <Select value={spFilters.sizeId} onValueChange={v => setSpFilter("sizeId", v === "__all__" ? "" : v)}>
-                  <SelectTrigger data-testid="select-sp-filter-size"><SelectValue placeholder="Size" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-sp-filter-size"><SelectValue placeholder="Taille" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__all__">All Sizes</SelectItem>
+                    <SelectItem value="__all__">Toutes les tailles</SelectItem>
                     {filteredSzsSp.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="w-[130px] shrink-0">
                 <Select value={spFilters.brandId} onValueChange={v => setSpFilter("brandId", v === "__all__" ? "" : v)}>
-                  <SelectTrigger data-testid="select-sp-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-sp-filter-brand"><SelectValue placeholder="Marque" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__all__">All Brands</SelectItem>
+                    <SelectItem value="__all__">Toutes les marques</SelectItem>
                     {filteredBrndsSp.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               {hasActiveSpFilters && (
                 <Button variant="outline" size="sm" onClick={() => setSpFilters(EMPTY_SP_FILTERS)} className="text-muted-foreground shrink-0">
-                  <X className="w-4 h-4 mr-1" />Clear
+                  <X className="w-4 h-4 mr-1" />Effacer
                 </Button>
               )}
               <div className="shrink-0 sm:ml-auto">
                 <div className="flex border rounded-md overflow-hidden">
-                  <button onClick={() => setViewMode('list')} className={`p-1.5 transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`} data-testid="toggle-sp-view-list" title="List view">
+                  <button onClick={() => setViewMode('list')} className={`p-1.5 transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`} data-testid="toggle-sp-view-list" title="Vue liste">
                     <LayoutList className="w-4 h-4" />
                   </button>
-                  <button onClick={() => setViewMode('grid')} className={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`} data-testid="toggle-sp-view-grid" title="Grid view">
+                  <button onClick={() => setViewMode('grid')} className={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`} data-testid="toggle-sp-view-grid" title="Vue grille">
                     <LayoutGrid className="w-4 h-4" />
                   </button>
                 </div>
@@ -1157,9 +1157,9 @@ function SupplierProductsSection({
       ) : displayed.length === 0 ? (
         <div className="p-16 flex flex-col items-center gap-3 text-center border rounded-lg">
           <Package className="w-12 h-12 text-muted-foreground opacity-40" />
-          <p className="font-medium">{hasActiveSpFilters ? "No products match your filters" : "No supplier products yet"}</p>
+          <p className="font-medium">{hasActiveSpFilters ? "Aucun produit ne correspond à vos filtres" : "Aucun produit fournisseur pour le moment"}</p>
           <p className="text-sm text-muted-foreground">
-            {hasActiveSpFilters ? "Try adjusting your filters." : "Products created by suppliers will appear here for review."}
+            {hasActiveSpFilters ? "Essayez d'ajuster vos filtres." : "Les produits créés par les fournisseurs apparaîtront ici pour révision."}
           </p>
         </div>
       ) : viewMode === 'grid' ? (
@@ -1185,7 +1185,7 @@ function SupplierProductsSection({
                 <div className="flex gap-1 pt-0.5" onClick={e => e.stopPropagation()}>
                   {(p as any).status !== 'ACTIVE' && (
                     <Button size="sm" className="h-7 px-2 text-xs flex-1 bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => approveMut.mutate(p.id)} disabled={approveMut.isPending} data-testid={`button-approve-sprod-${p.id}`}>
-                      <CheckCircle2 className="w-3 h-3 mr-1" />Approve
+                      <CheckCircle2 className="w-3 h-3 mr-1" />Approuver
                     </Button>
                   )}
                   <Button size="sm" variant="outline" className="h-7 px-2 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(p)} disabled={deleteMut.isPending} data-testid={`button-delete-sprod-${p.id}`}>
@@ -1202,9 +1202,9 @@ function SupplierProductsSection({
             <TableHeader className="bg-secondary/30">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-14" />
-                <TableHead>Product</TableHead>
-                <TableHead>Taxonomy</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Produit</TableHead>
+                <TableHead>Taxonomie</TableHead>
+                <TableHead>Statut</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -1221,7 +1221,7 @@ function SupplierProductsSection({
                   <TableCell>
                     <p className="font-medium text-sm">{p.name}</p>
                     {p.description && <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{p.description}</p>}
-                    {(p as any).creatorName && <p className="text-xs text-muted-foreground mt-0.5">By: {(p as any).creatorName}</p>}
+                    {(p as any).creatorName && <p className="text-xs text-muted-foreground mt-0.5">Par : {(p as any).creatorName}</p>}
                   </TableCell>
                   <TableCell><TaxBadges product={p} /></TableCell>
                   <TableCell><SpStatusBadge status={(p as any).status} /></TableCell>
@@ -1229,11 +1229,11 @@ function SupplierProductsSection({
                     <div className="flex justify-end gap-2">
                       {(p as any).status !== 'ACTIVE' && (
                         <Button size="sm" className="text-xs bg-emerald-600 hover:bg-emerald-700 text-white" onClick={() => approveMut.mutate(p.id)} disabled={approveMut.isPending} data-testid={`button-approve-sprod-${p.id}`}>
-                          <CheckCircle2 className="w-3.5 h-3.5 mr-1" />Approve
+                          <CheckCircle2 className="w-3.5 h-3.5 mr-1" />Approuver
                         </Button>
                       )}
                       <Button size="sm" variant="destructive" className="text-xs" onClick={() => setDeleteTarget(p)} disabled={deleteMut.isPending} data-testid={`button-delete-sprod-${p.id}`}>
-                        <Trash2 className="w-3.5 h-3.5 mr-1" />Delete
+                        <Trash2 className="w-3.5 h-3.5 mr-1" />Supprimer
                       </Button>
                     </div>
                   </TableCell>
@@ -1296,34 +1296,34 @@ function PackStatusBadge({ pack }: { pack: any }) {
   if (pack.isArchived)
     return (
       <Badge className="text-xs font-medium bg-slate-100/70 text-slate-700 dark:bg-slate-400/10 dark:text-slate-300 border border-slate-200/70 dark:border-slate-400/20">
-        Archived
+        Archivé
       </Badge>
     );
 
   if (pack.isExpired)
     return (
       <Badge className="text-xs font-medium bg-rose-100/70 text-rose-800 dark:bg-rose-400/10 dark:text-rose-300 border border-rose-200/70 dark:border-rose-400/20">
-        Expired
+        Expiré
       </Badge>
     );
 
   if (pack.visibility === "HIDDEN")
     return (
       <Badge className="text-xs font-medium bg-secondary/70 text-muted-foreground border border-border/70">
-        Hidden
+        Masqué
       </Badge>
     );
 
   if (pack.isAvailable)
     return (
       <Badge className="text-xs font-medium bg-emerald-100/70 text-emerald-800 dark:bg-emerald-400/10 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-400/20">
-        Available
+        Disponible
       </Badge>
     );
 
   return (
     <Badge className="text-xs font-medium bg-amber-100/70 text-amber-800 dark:bg-amber-400/10 dark:text-amber-300 border border-amber-200/70 dark:border-amber-400/20">
-      Out of Stock
+      Rupture de stock
     </Badge>
   );
 }
@@ -1352,13 +1352,13 @@ function AdminPackPreviewModal({
       {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own
           scroll container exactly, same thumb/track/hover classes, not a new scrollbar style. */}
       <DialogContent hideClose className="sm:max-w-2xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
-        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Close" data-testid="button-close-pack-preview">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Fermer" data-testid="button-close-pack-preview">
           <X className="w-4 h-4" />
         </button>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Layers className="w-4 h-4 text-amber-500" />
-            Pack Preview
+            Aperçu du pack
           </DialogTitle>
         </DialogHeader>
 
@@ -1376,7 +1376,7 @@ function AdminPackPreviewModal({
             {pack.expirationDate && (
               <div className="absolute bottom-3 right-3">
                 <Badge className="bg-orange-500 text-white border-0 text-xs">
-                  Exp. {new Date(pack.expirationDate).toLocaleDateString()}
+                  Exp. : {new Date(pack.expirationDate).toLocaleDateString()}
                 </Badge>
               </div>
             )}
@@ -1410,45 +1410,45 @@ function AdminPackPreviewModal({
           {/* Price + stock row */}
           <div className="flex flex-wrap gap-4 p-3 bg-secondary/40 rounded-lg">
             <div>
-              <p className="text-xs text-muted-foreground mb-0.5">Pack Price</p>
+              <p className="text-xs text-muted-foreground mb-0.5">Prix du pack</p>
               <p className="font-bold text-lg text-amber-600">
                 {pack.price != null ? fmt(pack.price) : "—"}
               </p>
               {individualTotal > (pack.price ?? 0) && (
                 <p className="text-xs text-muted-foreground line-through">
-                  {fmt(individualTotal)} (individual)
+                  {fmt(individualTotal)} (à l'unité)
                 </p>
               )}
             </div>
             <div>
-              <p className="text-xs text-muted-foreground mb-0.5">Max Buildable</p>
+              <p className="text-xs text-muted-foreground mb-0.5">Nombre max. réalisable</p>
               <p className="font-semibold">{pack.maxBuildable ?? 0}</p>
             </div>
             {pack.packReviewCount > 0 && (
               <div>
-                <p className="text-xs text-muted-foreground mb-0.5">Rating</p>
-                <p className="font-semibold">{pack.packAvgRating?.toFixed(1)} <span className="text-xs text-muted-foreground font-normal">({pack.packReviewCount} reviews)</span></p>
+                <p className="text-xs text-muted-foreground mb-0.5">Note</p>
+                <p className="font-semibold">{pack.packAvgRating?.toFixed(1)} <span className="text-xs text-muted-foreground font-normal">({pack.packReviewCount} avis)</span></p>
               </div>
             )}
             <div>
-              <p className="text-xs text-muted-foreground mb-0.5">Visibility</p>
-              <p className="font-semibold text-sm">{pack.visibility === "VISIBLE" ? "Visible" : "Hidden"}</p>
+              <p className="text-xs text-muted-foreground mb-0.5">Visibilité</p>
+              <p className="font-semibold text-sm">{pack.visibility === "VISIBLE" ? "Visible" : "Masqué"}</p>
             </div>
           </div>
 
           {/* Items list */}
           {(pack.items ?? []).length > 0 && (
             <div>
-              <p className="text-sm font-semibold mb-2">{(pack.items ?? []).length} items included</p>
+              <p className="text-sm font-semibold mb-2">{(pack.items ?? []).length} article(s) inclus</p>
               <div className="rounded-lg border overflow-hidden">
                 <Table>
                   <TableHeader className="bg-secondary/30">
                     <TableRow className="hover:bg-transparent">
-                      <TableHead className="text-xs">Product</TableHead>
-                      <TableHead className="text-xs">Variant</TableHead>
-                      <TableHead className="text-xs text-right">Qty</TableHead>
-                      <TableHead className="text-xs text-right">Unit Price</TableHead>
-                      <TableHead className="text-xs text-right">Pack Price</TableHead>
+                      <TableHead className="text-xs">Produit</TableHead>
+                      <TableHead className="text-xs">Variante</TableHead>
+                      <TableHead className="text-xs text-right">Qté</TableHead>
+                      <TableHead className="text-xs text-right">Prix unitaire</TableHead>
+                      <TableHead className="text-xs text-right">Prix du pack</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1526,9 +1526,9 @@ function AdminPackPreviewModal({
                 data-testid={`button-modal-toggle-visibility-pack-${pack.id}`}
               >
                 {pack.visibility === "VISIBLE" ? (
-                  <><EyeOff className="w-3.5 h-3.5 mr-1.5" />Hide Pack</>
+                  <><EyeOff className="w-3.5 h-3.5 mr-1.5" />Masquer le pack</>
                 ) : (
-                  <><Eye className="w-3.5 h-3.5 mr-1.5" />Show Pack</>
+                  <><Eye className="w-3.5 h-3.5 mr-1.5" />Afficher le pack</>
                 )}
               </Button>
             </div>
@@ -1540,12 +1540,12 @@ function AdminPackPreviewModal({
                 onClick={() => setConfirmDelete(true)}
                 data-testid={`button-modal-delete-pack-${pack.id}`}
               >
-                <Trash2 className="w-3.5 h-3.5 mr-1.5" />Delete Pack
+                <Trash2 className="w-3.5 h-3.5 mr-1.5" />Supprimer le pack
               </Button>
             ) : (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">Are you sure?</span>
-                <Button variant="outline" size="sm" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+                <span className="text-xs text-muted-foreground">Êtes-vous sûr ?</span>
+                <Button variant="outline" size="sm" onClick={() => setConfirmDelete(false)}>Annuler</Button>
                 <Button
                   variant="destructive"
                   size="sm"
@@ -1553,7 +1553,7 @@ function AdminPackPreviewModal({
                   disabled={isPending}
                   data-testid="button-modal-confirm-delete-pack"
                 >
-                  {isPending ? "Deleting…" : "Delete"}
+                  {isPending ? "Suppression…" : "Supprimer"}
                 </Button>
               </div>
             )}
@@ -1616,13 +1616,13 @@ function AdminPacksSection({
     onSuccess: (_, variables) => {
       qc.invalidateQueries({ queryKey: ["/api/admin/packs"] });
       qc.invalidateQueries({ queryKey: ["/api/marketplace/packs"] });
-      toast({ title: "Pack updated" });
+      toast({ title: "Pack mis à jour" });
       // Refresh the pack in preview if it's open
       if (previewPack?.id === variables.id) {
         setPreviewPack((prev: any) => prev ? { ...prev, ...variables.data } : prev);
       }
     },
-    onError: () => toast({ title: "Error", variant: "destructive" }),
+    onError: () => toast({ title: "Erreur", variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
@@ -1630,11 +1630,11 @@ function AdminPacksSection({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/packs"] });
       qc.invalidateQueries({ queryKey: ["/api/marketplace/packs"] });
-      toast({ title: "Pack deleted" });
+      toast({ title: "Pack supprimé" });
       setDeleting(null);
       setPreviewPack(null);
     },
-    onError: () => toast({ title: "Error deleting pack", variant: "destructive" }),
+    onError: () => toast({ title: "Erreur lors de la suppression du pack", variant: "destructive" }),
   });
 
   // ── Dynamic filter dropdowns ──────────────────────────────────────────────
@@ -1733,18 +1733,18 @@ function AdminPacksSection({
       <div className="flex gap-3 flex-wrap">
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
           <Layers className="w-4 h-4 text-amber-500" />
-          <span className="text-sm font-medium">{packs.length} total packs</span>
+          <span className="text-sm font-medium">{packs.length} packs au total</span>
         </div>
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
-            {packs.filter((p: any) => p.isAvailable).length} available ·{" "}
-            {packs.filter((p: any) => !p.isAvailable).length} unavailable
+            {packs.filter((p: any) => p.isAvailable).length} disponible(s) ·{" "}
+            {packs.filter((p: any) => !p.isAvailable).length} indisponible(s)
           </span>
         </div>
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
           <span className="text-sm text-muted-foreground">
-            {packs.filter((p: any) => p.isArchived).length} archived ·{" "}
-            {packs.filter((p: any) => p.isExpired && !p.isArchived).length} expired
+            {packs.filter((p: any) => p.isArchived).length} archivé(s) ·{" "}
+            {packs.filter((p: any) => p.isExpired && !p.isArchived).length} expiré(s)
           </span>
         </div>
       </div>
@@ -1771,7 +1771,7 @@ function AdminPacksSection({
                   <Input
                     ref={packSearchInputRef}
                     className="pl-9"
-                    placeholder="Search packs or suppliers…"
+                    placeholder="Rechercher des packs ou fournisseurs…"
                     value={packFilters.search}
                     onChange={e => setPackFilter("search", e.target.value)}
                     onBlur={() => { if (!packFilters.search) setPackSearchOpen(false); }}
@@ -1783,9 +1783,9 @@ function AdminPacksSection({
               {/* Category */}
               <div className="w-[150px] shrink-0">
                 <Select value={packFilters.categoryId} onValueChange={v => setPackFilter("categoryId", v === "__all__" ? "" : v)}>
-                  <SelectTrigger data-testid="select-pack-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-pack-filter-category"><SelectValue placeholder="Catégorie" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__all__">All Categories</SelectItem>
+                    <SelectItem value="__all__">Toutes les catégories</SelectItem>
                     {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -1794,9 +1794,9 @@ function AdminPacksSection({
               {/* Sub-category */}
               <div className="w-[150px] shrink-0">
                 <Select value={packFilters.subCategoryId} onValueChange={v => setPackFilter("subCategoryId", v === "__all__" ? "" : v)} disabled={!packFilters.categoryId}>
-                  <SelectTrigger data-testid="select-pack-filter-subcat"><SelectValue placeholder="Sub-category" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-pack-filter-subcat"><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__all__">All Sub-categories</SelectItem>
+                    <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
                     {filteredSubsPack.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -1805,9 +1805,9 @@ function AdminPacksSection({
               {/* Brand */}
               <div className="w-[130px] shrink-0">
                 <Select value={packFilters.brandId} onValueChange={v => setPackFilter("brandId", v === "__all__" ? "" : v)}>
-                  <SelectTrigger data-testid="select-pack-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-pack-filter-brand"><SelectValue placeholder="Marque" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__all__">All Brands</SelectItem>
+                    <SelectItem value="__all__">Toutes les marques</SelectItem>
                     {filteredBrndsPack.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -1816,9 +1816,9 @@ function AdminPacksSection({
               {/* Flavor */}
               <div className="w-[130px] shrink-0">
                 <Select value={packFilters.flavorId} onValueChange={v => setPackFilter("flavorId", v === "__all__" ? "" : v)}>
-                  <SelectTrigger data-testid="select-pack-filter-flavor"><SelectValue placeholder="Flavor" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-pack-filter-flavor"><SelectValue placeholder="Parfum" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__all__">All Flavors</SelectItem>
+                    <SelectItem value="__all__">Tous les parfums</SelectItem>
                     {filteredFlavsPack.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -1827,9 +1827,9 @@ function AdminPacksSection({
               {/* Size */}
               <div className="w-[130px] shrink-0">
                 <Select value={packFilters.sizeId} onValueChange={v => setPackFilter("sizeId", v === "__all__" ? "" : v)}>
-                  <SelectTrigger data-testid="select-pack-filter-size"><SelectValue placeholder="Size" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-pack-filter-size"><SelectValue placeholder="Taille" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__all__">All Sizes</SelectItem>
+                    <SelectItem value="__all__">Toutes les tailles</SelectItem>
                     {filteredSzsPack.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -1838,14 +1838,14 @@ function AdminPacksSection({
               {/* Status */}
               <div className="w-[130px] shrink-0">
                 <Select value={packFilters.status} onValueChange={v => setPackFilter("status", v === "__all__" ? "" : v)}>
-                  <SelectTrigger data-testid="select-pack-filter-status"><SelectValue placeholder="Status" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-pack-filter-status"><SelectValue placeholder="Statut" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="__all__">All Statuses</SelectItem>
-                    <SelectItem value="available">Available</SelectItem>
-                    <SelectItem value="unavailable">Out of Stock</SelectItem>
-                    <SelectItem value="hidden">Hidden</SelectItem>
-                    <SelectItem value="archived">Archived</SelectItem>
-                    <SelectItem value="expired">Expired</SelectItem>
+                    <SelectItem value="__all__">Tous les statuts</SelectItem>
+                    <SelectItem value="available">Disponible</SelectItem>
+                    <SelectItem value="unavailable">Rupture de stock</SelectItem>
+                    <SelectItem value="hidden">Masqué</SelectItem>
+                    <SelectItem value="archived">Archivé</SelectItem>
+                    <SelectItem value="expired">Expiré</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1853,7 +1853,7 @@ function AdminPacksSection({
               {/* Clear */}
               {hasActivePackFilters && (
                 <Button variant="outline" size="sm" onClick={() => setPackFilters(EMPTY_PACK_FILTERS)} className="text-muted-foreground shrink-0">
-                  <X className="w-4 h-4 mr-1" />Clear
+                  <X className="w-4 h-4 mr-1" />Effacer
                 </Button>
               )}
               {/* Grid / List toggle */}
@@ -1863,7 +1863,7 @@ function AdminPacksSection({
                     onClick={() => setViewMode('list')}
                     className={`p-1.5 transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                     data-testid="toggle-pack-view-list"
-                    title="List view"
+                    title="Vue liste"
                   >
                     <LayoutList className="w-4 h-4" />
                   </button>
@@ -1871,7 +1871,7 @@ function AdminPacksSection({
                     onClick={() => setViewMode('grid')}
                     className={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                     data-testid="toggle-pack-view-grid"
-                    title="Grid view"
+                    title="Vue grille"
                   >
                     <LayoutGrid className="w-4 h-4" />
                   </button>
@@ -1887,9 +1887,9 @@ function AdminPacksSection({
       ) : displayed.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <Layers className="w-12 h-12 text-muted-foreground opacity-40 mb-4" />
-          <p className="font-semibold">{hasActivePackFilters ? "No packs match your filters" : "No packs found"}</p>
+          <p className="font-semibold">{hasActivePackFilters ? "Aucun pack ne correspond à vos filtres" : "Aucun pack trouvé"}</p>
           <p className="text-sm text-muted-foreground mt-1">
-            {hasActivePackFilters ? "Try adjusting your filters." : "Suppliers can create packs from their Pack tab."}
+            {hasActivePackFilters ? "Essayez d'ajuster vos filtres." : "Les fournisseurs peuvent créer des packs depuis leur onglet Pack."}
           </p>
         </div>
       ) : viewMode === 'grid' ? (
@@ -1911,7 +1911,7 @@ function AdminPacksSection({
                 {/* Visibility badge */}
                 {pack.visibility === "HIDDEN" && (
                   <div className="absolute top-1.5 right-1.5">
-                    <Badge className="text-[10px] px-1.5 py-0 bg-secondary text-muted-foreground border-0">Hidden</Badge>
+                    <Badge className="text-[10px] px-1.5 py-0 bg-secondary text-muted-foreground border-0">Masqué</Badge>
                   </div>
                 )}
               </div>
@@ -1934,13 +1934,13 @@ function AdminPacksSection({
                   <Button
                     size="sm" variant="outline"
                     className="h-7 px-2 text-xs flex-1"
-                    title={pack.visibility === "VISIBLE" ? "Hide" : "Show"}
+                    title={pack.visibility === "VISIBLE" ? "Masquer" : "Afficher"}
                     onClick={() => toggleVisibility(pack)}
                     disabled={patchMutation.isPending}
                     data-testid={`button-toggle-visibility-pack-${pack.id}`}
                   >
                     {pack.visibility === "VISIBLE" ? <EyeOff className="w-3 h-3 mr-1" /> : <Eye className="w-3 h-3 mr-1" />}
-                    {pack.visibility === "VISIBLE" ? "Hide" : "Show"}
+                    {pack.visibility === "VISIBLE" ? "Masquer" : "Afficher"}
                   </Button>
                   <Button
                     size="sm" variant="outline"
@@ -1963,11 +1963,11 @@ function AdminPacksSection({
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-14" />
                 <TableHead>Pack</TableHead>
-                <TableHead>Supplier</TableHead>
-                <TableHead>Categories</TableHead>
-                <TableHead>Price</TableHead>
+                <TableHead>Fournisseur</TableHead>
+                <TableHead>Catégories</TableHead>
+                <TableHead>Prix</TableHead>
                 <TableHead>Stock</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Statut</TableHead>
                 <TableHead className="w-24 text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -1994,7 +1994,7 @@ function AdminPacksSection({
                       <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{pack.description}</p>
                     )}
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {(pack.items ?? []).length} item{(pack.items ?? []).length !== 1 ? "s" : ""} included
+                      {(pack.items ?? []).length} article{(pack.items ?? []).length !== 1 ? "s" : ""} inclus
                     </p>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{pack.supplierName ?? "—"}</TableCell>
@@ -2016,7 +2016,7 @@ function AdminPacksSection({
                     <div className="flex items-center justify-end gap-1">
                       <Button
                         size="icon" variant="outline" className="h-8 w-8"
-                        title={pack.visibility === "VISIBLE" ? "Hide pack" : "Show pack"}
+                        title={pack.visibility === "VISIBLE" ? "Masquer le pack" : "Afficher le pack"}
                         onClick={() => toggleVisibility(pack)}
                         disabled={patchMutation.isPending}
                         data-testid={`button-toggle-visibility-pack-${pack.id}`}
@@ -2174,11 +2174,11 @@ export default function AdminProductsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/admin/products"] });
       invalidateMarketplace(qc);
-      toast({ title: "Product deleted" });
+      toast({ title: "Produit supprimé" });
       setDeleting(null);
       setModalOpen(false); setEditing(null);
     },
-    onError: () => toast({ title: "Error deleting product", variant: "destructive" }),
+    onError: () => toast({ title: "Erreur lors de la suppression du produit", variant: "destructive" }),
   });
 
   const openAdd = () => { setEditing(null); setModalOpen(true); };
@@ -2187,11 +2187,11 @@ export default function AdminProductsPage() {
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
-        title="Product Catalog"
-        subtitle="Admin-managed product catalog. Suppliers browse and claim products from here."
+        title="Catalogue produits"
+        subtitle="Catalogue de produits géré par l'administration. Les fournisseurs parcourent et réclament des produits depuis ici."
         action={section === 'catalog' && (
           <Button onClick={openAdd} data-testid="button-add-product">
-            <Plus className="w-4 h-4 mr-1.5" />Add Product
+            <Plus className="w-4 h-4 mr-1.5" />Ajouter un produit
           </Button>
         )}
       />
@@ -2208,14 +2208,14 @@ export default function AdminProductsPage() {
               className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0 transition-all ${section === 'catalog' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               data-testid="section-catalog"
             >
-              Product Management
+              Gestion des produits
             </button>
             <button
               onClick={() => setSection('supplier')}
               className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0 transition-all ${section === 'supplier' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               data-testid="section-supplier"
             >
-              Supplier Products
+              Produits des fournisseurs
             </button>
             <button
               onClick={() => setSection('packs')}
@@ -2237,13 +2237,13 @@ export default function AdminProductsPage() {
       <div className="flex gap-3 flex-wrap">
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
           <Package className="w-4 h-4 text-primary" />
-          <span className="text-sm font-medium">{allProducts.length} total products</span>
+          <span className="text-sm font-medium">{allProducts.length} produits au total</span>
         </div>
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">{allProducts.filter(p => computeProductStatus(p) === 'active').length} active · {allProducts.filter(p => computeProductStatus(p) === 'inactive').length} inactive</span>
+          <span className="text-sm text-muted-foreground">{allProducts.filter(p => computeProductStatus(p) === 'active').length} actif(s) · {allProducts.filter(p => computeProductStatus(p) === 'inactive').length} inactif(s)</span>
         </div>
         <div className="bg-card border rounded-lg px-4 py-2 flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">{cats.length} categories · {subs.length} sub-categories · {flavs.length} flavors · {szs.length} sizes · {brnds.length} brands</span>
+          <span className="text-sm text-muted-foreground">{cats.length} catégories · {subs.length} sous-catégories · {flavs.length} parfums · {szs.length} tailles · {brnds.length} marques</span>
         </div>
       </div>
 
@@ -2270,7 +2270,7 @@ export default function AdminProductsPage() {
                   ref={prodSearchInputRef}
                   data-testid="input-product-search"
                   className="pl-9"
-                  placeholder="Search products…"
+                  placeholder="Rechercher des produits…"
                   value={filters.search}
                   onChange={e => setFilter("search", e.target.value)}
                   onBlur={() => { if (!filters.search) setProdSearchOpen(false); }}
@@ -2281,9 +2281,9 @@ export default function AdminProductsPage() {
             {/* Category */}
             <div className="w-[150px] shrink-0">
               <Select value={filters.categoryId} onValueChange={v => setFilter("categoryId", v === "__all__" ? "" : v)}>
-                <SelectTrigger data-testid="select-filter-category"><SelectValue placeholder="Category" /></SelectTrigger>
+                <SelectTrigger data-testid="select-filter-category"><SelectValue placeholder="Catégorie" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">All Categories</SelectItem>
+                  <SelectItem value="__all__">Toutes les catégories</SelectItem>
                   {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -2292,9 +2292,9 @@ export default function AdminProductsPage() {
             {/* SubCategory */}
             <div className="w-[150px] shrink-0">
               <Select value={filters.subCategoryId} onValueChange={v => setFilter("subCategoryId", v === "__all__" ? "" : v)} disabled={!filters.categoryId}>
-                <SelectTrigger data-testid="select-filter-subcat"><SelectValue placeholder="Sub-category" /></SelectTrigger>
+                <SelectTrigger data-testid="select-filter-subcat"><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">All Sub-categories</SelectItem>
+                  <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
                   {filteredSubsForFilter.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -2303,9 +2303,9 @@ export default function AdminProductsPage() {
             {/* Flavor — dynamic based on subcat */}
             <div className="w-[130px] shrink-0">
               <Select value={filters.flavorId} onValueChange={v => setFilter("flavorId", v === "__all__" ? "" : v)}>
-                <SelectTrigger data-testid="select-filter-flavor"><SelectValue placeholder="Flavor" /></SelectTrigger>
+                <SelectTrigger data-testid="select-filter-flavor"><SelectValue placeholder="Parfum" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">All Flavors</SelectItem>
+                  <SelectItem value="__all__">Tous les parfums</SelectItem>
                   {filteredFlavsForFilter.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -2314,9 +2314,9 @@ export default function AdminProductsPage() {
             {/* Size — dynamic based on subcat */}
             <div className="w-[130px] shrink-0">
               <Select value={filters.sizeId} onValueChange={v => setFilter("sizeId", v === "__all__" ? "" : v)}>
-                <SelectTrigger data-testid="select-filter-size"><SelectValue placeholder="Size" /></SelectTrigger>
+                <SelectTrigger data-testid="select-filter-size"><SelectValue placeholder="Taille" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">All Sizes</SelectItem>
+                  <SelectItem value="__all__">Toutes les tailles</SelectItem>
                   {filteredSzsForFilter.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -2325,9 +2325,9 @@ export default function AdminProductsPage() {
             {/* Brand — dynamic based on subcat */}
             <div className="w-[130px] shrink-0">
               <Select value={filters.brandId} onValueChange={v => setFilter("brandId", v === "__all__" ? "" : v)}>
-                <SelectTrigger data-testid="select-filter-brand"><SelectValue placeholder="Brand" /></SelectTrigger>
+                <SelectTrigger data-testid="select-filter-brand"><SelectValue placeholder="Marque" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">All Brands</SelectItem>
+                  <SelectItem value="__all__">Toutes les marques</SelectItem>
                   {filteredBrndsForFilter.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -2336,7 +2336,7 @@ export default function AdminProductsPage() {
             {/* Clear */}
             {hasActiveFilters && (
               <Button variant="outline" size="sm" onClick={() => setFilters(EMPTY_FILTERS)} className="text-muted-foreground shrink-0">
-                <X className="w-4 h-4 mr-1" />Clear
+                <X className="w-4 h-4 mr-1" />Effacer
               </Button>
             )}
 
@@ -2347,7 +2347,7 @@ export default function AdminProductsPage() {
                   onClick={() => setViewMode('list')}
                   className={`p-1.5 transition-colors ${viewMode === 'list' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                   data-testid="toggle-view-list"
-                  title="List view"
+                  title="Vue liste"
                 >
                   <LayoutList className="w-4 h-4" />
                 </button>
@@ -2355,7 +2355,7 @@ export default function AdminProductsPage() {
                   onClick={() => setViewMode('grid')}
                   className={`p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
                   data-testid="toggle-view-grid"
-                  title="Grid view"
+                  title="Vue grille"
                 >
                   <LayoutGrid className="w-4 h-4" />
                 </button>
@@ -2380,9 +2380,9 @@ export default function AdminProductsPage() {
         <div className="p-16 flex flex-col items-center gap-3 text-center border rounded-lg">
           <Package className="w-12 h-12 text-muted-foreground opacity-40" />
           <div>
-            <p className="font-medium">No products found</p>
+            <p className="font-medium">Aucun produit trouvé</p>
             <p className="text-sm text-muted-foreground mt-1">
-              {hasActiveFilters ? "Try adjusting your filters." : "Add your first product to the catalog."}
+              {hasActiveFilters ? "Essayez d'ajuster vos filtres." : "Ajoutez votre premier produit au catalogue."}
             </p>
           </div>
         </div>
@@ -2425,8 +2425,8 @@ export default function AdminProductsPage() {
             <TableHeader className="bg-secondary/30">
               <TableRow className="hover:bg-transparent">
                 <TableHead className="w-14" />
-                <TableHead>Name</TableHead>
-                <TableHead>Taxonomy</TableHead>
+                <TableHead>Nom</TableHead>
+                <TableHead>Taxonomie</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

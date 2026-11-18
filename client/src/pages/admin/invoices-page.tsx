@@ -62,8 +62,8 @@ export default function InvoicesPage() {
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
-        title="Invoices"
-        subtitle="View and export order invoices."
+        title="Factures"
+        subtitle="Consultez et exportez les factures des commandes."
         action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
@@ -75,7 +75,7 @@ export default function InvoicesPage() {
                 <FileText className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-medium">Total Invoices</p>
+                <p className="text-xs text-muted-foreground font-medium">Total des factures</p>
                 <p className="text-2xl font-bold">{nonCancelled.length}</p>
               </div>
             </CardContent>
@@ -86,7 +86,7 @@ export default function InvoicesPage() {
                 <DollarSign className="w-5 h-5 text-green-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-medium">Total Invoiced Amount</p>
+                <p className="text-xs text-muted-foreground font-medium">Montant total facturé</p>
                 <p className="text-2xl font-bold text-green-600">{fmt(totalInvoiced)}</p>
               </div>
             </CardContent>
@@ -102,7 +102,7 @@ export default function InvoicesPage() {
                 <FileText className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-medium">Total Invoices</p>
+                <p className="text-xs text-muted-foreground font-medium">Total des factures</p>
                 <p className="text-2xl font-bold">{nonCancelled.length}</p>
               </div>
             </CardContent>
@@ -113,7 +113,7 @@ export default function InvoicesPage() {
                 <DollarSign className="w-5 h-5 text-green-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-medium">Total Invoiced Amount</p>
+                <p className="text-xs text-muted-foreground font-medium">Montant total facturé</p>
                 <p className="text-2xl font-bold text-green-600">{fmt(totalInvoiced)}</p>
               </div>
             </CardContent>
@@ -136,7 +136,7 @@ export default function InvoicesPage() {
           {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-56 w-full rounded-2xl" />)}
         </div>
       ) : rows.length === 0 ? (
-        <Card><CardContent className="p-12 text-center text-muted-foreground">No invoices yet</CardContent></Card>
+        <Card><CardContent className="p-12 text-center text-muted-foreground">Aucune facture pour le moment</CardContent></Card>
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

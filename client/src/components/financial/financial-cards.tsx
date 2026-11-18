@@ -10,6 +10,17 @@ import {
   PAYOUT_STATUS_META, PAYMENT_COLLECTION_META, invoiceNumber, payoutReference, type FinancialRow,
 } from "@/lib/financial-rows";
 
+// Displayed label only for the raw sub-order status badge below — never the
+// value itself, which stays exactly as stored/compared everywhere else. Same
+// French wording already used for this exact status enum in
+// client/src/components/cafe/order-details-modal.tsx's own SUBORDER_STATUS
+// map, kept in sync here rather than imported to avoid coupling this shared
+// card to that unrelated Coffee-Owner-facing component.
+const SUB_ORDER_STATUS_LABELS: Record<string, string> = {
+  PENDING: "En attente", CONFIRMED: "Confirmée", PREPARING: "En préparation",
+  READY: "Prête", IN_DELIVERY: "En livraison", DELIVERED: "Livrée", CANCELLED: "Annulée",
+};
+
 // Mapped-card presentation for Invoices/Payments — visually inspired by Admin → Delivery's
 // DeliveryCard (same InfoTile grid + header badge + footer action approach), reused by both
 // Admin and Supplier Invoices/Payments pages instead of four duplicated card layouts. Every
@@ -53,7 +64,7 @@ export function InvoiceCard({ row, showSupplier = true, onView, clickable = fals
 
         <div className="flex items-center justify-between pt-2 border-t border-border/50">
           <InfoTile icon={DollarSign} label="Montant" value={<span className="text-foreground font-semibold">{fmt(row.subtotal)}</span>} />
-          <Badge variant="outline" className="text-[10px] shrink-0">{row.subOrderStatus}</Badge>
+          <Badge variant="outline" className="text-[10px] shrink-0">{SUB_ORDER_STATUS_LABELS[row.subOrderStatus] ?? row.subOrderStatus}</Badge>
         </div>
 
         {!clickable && (

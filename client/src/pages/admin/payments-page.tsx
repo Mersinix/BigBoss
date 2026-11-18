@@ -60,8 +60,8 @@ export default function PaymentsPage() {
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
-        title="Payments"
-        subtitle="Overview of platform payment activity."
+        title="Paiements"
+        subtitle="Vue d'ensemble de l'activité de paiement de la plateforme."
         action={isMobile && <KpiOverviewButton onClick={() => setKpiModalOpen(true)} />}
       />
 
@@ -73,7 +73,7 @@ export default function PaymentsPage() {
                 <DollarSign className="w-5 h-5 text-green-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-medium">Revenue (livrées)</p>
+                <p className="text-xs text-muted-foreground font-medium">Revenus (livrées)</p>
                 <p className="text-2xl font-bold text-green-600">{fmt(totalRevenue)}</p>
               </div>
             </CardContent>
@@ -84,7 +84,7 @@ export default function PaymentsPage() {
                 <CreditCard className="w-5 h-5 text-amber-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-medium">Pending Payments</p>
+                <p className="text-xs text-muted-foreground font-medium">Paiements en attente</p>
                 <p className="text-2xl font-bold text-amber-600">{fmt(pendingAmount)}</p>
               </div>
             </CardContent>
@@ -95,7 +95,7 @@ export default function PaymentsPage() {
                 <TrendingUp className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-medium">Platform Commission (5%)</p>
+                <p className="text-xs text-muted-foreground font-medium">Commission plateforme (5%)</p>
                 <p className="text-2xl font-bold text-blue-600">{fmt(commission)}</p>
               </div>
             </CardContent>
@@ -111,7 +111,7 @@ export default function PaymentsPage() {
                 <DollarSign className="w-5 h-5 text-green-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-medium">Revenue (livrées)</p>
+                <p className="text-xs text-muted-foreground font-medium">Revenus (livrées)</p>
                 <p className="text-2xl font-bold text-green-600">{fmt(totalRevenue)}</p>
               </div>
             </CardContent>
@@ -122,7 +122,7 @@ export default function PaymentsPage() {
                 <CreditCard className="w-5 h-5 text-amber-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-medium">Pending Payments</p>
+                <p className="text-xs text-muted-foreground font-medium">Paiements en attente</p>
                 <p className="text-2xl font-bold text-amber-600">{fmt(pendingAmount)}</p>
               </div>
             </CardContent>
@@ -133,7 +133,7 @@ export default function PaymentsPage() {
                 <TrendingUp className="w-5 h-5 text-blue-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground font-medium">Platform Commission (5%)</p>
+                <p className="text-xs text-muted-foreground font-medium">Commission plateforme (5%)</p>
                 <p className="text-2xl font-bold text-blue-600">{fmt(commission)}</p>
               </div>
             </CardContent>
@@ -156,7 +156,7 @@ export default function PaymentsPage() {
           {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-56 w-full rounded-2xl" />)}
         </div>
       ) : rows.length === 0 ? (
-        <Card><CardContent className="p-12 text-center text-muted-foreground">No payment records</CardContent></Card>
+        <Card><CardContent className="p-12 text-center text-muted-foreground">Aucun paiement</CardContent></Card>
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

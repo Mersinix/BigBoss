@@ -8,8 +8,8 @@ import {
   Store, Layers, RotateCcw, Calendar, Zap, Package, XCircle,
   Sun, Moon, X, User, FileText, Wallet, Star, Ticket,
 } from "lucide-react";
-import { Textarea } from "@/components/ui/textarea";
 import { useDriverReviewForDelivery, useCreateDriverReview, VEHICLE_TYPE_LABELS, type DeliveryVehicleType } from "@/hooks/use-delivery-ecosystem";
+import { ReviewModal } from "@/components/review-modal";
 import { useThemeStore } from "@/store/theme-store";
 import { formatDate } from "@/lib/format";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -71,13 +71,10 @@ const DELIVERY_STATUS_META: Record<string, { label: string; badgeDk: string; bad
 // Driver → Avis, Driver rating, Delivery Company Driver detail, and Admin automatically —
 // same live-computed rating pattern, nothing stored twice. ──────────────────────────────
 
-function DriverReviewButton({ driverId, deliveryId, isDark }: { driverId: number; deliveryId: number; isDark: boolean }) {
-  const { toast } = useToast();
+function DriverReviewButton({ driverId, driverName, deliveryId, isDark }: { driverId: number; driverName: string; deliveryId: number; isDark: boolean }) {
   const { data: existing, isLoading } = useDriverReviewForDelivery(deliveryId);
   const createReview = useCreateDriverReview();
   const [open, setOpen] = useState(false);
-  const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState("");
 
   if (isLoading) return null;
 
@@ -90,37 +87,38 @@ function DriverReviewButton({ driverId, deliveryId, isDark }: { driverId: number
     );
   }
 
-  const submit = () => {
-    createReview.mutate({ driverId, deliveryId, rating, comment: comment.trim() || undefined }, {
-      onSuccess: () => { toast({ title: "Avis envoyé" }); setOpen(false); },
-      onError: (err: Error) => toast({ title: "Erreur", description: err.message, variant: "destructive" }),
+  // Create-only here (the `existing` branch above already covers "already
+  // reviewed" with a permanent read-only line, same as before this task) —
+  // myReview is always null, so the shared modal never shows its own
+  // edit-mode wording. onSubmit must reject on failure (never call its own
+  // toast) so ReviewModal's existing success/error toast — now this driver
+  // review's only toast, replacing the old bespoke "Avis envoyé" one as
+  // part of adopting its shared design — is the single source of feedback.
+  const handleSubmit = (rating: number, comment: string) =>
+    new Promise<void>((resolve, reject) => {
+      createReview.mutate(
+        { driverId, deliveryId, rating, comment: comment.trim() || undefined },
+        { onSuccess: () => resolve(), onError: (err: Error) => reject(err) },
+      );
     });
-  };
 
   return (
     <>
       <Button size="sm" variant="outline" className={`h-7 text-xs mt-1.5 gap-1 ${isDark ? "text-white border-white" : ""}`} onClick={() => setOpen(true)} data-testid={`button-review-driver-${deliveryId}`}>
         <Star className="w-3 h-3" /> Donner un avis
       </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogTitle>Évaluer le chauffeur</DialogTitle>
-          <div className="flex items-center gap-1 py-2">
-            {[1, 2, 3, 4, 5].map((v) => (
-              <button key={v} type="button" onClick={() => setRating(v)} data-testid={`star-driver-${v}`}>
-                <Star className={`w-6 h-6 ${v <= rating ? "fill-amber-400 text-amber-400" : "text-gray-300"}`} />
-              </button>
-            ))}
-          </div>
-          <Textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={3} placeholder="Votre avis (optionnel)" data-testid="input-driver-review-comment" />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Annuler</Button>
-            <Button onClick={submit} disabled={createReview.isPending} data-testid="button-submit-driver-review">
-              {createReview.isPending ? "Envoi…" : "Envoyer"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ReviewModal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Évaluer le chauffeur"
+        targetName={driverName}
+        reviewTypeLabel="Avis sur le chauffeur"
+        typeIcon={Truck}
+        existingReviews={[]}
+        myReview={null}
+        onSubmit={handleSubmit}
+        isSubmitting={createReview.isPending}
+      />
     </>
   );
 }
@@ -840,7 +838,7 @@ export default function OrderDetailsModal({
                                 button rendered for Admin too, even though submitting would always
                                 be rejected server-side; hiding it here matches actual eligibility. */}
                             {!isAdmin && sub.delivery.status === "DELIVERED" && sub.delivery.driver && (
-                              <DriverReviewButton driverId={sub.delivery.driver.id} deliveryId={sub.delivery.id} isDark={t.dk} />
+                              <DriverReviewButton driverId={sub.delivery.driver.id} driverName={sub.delivery.driver.name} deliveryId={sub.delivery.id} isDark={t.dk} />
                             )}
                           </div>
                         </div>

@@ -882,6 +882,17 @@ export function registerShopCatalogRoutes(app: Express): void {
       } catch { res.status(500).json({ message: "Error" }); }
     });
 
+    // Supplier/store ASSOCIATION for a product — separate from purchase eligibility
+    // (task: "separate supplier/store visibility from product purchase eligibility").
+    // Identity-only (supplierId + supplierName), no pricing/stock, so it needs no
+    // stripCommercialData gating — same openness as /api/stores.
+    app.get("/api/marketplace/:productId/suppliers", async (req, res) => {
+      try {
+        const suppliers = await storage.getMarketplaceProductSuppliers(parseInt(req.params.productId));
+        res.json(suppliers);
+      } catch { res.status(500).json({ message: "Error" }); }
+    });
+
     // ── Promotions (Supplier) ──────────────────────────────────────────────────
 
     const requireSupplier = async (req: any, res: any, next: any) => {

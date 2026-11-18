@@ -136,6 +136,7 @@ export interface IStorage {
   // Marketplace (cafe browsing)
   getMarketplaceProducts(filters?: { categoryId?: number; subCategoryId?: number; search?: string; supplierId?: number }): Promise<MarketplaceProduct[]>;
   getMarketplaceProduct(productId: number, supplierId?: number): Promise<MarketplaceProduct | undefined>;
+  getMarketplaceProductSuppliers(productId: number): Promise<{ supplierId: number; supplierName: string }[]>;
   // Lightweight, batched image+crop lookup (task: "Synchronize Updated
   // Product and Pack Images in Coffee Owner Cart") — never price/stock,
   // just enough for a cart/display row to re-resolve a fresh image.

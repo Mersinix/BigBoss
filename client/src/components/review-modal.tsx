@@ -4,7 +4,7 @@ import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Star, CheckCircle, Package, X, Sun, Moon } from "lucide-react";
+import { Star, CheckCircle, Package, X, Sun, Moon, type LucideIcon } from "lucide-react";
 import { useThemeStore } from "@/store/theme-store";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
@@ -67,6 +67,15 @@ interface Props {
   // existing workflow pre-selects 5 stars for a brand-new review); every
   // other target keeps the default.
   defaultRating?: number;
+  // Additive, defaults to the existing "Modifier votre avis" / "Écrire un
+  // avis" header text — lets a target with its own fixed, non-editing
+  // wording (e.g. the Driver review's "Évaluer le chauffeur") override the
+  // header title without touching Product/Pack, neither of which pass this.
+  title?: string;
+  // Additive, defaults to the existing Package icon on the reviewTypeLabel
+  // pill — Package fits a product/pack but not every target (e.g. a driver
+  // review). Product/Pack never pass this, so their pill is unchanged.
+  typeIcon?: LucideIcon;
 }
 
 function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
@@ -110,7 +119,7 @@ function StarDisplay({ rating }: { rating: number }) {
 
 export function ReviewModal({
   open, onClose, targetName, reviewTypeLabel, existingReviews, myReview, onSubmit, isSubmitting, canReview = true,
-  extraFormContent, defaultRating = 0,
+  extraFormContent, defaultRating = 0, title, typeIcon: TypeIcon = Package,
 }: Props) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -208,7 +217,7 @@ export function ReviewModal({
               {/* Centered title */}
               <div className="flex flex-col items-center gap-0.5">
                 <span className={`text-[13px] font-semibold tracking-tight ${textPrimary}`}>
-                  {isEditing ? "Modifier votre avis" : "Écrire un avis"}
+                  {title ?? (isEditing ? "Modifier votre avis" : "Écrire un avis")}
                 </span>
                 <span className={`text-[11px] font-medium ${textMuted}`}>{targetName}</span>
               </div>
@@ -243,7 +252,7 @@ export function ReviewModal({
           >
             {/* Review type label */}
             <div className={`flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold rounded-xl ${dk ? "bg-gray-800 text-gray-200" : "bg-gray-100 text-gray-700"}`}>
-              <Package className="w-3.5 h-3.5" /> {reviewTypeLabel}
+              <TypeIcon className="w-3.5 h-3.5" /> {reviewTypeLabel}
             </div>
             {submitted ? (
               <div className="flex flex-col items-center gap-3 py-12 text-center">

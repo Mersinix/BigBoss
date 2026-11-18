@@ -126,6 +126,27 @@ export class MarketplaceStorage {
     return all.find((p) => p.id === productId);
   }
 
+  // Supplier/store ASSOCIATION for a product, independent of marketplace PURCHASE
+  // eligibility (task: "separate supplier/store visibility from product purchase
+  // eligibility" — the Coffee Owner's mapped product detail modal needs to show a
+  // supplier's Boutique button even when that supplier's category is frozen, or it
+  // currently has no priced/stocked variant — neither of which getMarketplaceProducts
+  // treats as disqualifying the supplier's STANDALONE MAPPING, only its purchasability).
+  // Deliberately mirrors ONLY the "is this listing a standalone, visible mapping of
+  // this product" checks getMarketplaceProducts also applies (visibility/
+  // isIndividuallyVisible/onlyForPack) — never the frozen-category check or the
+  // price>0/quantity>0 purchasability filter, both of which getMarketplaceProducts
+  // keeps unweakened and unchanged.
+  async getMarketplaceProductSuppliers(productId: number): Promise<{ supplierId: number; supplierName: string }[]> {
+    const listings = await db.select().from(supplierProductListings).where(eq(supplierProductListings.productId, productId));
+    const eligible = listings.filter((l) => l.visibility === 'VISIBLE' && l.isIndividuallyVisible && !l.onlyForPack);
+    if (!eligible.length) return [];
+    const supplierIds = Array.from(new Set(eligible.map((l) => l.supplierId)));
+    const allUsers = await db.select().from(users).where(inArray(users.id, supplierIds));
+    const nameById = new Map(allUsers.map((u) => [u.id, u.name]));
+    return supplierIds.map((id) => ({ supplierId: id, supplierName: nameById.get(id) ?? "" }));
+  }
+
   async getProductImageData(ids: number[]): Promise<Array<{ id: number; imageUrl: string | null; imageUrls: string[] | null; imageAdjustments: Record<string, number> }>> {
     const uniqueIds = Array.from(new Set(ids)).filter((id) => Number.isInteger(id) && id > 0);
     if (!uniqueIds.length) return [];

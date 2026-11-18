@@ -11,10 +11,12 @@ import { getAvatarUrl } from "@/lib/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Star, MapPin, Clock, Truck, Mail, Phone, Award, Package, Building2, Store, X, Zap, Image as ImageIcon, Target } from "lucide-react";
-import { WEEKLY_DAY_DEFS } from "@/lib/weekly-hours";
 import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-portfolio-album-modal";
-import { ReviewsModal } from "@/components/account/reviews-modal";
+import { ReviewModal } from "@/components/review-modal";
+import { AvailabilityModal } from "@/components/shared/availability-modal";
 import { FlashPreviewModal } from "@/components/account/flash-preview-modal";
+import { ModalGrabber } from "@/components/shared/modal-grabber";
+import { useScrollDismiss } from "@/hooks/use-scroll-dismiss";
 import type { User } from "@shared/schema";
 
 // Same theming mechanism as barista-detail-modal.tsx / AgentDetailModal /
@@ -34,90 +36,6 @@ function useTheme(isDark: boolean) {
 }
 
 const STATUS_LABELS: Record<string, string> = { approved: "Approuvé", pending: "En attente", rejected: "Refusé" };
-
-function DriverAvailabilityModal({
-  open, onClose, driverName, weeklyHours, isDark,
-}: {
-  open: boolean;
-  onClose: () => void;
-  driverName: string;
-  weeklyHours: import("@shared/schema").OpeningHoursMap | null;
-  isDark: boolean;
-}) {
-  const todayIndex = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
-  const todayKey = WEEKLY_DAY_DEFS[todayIndex].key;
-  const dk = isDark;
-  const bg = dk ? "bg-gray-900" : "bg-white";
-  const textPrimary = dk ? "text-white" : "text-gray-900";
-  const textMuted = dk ? "text-gray-400" : "text-gray-500";
-  const rowBg = dk ? "bg-gray-800 border-gray-700/60" : "bg-gray-50 border-gray-100";
-  const rowToday = dk ? "bg-blue-500/15 border-blue-500/30" : "bg-blue-50 border-blue-200";
-  const timeColor = dk ? "text-gray-300" : "text-gray-700";
-  const closedColor = dk ? "text-red-400" : "text-red-500";
-
-  return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-sm p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden">
-        <VisuallyHidden><DialogTitle>Disponibilité — {driverName}</DialogTitle></VisuallyHidden>
-        <div className={`flex flex-col max-h-[88vh] overflow-hidden transition-colors duration-200 ${bg}`}>
-          <div className={`shrink-0 ${bg} px-5 pt-5 pb-4`}>
-            <div className="flex items-center justify-between mb-4">
-              <button onClick={onClose} aria-label="Close" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${dk ? "bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white" : "bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800"}`}>
-                <X className="w-4 h-4" />
-              </button>
-              <div className="flex flex-col items-center gap-0.5">
-                <span className={`text-[13px] font-semibold tracking-tight leading-tight ${textPrimary}`}>{driverName}</span>
-                <span className={`text-[11px] font-medium ${textMuted}`}>Disponibilité</span>
-              </div>
-              <div className="w-8 h-8" />
-            </div>
-            <div className={`h-px w-full ${dk ? "bg-gray-800" : "bg-gray-100"}`} />
-          </div>
-          {/* Thin scrollbar treatment — matches the existing Admin detail-modal scroll
-              containers exactly (e.g. academy-detail-modal.tsx), not a new scrollbar style. */}
-          <div
-            className="flex-1 min-h-0 overflow-y-auto px-5 pb-6
-              [&::-webkit-scrollbar]:w-1
-              [&::-webkit-scrollbar-track]:bg-transparent
-              [&::-webkit-scrollbar-thumb]:rounded-full
-              [&::-webkit-scrollbar-thumb]:bg-gray-700
-              hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
-            style={{ WebkitOverflowScrolling: "touch" }}
-          >
-            {weeklyHours ? (
-              <div className="space-y-2 pb-2">
-                {WEEKLY_DAY_DEFS.map(({ key, label }) => {
-                  const day = weeklyHours[key];
-                  const isToday = key === todayKey;
-                  return (
-                    <div key={key} className={`flex items-center justify-between border rounded-2xl px-4 py-3 transition-colors ${isToday ? rowToday : rowBg}`}>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[13px] font-medium ${isToday ? (dk ? "text-blue-400" : "text-blue-600") : textPrimary}`}>{label}</span>
-                        {isToday && <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${dk ? "bg-blue-500/30 text-blue-300" : "bg-blue-100 text-blue-700"}`}>Aujourd'hui</span>}
-                      </div>
-                      {day?.closed ? (
-                        <span className={`text-[12px] font-semibold ${closedColor}`}>Fermé</span>
-                      ) : day ? (
-                        <span className={`text-[13px] font-medium tabular-nums ${isToday ? (dk ? "text-blue-300" : "text-blue-700") : timeColor}`}>{day.open}&thinsp;–&thinsp;{day.close}</span>
-                      ) : (
-                        <span className={`text-[12px] ${textMuted}`}>—</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className={`text-center py-12 ${textMuted}`}>
-                <Clock className="w-10 h-10 mx-auto mb-3 opacity-20" />
-                <p className={`text-sm font-medium ${textPrimary}`}>Aucun horaire configuré</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 // ONE reusable Chauffeur details modal (Part 13/39-40) — used identically by
 // Supplier → Delivery → Chauffeurs (driver-roster-view.tsx), Espace Livraison
@@ -156,13 +74,23 @@ export function DriverDetailModal({
   // Smart Driver Dispatch System (task: "BigBossCoffee — Smart Driver Dispatch System",
   // Phase 7) — single shared source (getDriverDispatchStats), reusing the same
   // reviewCount/avgRating it already computes rather than a second computation from
-  // `reviews` above (that one stays purely for ReviewsModal's own list display).
+  // `reviews` above (that one stays purely for ReviewModal's own list display).
   const { data: dispatchStats } = useDriverDispatchStats(driver?.id ?? null);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const [albumOpen, setAlbumOpen] = useState(false);
   const [albumIndex, setAlbumIndex] = useState(0);
   const [reviewsOpen, setReviewsOpen] = useState(false);
   const [flashOpen, setFlashOpen] = useState(false);
+
+  // Grabber + swipe-to-dismiss (task: "Add Grabber to Supplier Driver Detail
+  // Modal") — same shared hook/call signature as the Pack Detail Modal
+  // reference (pack-quick-view-modal.tsx's own useScrollDismiss(dialogOpen,
+  // close, undefined, true)). Called unconditionally, before the early
+  // return below — a Hook can't be called conditionally.
+  const {
+    onBodyWheel, onBodyTouchStart, onBodyTouchMove, onBodyTouchEnd,
+    dismissContentStyle, dismissOverlayStyle,
+  } = useScrollDismiss(open, onClose, undefined, true);
 
   if (!driver) return null;
 
@@ -182,8 +110,23 @@ export function DriverDetailModal({
   return (
     <>
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className={`sm:max-w-2xl rounded-2xl border-0 shadow-2xl max-h-[90vh] overflow-y-auto p-0 [&>button]:hidden [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600 ${t.modalBg}`}>
+      <DialogContent
+        className={`sm:max-w-2xl rounded-2xl border-0 shadow-2xl max-h-[90vh] flex flex-col overflow-hidden p-0 [&>button]:hidden ${t.modalBg}`}
+        style={dismissContentStyle}
+        overlayStyle={dismissOverlayStyle}
+      >
         <VisuallyHidden><DialogTitle>{driver.name}</DialogTitle></VisuallyHidden>
+        {/* Scrollable body — grabber/swipe-to-dismiss handlers attached here
+            (not on DialogContent itself), same separation as the Pack Detail
+            Modal reference, so the drag gesture never fights native scroll. */}
+        <div
+          className="flex-1 min-h-0 overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-700 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-gray-600"
+          style={{ WebkitOverflowScrolling: "touch" } as React.CSSProperties}
+          onWheel={onBodyWheel}
+          onTouchStart={onBodyTouchStart}
+          onTouchMove={onBodyTouchMove}
+          onTouchEnd={onBodyTouchEnd}
+        >
         {isLoading || !profile ? (
           <div className="p-6 space-y-4">
             <Skeleton className={`h-24 w-full rounded-2xl ${isDark ? "bg-gray-800" : ""}`} />
@@ -192,6 +135,7 @@ export function DriverDetailModal({
         ) : (
           <div className="flex flex-col">
             <div className={`w-full h-56 sm:h-72 relative shrink-0 rounded-t-2xl overflow-hidden ${isDark ? "bg-gray-800" : "bg-gray-100"}`}>
+              <ModalGrabber isDark={isDark} onImage />
               {/* Cover (Part 4) — banner background when set, logo demoted to a small
                   corner badge; falls back to the existing full-banner avatar otherwise.
                   driver is the raw User row, so driver.coverImageUrl is already live. */}
@@ -337,21 +281,24 @@ export function DriverDetailModal({
                 </div>
               )}
 
-              {/* Avis — moved out of the inline body into ReviewsModal (Star icon above). */}
+              {/* Avis — moved out of the inline body into ReviewModal (Star icon above). */}
 
               {adminSlot}
             </div>
           </div>
         )}
+        </div>
       </DialogContent>
     </Dialog>
 
-    <DriverAvailabilityModal
+    <AvailabilityModal
       open={availabilityOpen}
       onClose={() => setAvailabilityOpen(false)}
-      driverName={driver.name}
+      targetName={driver.name}
       weeklyHours={profile?.weeklyHours ?? null}
       isDark={isDark}
+      accentColor="blue"
+      noScheduleHint="Ce chauffeur n'a pas encore configuré ses disponibilités."
     />
 
     <MarketingPortfolioAlbumModal
@@ -363,15 +310,18 @@ export function DriverDetailModal({
     />
 
     {/* Reviews are only ever submitted elsewhere (after a completed delivery),
-        so no reviewForm here — list only. */}
-    <ReviewsModal
+        so canReview=false — list only, same view-only pattern already used by
+        e.g. academy-profile-modal.tsx's own ReviewModal usage. */}
+    <ReviewModal
       open={reviewsOpen}
       onClose={() => setReviewsOpen(false)}
-      professionalName={driver.name}
-      rating={avgRating}
-      reviewCount={reviews.length}
-      reviews={reviews}
-      isDark={isDark}
+      targetName={driver.name}
+      reviewTypeLabel="Avis sur le chauffeur"
+      existingReviews={reviews}
+      myReview={null}
+      canReview={false}
+      onSubmit={() => {}}
+      isSubmitting={false}
     />
 
     <FlashPreviewModal

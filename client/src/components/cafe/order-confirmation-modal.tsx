@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Store, Layers, MapPin, Clock, AlertTriangle,
@@ -201,6 +205,15 @@ export default function OrderConfirmationModal({
     ));
   };
 
+  // Remove-entire-product (task: "product-level removal option in the SHOP order
+  // confirmation modal") — keyed by the stable supplierId + productId pair, never by
+  // the displayed product name, so it can't collide with a same-named product from a
+  // different supplier or listing. Confirmed via a dialog (below) before it fires.
+  const [removeProductTarget, setRemoveProductTarget] = useState<{ supplierId: number; productId: number; productName: string } | null>(null);
+  const removeProduct = (supplierId: number, productId: number) => {
+    setLocalItems(prev => prev.filter(i => !(i.supplierId === supplierId && i.productId === productId)));
+  };
+
   // ── Totals ───────────────────────────────────────────────────────────────────
   // Re-evaluated from THIS modal's own draft (localItems), not a value computed by the
   // parent Cart page from the live Cart's contents at the moment this modal opened.
@@ -306,6 +319,7 @@ export default function OrderConfirmationModal({
   // ── Render ────────────────────────────────────────────────────────────────────
 
   return (
+    <>
     <Dialog open={open} onOpenChange={(v) => { if (!v && !isSubmitting) onClose(); }}>
       <DialogContent
         className="max-w-2xl sm:w-[calc(100%-2rem)] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden"
@@ -401,6 +415,17 @@ export default function OrderConfirmationModal({
                             {product.subCategoryName && <span>SubCategory: {product.subCategoryName}</span>}
                           </div>
                         </div>
+                        {/* Remove-entire-product — distinct from the per-variant icon-only
+                            button below (bordered + labeled), so it reads as a bigger action. */}
+                        <button
+                          type="button"
+                          className={`shrink-0 self-start flex items-center gap-1 px-2 py-1 rounded-lg border text-[10px] font-semibold transition-colors ${t.dk ? "border-red-500/30 text-red-400 hover:bg-red-500/10" : "border-red-200 text-red-500 hover:bg-red-50"}`}
+                          onClick={() => setRemoveProductTarget({ supplierId, productId: product.productId, productName: product.productName })}
+                          data-testid={`button-remove-product-${product.productId}`}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Retirer
+                        </button>
                       </div>
                       {/* Variants — full width beneath the image/name row instead of being
                           squeezed into the narrow middle column (same principle already used
@@ -800,5 +825,45 @@ export default function OrderConfirmationModal({
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* AlertDialogContent's base classes (bg-background, border, text-muted-foreground, …)
+        are plain CSS-variable values that never switch with this app's theme — the app
+        drives dark mode entirely through useThemeStore/t (above), not a real Tailwind
+        `.dark` class on <html>. So this instance overrides those classes directly from
+        `t`, the same per-component theme object the rest of this modal already uses,
+        instead of relying on the shared component's un-themed defaults. In Dark Mode the
+        background is intentionally `t.cardBg`'s own background ("bg-gray-800", the exact
+        same class the supplier product cards above use), not `t.modalBg` ("bg-gray-900") —
+        matched to the Boga/SGA product card's actual background per spec, not a guess. */}
+    <AlertDialog open={!!removeProductTarget} onOpenChange={(o) => !o && setRemoveProductTarget(null)}>
+      <AlertDialogContent className={`${t.dk ? "bg-gray-800" : "bg-white"} ${t.dk ? "border-gray-800" : "border-gray-100"}`}>
+        <AlertDialogHeader>
+          <AlertDialogTitle className={t.textPrimary}>Retirer ce produit ?</AlertDialogTitle>
+          <AlertDialogDescription className={t.textMuted}>
+            Cela retirera <strong className={t.textPrimary}>{removeProductTarget?.productName}</strong> et toutes ses variantes (saveur/taille) de votre commande.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel
+            className={t.dk
+              ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white bg-transparent"
+              : "border-gray-200 text-gray-700 hover:bg-gray-50 bg-white"}
+          >
+            Annuler
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => {
+              if (removeProductTarget) removeProduct(removeProductTarget.supplierId, removeProductTarget.productId);
+              setRemoveProductTarget(null);
+            }}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            data-testid="button-confirm-remove-product"
+          >
+            Supprimer
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

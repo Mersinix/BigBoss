@@ -16,7 +16,7 @@ import { useCart } from "@/hooks/use-cart";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useToast } from "@/hooks/use-toast";
 import { useQuickView } from "@/hooks/use-quick-view";
-import type { MarketplaceProduct, MarketplaceListing, MarketplaceVariant, ListingPromotion } from "@shared/schema";
+import type { MarketplaceProduct, MarketplaceListing, MarketplaceVariant, ListingPromotion, StoreCard } from "@shared/schema";
 import LocationPickerModal, { type PickedLocation } from "@/components/location-picker-modal";
 import { ReviewModal } from "@/components/review-modal";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
@@ -319,7 +319,8 @@ function VariantRow({
 // ── Supplier Section ──────────────────────────────────────────────────────────
 
 function SupplierSection({
-  listing, product, visibleVariants, reviewStats, distanceKm, promotions = [], isDark = false, onOpenPromotion,
+  listing, product, visibleVariants, reviewStats, distanceKm, promotions = [], isDark = false, isModal = false,
+  storeId = null, onStoreClick, onOpenPromotion,
 }: {
   listing: MarketplaceListing;
   product: MarketplaceProduct;
@@ -328,6 +329,15 @@ function SupplierSection({
   distanceKm?: number;
   promotions?: ListingPromotion[];
   isDark?: boolean;
+  // "Boutique" button (task: "new Boutique button for each supplier in the
+  // Coffee Owner's mapped product detail modal") — modal-only by design, so
+  // the full standalone product-detail-page.tsx layout is never affected.
+  // storeId is this supplier's own supplierStores.id, already pre-filtered
+  // to eligible (published + visible) stores by the caller — null means no
+  // eligible store exists, in which case no button renders at all.
+  isModal?: boolean;
+  storeId?: number | null;
+  onStoreClick?: (storeId: number) => void;
   onOpenPromotion: (target: PromotionBadgeTarget) => void;
 }) {
   const cardBorder = isDark ? "bg-gray-800 border-gray-700/60" : "border-border/50";
@@ -354,20 +364,33 @@ function SupplierSection({
           }
         </div>
         <div className="min-w-0 flex-1">
-          {/* Supplier name + supplier-level promo badges on the same line */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <p className={nameCls}>{listing.supplierName}</p>
-            {supplierBadgePromos.map((promo, i) => (
+          {/* Supplier name (+ supplier-level promo badges) on the left, Boutique
+              pinned to the right of the same row, both vertically centered. */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+              <p className={`${nameCls} truncate`}>{listing.supplierName}</p>
+              {supplierBadgePromos.map((promo, i) => (
+                <button
+                  type="button"
+                  key={`${promo.promotionId}-${i}`}
+                  onClick={() => onOpenPromotion({ promotionId: promo.promotionId, listingId: listing.id, flavorId: null, sizeId: null })}
+                  className="inline-flex items-center gap-1 bg-blue-500/90 hover:bg-blue-600 transition-colors text-white text-[10px] font-bold px-2 py-0.5 rounded-full"
+                  data-testid={`button-promo-badge-supplier-${listing.id}-${promo.promotionId}`}
+                >
+                  <Zap className="w-2.5 h-2.5" />{promo.label}
+                </button>
+              ))}
+            </div>
+            {isModal && storeId != null && (
               <button
                 type="button"
-                key={`${promo.promotionId}-${i}`}
-                onClick={() => onOpenPromotion({ promotionId: promo.promotionId, listingId: listing.id, flavorId: null, sizeId: null })}
-                className="inline-flex items-center gap-1 bg-blue-500/90 hover:bg-blue-600 transition-colors text-white text-[10px] font-bold px-2 py-0.5 rounded-full"
-                data-testid={`button-promo-badge-supplier-${listing.id}-${promo.promotionId}`}
+                onClick={(e) => { e.stopPropagation(); onStoreClick?.(storeId); }}
+                className={`shrink-0 px-3 py-1.5 text-[11px] font-semibold rounded-xl transition-all ${isDark ? "bg-gray-700 text-amber-400 shadow-sm" : "bg-white text-amber-600 shadow-sm"}`}
+                data-testid={`button-boutique-${listing.supplierId}`}
               >
-                <Zap className="w-2.5 h-2.5" />{promo.label}
+                Boutique
               </button>
-            ))}
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap mt-0.5">
             <p className={`text-xs ${subCls}`}>{visibleVariants.length} variante{visibleVariants.length !== 1 ? "s" : ""}</p>
@@ -386,17 +409,21 @@ function SupplierSection({
         </div>
       </div>
       <div className={`px-5 ${bodyBg}`}>
-        {visibleVariants.map((v, idx) => (
-          <VariantRow
-            key={`${v.flavorId ?? 0}-${v.sizeId ?? 0}-${idx}`}
-            variant={v}
-            listing={listing}
-            product={product}
-            promotions={pricePromos}
-            isDark={isDark}
-            onOpenPromotion={onOpenPromotion}
-          />
-        ))}
+        {visibleVariants.length === 0 ? (
+          <p className={`text-xs py-3 ${subCls}`}>Aucune variante disponible actuellement chez ce fournisseur.</p>
+        ) : (
+          visibleVariants.map((v, idx) => (
+            <VariantRow
+              key={`${v.flavorId ?? 0}-${v.sizeId ?? 0}-${idx}`}
+              variant={v}
+              listing={listing}
+              product={product}
+              promotions={pricePromos}
+              isDark={isDark}
+              onOpenPromotion={onOpenPromotion}
+            />
+          ))
+        )}
       </div>
     </div>
   );
@@ -728,6 +755,96 @@ export function ProductDetailContent({
     staleTime: 30_000,
     refetchInterval: 30_000,
   });
+
+  // ── Store availability per supplier ("Boutique" button) ──────────────────
+  // Reuses /api/stores — the exact same eligible-stores list (APPROVED +
+  // VISIBLE + has at least one available product) the Shop's own Stores
+  // section already fetches — and the exact same query key use-realtime.ts
+  // already invalidates on store_updated/store_approval_changed (see
+  // invalidateStoreQueries), so a store being published/unpublished while
+  // this modal is open refreshes the Boutique buttons with no new
+  // listener, no polling, and no backend change. Modal-only: skipped
+  // entirely in full-page mode, where no Boutique button is ever shown.
+  const { data: visibleStores = [] } = useQuery<StoreCard[]>({
+    queryKey: ["/api/stores"],
+    queryFn: async () => {
+      const res = await fetch("/api/stores", { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: isModal && hasCommercial,
+  });
+  const storesBySupplier = useMemo(() => {
+    const map = new Map<number, StoreCard>();
+    for (const s of visibleStores) map.set(s.supplierId, s);
+    return map;
+  }, [visibleStores]);
+  // Closes this quick-view modal (same path as its own Close button/backdrop/
+  // Escape — see product-quick-view-modal.tsx's requestDismiss) before
+  // navigating to the store page, via the app's existing /stores/:storeId
+  // route — never a URL built from the supplier's name.
+  const handleStoreClick = useCallback((id: number) => {
+    if (isModal) onBack();
+    navigate(`/stores/${id}`);
+  }, [isModal, onBack, navigate]);
+
+  // True when this modal was opened from a specific supplier's Store page
+  // (the component's own `supplierId` prop — passed down from product-quick-
+  // view-modal.tsx's own `supplierId` state, set by whatever opened the
+  // modal, e.g. store-detail-page.tsx's product cards — vs. undefined when
+  // opened from the Shop's own product grid). Reused below to restrict the
+  // "all mapped suppliers" behavior and the Boutique button to the Shop
+  // context only (task: "Restore Store Page Product Detail Modal Supplier
+  // Behavior") — never inferred from a name or URL string, only this
+  // existing, already-plumbed id.
+  const isStoreContext = supplierId != null;
+
+  // ── Supplier/store ASSOCIATION, independent of purchase eligibility ───────
+  // (task: "separate supplier/store visibility from product purchase
+  // eligibility") — /api/marketplace's own listings (storeListings, below)
+  // already exclude a supplier whose category is frozen, or whose variants
+  // are currently unpriced/out of stock — correct for what's actually
+  // purchasable, but wrong for "is this supplier mapped to this product and
+  // does it have a store to visit", which must not depend on either. This
+  // reuses the product->supplier mapping directly (GET /api/marketplace/
+  // :productId/suppliers, keyed ["/api/marketplace", productId, "suppliers"]
+  // — a prefix of ["/api/marketplace"], so it's already covered by every
+  // existing invalidateMarketplace() call in use-realtime.ts with no new
+  // wiring), never from storeListings/filteredListings. Purchase eligibility
+  // itself (price>0, quantity>0, frozen-category) is untouched below.
+  // Shop context only — a Store page already knows its one current supplier,
+  // so this cross-supplier lookup is both unneeded and, per this task, must
+  // not run there at all.
+  const { data: mappedSuppliers = [] } = useQuery<{ supplierId: number; supplierName: string }[]>({
+    queryKey: ["/api/marketplace", productId, "suppliers"],
+    queryFn: async () => {
+      const res = await fetch(`/api/marketplace/${productId}/suppliers`, { credentials: "include" });
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: isModal && hasCommercial && !isStoreContext,
+  });
+
+  // Suppliers genuinely mapped to this product (mappedSuppliers) that never made it
+  // into storeListings at all — excluded there by purchase eligibility (frozen
+  // category, or no priced/stocked variant), not by their mapping being invalid.
+  // These still get a supplier section with a Boutique button, just with no
+  // purchasable variants to show (task: "the supplier section may still display
+  // its name and Boutique button, but must not display unavailable variants").
+  // Shop-only (never in Store-page context — see isStoreContext above), since
+  // Store page must show only its one current supplier, not every supplier
+  // mapped to the product.
+  // Placed here — BEFORE the isLoading/error early returns below — and not
+  // further down near its only use site: a hook called after those early
+  // returns runs on some renders and not others (skipped whenever this
+  // function returns early), which is exactly the "Une erreur est survenue"
+  // crash this task fixes (see error-boundary.tsx) — React detects the
+  // differing hook count between renders and throws.
+  const unavailableSuppliers = useMemo(() => {
+    if (!isModal || isStoreContext) return [];
+    const purchasableIds = new Set(storeListings.map((l) => l.supplierId));
+    return mappedSuppliers.filter((s) => !purchasableIds.has(s.supplierId));
+  }, [isModal, isStoreContext, mappedSuppliers, storeListings]);
 
   // ── Best promotional price for the header (store context only) ───────────────
   const headerBestPromoPrice = useMemo(() => {
@@ -1259,7 +1376,7 @@ export function ProductDetailContent({
   const supplierListings = hasCommercial ? (
     <div className="space-y-3">
       {supplierToolbar}
-      {filteredListings.length === 0 ? (
+      {filteredListings.length === 0 && unavailableSuppliers.length === 0 ? (
         <div className={
           isModal
             ? `rounded-2xl border p-12 text-center ${dk ? "border-gray-700/60 text-gray-400" : "border-gray-100 text-gray-500"}`
@@ -1270,24 +1387,54 @@ export function ProductDetailContent({
             : "Aucun fournisseur ne correspond aux filtres actuels. Essayez d'ajuster vos filtres de parfum, taille ou localisation."}
         </div>
       ) : (
-        filteredListings.map(({ listing, variants }) => {
-          const distanceKm = refLocation && listing.supplierLat && listing.supplierLng
-            ? haversineKm(refLocation.lat, refLocation.lng, parseFloat(listing.supplierLat), parseFloat(listing.supplierLng))
-            : undefined;
-          return (
+        <>
+          {filteredListings.map(({ listing, variants }) => {
+            const distanceKm = refLocation && listing.supplierLat && listing.supplierLng
+              ? haversineKm(refLocation.lat, refLocation.lng, parseFloat(listing.supplierLat), parseFloat(listing.supplierLng))
+              : undefined;
+            return (
+              <SupplierSection
+                key={listing.id}
+                listing={listing}
+                product={product}
+                visibleVariants={variants}
+                reviewStats={reviewData?.bySupplier[String(listing.supplierId)]}
+                distanceKm={distanceKm}
+                promotions={listingPromotions.filter(p => p.listingId === listing.id)}
+                isDark={isModal && isDark}
+                isModal={isModal}
+                storeId={storesBySupplier.get(listing.supplierId)?.id ?? null}
+                onStoreClick={handleStoreClick}
+                onOpenPromotion={setPromoTarget}
+              />
+            );
+          })}
+          {unavailableSuppliers.map((s) => (
             <SupplierSection
-              key={listing.id}
-              listing={listing}
+              key={`unavailable-${s.supplierId}`}
+              listing={{
+                id: -s.supplierId,
+                supplierId: s.supplierId,
+                supplierName: s.supplierName,
+                supplierLat: null,
+                supplierLng: null,
+                storeLogoUrl: storesBySupplier.get(s.supplierId)?.logoUrl ?? null,
+                variants: [],
+                totalStock: 0,
+                minPrice: 0,
+              }}
               product={product}
-              visibleVariants={variants}
-              reviewStats={reviewData?.bySupplier[String(listing.supplierId)]}
-              distanceKm={distanceKm}
-              promotions={listingPromotions.filter(p => p.listingId === listing.id)}
+              visibleVariants={[]}
+              reviewStats={reviewData?.bySupplier[String(s.supplierId)]}
+              promotions={[]}
               isDark={isModal && isDark}
+              isModal={isModal}
+              storeId={storesBySupplier.get(s.supplierId)?.id ?? null}
+              onStoreClick={handleStoreClick}
               onOpenPromotion={setPromoTarget}
             />
-          );
-        })
+          ))}
+        </>
       )}
     </div>
   ) : (
@@ -1435,31 +1582,61 @@ export function ProductDetailContent({
           <div className="px-3 sm:px-5 pt-3 pb-5">
             {hasCommercial ? (
               <div className="space-y-3">
-                {filteredListings.length === 0 ? (
+                {filteredListings.length === 0 && unavailableSuppliers.length === 0 ? (
                   <div className={`rounded-2xl border p-12 text-center ${dk ? "border-gray-700/60 text-gray-400" : "border-gray-100 text-gray-500"}`}>
                     {storeListings.length === 0
                       ? "Aucune offre fournisseur disponible pour ce produit."
                       : "Aucun fournisseur ne correspond aux filtres actuels. Essayez d'ajuster vos filtres de parfum, taille ou localisation."}
                   </div>
                 ) : (
-                  filteredListings.map(({ listing, variants }) => {
-                    const distanceKm = refLocation && listing.supplierLat && listing.supplierLng
-                      ? haversineKm(refLocation.lat, refLocation.lng, parseFloat(listing.supplierLat), parseFloat(listing.supplierLng))
-                      : undefined;
-                    return (
+                  <>
+                    {filteredListings.map(({ listing, variants }) => {
+                      const distanceKm = refLocation && listing.supplierLat && listing.supplierLng
+                        ? haversineKm(refLocation.lat, refLocation.lng, parseFloat(listing.supplierLat), parseFloat(listing.supplierLng))
+                        : undefined;
+                      return (
+                        <SupplierSection
+                          key={listing.id}
+                          listing={listing}
+                          product={product}
+                          visibleVariants={variants}
+                          reviewStats={reviewData?.bySupplier[String(listing.supplierId)]}
+                          distanceKm={distanceKm}
+                          promotions={listingPromotions.filter(p => p.listingId === listing.id)}
+                          isDark={isModal && isDark}
+                          isModal={isModal && !isStoreContext}
+                          storeId={storesBySupplier.get(listing.supplierId)?.id ?? null}
+                          onStoreClick={handleStoreClick}
+                          onOpenPromotion={setPromoTarget}
+                        />
+                      );
+                    })}
+                    {unavailableSuppliers.map((s) => (
                       <SupplierSection
-                        key={listing.id}
-                        listing={listing}
+                        key={`unavailable-${s.supplierId}`}
+                        listing={{
+                          id: -s.supplierId,
+                          supplierId: s.supplierId,
+                          supplierName: s.supplierName,
+                          supplierLat: null,
+                          supplierLng: null,
+                          storeLogoUrl: storesBySupplier.get(s.supplierId)?.logoUrl ?? null,
+                          variants: [],
+                          totalStock: 0,
+                          minPrice: 0,
+                        }}
                         product={product}
-                        visibleVariants={variants}
-                        reviewStats={reviewData?.bySupplier[String(listing.supplierId)]}
-                        distanceKm={distanceKm}
-                        promotions={listingPromotions.filter(p => p.listingId === listing.id)}
+                        visibleVariants={[]}
+                        reviewStats={reviewData?.bySupplier[String(s.supplierId)]}
+                        promotions={[]}
                         isDark={isModal && isDark}
+                        isModal={isModal && !isStoreContext}
+                        storeId={storesBySupplier.get(s.supplierId)?.id ?? null}
+                        onStoreClick={handleStoreClick}
                         onOpenPromotion={setPromoTarget}
                       />
-                    );
-                  })
+                    ))}
+                  </>
                 )}
               </div>
             ) : (

@@ -1981,6 +1981,10 @@ export class DatabaseStorage implements IStorage {
     return this.marketplaceDomain.getMarketplaceProduct(productId, supplierId);
   }
 
+  async getMarketplaceProductSuppliers(productId: number): Promise<{ supplierId: number; supplierName: string }[]> {
+    return this.marketplaceDomain.getMarketplaceProductSuppliers(productId);
+  }
+
   async getProductImageData(ids: number[]): Promise<Array<{ id: number; imageUrl: string | null; imageUrls: string[] | null; imageAdjustments: Record<string, number> }>> {
     return this.marketplaceDomain.getProductImageData(ids);
   }

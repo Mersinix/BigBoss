@@ -306,7 +306,7 @@ export default function StorePage() {
           the active configuration section below, and kept live (no page refresh) since it
           reads directly from `form`, the exact same state every section's inputs write to. */}
       <div
-        className="rounded-2xl overflow-hidden shadow-lg bg-gray-900 max-w-6xl mx-auto lg:mx-0"
+        className="rounded-2xl overflow-hidden shadow-lg bg-gray-800 max-w-6xl mx-auto lg:mx-0"
         data-testid="preview-store-card"
       >
         {/* Cover media */}
@@ -371,7 +371,7 @@ export default function StorePage() {
         </div>
 
         {/* Store info section — dark style */}
-        <div className="px-4 pt-1 pb-4 bg-gray-900">
+        <div className="px-4 pt-1 pb-4 bg-gray-800">
           {/* Logo overlapping cover */}
           <div className="flex items-end gap-3 -mt-7 mb-3">
             <div className="w-14 h-14 rounded-2xl border-4 border-gray-900 bg-gray-800 shadow-lg overflow-hidden shrink-0 flex items-center justify-center">

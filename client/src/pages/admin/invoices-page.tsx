@@ -163,6 +163,7 @@ export default function InvoicesPage() {
         onClose={() => setViewing(null)}
         order={viewingOrder}
         subOrderId={viewing?.subOrderId ?? null}
+        isolatedPrint
       />
     </div>
   );

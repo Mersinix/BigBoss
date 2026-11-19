@@ -54,7 +54,7 @@ export function firstVisiblePerformanceUrl(settings: SupplierTabSettings): strin
   for (const tab of PERFORMANCE_TABS) {
     if (settings[tab.key]) return tab.href;
   }
-  return "/supplier/orders";
+  return "/orders";
 }
 
 // Where a given Performance tab (by its own href) should redirect to if ITS
@@ -67,5 +67,5 @@ export function performanceRedirectTarget(settings: SupplierTabSettings, href: s
   for (const other of PERFORMANCE_TABS) {
     if (other.href !== href && settings[other.key]) return other.href;
   }
-  return "/supplier/orders";
+  return "/orders";
 }

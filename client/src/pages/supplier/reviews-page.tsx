@@ -342,10 +342,10 @@ export default function ReviewsPage() {
         <div className="flex flex-wrap gap-3">
           <Select value={categoryFilter || "__all__"} onValueChange={v => { setCategoryFilter(v === "__all__" ? "" : v); setSubCategoryFilter(""); }}>
             <SelectTrigger className="w-48 h-9 text-sm">
-              <SelectValue placeholder="Toutes les catégories" />
+              <SelectValue placeholder="Catégories" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">Toutes les catégories</SelectItem>
+              <SelectItem value="__all__">Catégories</SelectItem>
               {categories.map((c: any) => (
                 <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>
               ))}
@@ -353,10 +353,10 @@ export default function ReviewsPage() {
           </Select>
           <Select value={subCategoryFilter || "__all__"} onValueChange={v => setSubCategoryFilter(v === "__all__" ? "" : v)} disabled={!categoryFilter}>
             <SelectTrigger className="w-48 h-9 text-sm">
-              <SelectValue placeholder={categoryFilter ? "Toutes les sous-catégories" : "Choisir une catégorie d'abord"} />
+              <SelectValue placeholder={categoryFilter ? "Sous-Catégories" : "Choisir une catégorie d'abord"} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
+              <SelectItem value="__all__">Sous-catégories</SelectItem>
               {filteredSubs.map((s: any) => (
                 <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
               ))}

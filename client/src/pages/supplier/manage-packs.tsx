@@ -548,7 +548,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                       <SelectValue placeholder="Catégorie" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">Toutes les catégories</SelectItem>
+                      <SelectItem value="__all__">Catégories</SelectItem>
                       {variantCategoryOptions.map(c => (
                         <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
                       ))}
@@ -559,7 +559,7 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
                       <SelectValue placeholder="Sous-catégorie" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
+                      <SelectItem value="__all__">Sous-Catégories</SelectItem>
                       {variantSubCategoryOptions.map(s => (
                         <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
                       ))}
@@ -1066,7 +1066,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
                 <SelectValue placeholder="Catégorie" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">Toutes les catégories</SelectItem>
+                <SelectItem value="__all__">Catégories</SelectItem>
                 {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -1079,7 +1079,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
                 <SelectValue placeholder="Sous-catégorie" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
+                <SelectItem value="__all__">Sous-Catégories</SelectItem>
                 {subCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -1092,7 +1092,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
                 <SelectValue placeholder="Marque" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">Toutes les marques</SelectItem>
+                <SelectItem value="__all__">Marques</SelectItem>
                 {brands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -1105,7 +1105,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
                 <SelectValue placeholder="Parfum" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">Tous les parfums</SelectItem>
+                <SelectItem value="__all__">Parfums</SelectItem>
                 {flavors.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -1118,7 +1118,7 @@ function PackProductsTab({ listings, onCreatePack, resetSignal }: {
                 <SelectValue placeholder="Taille" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">Toutes les tailles</SelectItem>
+                <SelectItem value="__all__">Tailles</SelectItem>
                 {sizes.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -1667,7 +1667,7 @@ export function PackTab() {
                         <SelectValue placeholder="Catégorie" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">Toutes les catégories</SelectItem>
+                        <SelectItem value="__all__">Catégories</SelectItem>
                         {packsCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1680,7 +1680,7 @@ export function PackTab() {
                         <SelectValue placeholder="Sous-catégorie" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
+                        <SelectItem value="__all__">Sous-Catégories</SelectItem>
                         {packsSubCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1693,7 +1693,7 @@ export function PackTab() {
                         <SelectValue placeholder="Marque" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">Toutes les marques</SelectItem>
+                        <SelectItem value="__all__">Marques</SelectItem>
                         {packsBrands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1706,7 +1706,7 @@ export function PackTab() {
                         <SelectValue placeholder="Parfum" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">Tous les parfums</SelectItem>
+                        <SelectItem value="__all__">Parfums</SelectItem>
                         {packsFlavors.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1719,7 +1719,7 @@ export function PackTab() {
                         <SelectValue placeholder="Taille" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">Toutes les tailles</SelectItem>
+                        <SelectItem value="__all__">Tailles</SelectItem>
                         {packsSizes.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1790,7 +1790,7 @@ export function PackTab() {
                         <SelectValue placeholder="Catégorie" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">Toutes les catégories</SelectItem>
+                        <SelectItem value="__all__">Catégories</SelectItem>
                         {archivedCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1803,7 +1803,7 @@ export function PackTab() {
                         <SelectValue placeholder="Sous-catégorie" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
+                        <SelectItem value="__all__">Sous-Catégories</SelectItem>
                         {archivedSubCategories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1816,7 +1816,7 @@ export function PackTab() {
                         <SelectValue placeholder="Marque" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">Toutes les marques</SelectItem>
+                        <SelectItem value="__all__">Marques</SelectItem>
                         {archivedBrands.map(b => <SelectItem key={b} value={b}>{b}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1829,7 +1829,7 @@ export function PackTab() {
                         <SelectValue placeholder="Parfum" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">Tous les parfums</SelectItem>
+                        <SelectItem value="__all__">Parfums</SelectItem>
                         {archivedFlavors.map(f => <SelectItem key={f} value={f}>{f}</SelectItem>)}
                       </SelectContent>
                     </Select>
@@ -1842,7 +1842,7 @@ export function PackTab() {
                         <SelectValue placeholder="Taille" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__all__">Toutes les tailles</SelectItem>
+                        <SelectItem value="__all__">Tailles</SelectItem>
                         {archivedSizes.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                       </SelectContent>
                     </Select>

@@ -1403,7 +1403,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
               <Select value={filters.categoryId} onValueChange={v => setFilter("categoryId", v)}>
                 <SelectTrigger data-testid="select-new-filter-category"><SelectValue placeholder="Catégorie" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">Toutes les catégories</SelectItem>
+                  <SelectItem value="__all__">Catégories</SelectItem>
                   {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -1413,7 +1413,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
               <Select value={filters.subCategoryId} onValueChange={v => setFilter("subCategoryId", v)} disabled={!filters.categoryId}>
                 <SelectTrigger data-testid="select-new-filter-subcat"><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
+                  <SelectItem value="__all__">Sous-Catégories</SelectItem>
                   {filteredSubsForFilter.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -1423,7 +1423,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
               <Select value={filters.flavorId} onValueChange={v => setFilter("flavorId", v)}>
                 <SelectTrigger data-testid="select-new-filter-flavor"><SelectValue placeholder="Parfum" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">Tous les parfums</SelectItem>
+                  <SelectItem value="__all__">Parfums</SelectItem>
                   {filteredFlavsNew.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -1433,7 +1433,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
               <Select value={filters.sizeId} onValueChange={v => setFilter("sizeId", v)}>
                 <SelectTrigger data-testid="select-new-filter-size"><SelectValue placeholder="Taille" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">Toutes les tailles</SelectItem>
+                  <SelectItem value="__all__">Tailles</SelectItem>
                   {filteredSzsNew.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -1443,7 +1443,7 @@ function NewProductTab({ cats, subs, flavs, szs, brnds, mappings = [] }: {
               <Select value={filters.brandId} onValueChange={v => setFilter("brandId", v)}>
                 <SelectTrigger data-testid="select-new-filter-brand"><SelectValue placeholder="Marque" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="__all__">Toutes les marques</SelectItem>
+                  <SelectItem value="__all__">Marques</SelectItem>
                   {filteredBrndsNew.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -1828,7 +1828,7 @@ function AdminProductsTab({
                   <Select value={catIdStr || "__all__"} onValueChange={handleCatChange}>
                     <SelectTrigger data-testid="select-admin-filter-category"><SelectValue placeholder="Catégorie" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">Toutes les catégories</SelectItem>
+                      <SelectItem value="__all__">Catégories</SelectItem>
                       {mappedCats.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -1838,7 +1838,7 @@ function AdminProductsTab({
                   <Select value={subCatIdStr || "__all__"} onValueChange={handleSubCatChange} disabled={!catIdStr}>
                     <SelectTrigger data-testid="select-admin-filter-subcat"><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
+                      <SelectItem value="__all__">Sous-Catégories</SelectItem>
                       {mappedSubcats.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -1848,7 +1848,7 @@ function AdminProductsTab({
                   <Select value={filters.flavorId || "__all__"} onValueChange={v => setFilter("flavorId", v)}>
                     <SelectTrigger data-testid="select-admin-filter-flavor"><SelectValue placeholder="Parfum" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">Tous les parfums</SelectItem>
+                      <SelectItem value="__all__">Parfums</SelectItem>
                       {filteredFlavsForFilter.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -1858,7 +1858,7 @@ function AdminProductsTab({
                   <Select value={filters.sizeId || "__all__"} onValueChange={v => setFilter("sizeId", v)}>
                     <SelectTrigger data-testid="select-admin-filter-size"><SelectValue placeholder="Taille" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">Toutes les tailles</SelectItem>
+                      <SelectItem value="__all__">Tailles</SelectItem>
                       {filteredSzsForFilter.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -1868,7 +1868,7 @@ function AdminProductsTab({
                   <Select value={filters.brandId || "__all__"} onValueChange={v => setFilter("brandId", v)}>
                     <SelectTrigger data-testid="select-admin-filter-brand"><SelectValue placeholder="Marque" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">Toutes les marques</SelectItem>
+                      <SelectItem value="__all__">Marques</SelectItem>
                       {filteredBrndsForFilter.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -2234,7 +2234,7 @@ function MyProductsTab({
                   <Select value={catIdStr || "__all__"} onValueChange={handleCatChange}>
                     <SelectTrigger data-testid="select-my-filter-category"><SelectValue placeholder="Catégorie" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">Toutes les catégories</SelectItem>
+                      <SelectItem value="__all__">Catégories</SelectItem>
                       {mappedCats.map((c: any) => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -2244,7 +2244,7 @@ function MyProductsTab({
                   <Select value={subCatIdStr || "__all__"} onValueChange={handleSubCatChange} disabled={!catIdStr}>
                     <SelectTrigger data-testid="select-my-filter-subcat"><SelectValue placeholder="Sous-catégorie" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">Toutes les sous-catégories</SelectItem>
+                      <SelectItem value="__all__">Sous-Catégories</SelectItem>
                       {mappedSubcats.map((s: any) => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -2254,7 +2254,7 @@ function MyProductsTab({
                   <Select value={filters.flavorId || "__all__"} onValueChange={v => setFilter("flavorId", v)}>
                     <SelectTrigger data-testid="select-my-filter-flavor"><SelectValue placeholder="Parfum" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">Tous les parfums</SelectItem>
+                      <SelectItem value="__all__">Parfums</SelectItem>
                       {filteredFlavsForFilter.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -2264,7 +2264,7 @@ function MyProductsTab({
                   <Select value={filters.sizeId || "__all__"} onValueChange={v => setFilter("sizeId", v)}>
                     <SelectTrigger data-testid="select-my-filter-size"><SelectValue placeholder="Taille" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">Toutes les tailles</SelectItem>
+                      <SelectItem value="__all__">Tailles</SelectItem>
                       {filteredSzsForFilter.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -2274,7 +2274,7 @@ function MyProductsTab({
                   <Select value={filters.brandId || "__all__"} onValueChange={v => setFilter("brandId", v)}>
                     <SelectTrigger data-testid="select-my-filter-brand"><SelectValue placeholder="Marque" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">Toutes les marques</SelectItem>
+                      <SelectItem value="__all__">Marques</SelectItem>
                       {filteredBrndsForFilter.map(b => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
                     </SelectContent>
                   </Select>

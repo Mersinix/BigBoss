@@ -38,7 +38,7 @@ const STATUS_META: Record<string, { label: string; badgeDk: string; badgeLt: str
 };
 
 const PRIORITY_META: Record<string, { label: string; badgeDk: string; badgeLt: string }> = {
-  NORMAL: { label: "Normal",          badgeDk: "bg-gray-700 text-gray-300",                badgeLt: "bg-gray-100 text-gray-700" },
+  NORMAL: { label: "Normale",         badgeDk: "bg-gray-700 text-gray-300",                badgeLt: "bg-gray-100 text-gray-700" },
   HIGH:   { label: "Haute priorité",  badgeDk: "bg-orange-500/25 text-orange-300",         badgeLt: "bg-orange-100 text-orange-700" },
   URGENT: { label: "Urgent",          badgeDk: "bg-red-500/25 text-red-300",               badgeLt: "bg-red-100 text-red-700" },
 };
@@ -212,7 +212,7 @@ function CancelSubOrderModal({
           <button
             type="button"
             onClick={() => { setSelected(new Set()); onClose(); }}
-            aria-label="Close"
+            aria-label="Fermer"
             className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${t.iconBtn}`}
           >
             <X className="w-4 h-4" />
@@ -525,7 +525,7 @@ export default function OrderDetailsModal({
             {!hasSubOrders && (
               <div className={`border rounded-2xl p-4 ${t.innerCard}`}>
                 <div className="flex items-center justify-between gap-3 mb-4">
-                  <p className={`text-sm font-semibold ${t.textPrimary}`}>Order progress</p>
+                  <p className={`text-sm font-semibold ${t.textPrimary}`}>Suivi de la commande</p>
                   <Badge
                     variant="outline"
                     className={`text-[10px] rounded-lg ${t.badge(order.status, STATUS_META)}`}
@@ -541,24 +541,24 @@ export default function OrderDetailsModal({
             <div className={`border rounded-2xl p-4 space-y-3 ${t.innerCard}`}>
               <p className={`text-sm font-semibold flex items-center gap-2 ${t.textPrimary}`}>
                 <Truck className="w-4 h-4 text-amber-500" />
-                Delivery & payment
+                Livraison et paiement
               </p>
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className={`rounded-xl border p-3 ${t.cardBg}`}>
-                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Delivery</p>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Livraison</p>
                   <p className={`text-sm font-semibold mt-1 ${t.textPrimary}`}>{deliveryLabel}</p>
                   {deliveryMethod === "SELF_PICKUP" ? (
-                    <p className={`text-xs mt-1 ${t.textMuted}`}>Order collected directly from the supplier.</p>
+                    <p className={`text-xs mt-1 ${t.textMuted}`}>Commande récupérée directement chez le fournisseur.</p>
                   ) : (
                     <>
                       {deliveryAddress && <p className={`text-xs mt-1 ${t.textMuted}`}>{deliveryAddress.address}</p>}
                       {!supplierStatuses && (
-                        <p className={`text-xs mt-1 ${t.textMuted}`}>Status: {statusMeta.label}</p>
+                        <p className={`text-xs mt-1 ${t.textMuted}`}>Statut : {statusMeta.label}</p>
                       )}
                     </>
                   )}
-                  <p className={`text-xs mt-1 ${t.textMuted}`}>Delivery fee: {anyFreeDelivery && deliveryFee === 0 ? <span className="text-green-500 font-medium">Free</span> : fmt(deliveryFee)}</p>
-                  {order.delivery?.name && <p className={`text-xs mt-1 ${t.textMuted}`}>Driver: {order.delivery.name}</p>}
+                  <p className={`text-xs mt-1 ${t.textMuted}`}>Frais de livraison : {anyFreeDelivery && deliveryFee === 0 ? <span className="text-green-500 font-medium">Gratuit</span> : fmt(deliveryFee)}</p>
+                  {order.delivery?.name && <p className={`text-xs mt-1 ${t.textMuted}`}>Chauffeur : {order.delivery.name}</p>}
                   {/* Admin-only full cross-party breakdown across every sub-order's delivery —
                       never shown to the Coffee Owner (see isAdmin prop). */}
                   {isAdmin && hasSubOrders && (
@@ -576,17 +576,25 @@ export default function OrderDetailsModal({
                   )}
                 </div>
                 <div className={`rounded-xl border p-3 ${t.cardBg}`}>
-                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Payment</p>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Paiement</p>
                   <p className={`text-sm font-semibold mt-1 ${t.textPrimary}`}>{paymentLabel}</p>
-                  <p className={`text-xs mt-1 ${t.textMuted}`}>Status: {paymentStatus}</p>
+                  <p className={`text-xs mt-1 ${t.textMuted}`}>Statut : {
+                    (() => {
+                      const PAYMENT_STATUS_LABELS: Record<string, string> = {
+                        PENDING: "En attente", INITIATED: "En attente", PAID: "Payé",
+                        CONFIRMED: "Confirmé", FAILED: "Échoué", REFUNDED: "Remboursé", REVERSED: "Annulé",
+                      };
+                      return PAYMENT_STATUS_LABELS[paymentStatus] ?? paymentStatus;
+                    })()
+                  }</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 text-xs">
                 <span className={`rounded-lg px-2.5 py-1 ${t.dk ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700"}`}>
-                  Priority: {priorityMeta.label}
+                  Priorité : {priorityMeta.label}
                 </span>
                 <span className={`rounded-lg px-2.5 py-1 ${t.dk ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700"}`}>
-                  Planning: {scheduledAt ? "Scheduled" : "Immediate"}
+                  Planification : {scheduledAt ? "Planifiée" : "Immédiate"}
                 </span>
               </div>
             </div>
@@ -633,7 +641,7 @@ export default function OrderDetailsModal({
                       {/* Each supplier/sub-order progresses independently. */}
                       <div className={`px-4 py-3 border-b ${t.dk ? "border-gray-700/50" : "border-gray-100"}`}>
                         <div className="flex items-center justify-between gap-3 mb-3">
-                          <p className={`text-xs font-semibold ${t.textPrimary}`}>Order progress</p>
+                          <p className={`text-xs font-semibold ${t.textPrimary}`}>Suivi de la commande</p>
                           <span className={`text-[10px] font-medium ${t.textMuted}`}>
                             {SUBORDER_STATUS[sub.status]?.label ?? sub.status}
                           </span>
@@ -856,7 +864,7 @@ export default function OrderDetailsModal({
                         <div className={`px-4 py-3 border-t space-y-1.5 ${t.dk ? "border-gray-700/50 bg-gray-800/40" : "border-gray-100 bg-gray-50/60"}`}>
                           <div className="flex items-center gap-2">
                             <Truck className={`w-3.5 h-3.5 ${t.textMuted}`} />
-                            <span className={`text-xs font-semibold ${t.textMuted}`}>Transport requirements</span>
+                            <span className={`text-xs font-semibold ${t.textMuted}`}>Exigences de transport</span>
                           </div>
                           <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                             {(sub as any).requiredVehicleType && (
@@ -891,14 +899,14 @@ export default function OrderDetailsModal({
                               <Store className="w-4 h-4 text-amber-500" />
                             </div>
                             <div className="min-w-0">
-                              <span className={`text-xs font-semibold block ${t.textMuted}`}>Self Pickup</span>
+                              <span className={`text-xs font-semibold block ${t.textMuted}`}>Retrait sur place</span>
                               <span className={`text-xs ${t.textPrimary}`}>
                                 {["IN_DELIVERY", "DELIVERED"].includes(sub.status) ? "Retiré" : "Prêt pour retrait"}
                               </span>
                             </div>
                           </div>
                           <Button size="sm" onClick={() => setSelfPickupTarget(sub)} data-testid={`button-self-pickup-go-${sub.id}`}>
-                            {["IN_DELIVERY", "DELIVERED"].includes(sub.status) ? "Voir" : "Go"}
+                            {["IN_DELIVERY", "DELIVERED"].includes(sub.status) ? "Voir" : "Ouvrir"}
                           </Button>
                         </div>
                       )}
@@ -1061,7 +1069,7 @@ export default function OrderDetailsModal({
     </Dialog>
 
     <CancelSubOrderModal subOrder={cancelTarget} onClose={() => setCancelTarget(null)} t={t} />
-    <OrderInvoiceModal open={invoiceOpen} onClose={() => setInvoiceOpen(false)} order={order} />
+    <OrderInvoiceModal open={invoiceOpen} onClose={() => setInvoiceOpen(false)} order={order} isolatedPrint={!isAdmin} />
     <PayoutInfoModal open={payoutInfoOpen} onClose={() => setPayoutInfoOpen(false)} order={order} />
     {selfPickupTarget && (
       <SelfPickupModal

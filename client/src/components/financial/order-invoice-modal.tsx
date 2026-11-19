@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -59,12 +60,25 @@ type Props = {
   /** Show only this one supplier's invoice (Supplier's own Invoices tab). Omit to show the
    * full order across every supplier (Coffee Owner / Admin "View Invoice"). */
   subOrderId?: number | null;
+  /** Coffee Owner invoice-printing fix only (default false — every other caller is
+   * untouched). The underlying bug: this modal is rendered via a Radix Portal (`position:
+   * fixed`) on top of the full app page, and no print stylesheet scopes `window.print()` to
+   * just the invoice. When the full page is taller than one printed page, browsers redraw
+   * `position: fixed` elements on every page they paginate the document into — so the
+   * invoice visibly repeated once per page (observed: 4 times). When true, the printer
+   * button instead clones just the invoice's own content into a throwaway hidden iframe
+   * (its own tiny, single-page document) and prints that in isolation, so the result is
+   * always exactly one copy regardless of how long the page behind the modal is. */
+  isolatedPrint?: boolean;
 };
 
-export default function OrderInvoiceModal({ open, onClose, order, subOrderId = null }: Props) {
+export default function OrderInvoiceModal({ open, onClose, order, subOrderId = null, isolatedPrint = false }: Props) {
   const { isDark } = useThemeStore();
   const t = useTheme(isDark);
   const fmt = useFormatCurrency();
+  const printBodyRef = useRef<HTMLDivElement>(null);
+  const printTotalsRef = useRef<HTMLDivElement>(null);
+  const printBadgesRef = useRef<HTMLDivElement>(null);
 
   if (!order) return null;
 
@@ -90,6 +104,33 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
   const paymentLabel = paymentMethod === "CASH_ON_DELIVERY" ? "Paiement à la livraison"
     : paymentMethod === "CREDIT_CARD" ? "Carte bancaire"
     : paymentMethod === "MOBILE_PAYMENT" ? "Paiement mobile" : "Virement bancaire";
+
+  // Coffee Owner only (isolatedPrint) — print just the invoice's own content in a throwaway
+  // hidden iframe instead of the whole document. See the `isolatedPrint` prop doc above for
+  // why window.print() alone duplicated the invoice once per printed page.
+  const handlePrint = () => {
+    if (!isolatedPrint) { window.print(); return; }
+    const body = printBodyRef.current;
+    if (!body) { window.print(); return; }
+    const html = body.outerHTML + (printTotalsRef.current?.outerHTML ?? "") + (printBadgesRef.current?.outerHTML ?? "");
+    const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+      .map((el) => el.outerHTML)
+      .join("\n");
+    const iframe = document.createElement("iframe");
+    iframe.setAttribute("aria-hidden", "true");
+    Object.assign(iframe.style, { position: "fixed", width: "0", height: "0", border: "0", visibility: "hidden" });
+    document.body.appendChild(iframe);
+    const cleanup = () => { if (iframe.parentNode) document.body.removeChild(iframe); };
+    const doc = iframe.contentDocument;
+    if (!doc) { cleanup(); window.print(); return; }
+    doc.open();
+    doc.write(`<!DOCTYPE html><html><head><base href="${window.location.origin}/">${styles}</head><body>${html}</body></html>`);
+    doc.close();
+    doc.title = `Facture ${number}`;
+    iframe.contentWindow?.addEventListener("afterprint", cleanup);
+    setTimeout(() => { iframe.contentWindow?.focus(); iframe.contentWindow?.print(); }, 250);
+    setTimeout(cleanup, 10000);
+  };
   // Same DELIVERED-derived "collected" convention already used across Payments/Earnings/
   // Payouts (see lib/financial-rows.ts) — orders.paymentStatus itself never changes from
   // PENDING (only COD is supported), so it is not a usable live signal.
@@ -108,7 +149,7 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
               moved to the rightmost position to match the Pack Details modal's
               reference order; same handlers, position only) */}
           <div className={`shrink-0 border-b px-4 sm:px-6 pt-5 pb-4 flex items-center justify-between ${t.headerBg}`}>
-            <button onClick={() => window.print()} aria-label="Imprimer" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors print:hidden ${t.iconBtn}`}>
+            <button onClick={handlePrint} aria-label="Imprimer" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors print:hidden ${t.iconBtn}`}>
               <Printer className="w-4 h-4" />
             </button>
             <div className="flex items-center gap-2">
@@ -124,6 +165,7 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
               scroll container exactly (client/src/components/cafe/order-details-modal.tsx),
               same thumb/track/hover classes, not a new scrollbar style. */}
           <div
+            ref={printBodyRef}
             className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-5 space-y-4
               [&::-webkit-scrollbar]:w-1
               [&::-webkit-scrollbar-track]:bg-transparent
@@ -309,7 +351,7 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
 
           {/* Sticky footer */}
           <div className={`shrink-0 border-t px-4 sm:px-6 py-4 space-y-3 ${t.stickyBg}`}>
-            <div className="space-y-1.5 text-sm">
+            <div ref={printTotalsRef} className="space-y-1.5 text-sm">
               <div className={`flex justify-between ${t.textMuted}`}>
                 <span>Sous-total</span><span>{fmt(linesTotal)}</span>
               </div>
@@ -323,7 +365,7 @@ export default function OrderInvoiceModal({ open, onClose, order, subOrderId = n
                 <span className="text-amber-500 text-xl">{fmt(grandTotal)}</span>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2 text-xs">
+            <div ref={printBadgesRef} className="flex flex-wrap gap-2 text-xs">
               <span className={`rounded-lg px-2.5 py-1 ${t.dk ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700"}`}>
                 Paiement: {paymentLabel}
               </span>

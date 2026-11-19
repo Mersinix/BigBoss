@@ -216,13 +216,13 @@ export default function OrdersPage() {
   const hasFilters = statusFilter !== "ALL" || priorityFilter !== "ALL" || cafeSearch || supplierSearch || productSearch || dateFilter || sortOrder !== "desc";
 
   const mainViews = [
-    { id: "active" as const,     label: "Active Orders", icon: ListChecks, count: buckets.old.length + buckets.today.length + buckets.future.length },
+    { id: "active" as const,     label: "Commandes actives", icon: ListChecks, count: buckets.old.length + buckets.today.length + buckets.future.length },
     { id: "historique" as const, label: "Historique",    icon: Archive,    count: buckets.historique.length },
   ];
   const subViews = [
-    { id: "old" as const,   label: "Old Orders", icon: History,  count: buckets.old.length },
+    { id: "old" as const,   label: "Anciennes commandes", icon: History,  count: buckets.old.length },
     { id: "today" as const, label: "Aujourd'hui", icon: Clock,   count: buckets.today.length },
-    { id: "future" as const, label: "Futures",    icon: Calendar, count: buckets.future.length },
+    { id: "future" as const, label: "À venir",    icon: Calendar, count: buckets.future.length },
   ];
 
   // Coffee Owner gets a dedicated Today/Planifiées/Daily/Anciennes view (see
@@ -424,7 +424,7 @@ export default function OrdersPage() {
         <Select value={priorityFilter} onValueChange={setPriorityFilter}>
           <SelectTrigger className="w-36 shrink-0" data-testid="select-orders-priority"><SelectValue placeholder="Priorité" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">Toute priorité</SelectItem>
+            <SelectItem value="ALL">Priorité</SelectItem>
             <SelectItem value="NORMAL">Normale</SelectItem>
             <SelectItem value="HIGH">Haute</SelectItem>
             <SelectItem value="URGENT">Urgente</SelectItem>

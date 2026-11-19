@@ -314,7 +314,7 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                 order's aggregate status). ── */}
             <div className={`border rounded-2xl p-4 ${t.innerCard}`}>
               <div className="flex items-center justify-between gap-3 mb-4">
-                <p className={`text-sm font-semibold ${t.textPrimary}`}>Order progress</p>
+                <p className={`text-sm font-semibold ${t.textPrimary}`}>Suivi de la commande</p>
                 <Badge variant="outline" className={`text-[10px] rounded-lg ${t.badge(subStatus, STATUS_META)}`}>
                   {statusMeta.label}
                 </Badge>
@@ -329,37 +329,46 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
             <div className={`border rounded-2xl p-4 space-y-3 ${t.innerCard}`}>
               <p className={`text-sm font-semibold flex items-center gap-2 ${t.textPrimary}`}>
                 <Wallet className="w-4 h-4 text-amber-500" />
-                Delivery & payment
+                Livraison et paiement
               </p>
               <div className="grid sm:grid-cols-2 gap-3">
                 <div className={`rounded-xl border p-3 ${t.dk ? "bg-gray-800 border-gray-700/60" : "bg-white border-gray-100"}`}>
-                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Delivery</p>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Livraison</p>
                   <p className={`text-sm font-semibold mt-1 ${t.textPrimary}`}>
-                    {((order as any).deliveryMethod ?? "DELIVERY_SERVICE") === "SELF_PICKUP" ? "Self Pickup" : "Delivery Service"}
+                    {((order as any).deliveryMethod ?? "DELIVERY_SERVICE") === "SELF_PICKUP" ? "Retrait sur place" : "Service de livraison"}
                   </p>
                   {((order as any).deliveryMethod ?? "DELIVERY_SERVICE") === "SELF_PICKUP" && (
-                    <p className={`text-xs mt-1 ${t.textMuted}`}>Collected directly from you.</p>
+                    <p className={`text-xs mt-1 ${t.textMuted}`}>Récupérée directement chez vous.</p>
                   )}
                 </div>
                 <div className={`rounded-xl border p-3 ${t.dk ? "bg-gray-800 border-gray-700/60" : "bg-white border-gray-100"}`}>
-                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Payment</p>
+                  <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Paiement</p>
                   <p className={`text-sm font-semibold mt-1 ${t.textPrimary}`}>
                     {(() => {
                       const pm = (order as any).paymentMethod ?? "CASH_ON_DELIVERY";
-                      return pm === "CASH_ON_DELIVERY" ? "Cash on Delivery"
-                        : pm === "CREDIT_CARD" ? "Credit Card"
-                        : pm === "MOBILE_PAYMENT" ? "Mobile Payment" : "Bank Transfer";
+                      return pm === "CASH_ON_DELIVERY" ? "Paiement à la livraison"
+                        : pm === "CREDIT_CARD" ? "Carte bancaire"
+                        : pm === "MOBILE_PAYMENT" ? "Paiement mobile" : "Virement bancaire";
                     })()}
                   </p>
-                  <p className={`text-xs mt-1 ${t.textMuted}`}>Status: {(order as any).paymentStatus ?? "PENDING"}</p>
+                  <p className={`text-xs mt-1 ${t.textMuted}`}>Statut : {
+                    (() => {
+                      const ps = (order as any).paymentStatus ?? "PENDING";
+                      const PAYMENT_STATUS_LABELS: Record<string, string> = {
+                        PENDING: "En attente", INITIATED: "En attente", PAID: "Payé",
+                        CONFIRMED: "Confirmé", FAILED: "Échoué", REFUNDED: "Remboursé", REVERSED: "Annulé",
+                      };
+                      return PAYMENT_STATUS_LABELS[ps] ?? ps;
+                    })()
+                  }</p>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 text-xs">
                 <span className={`rounded-lg px-2.5 py-1 ${isDark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700"}`}>
-                  Priority: {priority === "URGENT" ? "Urgent" : priority === "HIGH" ? "Haute priorité" : "Normal"}
+                  Priorité : {priority === "URGENT" ? "Urgente" : priority === "HIGH" ? "Haute priorité" : "Normale"}
                 </span>
                 <span className={`rounded-lg px-2.5 py-1 ${isDark ? "bg-gray-700 text-gray-300" : "bg-gray-100 text-gray-700"}`}>
-                  Planning: {scheduledAt ? "Scheduled" : "Immediate"}
+                  Planification : {scheduledAt ? "Planifiée" : "Immédiate"}
                 </span>
               </div>
             </div>
@@ -373,24 +382,24 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
               <div className={`border rounded-2xl p-4 space-y-3 ${t.innerCard}`}>
                 <p className={`text-sm font-semibold flex items-center gap-2 ${t.textPrimary}`}>
                   <KeyRound className="w-4 h-4 text-amber-500" />
-                  SELF PICKUP
+                  RETRAIT SUR PLACE
                 </p>
                 <div className="flex items-center justify-between">
-                  <span className={`text-xs font-semibold ${t.textMuted}`}>Pickup status</span>
+                  <span className={`text-xs font-semibold ${t.textMuted}`}>Statut du retrait</span>
                   <Badge variant="outline" className={`text-xs ${["IN_DELIVERY", "DELIVERED"].includes(subStatus) ? "text-green-500 border-green-500/30" : "text-amber-500 border-amber-500/30"}`}>
-                    {["IN_DELIVERY", "DELIVERED"].includes(subStatus) ? "Retiré" : "Waiting for customer"}
+                    {["IN_DELIVERY", "DELIVERED"].includes(subStatus) ? "Retiré" : "En attente du client"}
                   </Badge>
                 </div>
                 <div className={`rounded-xl border p-3 flex items-center justify-between gap-3 ${t.dk ? "bg-gray-800 border-gray-700/60" : "bg-white border-gray-100"}`}>
                   <div>
-                    <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Pickup confirmation code</p>
+                    <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Code de confirmation de retrait</p>
                     <p className={`font-mono text-lg font-bold tracking-[0.3em] ${t.textPrimary}`}>
                       {showPickupCode ? ((subOrder as any).selfPickupCode ?? "——————") : "••••••"}
                     </p>
                   </div>
                   <Button size="sm" variant="outline" className={isDark ? "text-white border-white" : ""} onClick={() => setShowPickupCode((v) => !v)} data-testid="button-reveal-pickup-code">
                     {showPickupCode ? <EyeOff className="w-3.5 h-3.5 mr-1" /> : <Eye className="w-3.5 h-3.5 mr-1" />}
-                    {showPickupCode ? "Masquer" : "Reveal / Show Code"}
+                    {showPickupCode ? "Masquer" : "Afficher le code"}
                   </Button>
                 </div>
               </div>
@@ -405,7 +414,7 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                 <div className="flex items-center justify-between gap-2">
                   <p className={`text-sm font-semibold flex items-center gap-2 ${t.textPrimary}`}>
                     <Truck className="w-4 h-4 text-amber-500" />
-                    Transport requirements
+                    Exigences de transport
                   </p>
                   {showTransportSummary && transportEditable && (
                     <Button size="sm" variant="outline" className={isDark ? "text-white border-white" : ""} onClick={() => setIsEditingTransport(true)} data-testid="button-edit-transport-requirements">
@@ -420,7 +429,7 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                 {showTransportSummary ? (
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Required vehicle</p>
+                      <p className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Véhicule requis</p>
                       <p className={t.textPrimary}>{transport.requiredVehicleType ? VEHICLE_TYPE_LABELS[transport.requiredVehicleType as DeliveryVehicleType] : "Aucune exigence"}</p>
                     </div>
                     <div>
@@ -451,7 +460,7 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
                   <>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <label className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Required vehicle</label>
+                        <label className={`text-[10px] font-semibold uppercase tracking-wide ${t.textSubtle}`}>Véhicule requis</label>
                         <Select
                           value={transport.requiredVehicleType || "__none__"}
                           onValueChange={(v) => setTransport((f) => ({ ...f, requiredVehicleType: v === "__none__" ? "" : v }))}

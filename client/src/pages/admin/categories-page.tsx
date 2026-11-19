@@ -425,10 +425,10 @@ function SubCategoriesTab() {
           <p className="text-sm text-muted-foreground shrink-0">{subs.length} sous-catégories · glissez pour réorganiser</p>
           <Select value={filterCat} onValueChange={setFilterCat}>
             <SelectTrigger className="h-8 w-44 text-sm shrink-0" data-testid="select-filter-cat">
-              <SelectValue placeholder="Toutes les catégories" />
+              <SelectValue placeholder="Catégories" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes les catégories</SelectItem>
+              <SelectItem value="all">Catégories</SelectItem>
               {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -728,10 +728,10 @@ function TaxonomyCrudTab({
           <p className="text-sm text-muted-foreground shrink-0">{items.length} {title.toLowerCase()}s définies · glissez pour réorganiser</p>
           <Select value={filterCatId} onValueChange={v => { setFilterCatId(v); setFilterSubCatId("all"); }}>
             <SelectTrigger className="h-8 w-36 text-sm shrink-0">
-              <SelectValue placeholder="Toutes les catégories" />
+              <SelectValue placeholder="Catégories" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes les catégories</SelectItem>
+              <SelectItem value="all">Catégories</SelectItem>
               {cats.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.icon} {c.name}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -740,7 +740,7 @@ function TaxonomyCrudTab({
               <SelectValue placeholder="Toutes les sous-cat." />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">Toutes les sous-cat.</SelectItem>
+              <SelectItem value="all">Sous-Catégories</SelectItem>
               {filterSubs.map(s => <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>)}
             </SelectContent>
           </Select>
@@ -848,7 +848,7 @@ function TaxonomyCrudTab({
 
             {/* SubCategory multiselect */}
             <MultiSelectList
-              label="Sous-catégories"
+              label="Sous-Catégories"
               items={formCategoryId && formCategoryId !== "__none__" ? modalSubs : subs}
               selected={formSubCategoryIds}
               onChange={setFormSubCategoryIds}

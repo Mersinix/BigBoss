@@ -66,7 +66,7 @@ export function InventoryFilterBar({
       <Select value={filters.categoryId ? String(filters.categoryId) : "__all__"} onValueChange={(v) => set("categoryId", v === "__all__" ? undefined : Number(v))}>
         <SelectTrigger className="w-[150px] shrink-0" data-testid="select-filter-category"><SelectValue placeholder="Catégorie" /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="__all__">Toutes les catégories</SelectItem>
+          <SelectItem value="__all__">Catégories</SelectItem>
           {categories.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
         </SelectContent>
       </Select>
@@ -74,7 +74,7 @@ export function InventoryFilterBar({
       <Select value={filters.brandId ? String(filters.brandId) : "__all__"} onValueChange={(v) => set("brandId", v === "__all__" ? undefined : Number(v))}>
         <SelectTrigger className="w-[140px] shrink-0" data-testid="select-filter-brand"><SelectValue placeholder="Marque" /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="__all__">Toutes les marques</SelectItem>
+          <SelectItem value="__all__">Marques</SelectItem>
           {brands.map((b) => <SelectItem key={b.id} value={String(b.id)}>{b.name}</SelectItem>)}
         </SelectContent>
       </Select>
@@ -82,7 +82,7 @@ export function InventoryFilterBar({
       <Select value={filters.status ?? "__all__"} onValueChange={(v) => set("status", v === "__all__" ? undefined : (v as any))}>
         <SelectTrigger className="w-[130px] shrink-0" data-testid="select-filter-status"><SelectValue placeholder="Statut" /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="__all__">Tous les statuts</SelectItem>
+          <SelectItem value="__all__">Statuts</SelectItem>
           <SelectItem value="ACTIVE">Actif</SelectItem>
           <SelectItem value="HIDDEN">Masqué</SelectItem>
           <SelectItem value="DRAFT">Brouillon</SelectItem>
@@ -92,7 +92,7 @@ export function InventoryFilterBar({
       <Select value={filters.stockStatus ?? "__all__"} onValueChange={(v) => set("stockStatus", v === "__all__" ? undefined : (v as any))}>
         <SelectTrigger className="w-[150px] shrink-0" data-testid="select-filter-stock-status"><SelectValue placeholder="Niveau de stock" /></SelectTrigger>
         <SelectContent>
-          <SelectItem value="__all__">Tous les niveaux de stock</SelectItem>
+          <SelectItem value="__all__">Stock</SelectItem>
           <SelectItem value="IN_STOCK">En stock</SelectItem>
           <SelectItem value="LOW_STOCK">Stock faible</SelectItem>
           <SelectItem value="OUT_OF_STOCK">Rupture de stock</SelectItem>

@@ -132,6 +132,27 @@ export function AppSidebar() {
           ],
         },
         {
+          label: "PRINCIPAL",
+          items: [
+            { title: "Catégories", url: "/admin/categories", icon: Folder },
+            { title: "Produits", url: "/admin/products", icon: Package },
+            { title: "Boutiques", url: "/admin/stores", icon: Store },
+            
+
+          ],
+        },
+        {
+          label: "COMMANDES",
+          items: [
+             { title: "Commandes", url: "/orders", icon: ClipboardList },
+            { title: "Livraison", url: "/admin/delivery", icon: Truck },
+            { title: "Factures", url: "/admin/invoices", icon: FileText },
+            { title: "Paiements", url: "/admin/payments", icon: DollarSign },
+
+
+          ],
+        },
+        {
           label: "SERVICES",
           items: [
             { title: "MAINTENANCE", url: "/admin/maintenance", icon: Wrench },
@@ -149,20 +170,7 @@ export function AppSidebar() {
             { title: "Fournisseurs", url: "/admin/suppliers", icon: Store },
           ],
         },
-        {
-          label: "PRINCIPAL",
-          items: [
-            { title: "Catégories", url: "/admin/categories", icon: Folder },
-            { title: "Produits", url: "/admin/products", icon: Package },
-            { title: "Boutiques", url: "/admin/stores", icon: Store },
-            { title: "Commandes", url: "/orders", icon: ClipboardList },
-            { title: "Livraison", url: "/admin/delivery", icon: Truck },
-            { title: "Factures", url: "/admin/invoices", icon: FileText },
-            { title: "Paiements", url: "/admin/payments", icon: DollarSign },
-
-
-          ],
-        },
+        
         {
           label: "COMPTE",
           items: [
@@ -174,11 +182,10 @@ export function AppSidebar() {
 
     if (user.role === "SUPPLIER") {
       return [
-
-        {
-          label: "PRINCIPAL",
+{
+          label: "GESTION",
           items: [
-            // Admin → System Management → Supplier → Onglet's "Visibilité de l'onglet
+             // Admin → System Management → Supplier → Onglet's "Visibilité de l'onglet
             // Performance" group (task: "Admin Supplier Settings — Supplier
             // Performance Tab Visibility Management") — the whole nav entry is hidden
             // when all three of Dashboard/Analytics/Earnings are disabled
@@ -186,7 +193,15 @@ export function AppSidebar() {
             // its target URL always points at the first currently-enabled tab so
             // clicking "Performance" never lands on a tab that immediately redirects
             // away. Kept live by use-realtime.ts's supplier_tab_settings_updated handler.
+            
             ...(supplierTabSettings.performanceTabVisible ? [{ title: "Performance", url: firstVisiblePerformanceUrl(supplierTabSettings), icon: Activity, activeUrls: ["/", "/supplier/analytics", "/supplier/earnings"] }] : []),
+               { title: "Communication", url: "/supplier/messages", icon: MessageCircle, activeUrls: ["/supplier/messages", "/supplier/notifications", "/supplier/reviews"] },
+  
+          ],
+        },
+        {
+          label: "PRINCIPAL",
+          items: [
             // Admin → System Management → Supplier → Onglet's "Onglet Cafés" toggle
             // (task: "Admin Supplier Settings — Add Tab Visibility Management") —
             // same reactive hide pattern as Promotions/Discount Codes above, kept in
@@ -209,14 +224,14 @@ export function AppSidebar() {
             { title: "Livraison des commandes", url: "/supplier/delivery-status", icon: MapPin },
             // Admin → System Management → Supplier → Onglet's "Onglet Retours" toggle.
             ...(supplierTabSettings.returnsTabVisible ? [{ title: "Retours", url: "/supplier/returns", icon: RotateCcw }] : []),
-            { title: "Paiements", url: "/supplier/payouts", icon: Wallet },
             { title: "Factures", url: "/supplier/invoices", icon: FileText },
+            { title: "Paiements", url: "/supplier/payouts", icon: Wallet },
+            
           ],
         },
          {
           label: "MARKETING",
           items: [
-            { title: "Communication", url: "/supplier/messages", icon: MessageCircle, activeUrls: ["/supplier/messages", "/supplier/notifications", "/supplier/reviews"] },
             // Admin → System Management → Promotion's global toggle (task: "Admin
             // Promotion Management — Supplier Promotions Visibility") — hides this
             // nav entry entirely when disabled, reactively (usePromotionSettings is a

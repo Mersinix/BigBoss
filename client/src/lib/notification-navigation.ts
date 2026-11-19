@@ -31,7 +31,7 @@ export function resolveNotificationPath(n: Notification, role: string): string |
   if (n.service === "SHOP") {
     if (role === "SUPPLIER") {
       switch (et) {
-        case "order": case "suborder": return "/supplier/orders";
+        case "order": case "suborder": return "/orders";
         case "listing": return "/supplier/inventory";
         case "review": return "/supplier/reviews";
         case "delivery": return "/supplier/delivery-status";

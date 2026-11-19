@@ -16,7 +16,6 @@ import CategoriesPage from "@/pages/supplier/categories-page";
 import StorePage from "@/pages/supplier/store-page";
 import StoreDetailPage from "@/pages/cafe/store-detail-page";
 import InventoryPage from "@/pages/supplier/inventory-page";
-import SupplierOrdersPage from "@/pages/supplier/orders-page";
 import ReturnsPage from "@/pages/supplier/returns-page";
 import DeliveryStatusPage from "@/pages/supplier/delivery-status-page";
 import FinanceAnalyticsPage from "@/pages/supplier/finance-analytics-page";
@@ -393,9 +392,7 @@ function Router() {
       <Route path="/supplier/order-requests">
         {() => (<DashboardLayout><ProtectedRoute component={SupplierOrderRequestsRedirect} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>
-      <Route path="/supplier/orders">
-        {() => (<DashboardLayout><ProtectedRoute component={SupplierOrdersPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
-      </Route>
+
       <Route path="/supplier/returns">
         {() => (<DashboardLayout><ProtectedRoute component={ReturnsPage} allowedRoles={["SUPPLIER"]} requireApproved /></DashboardLayout>)}
       </Route>

@@ -88,7 +88,7 @@ export default function SelfPickupModal({ open, onClose, subOrderId, orderId, su
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) { setCode(""); onClose(); } }}>
       <DialogContent className={`max-w-sm w-[calc(100%-2rem)] p-0 gap-0 overflow-hidden rounded-[2rem] border-0 shadow-2xl [&>button]:hidden ${t.modalBg}`}>
-        <DialogTitle className="sr-only">Self Pickup — Commande #{String(orderId).padStart(6, "0")}</DialogTitle>
+        <DialogTitle className="sr-only">Retrait sur place — Commande #{String(orderId).padStart(6, "0")}</DialogTitle>
 
         {/* Spacer / title / close (task: "Modal Close Button Consistency" — close
             moved to the rightmost position to match the Pack Details modal's
@@ -97,7 +97,7 @@ export default function SelfPickupModal({ open, onClose, subOrderId, orderId, su
           <div className="w-8" />
           <div className="flex items-center gap-2">
             <ShoppingBag className="w-4 h-4 text-amber-500" />
-            <span className={`text-[15px] font-bold tracking-tight ${t.textPrimary}`}>Self Pickup</span>
+            <span className={`text-[15px] font-bold tracking-tight ${t.textPrimary}`}>Retrait sur place</span>
           </div>
           <button onClick={onClose} aria-label="Fermer" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${t.iconBtn}`}>
             <X className="w-4 h-4" />
@@ -122,14 +122,14 @@ export default function SelfPickupModal({ open, onClose, subOrderId, orderId, su
                 <MapPin className="w-4 h-4 text-blue-500" />
               </div>
               <div className="min-w-0">
-                <p className={`text-xs font-semibold mb-0.5 ${t.textMuted}`}>Pickup address</p>
+                <p className={`text-xs font-semibold mb-0.5 ${t.textMuted}`}>Adresse de retrait</p>
                 <p className={`text-sm font-medium ${t.textPrimary}`}>{pickupAddress?.address || "Adresse non renseignée"}</p>
               </div>
             </div>
             <div className={`flex items-center justify-between pt-2.5 border-t ${t.dk ? "border-gray-700/50" : "border-gray-100"}`}>
-              <span className={`text-xs font-semibold ${t.textMuted}`}>Status</span>
+              <span className={`text-xs font-semibold ${t.textMuted}`}>Statut</span>
               <Badge variant="outline" className={`text-xs ${alreadyConfirmed ? "text-green-500 border-green-500/30" : "text-amber-500 border-amber-500/30"}`}>
-                {alreadyConfirmed ? "Retiré" : "Ready for Pickup"}
+                {alreadyConfirmed ? "Retiré" : "Prêt pour retrait"}
               </Badge>
             </div>
           </div>
@@ -144,7 +144,7 @@ export default function SelfPickupModal({ open, onClose, subOrderId, orderId, su
 
           {!alreadyConfirmed && (
             <div className="space-y-2">
-              <p className={`text-xs font-semibold uppercase tracking-wide ${t.textSubtle}`}>Pickup confirmation code</p>
+              <p className={`text-xs font-semibold uppercase tracking-wide ${t.textSubtle}`}>Code de confirmation de retrait</p>
               <Input
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
@@ -168,7 +168,7 @@ export default function SelfPickupModal({ open, onClose, subOrderId, orderId, su
               disabled={code.trim().length === 0 || confirmPickup.isPending}
               data-testid="button-confirm-pickup"
             >
-              {confirmPickup.isPending ? "Confirmation…" : "Confirm Pickup"}
+              {confirmPickup.isPending ? "Confirmation…" : "Confirmer le retrait"}
             </Button>
           )}
         </DialogFooter>

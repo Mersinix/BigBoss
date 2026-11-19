@@ -6,12 +6,12 @@ import { AlertCircle, Box, CheckCircle2, Clock, Package, Truck, ShoppingBag, Pac
 // The active state always comes from the real order/sub-order status column, never a
 // hardcoded/derived value.
 export const ORDER_PROGRESS_STAGES = [
-  { status: "PENDING", label: "Order Placed", icon: Clock },
-  { status: "CONFIRMED", label: "Confirmed", icon: CheckCircle2 },
-  { status: "PREPARING", label: "Preparing", icon: Box },
-  { status: "READY", label: "Ready for Delivery", icon: Package },
-  { status: "IN_DELIVERY", label: "Out for Delivery", icon: Truck },
-  { status: "DELIVERED", label: "Delivered", icon: CheckCircle2 },
+  { status: "PENDING", label: "Commande passée", icon: Clock },
+  { status: "CONFIRMED", label: "Confirmée", icon: CheckCircle2 },
+  { status: "PREPARING", label: "En préparation", icon: Box },
+  { status: "READY", label: "Prête pour livraison", icon: Package },
+  { status: "IN_DELIVERY", label: "En livraison", icon: Truck },
+  { status: "DELIVERED", label: "Livrée", icon: CheckCircle2 },
 ] as const;
 
 // Self Pickup variant (Delivery System V2) — the exact same underlying status column/values
@@ -21,12 +21,12 @@ export const ORDER_PROGRESS_STAGES = [
 // "Completed" are always reached together — there is no courier hand-off to track separately
 // for a self-pickup order.
 export const SELF_PICKUP_PROGRESS_STAGES = [
-  { status: "PENDING", label: "Order Placed", icon: Clock },
-  { status: "CONFIRMED", label: "Confirmed", icon: CheckCircle2 },
-  { status: "PREPARING", label: "Preparing", icon: Box },
-  { status: "READY", label: "Ready for Pickup", icon: ShoppingBag },
-  { status: "IN_DELIVERY", label: "Picked Up", icon: PackageCheck },
-  { status: "DELIVERED", label: "Completed", icon: CheckCircle2 },
+  { status: "PENDING", label: "Commande passée", icon: Clock },
+  { status: "CONFIRMED", label: "Confirmée", icon: CheckCircle2 },
+  { status: "PREPARING", label: "En préparation", icon: Box },
+  { status: "READY", label: "Prête pour retrait", icon: ShoppingBag },
+  { status: "IN_DELIVERY", label: "Retirée", icon: PackageCheck },
+  { status: "DELIVERED", label: "Terminée", icon: CheckCircle2 },
 ] as const;
 
 export type OrderProgressTheme = {
@@ -40,7 +40,7 @@ export function OrderProgress({ status, t, fulfillmentType }: { status: string; 
     return (
       <div className="flex items-center gap-2 text-sm text-red-400">
         <AlertCircle className="w-4 h-4" />
-        This order was cancelled.
+        Cette commande a été annulée.
       </div>
     );
   }

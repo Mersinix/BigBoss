@@ -109,7 +109,7 @@ export default function SupplierCancelItemsModal({
   return (
     <Dialog open={!!subOrder} onOpenChange={(v) => { if (!v) { setSelection({}); onClose(); } }}>
       <DialogContent hideClose className={`max-w-lg w-[calc(100%-2rem)] rounded-3xl border-0 shadow-2xl ${t.dk ? "bg-gray-900" : "bg-white"}`}>
-        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => { setSelection({}); onClose(); }} aria-label="Close" data-testid="button-close-cancel-items">
+        <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => { setSelection({}); onClose(); }} aria-label="Fermer" data-testid="button-close-cancel-items">
           <X className="w-4 h-4" />
         </button>
         <DialogTitle className={t.textPrimary}>Annuler des articles</DialogTitle>

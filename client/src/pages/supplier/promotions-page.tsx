@@ -592,10 +592,10 @@ function PromotionAssignmentDialog({
           {isProducts && categoryOptions.length > 0 && (
             <Select value={filterCategory} onValueChange={setFilterCategory}>
               <SelectTrigger className="h-8 text-sm w-40">
-                <SelectValue placeholder="Toutes les catégories" />
+                <SelectValue placeholder="Catégories" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__all__">Toutes les catégories</SelectItem>
+                <SelectItem value="__all__">Catégories</SelectItem>
                 {categoryOptions.map(([val, label]) => (
                   <SelectItem key={val} value={val}>{label}</SelectItem>
                 ))}
@@ -1059,7 +1059,7 @@ export default function PromotionsPage() {
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-36 h-9 shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">Tous les statuts</SelectItem>
+            <SelectItem value="ALL">Statuts</SelectItem>
             <SelectItem value="ACTIVE">Active</SelectItem>
             <SelectItem value="PAUSED">En pause</SelectItem>
             <SelectItem value="SCHEDULED">Programmée</SelectItem>
@@ -1069,7 +1069,7 @@ export default function PromotionsPage() {
         <Select value={filterType} onValueChange={setFilterType}>
           <SelectTrigger className="w-44 h-9 shrink-0"><SelectValue placeholder="Type" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="ALL">Tous les types</SelectItem>
+            <SelectItem value="ALL">Types</SelectItem>
             {(Object.entries(TYPE_LABELS) as [PromotionType, string][]).map(([k, v]) => (
               <SelectItem key={k} value={k}>{v}</SelectItem>
             ))}

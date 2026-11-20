@@ -1448,12 +1448,20 @@ export const heroActionSettings = pgTable("hero_action_settings", {
   service: heroServiceEnum("service").notNull().unique(),
   fastSearchEnabled: boolean("fast_search_enabled").notNull().default(true),
   reportEnabled: boolean("report_enabled").notNull().default(true),
+  // BARISTA's "Offres d'emploi" icon and MAINTENANCE's "Intervention" icon — both pre-existing
+  // hero actions that were previously always shown unconditionally. Added here (not a new
+  // table) so they ride the exact same admin UI/API/realtime mechanism as the two fields
+  // above. Unused by SHOP/ACADEMY/PRINT/MARKETING rows, same as those services never reading
+  // them. default(true) preserves every existing deployment's current (always-visible)
+  // behavior for both icons until an Admin explicitly flips either off.
+  jobOffersEnabled: boolean("job_offers_enabled").notNull().default(true),
+  interventionEnabled: boolean("intervention_enabled").notNull().default(true),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export type HeroService = 'SHOP' | 'BARISTA' | 'ACADEMY' | 'MAINTENANCE' | 'PRINT' | 'MARKETING';
 export type HeroActionSetting = typeof heroActionSettings.$inferSelect;
-export type HeroActionSettingsMap = Record<HeroService, { fastSearchEnabled: boolean; reportEnabled: boolean }>;
+export type HeroActionSettingsMap = Record<HeroService, { fastSearchEnabled: boolean; reportEnabled: boolean; jobOffersEnabled: boolean; interventionEnabled: boolean }>;
 
 // Admin-controlled visual customization of each Coffee-Owner-facing service
 // hero section (background image rotation / gradient, subtitle override,
@@ -3369,6 +3377,47 @@ export const supplierTabSettings = pgTable("supplier_tab_settings", {
   dashboardTabVisible: boolean("dashboard_tab_visible").notNull().default(true),
   analyticsTabVisible: boolean("analytics_tab_visible").notNull().default(true),
   earningsTabVisible: boolean("earnings_tab_visible").notNull().default(true),
+  // Two further independent Supplier nav tabs — Centre d'aide (/supplier/help) and Stock
+  // (/supplier/inventory) — same single-row/default-true pattern as returnsTabVisible/
+  // cafesTabVisible above: sidebar visibility only, never touches the underlying support or
+  // inventory data/APIs.
+  helpCenterTabVisible: boolean("help_center_tab_visible").notNull().default(true),
+  inventoryTabVisible: boolean("inventory_tab_visible").notNull().default(true),
+  // Admin → System Management → Supplier → Onglet's "Visibilité de l'onglet Communication"
+  // group. Three independent settings for the Supplier's existing consolidated
+  // "Communication" nav entry (Messages "/supplier/messages", Notifications
+  // "/supplier/notifications", Avis "/supplier/reviews" — see
+  // client/src/components/supplier/supplier-communication-switcher.tsx). The Communication
+  // PARENT tab's own visibility is always DERIVED from these three (visible iff at least one
+  // is true) — mirrors dashboardTabVisible/analyticsTabVisible/earningsTabVisible's own
+  // "no independently editable parent toggle" rule above, deliberately never its own column.
+  messagesTabVisible: boolean("messages_tab_visible").notNull().default(true),
+  notificationsTabVisible: boolean("notifications_tab_visible").notNull().default(true),
+  reviewsTabVisible: boolean("reviews_tab_visible").notNull().default(true),
+  // Admin → System Management → Supplier → Onglet's "Catégories" and "Produits" switcher
+  // entries. Unlike performanceTabVisible/communicationTabVisible above, these two parents
+  // are each a REAL, independently stored/editable master switch (not purely derived) that
+  // additionally overrides its own children: parent OFF forces both children hidden
+  // regardless of their own saved value; parent ON lets each child decide for itself. The
+  // Supplier sidebar/pages additionally auto-hide the section when both children end up off
+  // even with the parent ON — computed client-side from these three raw values, never a
+  // fourth stored "effective" column, so there is nothing else to keep in sync.
+  // categoriesTabVisible gates the whole Catégories entry (/supplier/categories); its two
+  // children are the page's own "Mes catégories" and "Demandes de catégories" sections (see
+  // client/src/pages/supplier/categories-page.tsx's activeSection state) — NOT separate
+  // routes, so this only ever toggles which in-page section renders, never the route itself.
+  categoriesTabVisible: boolean("categories_tab_visible").notNull().default(true),
+  myCategoriesVisible: boolean("my_categories_visible").notNull().default(true),
+  categoryRequestsVisible: boolean("category_requests_visible").notNull().default(true),
+  // productsTabVisible gates the whole Produits entry (/supplier/products); its two children
+  // are two of that page's four existing tabs — "new-product" (Nouveau produit) and "pack"
+  // (Pack) — see client/src/pages/supplier/manage-products.tsx. The other two tabs
+  // ("admin-products"/Produits du catalogue and "my-products"/Mes produits — the actual
+  // product listing/management UI) are deliberately NOT gated by anything here, per the
+  // task's explicit "do not hide the existing product listing/management page".
+  productsTabVisible: boolean("products_tab_visible").notNull().default(true),
+  newProductVisible: boolean("new_product_visible").notNull().default(true),
+  packVisible: boolean("pack_visible").notNull().default(true),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 export type SupplierTabSettings = typeof supplierTabSettings.$inferSelect;

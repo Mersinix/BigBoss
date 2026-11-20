@@ -24,6 +24,17 @@ export type SupplierTabSettingsShape = {
   dashboardTabVisible: boolean;
   analyticsTabVisible: boolean;
   earningsTabVisible: boolean;
+  helpCenterTabVisible: boolean;
+  inventoryTabVisible: boolean;
+  messagesTabVisible: boolean;
+  notificationsTabVisible: boolean;
+  reviewsTabVisible: boolean;
+  categoriesTabVisible: boolean;
+  myCategoriesVisible: boolean;
+  categoryRequestsVisible: boolean;
+  productsTabVisible: boolean;
+  newProductVisible: boolean;
+  packVisible: boolean;
 };
 
 // Stage 2 — Batch 20 business-domain consolidation. Merges Landing Config
@@ -206,9 +217,14 @@ export class PlatformSettingsStorage {
     const ALL_SERVICES: HeroService[] = ['SHOP', 'BARISTA', 'ACADEMY', 'MAINTENANCE', 'PRINT', 'MARKETING'];
     const rows = await db.select().from(heroActionSettings);
     const map = {} as HeroActionSettingsMap;
-    for (const service of ALL_SERVICES) map[service] = { fastSearchEnabled: true, reportEnabled: true };
+    for (const service of ALL_SERVICES) map[service] = { fastSearchEnabled: true, reportEnabled: true, jobOffersEnabled: true, interventionEnabled: true };
     for (const row of rows) {
-      map[row.service as HeroService] = { fastSearchEnabled: row.fastSearchEnabled, reportEnabled: row.reportEnabled };
+      map[row.service as HeroService] = {
+        fastSearchEnabled: row.fastSearchEnabled,
+        reportEnabled: row.reportEnabled,
+        jobOffersEnabled: row.jobOffersEnabled,
+        interventionEnabled: row.interventionEnabled,
+      };
     }
     const missing = ALL_SERVICES.filter((s) => !rows.some((r) => r.service === s));
     if (missing.length) {
@@ -219,7 +235,7 @@ export class PlatformSettingsStorage {
     return map;
   }
 
-  async setHeroActionSettings(service: HeroService, updates: Partial<{ fastSearchEnabled: boolean; reportEnabled: boolean }>): Promise<HeroActionSettingsMap> {
+  async setHeroActionSettings(service: HeroService, updates: Partial<{ fastSearchEnabled: boolean; reportEnabled: boolean; jobOffersEnabled: boolean; interventionEnabled: boolean }>): Promise<HeroActionSettingsMap> {
     const existing = await db.select().from(heroActionSettings).where(eq(heroActionSettings.service, service));
     if (existing.length) {
       await db.update(heroActionSettings).set({ ...updates, updatedAt: new Date() }).where(eq(heroActionSettings.service, service));
@@ -419,13 +435,20 @@ export class PlatformSettingsStorage {
   // the three Performance child settings (never its own stored column or an
   // accepted update field) — see supplierTabSettings' own comment in
   // shared/schema.ts for why.
-  async getSupplierTabSettings(): Promise<SupplierTabSettingsShape & { performanceTabVisible: boolean }> {
+  async getSupplierTabSettings(): Promise<SupplierTabSettingsShape & { performanceTabVisible: boolean; communicationTabVisible: boolean }> {
     const [row] = await db.select().from(supplierTabSettings).limit(1);
     const stored: SupplierTabSettingsShape = row
       ? {
           returnsTabVisible: row.returnsTabVisible, cafesTabVisible: row.cafesTabVisible,
           dashboardTabVisible: row.dashboardTabVisible, analyticsTabVisible: row.analyticsTabVisible,
           earningsTabVisible: row.earningsTabVisible,
+          helpCenterTabVisible: row.helpCenterTabVisible, inventoryTabVisible: row.inventoryTabVisible,
+          messagesTabVisible: row.messagesTabVisible, notificationsTabVisible: row.notificationsTabVisible,
+          reviewsTabVisible: row.reviewsTabVisible,
+          categoriesTabVisible: row.categoriesTabVisible, myCategoriesVisible: row.myCategoriesVisible,
+          categoryRequestsVisible: row.categoryRequestsVisible,
+          productsTabVisible: row.productsTabVisible, newProductVisible: row.newProductVisible,
+          packVisible: row.packVisible,
         }
       : await (async () => {
           const [created] = await db.insert(supplierTabSettings).values({}).returning();
@@ -433,15 +456,26 @@ export class PlatformSettingsStorage {
             returnsTabVisible: created.returnsTabVisible, cafesTabVisible: created.cafesTabVisible,
             dashboardTabVisible: created.dashboardTabVisible, analyticsTabVisible: created.analyticsTabVisible,
             earningsTabVisible: created.earningsTabVisible,
+            helpCenterTabVisible: created.helpCenterTabVisible, inventoryTabVisible: created.inventoryTabVisible,
+            messagesTabVisible: created.messagesTabVisible, notificationsTabVisible: created.notificationsTabVisible,
+            reviewsTabVisible: created.reviewsTabVisible,
+            categoriesTabVisible: created.categoriesTabVisible, myCategoriesVisible: created.myCategoriesVisible,
+            categoryRequestsVisible: created.categoryRequestsVisible,
+            productsTabVisible: created.productsTabVisible, newProductVisible: created.newProductVisible,
+            packVisible: created.packVisible,
           };
         })();
-    return { ...stored, performanceTabVisible: stored.dashboardTabVisible || stored.analyticsTabVisible || stored.earningsTabVisible };
+    return {
+      ...stored,
+      performanceTabVisible: stored.dashboardTabVisible || stored.analyticsTabVisible || stored.earningsTabVisible,
+      communicationTabVisible: stored.messagesTabVisible || stored.notificationsTabVisible || stored.reviewsTabVisible,
+    };
   }
 
   async updateSupplierTabSettings(
     updates: Partial<SupplierTabSettingsShape>,
-  ): Promise<SupplierTabSettingsShape & { performanceTabVisible: boolean }> {
-    const { performanceTabVisible: _derived, ...current } = await this.getSupplierTabSettings();
+  ): Promise<SupplierTabSettingsShape & { performanceTabVisible: boolean; communicationTabVisible: boolean }> {
+    const { performanceTabVisible: _derived, communicationTabVisible: _derived2, ...current } = await this.getSupplierTabSettings();
     const next: SupplierTabSettingsShape = { ...current, ...updates };
     const [row] = await db.select({ id: supplierTabSettings.id }).from(supplierTabSettings).limit(1);
     if (row) {
@@ -449,7 +483,11 @@ export class PlatformSettingsStorage {
     } else {
       await db.insert(supplierTabSettings).values(next);
     }
-    return { ...next, performanceTabVisible: next.dashboardTabVisible || next.analyticsTabVisible || next.earningsTabVisible };
+    return {
+      ...next,
+      performanceTabVisible: next.dashboardTabVisible || next.analyticsTabVisible || next.earningsTabVisible,
+      communicationTabVisible: next.messagesTabVisible || next.notificationsTabVisible || next.reviewsTabVisible,
+    };
   }
 
   // ── Supplier Store Settings (Admin → System Management → Supplier → Store) ───

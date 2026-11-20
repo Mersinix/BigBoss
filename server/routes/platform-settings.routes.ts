@@ -45,11 +45,13 @@ export function registerPlatformSettingsRoutes(app: Express): void {
         const service = req.params.service as string;
         const VALID_SERVICES = ['SHOP', 'BARISTA', 'ACADEMY', 'MAINTENANCE', 'PRINT', 'MARKETING'];
         if (!VALID_SERVICES.includes(service)) return res.status(400).json({ message: "Invalid service" });
-        const { fastSearchEnabled, reportEnabled } = z.object({
+        const { fastSearchEnabled, reportEnabled, jobOffersEnabled, interventionEnabled } = z.object({
           fastSearchEnabled: z.boolean().optional(),
           reportEnabled: z.boolean().optional(),
+          jobOffersEnabled: z.boolean().optional(),
+          interventionEnabled: z.boolean().optional(),
         }).parse(req.body);
-        const settings = await storage.setHeroActionSettings(service as any, { fastSearchEnabled, reportEnabled });
+        const settings = await storage.setHeroActionSettings(service as any, { fastSearchEnabled, reportEnabled, jobOffersEnabled, interventionEnabled });
         broadcast("hero_actions_updated", settings);
         res.json(settings);
       } catch (err) {
@@ -205,6 +207,17 @@ export function registerPlatformSettingsRoutes(app: Express): void {
           dashboardTabVisible: z.boolean().optional(),
           analyticsTabVisible: z.boolean().optional(),
           earningsTabVisible: z.boolean().optional(),
+          helpCenterTabVisible: z.boolean().optional(),
+          inventoryTabVisible: z.boolean().optional(),
+          messagesTabVisible: z.boolean().optional(),
+          notificationsTabVisible: z.boolean().optional(),
+          reviewsTabVisible: z.boolean().optional(),
+          categoriesTabVisible: z.boolean().optional(),
+          myCategoriesVisible: z.boolean().optional(),
+          categoryRequestsVisible: z.boolean().optional(),
+          productsTabVisible: z.boolean().optional(),
+          newProductVisible: z.boolean().optional(),
+          packVisible: z.boolean().optional(),
         }).strict().parse(req.body);
         const settings = await storage.updateSupplierTabSettings(body);
         broadcast("supplier_tab_settings_updated", settings);

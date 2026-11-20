@@ -2711,51 +2711,6 @@ export class DeliveryStorage {
   }
 
   /**
-   * Admin-only ledger query (Phase 5A rule 20: "make the ledger auditable", not a full
-   * dashboard — that is Phase 5B). Filters are all optional and combine with AND. Ordered
-   * newest-first, matching every other list method's existing convention in this file.
-   */
-  async getFinancialLedgerEntries(filters?: {
-    deliveryId?: number; orderId?: number; subOrderId?: number;
-    entryType?: string; actorRole?: string; actorUserId?: number; status?: string;
-    fromDate?: Date; toDate?: Date;
-    page?: number; limit?: number;
-  }): Promise<{ entries: FinancialLedgerEntry[]; total: number; page: number; limit: number }> {
-    const conditions = [];
-    if (filters?.deliveryId != null) conditions.push(eq(deliveryFinancialLedger.deliveryId, filters.deliveryId));
-    if (filters?.orderId != null) conditions.push(eq(deliveryFinancialLedger.orderId, filters.orderId));
-    if (filters?.subOrderId != null) conditions.push(eq(deliveryFinancialLedger.subOrderId, filters.subOrderId));
-    if (filters?.entryType) conditions.push(eq(deliveryFinancialLedger.entryType, filters.entryType));
-    if (filters?.actorRole) conditions.push(eq(deliveryFinancialLedger.actorRole, filters.actorRole));
-    // actorUserId — an Admin filter for "show me everything concerning this specific
-    // supplier/driver/company", regardless of whether they're the entry's actor or
-    // counterparty (e.g. filtering by a supplierId should surface both its own
-    // SUPPLIER_CONTRIBUTION entries AND its own driver's DRIVER_PAYOUT entries, where the
-    // supplier appears as counterparty — same scoping logic as getActorFinancialHistory).
-    if (filters?.actorUserId != null) {
-      conditions.push(or(
-        eq(deliveryFinancialLedger.actorUserId, filters.actorUserId),
-        eq(deliveryFinancialLedger.counterpartyUserId, filters.actorUserId),
-      ));
-    }
-    if (filters?.status) conditions.push(eq(deliveryFinancialLedger.status, filters.status));
-    if (filters?.fromDate) conditions.push(gte(deliveryFinancialLedger.effectiveAt, filters.fromDate));
-    if (filters?.toDate) conditions.push(lte(deliveryFinancialLedger.effectiveAt, filters.toDate));
-    const where = conditions.length ? and(...conditions) : undefined;
-    // Performance (rule 22 of the Phase 5B task) — paginated, never an unbounded scan; the
-    // existing indexes on deliveryId/orderId/subOrderId/actorRole/status/effectiveAt (Phase
-    // 5A) already cover every filter above.
-    const page = Math.max(1, filters?.page ?? 1);
-    const limit = Math.min(Math.max(1, filters?.limit ?? 50), 200);
-    const [entries, [{ count }]] = await Promise.all([
-      db.select().from(deliveryFinancialLedger).where(where)
-        .orderBy(desc(deliveryFinancialLedger.effectiveAt)).limit(limit).offset((page - 1) * limit),
-      db.select({ count: sql<number>`count(*)::int` }).from(deliveryFinancialLedger).where(where),
-    ]);
-    return { entries, total: count, page, limit };
-  }
-
-  /**
    * Delivery System V2 Phase 5B — self-service financial history for a Coffee Owner, Supplier,
    * Driver, or Delivery Company (rule 19: "getActorFinancialHistory(actingUser, filters)").
    * `actingUser` is ALWAYS the authenticated caller — there is no `actorId` parameter an

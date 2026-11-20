@@ -656,7 +656,7 @@ export default function BaristaPage({ comingSoon = false }: { comingSoon?: boole
                 <Zap className="w-4 h-4" />
               </button>
             )}
-            {canAct && (
+            {canAct && (heroActions.BARISTA.jobOffersEnabled ?? true) && (
               <button
                 onClick={() => setJobManagementOpen(true)}
                 aria-label="Offres d'emploi"

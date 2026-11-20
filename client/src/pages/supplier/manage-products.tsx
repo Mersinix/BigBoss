@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Package, Search, X, Pencil, Trash2, CheckCircle2, ShoppingBag, Layers, LayoutGrid, LayoutList, Eye, EyeOff, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useSupplierTabSettings } from "@/hooks/use-supplier-tab-settings";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 import { useFormatCurrency, useFormatDecimalCurrency, useCurrency } from "@/hooks/use-currency";
@@ -2462,6 +2463,15 @@ function MyProductsTab({
 
 export default function ManageProducts() {
   const [, navigate] = useLocation();
+  // Admin → System Management → Supplier → Onglet's "Produits" group (task: "Fix Supplier
+  // Produits Tab Visibility Logic"). "productsTabVisible" (Onglet Produits) is the ONLY
+  // setting that gates this whole page/section — when off, all four tabs (including
+  // "Produits du catalogue"/"Mes produits") are hidden; when on, Nouveau produit and Pack
+  // each independently decide their own tab, and "Produits du catalogue"/"Mes produits"
+  // always render regardless of those two (never gated by anything here).
+  const { settings: supplierTabSettings } = useSupplierTabSettings();
+  const newProductEnabled = supplierTabSettings.productsTabVisible && supplierTabSettings.newProductVisible;
+  const packEnabled = supplierTabSettings.productsTabVisible && supplierTabSettings.packVisible;
   const { data: cats = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
   const { data: subs = [] } = useQuery<SubCategoryWithDetails[]>({ queryKey: ["/api/subcategories"] });
   const { data: flavs = [] } = useQuery<FlavorWithCount[]>({ queryKey: ["/api/flavors"] });
@@ -2484,6 +2494,15 @@ export default function ManageProducts() {
 
   const handleGoToCategories = () => navigate("/supplier/categories");
 
+  if (!supplierTabSettings.productsTabVisible) {
+    return (
+      <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
+        <DashboardHero title="Produits" subtitle="Parcourez le catalogue de l'administrateur et gérez vos fiches produits avec des prix et un stock personnalisés." />
+        <Card><CardContent className="p-12 text-center text-muted-foreground">Cette fonctionnalité est temporairement indisponible.</CardContent></Card>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
       <DashboardHero
@@ -2503,12 +2522,16 @@ export default function ManageProducts() {
             <TabsTrigger value="my-products" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-my-products">
               <ShoppingBag className="w-4 h-4 mr-1.5" />Mes produits
             </TabsTrigger>
-            <TabsTrigger value="new-product" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-new-product">
-              <Plus className="w-4 h-4 mr-1.5" />Nouveau produit
-            </TabsTrigger>
-            <TabsTrigger value="pack" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-pack">
-              <Layers className="w-4 h-4 mr-1.5" />Pack
-            </TabsTrigger>
+            {newProductEnabled && (
+              <TabsTrigger value="new-product" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-new-product">
+                <Plus className="w-4 h-4 mr-1.5" />Nouveau produit
+              </TabsTrigger>
+            )}
+            {packEnabled && (
+              <TabsTrigger value="pack" className="shrink-0 whitespace-nowrap rounded-lg px-4 py-2 text-sm font-medium hover:text-foreground" data-testid="tab-pack">
+                <Layers className="w-4 h-4 mr-1.5" />Pack
+              </TabsTrigger>
+            )}
           </TabsList>
         </div>
 
@@ -2532,13 +2555,17 @@ export default function ManageProducts() {
           />
         </TabsContent>
 
-        <TabsContent value="new-product">
-          <NewProductTab cats={cats} subs={subs} flavs={flavs} szs={szs} brnds={brnds} mappings={activeMappings} />
-        </TabsContent>
+        {newProductEnabled && (
+          <TabsContent value="new-product">
+            <NewProductTab cats={cats} subs={subs} flavs={flavs} szs={szs} brnds={brnds} mappings={activeMappings} />
+          </TabsContent>
+        )}
 
-        <TabsContent value="pack">
-          <PackTab />
-        </TabsContent>
+        {packEnabled && (
+          <TabsContent value="pack">
+            <PackTab />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

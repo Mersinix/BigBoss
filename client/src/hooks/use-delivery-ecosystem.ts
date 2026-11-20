@@ -228,16 +228,6 @@ export type FinancialLedgerFilters = {
 // paginated... do not return thousands of rows in one request").
 export type PaginatedLedgerResult = { entries: FinancialLedgerEntry[]; total: number; page: number; limit: number };
 
-export function useFinancialLedgerEntries(filters: FinancialLedgerFilters) {
-  const params = new URLSearchParams();
-  Object.entries(filters).forEach(([k, v]) => { if (v !== undefined && v !== "") params.set(k, String(v)); });
-  const qs = params.toString();
-  return useQuery<PaginatedLedgerResult>({
-    queryKey: ["/api/admin/delivery-financial-ledger", filters],
-    queryFn: () => getJson(`/api/admin/delivery-financial-ledger${qs ? `?${qs}` : ""}`),
-  });
-}
-
 // Delivery System V2 Phase 5B — self-service financial history (own role/id only, resolved
 // server-side from the session — see server/storage.ts getActorFinancialHistory doc).
 export function useMyFinancialHistory(filters: Omit<FinancialLedgerFilters, "deliveryId" | "orderId" | "subOrderId" | "actorRole" | "actorUserId">) {
@@ -296,15 +286,6 @@ export type Settlement = {
   createdAt: string;
 };
 
-export type SettlementItem = {
-  id: number;
-  settlementId: number;
-  ledgerEntryId: number;
-  amountCents: number;
-  entryType: string;
-  createdAt: string;
-};
-
 export type PaginatedSettlementResult = { settlements: Settlement[]; total: number; page: number; limit: number };
 
 // Role-scoped: Admin sees all of a delivery's settlements; every other role sees only
@@ -325,113 +306,6 @@ export function useMySettlementHistory(filters: { status?: string; page?: number
   return useQuery<PaginatedSettlementResult>({
     queryKey: ["/api/me/settlement-history", filters],
     queryFn: () => getJson(`/api/me/settlement-history${qs ? `?${qs}` : ""}`),
-  });
-}
-
-export type SettlementFilters = {
-  deliveryId?: number; orderId?: number; actorRole?: string; actorUserId?: number; status?: string;
-  page?: number; limit?: number;
-};
-
-export function useAdminSettlements(filters: SettlementFilters) {
-  const params = new URLSearchParams();
-  Object.entries(filters).forEach(([k, v]) => { if (v !== undefined && v !== "") params.set(k, String(v)); });
-  const qs = params.toString();
-  return useQuery<PaginatedSettlementResult>({
-    queryKey: ["/api/admin/settlements", filters],
-    queryFn: () => getJson(`/api/admin/settlements${qs ? `?${qs}` : ""}`),
-  });
-}
-
-export function useSettlementItems(settlementId: number | null) {
-  return useQuery<SettlementItem[]>({
-    queryKey: ["/api/admin/settlements", settlementId, "items"],
-    queryFn: () => getJson(`/api/admin/settlements/${settlementId}/items`),
-    enabled: settlementId != null,
-  });
-}
-
-export function useApproveSettlement() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => mutate("POST", `/api/admin/settlements/${id}/approve`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/settlements"] }),
-  });
-}
-
-export function useVoidSettlement() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => mutate("POST", `/api/admin/settlements/${id}/void`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/settlements"] }),
-  });
-}
-
-// ── Delivery System V2 Phase 5C.2 — Payment Layer, COD, Refunds, Adjustments, Financial
-// Summary. SETTLEMENT → PAYMENT step + satellites. Internal record-keeping only — no
-// external payment provider. See docs/bigboss-delivery-financial-strategy.md.
-
-export type PaymentMethod = "CASH" | "BANK_TRANSFER" | "CARD" | "WALLET" | "OTHER";
-export type Payment = {
-  id: number;
-  settlementId: number;
-  amountCents: number;
-  currency: string;
-  method: PaymentMethod;
-  provider: string | null;
-  providerReference: string | null;
-  status: "INITIATED" | "PENDING" | "CONFIRMED" | "FAILED" | "REVERSED";
-  initiatedAt: string;
-  completedAt: string | null;
-  failedAt: string | null;
-  createdByUserId: number;
-  createdAt: string;
-};
-export type PaginatedPaymentResult = { payments: Payment[]; total: number; page: number; limit: number };
-
-export function useAdminPayments(filters: { settlementId?: number; status?: string; method?: string; page?: number; limit?: number }) {
-  const params = new URLSearchParams();
-  Object.entries(filters).forEach(([k, v]) => { if (v !== undefined && v !== "") params.set(k, String(v)); });
-  const qs = params.toString();
-  return useQuery<PaginatedPaymentResult>({
-    queryKey: ["/api/admin/payments", filters],
-    queryFn: () => getJson(`/api/admin/payments${qs ? `?${qs}` : ""}`),
-  });
-}
-export function useSettlementPayments(settlementId: number | null) {
-  return useQuery<Payment[]>({
-    queryKey: ["/api/admin/settlements", settlementId, "payments"],
-    queryFn: () => getJson(`/api/admin/settlements/${settlementId}/payments`),
-    enabled: settlementId != null,
-  });
-}
-export function useCreatePayment() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ settlementId, ...data }: { settlementId: number; amountCents: number; method: PaymentMethod; provider?: string | null; providerReference?: string | null; idempotencyKey: string }) =>
-      mutate("POST", `/api/admin/settlements/${settlementId}/payments`, data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/payments"] }); qc.invalidateQueries({ queryKey: ["/api/admin/settlements"] }); },
-  });
-}
-export function useConfirmPayment() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => mutate("POST", `/api/admin/payments/${id}/confirm`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/payments"] }); qc.invalidateQueries({ queryKey: ["/api/admin/settlements"] }); },
-  });
-}
-export function useFailPayment() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => mutate("POST", `/api/admin/payments/${id}/fail`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/payments"] }),
-  });
-}
-export function useReversePayment() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => mutate("POST", `/api/admin/payments/${id}/reverse`),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["/api/admin/payments"] }); qc.invalidateQueries({ queryKey: ["/api/admin/settlements"] }); },
   });
 }
 
@@ -456,7 +330,6 @@ export type CodReconciliation = {
   createdAt: string;
   updatedAt: string | null;
 };
-export type PaginatedCodResult = { reconciliations: CodReconciliation[]; total: number; page: number; limit: number };
 
 export function useDeliveryCod(deliveryId: number | null) {
   return useQuery<CodReconciliation>({
@@ -464,15 +337,6 @@ export function useDeliveryCod(deliveryId: number | null) {
     queryFn: () => getJson(`/api/deliveries/${deliveryId}/cod`),
     enabled: deliveryId != null,
     retry: false,
-  });
-}
-export function useAdminCodReconciliations(filters: { status?: string; deliveryId?: number; page?: number; limit?: number }) {
-  const params = new URLSearchParams();
-  Object.entries(filters).forEach(([k, v]) => { if (v !== undefined && v !== "") params.set(k, String(v)); });
-  const qs = params.toString();
-  return useQuery<PaginatedCodResult>({
-    queryKey: ["/api/admin/cod-reconciliations", filters],
-    queryFn: () => getJson(`/api/admin/cod-reconciliations${qs ? `?${qs}` : ""}`),
   });
 }
 export function useRecordCashCollected() {
@@ -489,118 +353,6 @@ export function useRecordCashRemitted() {
     mutationFn: ({ deliveryId, remittedAmountCents }: { deliveryId: number; remittedAmountCents: number }) =>
       mutate("POST", `/api/deliveries/${deliveryId}/cod/remit`, { remittedAmountCents }),
     onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["/api/deliveries", vars.deliveryId, "cod"] }),
-  });
-}
-export function useReconcileCod() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ deliveryId, notes }: { deliveryId: number; notes?: string }) => mutate("POST", `/api/admin/deliveries/${deliveryId}/cod/reconcile`, { notes }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/cod-reconciliations"] }),
-  });
-}
-
-// ── Refunds (Admin-only) ──
-
-export type Refund = {
-  id: number;
-  paymentId: number | null;
-  settlementId: number | null;
-  amountCents: number;
-  reason: string;
-  status: "REQUESTED" | "CONFIRMED" | "FAILED" | "CANCELLED";
-  initiatedByUserId: number;
-  initiatedAt: string;
-  completedAt: string | null;
-  createdAt: string;
-};
-export type PaginatedRefundResult = { refunds: Refund[]; total: number; page: number; limit: number };
-
-export function useAdminRefunds(filters: { paymentId?: number; settlementId?: number; status?: string; page?: number; limit?: number }) {
-  const params = new URLSearchParams();
-  Object.entries(filters).forEach(([k, v]) => { if (v !== undefined && v !== "") params.set(k, String(v)); });
-  const qs = params.toString();
-  return useQuery<PaginatedRefundResult>({
-    queryKey: ["/api/admin/refunds", filters],
-    queryFn: () => getJson(`/api/admin/refunds${qs ? `?${qs}` : ""}`),
-  });
-}
-export function useRequestRefund() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { paymentId?: number | null; settlementId?: number | null; amountCents: number; reason: string }) => mutate("POST", "/api/admin/refunds", data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/refunds"] }),
-  });
-}
-export function useConfirmRefund() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => mutate("POST", `/api/admin/refunds/${id}/confirm`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/refunds"] }),
-  });
-}
-export function useFailRefund() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => mutate("POST", `/api/admin/refunds/${id}/fail`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/refunds"] }),
-  });
-}
-export function useCancelRefund() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => mutate("POST", `/api/admin/refunds/${id}/cancel`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/refunds"] }),
-  });
-}
-
-// ── Adjustments (Admin-only) ──
-
-export type Adjustment = {
-  id: number;
-  ledgerEntryId: number | null;
-  settlementId: number | null;
-  amountCents: number;
-  direction: "CREDIT" | "DEBIT";
-  reason: string;
-  createdByUserId: number;
-  createdAt: string;
-};
-export type PaginatedAdjustmentResult = { adjustments: Adjustment[]; total: number; page: number; limit: number };
-
-export function useAdminAdjustments(filters: { ledgerEntryId?: number; settlementId?: number; page?: number; limit?: number }) {
-  const params = new URLSearchParams();
-  Object.entries(filters).forEach(([k, v]) => { if (v !== undefined) params.set(k, String(v)); });
-  const qs = params.toString();
-  return useQuery<PaginatedAdjustmentResult>({
-    queryKey: ["/api/admin/adjustments", filters],
-    queryFn: () => getJson(`/api/admin/adjustments${qs ? `?${qs}` : ""}`),
-  });
-}
-export function useCreateAdjustment() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { ledgerEntryId?: number | null; settlementId?: number | null; amountCents: number; direction: "CREDIT" | "DEBIT"; reason: string }) => mutate("POST", "/api/admin/adjustments", data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/adjustments"] }),
-  });
-}
-
-// ── Financial Summary ──
-
-export type AdminFinancialSummary = {
-  economic: { totalDeliveryFeeCents: number; totalDriverPayoutCents: number; totalCompanyPayoutCents: number; totalSupplierContributionCents: number; totalSupplierSubsidyCents: number; totalDeficitCents: number; deliveryCount: number };
-  settlement: Record<string, { count: number; amountCents: number }>;
-  payment: Record<string, { count: number; amountCents: number }>;
-  cod: Record<string, { count: number; expectedCents: number }>;
-  refunds: { confirmedCount: number; confirmedAmountCents: number };
-  adjustments: { creditAmountCents: number; debitAmountCents: number; count: number };
-};
-export function useAdminFinancialSummary(filters: { fromDate?: string; toDate?: string; actorUserId?: number }) {
-  const params = new URLSearchParams();
-  Object.entries(filters).forEach(([k, v]) => { if (v !== undefined && v !== "") params.set(k, String(v)); });
-  const qs = params.toString();
-  return useQuery<AdminFinancialSummary>({
-    queryKey: ["/api/admin/financial-summary", filters],
-    queryFn: () => getJson(`/api/admin/financial-summary${qs ? `?${qs}` : ""}`),
   });
 }
 

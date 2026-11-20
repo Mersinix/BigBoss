@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMessagingSettings } from "@/hooks/use-messaging-settings";
 import { usePromotionSettings } from "@/hooks/use-promotion-settings";
 import { useDiscountCodeSettings } from "@/hooks/use-discount-code-settings";
-import { useSupplierTabSettings, firstVisiblePerformanceUrl } from "@/hooks/use-supplier-tab-settings";
+import { useSupplierTabSettings, firstVisiblePerformanceUrl, firstVisibleCommunicationUrl, categoriesEffectivelyVisible, productsEffectivelyVisible } from "@/hooks/use-supplier-tab-settings";
 import { useSupplierStoreSettings } from "@/hooks/use-supplier-store-settings";
 import {
   Store, Package, ShoppingCart, LayoutDashboard,
@@ -195,8 +195,13 @@ export function AppSidebar() {
             // away. Kept live by use-realtime.ts's supplier_tab_settings_updated handler.
             
             ...(supplierTabSettings.performanceTabVisible ? [{ title: "Performance", url: firstVisiblePerformanceUrl(supplierTabSettings), icon: Activity, activeUrls: ["/", "/supplier/analytics", "/supplier/earnings"] }] : []),
-               { title: "Communication", url: "/supplier/messages", icon: MessageCircle, activeUrls: ["/supplier/messages", "/supplier/notifications", "/supplier/reviews"] },
-  
+            // Admin → System Management → Supplier → Onglet's "Visibilité de l'onglet
+            // Communication" group — same derived-parent pattern as Performance above:
+            // hidden entirely when all three of Messages/Notifications/Avis are disabled
+            // (communicationTabVisible is derived server-side from exactly that), and its
+            // target URL always points at the first currently-enabled sub-tab. Kept live by
+            // use-realtime.ts's supplier_tab_settings_updated handler.
+            ...(supplierTabSettings.communicationTabVisible ? [{ title: "Communication", url: firstVisibleCommunicationUrl(supplierTabSettings), icon: MessageCircle, activeUrls: ["/supplier/messages", "/supplier/notifications", "/supplier/reviews"] }] : []),
           ],
         },
         {
@@ -212,16 +217,26 @@ export function AppSidebar() {
             // Store) — same reactive hide pattern as Cafes/Returns above, kept in
             // sync by use-realtime.ts's supplier_store_settings_updated handler.
             ...(supplierStoreSettings.storeTabVisible ? [{ title: "Boutique", url: "/supplier/store", icon: Store }] : []),
-            { title: "Catégories", url: "/supplier/categories", icon: Folder },
-            { title: "Produits", url: "/supplier/products", icon: Package },
-            { title: "Stock", url: "/supplier/inventory", icon: Warehouse },
+            // Admin → System Management → Supplier → Onglet's "Catégories" switcher entry —
+            // hidden when the parent master toggle is off, or when both of its own children
+            // (Mes catégories / Demandes de catégories) are off.
+            ...(categoriesEffectivelyVisible(supplierTabSettings) ? [{ title: "Catégories", url: "/supplier/categories", icon: Folder }] : []),
+            // Admin → System Management → Supplier → Onglet's "Produits" switcher entry —
+            // hidden ONLY when its own master toggle (Onglet Produits) is off. Nouveau produit
+            // and Pack each independently gate just their own in-page tab (see
+            // manage-products.tsx) and never affect this entry — "Produits du catalogue" and
+            // "Mes produits" stay visible and accessible whenever the master toggle is on,
+            // even if both Nouveau produit and Pack are hidden.
+            ...(productsEffectivelyVisible(supplierTabSettings) ? [{ title: "Produits", url: "/supplier/products", icon: Package }] : []),
+            // Admin → System Management → Supplier → Onglet's "Onglet Stock" toggle.
+            ...(supplierTabSettings.inventoryTabVisible ? [{ title: "Stock", url: "/supplier/inventory", icon: Warehouse }] : []),
           ],
         },
         {
           label: "COMMANDES",
           items: [
             { title: "Commandes", url: "/orders", icon: ClipboardList },
-            { title: "Livraison des commandes", url: "/supplier/delivery-status", icon: MapPin },
+            { title: "Livraison", url: "/supplier/delivery-status", icon: MapPin },
             // Admin → System Management → Supplier → Onglet's "Onglet Retours" toggle.
             ...(supplierTabSettings.returnsTabVisible ? [{ title: "Retours", url: "/supplier/returns", icon: RotateCcw }] : []),
             { title: "Factures", url: "/supplier/invoices", icon: FileText },
@@ -250,7 +265,8 @@ export function AppSidebar() {
           label: "COMPTE",
           items: [
             { title: "Paramètres", url: "/supplier/settings", icon: Settings },
-             { title: "Centre d'aide", url: "/supplier/help", icon: HelpCircle },
+            // Admin → System Management → Supplier → Onglet's "Onglet Centre d'aide" toggle.
+            ...(supplierTabSettings.helpCenterTabVisible ? [{ title: "Centre d'aide", url: "/supplier/help", icon: HelpCircle }] : []),
           ],
         },
 

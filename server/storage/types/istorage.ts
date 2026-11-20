@@ -293,8 +293,8 @@ export interface IStorage {
   setPromotionTypeEnabled(type: import("@shared/schema").PromotionType, enabled: boolean): Promise<import("@shared/schema").PromotionTypeSettingsMap>;
   getDiscountCodeSettings(): Promise<{ tabVisible: boolean; newCodeButtonVisible: boolean }>;
   updateDiscountCodeSettings(updates: Partial<{ tabVisible: boolean; newCodeButtonVisible: boolean }>): Promise<{ tabVisible: boolean; newCodeButtonVisible: boolean }>;
-  getSupplierTabSettings(): Promise<SupplierTabSettingsShape & { performanceTabVisible: boolean }>;
-  updateSupplierTabSettings(updates: Partial<SupplierTabSettingsShape>): Promise<SupplierTabSettingsShape & { performanceTabVisible: boolean }>;
+  getSupplierTabSettings(): Promise<SupplierTabSettingsShape & { performanceTabVisible: boolean; communicationTabVisible: boolean }>;
+  updateSupplierTabSettings(updates: Partial<SupplierTabSettingsShape>): Promise<SupplierTabSettingsShape & { performanceTabVisible: boolean; communicationTabVisible: boolean }>;
   getSupplierStoreSettings(): Promise<Omit<SupplierStoreSettings, "id" | "updatedAt">>;
   updateSupplierStoreSettings(updates: Partial<Omit<SupplierStoreSettings, "id" | "updatedAt">>): Promise<Omit<SupplierStoreSettings, "id" | "updatedAt">>;
 

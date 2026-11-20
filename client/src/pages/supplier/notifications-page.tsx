@@ -1,4 +1,4 @@
-import { useLocation } from "wouter";
+import { useLocation, Redirect } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useEffect, useState } from "react";
 import { SupplierCommunicationSwitcher } from "@/components/supplier/supplier-communication-switcher";
+import { useSupplierTabSettings, communicationRedirectTarget } from "@/hooks/use-supplier-tab-settings";
 
 // French label for the small per-notification type badge — keyed by the same internal
 // `notify()` type identifiers used server-side (never translated/modified themselves, only
@@ -51,6 +52,11 @@ export default function SupplierNotificationsPage() {
   const { data: notifications = [], isLoading } = useNotifications("SHOP", { limit: 200 });
   const markRead = useMarkNotificationRead();
   const markAllRead = useMarkAllNotificationsRead();
+  // Admin → System Management → Supplier → Onglet's "Visibilité de l'onglet
+  // Communication" group — redirect to another enabled Communication tab (or a
+  // safe Supplier page) if Notifications is currently disabled.
+  const { settings: communicationSettings } = useSupplierTabSettings();
+  const redirectTo = communicationRedirectTarget(communicationSettings, "/supplier/notifications");
 
   const pagination = usePagination(notifications.length);
   useEffect(() => { pagination.resetPage(); }, [notifications.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -65,6 +71,10 @@ export default function SupplierNotificationsPage() {
   const unread = notifications.filter((n) => !n.isRead).length;
   const stockAlerts = notifications.filter((n) => n.type === "low_stock" || n.type === "out_of_stock").length;
   const orderNotifications = notifications.filter((n) => n.type.startsWith("order") || n.type.startsWith("suborder")).length;
+
+  if (redirectTo) {
+    return <Redirect to={redirectTo} />;
+  }
 
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">

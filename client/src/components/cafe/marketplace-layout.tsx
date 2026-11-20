@@ -3104,6 +3104,23 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
   const hydrateStores = useStoreFavorites((s) => s.hydrateStores);
   const { states: headerServiceStates } = useServiceStates();
   const { order: headerServiceOrder } = useServiceOrder();
+  // Service Switcher Strip — SHOP is always eligible (service: null, never gated by Admin's
+  // per-service visibility); the other five are eligible unless Admin set them HIDDEN
+  // (COMING_SOON stays eligible — it keeps its own existing "Coming Soon" presentation inside
+  // the switcher). Hoisted out of the JSX below (same sort/filter it always ran) so its length
+  // can also decide whether the whole switcher renders at all: a lone SHOP entry means no other
+  // service is Visible/Coming Soon, so there is nothing to switch between.
+  const headerSwitcherServices = [
+    { id: "shop", orderId: "SHOP" as const, label: "SHOP", icon: ShoppingBag, href: "/products", service: null },
+    { id: "maintenance", orderId: "MAINTENANCE" as const, label: "MAINTENANCE", icon: Wrench, href: "/maintenance", service: "MAINTENANCE" as const },
+    { id: "print", orderId: "PRINT" as const, label: "PRINT", icon: Printer, href: "/print", service: "PRINTING" as const },
+    // BARISTA now means Marketplace Baristas only; Barista Academy is its
+    // own independent service/page — see the split at /barista vs /academy.
+    { id: "barista", orderId: "BARISTA_MARKETPLACE" as const, label: "BARISTA", icon: Coffee, href: "/barista", service: "BARISTA_MARKETPLACE" as const },
+    { id: "academy", orderId: "BARISTA_ACADEMY" as const, label: "ACADEMY", icon: GraduationCap, href: "/academy", service: "BARISTA_ACADEMY" as const },
+    { id: "marketing", orderId: "MARKETING" as const, label: "MARKETING", icon: Megaphone, href: "/marketing", service: "MARKETING" as const },
+  ].sort((a, b) => sortServiceIds([a.orderId, b.orderId], headerServiceOrder)[0] === a.orderId ? -1 : 1)
+    .filter((svc) => !svc.service || headerServiceStates[svc.service] !== "HIDDEN");
   const { settings: messagingSettings } = useMessagingSettings();
   const messagesVisible = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN" || messagingSettings.globalVisible;
 
@@ -3410,48 +3427,42 @@ export function MarketplaceLayout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {/* ── Service Switcher Strip ── */}
-      <div className={`border-b transition-colors duration-200 ${isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-100"}`}>
-        <div className="max-w-7xl mx-auto px-4 py-2">
-          <div
-            className={`flex gap-1 rounded-2xl p-1 overflow-x-auto ${isDark ? "bg-gray-800" : "bg-gray-100"}`}
-            style={{ scrollbarWidth: "none" }}
-          >
-            {[
-              { id: "shop", orderId: "SHOP" as const, label: "SHOP", icon: ShoppingBag, href: "/products", service: null },
-              { id: "maintenance", orderId: "MAINTENANCE" as const, label: "MAINTENANCE", icon: Wrench, href: "/maintenance", service: "MAINTENANCE" as const },
-              { id: "print", orderId: "PRINT" as const, label: "PRINT", icon: Printer, href: "/print", service: "PRINTING" as const },
-              // BARISTA now means Marketplace Baristas only; Barista Academy is its
-              // own independent service/page — see the split at /barista vs /academy.
-              { id: "barista", orderId: "BARISTA_MARKETPLACE" as const, label: "BARISTA", icon: Coffee, href: "/barista", service: "BARISTA_MARKETPLACE" as const },
-              { id: "academy", orderId: "BARISTA_ACADEMY" as const, label: "ACADEMY", icon: GraduationCap, href: "/academy", service: "BARISTA_ACADEMY" as const },
-              { id: "marketing", orderId: "MARKETING" as const, label: "MARKETING", icon: Megaphone, href: "/marketing", service: "MARKETING" as const },
-            ].sort((a, b) => sortServiceIds([a.orderId, b.orderId], headerServiceOrder)[0] === a.orderId ? -1 : 1)
-              .filter((svc) => !svc.service || headerServiceStates[svc.service] !== "HIDDEN").map((svc) => {
-              const isActive = location.startsWith("/" + svc.id) || (svc.href === "/products" && (location === "/products" || location.startsWith("/products")));
-              return (
-                <Link key={svc.id} href={svc.href}>
-                  <button
-                    data-testid={`nav-service-${svc.id}`}
-                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl transition-all shrink-0 ${
-                      isActive
-                        ? isDark
-                          ? "bg-gray-700 text-white shadow-sm"
-                          : "bg-white text-amber-600 shadow-sm"
-                        : isDark
-                          ? "text-gray-400 hover:text-gray-200"
-                          : "text-gray-500 hover:text-gray-700"
-                    }`}
-                  >
-                    <svc.icon className="w-3.5 h-3.5" />
-                    {svc.label}
-                  </button>
-                </Link>
-              );
-            })}
+      {/* ── Service Switcher Strip — hidden entirely when SHOP is the only eligible
+          entry (nothing else Visible or Coming Soon to switch to); a single-item
+          strip would just be noise, not a real switcher. ── */}
+      {headerSwitcherServices.length > 1 && (
+        <div className={`border-b transition-colors duration-200 ${isDark ? "bg-gray-900 border-gray-800" : "bg-white border-gray-100"}`}>
+          <div className="max-w-7xl mx-auto px-4 py-2">
+            <div
+              className={`flex gap-1 rounded-2xl p-1 overflow-x-auto ${isDark ? "bg-gray-800" : "bg-gray-100"}`}
+              style={{ scrollbarWidth: "none" }}
+            >
+              {headerSwitcherServices.map((svc) => {
+                const isActive = location.startsWith("/" + svc.id) || (svc.href === "/products" && (location === "/products" || location.startsWith("/products")));
+                return (
+                  <Link key={svc.id} href={svc.href}>
+                    <button
+                      data-testid={`nav-service-${svc.id}`}
+                      className={`flex items-center gap-1.5 px-4 py-2 text-xs font-semibold rounded-xl transition-all shrink-0 ${
+                        isActive
+                          ? isDark
+                            ? "bg-gray-700 text-white shadow-sm"
+                            : "bg-white text-amber-600 shadow-sm"
+                          : isDark
+                            ? "text-gray-400 hover:text-gray-200"
+                            : "text-gray-500 hover:text-gray-700"
+                      }`}
+                    >
+                      <svc.icon className="w-3.5 h-3.5" />
+                      {svc.label}
+                    </button>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── Pending Account Notice Bar ── */}
       {isPending && (

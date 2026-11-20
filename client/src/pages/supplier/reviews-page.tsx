@@ -16,6 +16,8 @@ import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { SupplierCommunicationSwitcher } from "@/components/supplier/supplier-communication-switcher";
+import { Redirect } from "wouter";
+import { useSupplierTabSettings, communicationRedirectTarget } from "@/hooks/use-supplier-tab-settings";
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -137,6 +139,11 @@ export default function ReviewsPage() {
   const [reportTarget, setReportTarget] = useState<number | null>(null);
   const isMobile = useIsMobile();
   const [kpiModalOpen, setKpiModalOpen] = useState(false);
+  // Admin → System Management → Supplier → Onglet's "Visibilité de l'onglet
+  // Communication" group — redirect to another enabled Communication tab (or a
+  // safe Supplier page) if Avis is currently disabled.
+  const { settings: communicationSettings } = useSupplierTabSettings();
+  const redirectTo = communicationRedirectTarget(communicationSettings, "/supplier/reviews");
 
   const { data: productReviews = [], isLoading: loadingProduct } = useQuery<SupplierProductReview[]>({
     queryKey: ["/api/supplier/reviews/products"],
@@ -215,6 +222,10 @@ export default function ReviewsPage() {
   const supplierAvg = supplierReviews.length
     ? (supplierReviews.reduce((s, r) => s + r.rating, 0) / supplierReviews.length).toFixed(1)
     : "—";
+
+  if (redirectTo) {
+    return <Redirect to={redirectTo} />;
+  }
 
   if (isLoading) {
     return (

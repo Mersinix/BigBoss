@@ -29,6 +29,7 @@ import type { CategoryWithCount, SupplierCategoryMapping, SubCategoryWithDetails
 import { useSupplierCategoryStore } from "@/store/supplier-category-store";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
+import { useSupplierTabSettings } from "@/hooks/use-supplier-tab-settings";
 
 // ── Status Badge ──────────────────────────────────────────────────────────────
 
@@ -715,6 +716,30 @@ function CategoryRequestsSection() {
 export default function SupplierCategoriesPage() {
   const [activeSection, setActiveSection] = useState<'my-categories' | 'category-requests'>('my-categories');
   const [addCategoryOpen, setAddCategoryOpen] = useState(false);
+  // Admin → System Management → Supplier → Onglet's "Catégories" group — the parent
+  // "categoriesTabVisible" master switch overrides both children when off; each child
+  // (myCategoriesVisible/categoryRequestsVisible) otherwise decides for itself. See the
+  // supplierTabSettings comment in shared/schema.ts.
+  const { settings: supplierTabSettings } = useSupplierTabSettings();
+  const myCategoriesEnabled = supplierTabSettings.categoriesTabVisible && supplierTabSettings.myCategoriesVisible;
+  const categoryRequestsEnabled = supplierTabSettings.categoriesTabVisible && supplierTabSettings.categoryRequestsVisible;
+
+  // Keep the active section valid if Admin disables the one currently selected while this
+  // page is already open — same realtime-correctness concern as the Performance/Communication
+  // pages' own self-redirect, but same-page since these are sections, not separate routes.
+  useEffect(() => {
+    if (activeSection === 'my-categories' && !myCategoriesEnabled && categoryRequestsEnabled) setActiveSection('category-requests');
+    else if (activeSection === 'category-requests' && !categoryRequestsEnabled && myCategoriesEnabled) setActiveSection('my-categories');
+  }, [myCategoriesEnabled, categoryRequestsEnabled, activeSection]);
+
+  if (!myCategoriesEnabled && !categoryRequestsEnabled) {
+    return (
+      <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
+        <DashboardHero title="Catégories" subtitle="Gérez vos catégories et proposez de nouveaux éléments du catalogue pour validation par l'administration." />
+        <Card><CardContent className="p-12 text-center text-muted-foreground">Cette fonctionnalité est temporairement indisponible.</CardContent></Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
@@ -733,19 +758,23 @@ export default function SupplierCategoriesPage() {
           in a bg-background/shadow-sm chip. */}
       <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
         <div className="flex gap-1 bg-secondary/40 rounded-xl p-1 w-max min-w-full sm:w-fit">
-          <button onClick={() => setActiveSection('my-categories')} data-testid="tab-my-categories"
-            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0 transition-all ${activeSection === 'my-categories' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-            Mes catégories
-          </button>
-          <button onClick={() => setActiveSection('category-requests')} data-testid="tab-category-requests"
-            className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0 transition-all ${activeSection === 'category-requests' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-            Demandes de catégories
-          </button>
+          {myCategoriesEnabled && (
+            <button onClick={() => setActiveSection('my-categories')} data-testid="tab-my-categories"
+              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0 transition-all ${activeSection === 'my-categories' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+              Mes catégories
+            </button>
+          )}
+          {categoryRequestsEnabled && (
+            <button onClick={() => setActiveSection('category-requests')} data-testid="tab-category-requests"
+              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0 transition-all ${activeSection === 'category-requests' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+              Demandes de catégories
+            </button>
+          )}
         </div>
       </div>
 
-      {activeSection === 'my-categories' && <MyCategoriesSection modalOpen={addCategoryOpen} setModalOpen={setAddCategoryOpen} />}
-      {activeSection === 'category-requests' && <CategoryRequestsSection />}
+      {activeSection === 'my-categories' && myCategoriesEnabled && <MyCategoriesSection modalOpen={addCategoryOpen} setModalOpen={setAddCategoryOpen} />}
+      {activeSection === 'category-requests' && categoryRequestsEnabled && <CategoryRequestsSection />}
     </div>
   );
 }

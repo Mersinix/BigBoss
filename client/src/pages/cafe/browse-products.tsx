@@ -1368,7 +1368,7 @@ export default function BrowseProducts() {
                 <Ban className="w-4 h-4" />
               </button>
             )}
-            {(allProducts.length > 0 || packs.length > 0) && (
+            {heroActions.SHOP.fastSearchEnabled && (allProducts.length > 0 || packs.length > 0) && (
               <button
                 onClick={() => setFlashOpen(true)}
                 aria-label="Flash Mode"

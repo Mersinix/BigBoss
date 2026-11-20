@@ -1051,7 +1051,7 @@ export default function MaintenancePage({ comingSoon = false }: { comingSoon?: b
                 <Zap className="w-4 h-4" />
               </button>
             )}
-            {accessLevel === "approved" && (
+            {accessLevel === "approved" && (heroActions.MAINTENANCE.interventionEnabled ?? true) && (
               <button onClick={() => { setJobManagementJobId(null); setJobManagementOpen(true); }} aria-label="Intervention" title="Intervention — publier et gérer" data-testid="button-open-maintenance-job-management" className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${t.dk ? "bg-gray-800 hover:bg-gray-700 text-blue-400" : "bg-white/20 hover:bg-white/30 text-white"}`}>
                 <ClipboardList className="w-4 h-4" />
               </button>

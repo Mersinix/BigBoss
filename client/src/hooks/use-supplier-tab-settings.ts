@@ -28,6 +28,8 @@ export type SupplierTabSettings = {
   productsTabVisible: boolean;
   newProductVisible: boolean;
   packVisible: boolean;
+  paymentsTabVisible: boolean;
+  invoicesTabVisible: boolean;
 };
 
 export const DEFAULT_SUPPLIER_TAB_SETTINGS: SupplierTabSettings = {
@@ -49,6 +51,8 @@ export const DEFAULT_SUPPLIER_TAB_SETTINGS: SupplierTabSettings = {
   productsTabVisible: true,
   newProductVisible: true,
   packVisible: true,
+  paymentsTabVisible: true,
+  invoicesTabVisible: true,
 };
 
 export function useSupplierTabSettings() {

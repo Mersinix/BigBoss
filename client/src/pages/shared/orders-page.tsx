@@ -22,15 +22,24 @@ import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const STATUS_OPTS = [
+// Status picklist options (task: "Admin & Supplier Orders — Separate Active
+// Orders from Order History") — split per main view since the two pages now
+// show disjoint status sets: Commandes actives never contains DELIVERED/
+// CANCELLED (moved to Historique below), so neither belongs in its picklist;
+// Historique contains ONLY those two, so it offers nothing else.
+const ACTIVE_STATUS_OPTS = [
   { value: "ALL",       label: "Tous les statuts" },
   { value: "PENDING",     label: "En attente" },
   { value: "CONFIRMED",   label: "Confirmée" },
   { value: "PREPARING",   label: "En préparation" },
   { value: "READY",       label: "Prête" },
   { value: "IN_DELIVERY", label: "En livraison" },
-  { value: "DELIVERED",   label: "Livrée" },
-  { value: "CANCELLED",   label: "Annulée" },
+];
+
+const HISTORY_STATUS_OPTS = [
+  { value: "ALL",       label: "Tous les statuts" },
+  { value: "DELIVERED", label: "Livrée" },
+  { value: "CANCELLED", label: "Annulée" },
 ];
 
 const STATUS_BADGE: Record<string, string> = {
@@ -46,6 +55,23 @@ const STATUS_BADGE: Record<string, string> = {
 const STATUS_LABELS: Record<string, string> = {
   PENDING: "En attente", CONFIRMED: "Confirmée", PREPARING: "En préparation",
   READY: "Prête", IN_DELIVERY: "En livraison", DELIVERED: "Livrée", CANCELLED: "Annulée",
+};
+
+// Admin/Supplier order-card border colors (tasks: "Supplier Orders — Add
+// Status-Colored Borders to All Order Cards" and "Admin Orders — Add
+// Status-Colored Borders to All Order Cards") — same hue per status as
+// STATUS_BADGE above, just applied to the border utility instead of bg/text, so
+// the card border always matches its own status badge. Admin and Supplier only
+// (see renderOrderCard below) — Coffee Owner has its own separate page/cards and
+// is untouched.
+const STATUS_BORDER: Record<string, string> = {
+  PENDING:     "border-yellow-400 dark:border-yellow-500/60",
+  CONFIRMED:   "border-blue-400 dark:border-blue-500/60",
+  PREPARING:   "border-orange-400 dark:border-orange-500/60",
+  READY:       "border-teal-400 dark:border-teal-500/60",
+  IN_DELIVERY: "border-purple-400 dark:border-purple-500/60",
+  DELIVERED:   "border-green-400 dark:border-green-500/60",
+  CANCELLED:   "border-red-400 dark:border-red-500/60",
 };
 
 function startOfDay(d: Date): Date {
@@ -147,16 +173,19 @@ export default function OrdersPage() {
     return () => clearInterval(id);
   }, []);
 
-  // Classification priority (task §9): DELIVERED first (→ Historique, regardless of date),
-  // otherwise bucket by the order's relevant date (→ Old Orders / Aujourd'hui / Futures). Every
-  // order lands in exactly one bucket — never duplicated across sections.
+  // Classification priority: DELIVERED or CANCELLED first (→ Historique, regardless of
+  // date — task: "Admin & Supplier Orders — Separate Active Orders from Order History"),
+  // otherwise bucket by the order's relevant date (→ Old Orders / Aujourd'hui / Futures).
+  // Every order lands in exactly one bucket — never duplicated across sections. Purely a
+  // presentation/grouping change: no order status, record, or table is touched here.
   const buckets = useMemo(() => {
     const historique: OrderWithDetails[] = [];
     const old: OrderWithDetails[] = [];
     const today: OrderWithDetails[] = [];
     const future: OrderWithDetails[] = [];
     for (const o of orders) {
-      if (getEffectiveStatus(o, isSupplier, user?.id) === "DELIVERED") { historique.push(o); continue; }
+      const status = getEffectiveStatus(o, isSupplier, user?.id);
+      if (status === "DELIVERED" || status === "CANCELLED") { historique.push(o); continue; }
       const bucket = classifyByDate(o);
       (bucket === "old" ? old : bucket === "today" ? today : future).push(o);
     }
@@ -207,6 +236,12 @@ export default function OrdersPage() {
       return sortOrder === "desc" ? db - da : da - db;
     });
   }, [filtered, sortOrder]);
+
+  // Commandes actives and Historique now offer disjoint status options (see
+  // ACTIVE_STATUS_OPTS/HISTORY_STATUS_OPTS above) — clear any selection left over
+  // from the other view so switching tabs never silently applies a status value
+  // that view doesn't even list.
+  useEffect(() => { setStatusFilter("ALL"); }, [mainView]);
 
   const pagination = usePagination(sorted.length);
   useEffect(() => { pagination.resetPage(); }, [mainView, activeSubView, statusFilter, priorityFilter, cafeSearch, supplierSearch, productSearch, dateFilter, sortOrder]);
@@ -265,7 +300,9 @@ export default function OrdersPage() {
     return (
       <Card
         key={order.id}
-        className="border-border/50 hover:shadow-md transition-shadow cursor-pointer"
+        className={`hover:shadow-md transition-shadow cursor-pointer ${
+          isSupplier || isAdmin ? (STATUS_BORDER[displayStatus] ?? "border-border/50") : "border-border/50"
+        }`}
         data-testid={`card-order-${order.id}`}
         onClick={() => setSelectedOrder(order)}
       >
@@ -380,22 +417,29 @@ export default function OrdersPage() {
         ))}
       </div>
 
-      {/* ── Sub view switcher: Old Orders / Aujourd'hui / Futures — Active Orders only ── */}
+      {/* ── Sub view switcher: Old Orders / Aujourd'hui / Futures — Active Orders only.
+          Full-width layout (task: "Full-Width Switcher Layout") — same container/scrolling
+          pattern as the reference switcher in Supplier → Livraison → Delivery Status
+          (components/delivery/supplier-delivery-tabs.tsx): a hidden-scrollbar horizontal
+          wrapper around a pill container that's always at least as wide as its parent
+          (w-max min-w-full, only shrinking back to content width at sm:+). ── */}
       {mainView === "active" && (
-        <div className="flex gap-1 bg-secondary/25 rounded-xl p-1 w-fit">
-          {subViews.map(({ id, label, icon: Icon, count }) => (
-            <button
-              key={id}
-              onClick={() => setActiveSubView(id)}
-              className={`flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg text-sm font-medium transition-all ${activeSubView === id ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              <span>{label}</span>
-              {count > 0 && (
-                <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${activeSubView === id ? "bg-amber-500 text-white" : "bg-secondary text-muted-foreground"}`}>{count}</span>
-              )}
-            </button>
-          ))}
+        <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+          <div className="flex gap-1 bg-secondary/25 rounded-xl p-1 w-max min-w-full sm:w-fit">
+            {subViews.map(({ id, label, icon: Icon, count }) => (
+              <button
+                key={id}
+                onClick={() => setActiveSubView(id)}
+                className={`flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg text-sm font-medium whitespace-nowrap shrink-0 transition-all ${activeSubView === id ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{label}</span>
+                {count > 0 && (
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${activeSubView === id ? "bg-amber-500 text-white" : "bg-secondary text-muted-foreground"}`}>{count}</span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -409,7 +453,7 @@ export default function OrdersPage() {
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-44 shrink-0"><SelectValue placeholder="Statut" /></SelectTrigger>
           <SelectContent>
-            {STATUS_OPTS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+            {(mainView === "historique" ? HISTORY_STATUS_OPTS : ACTIVE_STATUS_OPTS).map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
           </SelectContent>
         </Select>
 

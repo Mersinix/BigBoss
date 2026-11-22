@@ -30,6 +30,7 @@ import { pickedToGeoLocation } from "@/store/search-location-store";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useServiceStates, ROLE_TO_SERVICE, type ServiceKey } from "@/hooks/use-service-states";
 import { sortServiceIds, useServiceOrder } from "@/hooks/use-service-order";
+import { useDeliveryCompanyVisibility } from "@/hooks/use-delivery-company-visibility";
 
 // ── Language system ───────────────────────────────────────────────────────────
 
@@ -831,6 +832,7 @@ export default function LandingPage() {
   const loginForm = useForm({ resolver: zodResolver(loginSchema), defaultValues: { email: "", password: "" } });
 
   const { states: serviceStates } = useServiceStates();
+  const { settings: deliveryCompanyVisibility } = useDeliveryCompanyVisibility();
   const { order: serviceOrder } = useServiceOrder();
 
   const { data: categories = [] } = useQuery<CategoryWithCount[]>({ queryKey: ["/api/categories"] });
@@ -1062,6 +1064,11 @@ export default function LandingPage() {
   const roleConfig = ROLES.find((r) => r.id === selectedRole) ?? ROLES[0];
   const activeCategories = categories.filter((c) => (c.productCount ?? 0) > 0);
   const filteredRoles = ROLES.filter((role) => {
+    // Admin → System Management → Delivery's "Visibilité des entreprises de livraison" (task:
+    // "Admin Delivery Company Visibility Control and Supplier Delivery Workflow") — separate
+    // mechanism from the ROLE_TO_SERVICE marketplace-service gating below, since
+    // DELIVERY_COMPANY has no customer-facing marketplace page of its own.
+    if (role.id === "DELIVERY_COMPANY") return deliveryCompanyVisibility.visible;
     const service = ROLE_TO_SERVICE[role.id];
     if (!service) return true;
     return serviceStates[service] === "VISIBLE";

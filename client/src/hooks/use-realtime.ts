@@ -64,6 +64,12 @@ const MESSAGING_EVENTS = ["new_message", "conversation_updated", "conversation_d
 const MAINTENANCE_EVENTS = ["maintenance_updated", "maintenance_reservation_updated", "maintenance_favorite_updated", "maintenance_review_updated", "admin_maintenance_report_created", "maintenance_jobs_updated"];
 const DELIVERY_COMPANY_MARKETPLACE_EVENTS = ["delivery_company_profile_updated", "delivery_company_review_updated", "admin_delivery_company_report_created"];
 const DRIVER_PROFILE_EVENTS = ["driver_profile_updated"];
+// Admin → System Management → Delivery's "Visibilité des entreprises de livraison" (task:
+// "Admin Delivery Company Visibility Control and Supplier Delivery Workflow") — the master
+// switch itself. Eligibility (company/driver existence) changes separately, via the existing
+// DELIVERY_COMPANY_MARKETPLACE_EVENTS/DRIVER_PROFILE_EVENTS/ADMIN_USER_DIRECTORY_EVENTS below,
+// which also invalidate the combined eligibility query (see their own handlers).
+const DELIVERY_COMPANY_VISIBILITY_EVENTS = ["delivery_company_visibility_updated"];
 const PRINT_EVENTS = ["print_catalog_updated", "print_order_updated", "print_categories_updated", "print_review_updated", "admin_print_report_created", "print_profile_updated", "print_favorite_updated"];
 const USER_PROFILE_EVENTS = ["user_profile_updated"];
 const ADMIN_USER_DIRECTORY_EVENTS = ["admin_user_directory_changed"];
@@ -387,6 +393,10 @@ export function useRealtime(userId?: number) {
             // official location (or any identity edit) reaches it, same as every other
             // service's marketplace list below.
             qc.invalidateQueries({ queryKey: ["/api/academy/courses"] });
+            // An Admin approving/rejecting a pending DELIVERY_COMPANY or DRIVER registration
+            // goes through this same event — changes whether an eligible company/driver exists
+            // (task: "Admin Delivery Company Visibility Control", section 4).
+            qc.invalidateQueries({ queryKey: ["/api/delivery-company-dispatch-eligibility"] });
             // admin_user_directory_changed is already broadcast globally (to every
             // connected client, not just the editor's own tabs) on every
             // PATCH /api/auth/me/profile and PATCH /api/auth/me/location — reused here
@@ -545,12 +555,21 @@ export function useRealtime(userId?: number) {
             // so a driver/vehicle change is reflected everywhere the profile is shown.
             qc.invalidateQueries({ queryKey: ["/api/delivery-company/drivers"] });
             qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).includes("/vehicles") });
+            // A company gaining/losing marketplace eligibility (go-live/vacation/visibility) or
+            // a driver being added changes Supplier dispatch eligibility — see section 4/5 of
+            // the "Admin Delivery Company Visibility Control" task.
+            qc.invalidateQueries({ queryKey: ["/api/delivery-company-dispatch-eligibility"] });
           }
           if (DRIVER_PROFILE_EVENTS.includes(event)) {
             // The same DriverDetailModal is used by the Driver's own preview, Supplier →
             // Drivers, Espace Livraison → Chauffeurs, and Admin → Chauffeurs — all key off
             // this one query, so a single invalidation refreshes every surface.
             qc.invalidateQueries({ predicate: (q) => Array.isArray(q.queryKey) && typeof q.queryKey[0] === "string" && (q.queryKey[0] as string).startsWith("/api/drivers/") });
+            qc.invalidateQueries({ queryKey: ["/api/delivery-company-dispatch-eligibility"] });
+          }
+          if (DELIVERY_COMPANY_VISIBILITY_EVENTS.includes(event)) {
+            qc.invalidateQueries({ queryKey: ["/api/delivery-company-visibility"] });
+            qc.invalidateQueries({ queryKey: ["/api/delivery-company-dispatch-eligibility"] });
           }
           if (MARKETING_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/marketing/profiles"] });

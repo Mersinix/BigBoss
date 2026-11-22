@@ -3,7 +3,8 @@ import { useOrders } from "@/hooks/use-orders";
 import { useFormatCurrency } from "@/hooks/use-currency";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, DollarSign } from "lucide-react";
+import { FileText, DollarSign, Lock } from "lucide-react";
+import { useSupplierTabSettings } from "@/hooks/use-supplier-tab-settings";
 import { buildFinancialRows } from "@/lib/financial-rows";
 import {
   FinancialFilterBar, applyFinancialFilters, DEFAULT_FINANCIAL_FILTERS,
@@ -30,6 +31,14 @@ const STATUS_OPTIONS = [
 // real order/sub-order data, not mock records.
 export default function InvoicesPage() {
   const fmt = useFormatCurrency();
+  // Admin → System Management → Supplier → Onglet's "Onglet Factures" toggle (task: "Add
+  // Supplier Payments and Invoices Visibility Controls"). Also checked directly through the
+  // normal URL, same "clean UX, backend is the real enforcement" principle as the Returns page's
+  // own gate — except this page's data (/api/orders) is shared, generic order data with no
+  // dedicated endpoint of its own, so there is nothing to additionally gate server-side without
+  // over-reaching into the shared Orders feature; hiding this tab never touches that data.
+  // Reactive — kept in sync by use-realtime.ts's supplier_tab_settings_updated handler.
+  const { settings: supplierTabSettings } = useSupplierTabSettings();
   const { data: orders = [], isLoading } = useOrders();
   const [filters, setFilters] = useState(DEFAULT_FINANCIAL_FILTERS);
   const [viewing, setViewing] = useState<{ orderId: number; subOrderId: number } | null>(null);
@@ -52,6 +61,19 @@ export default function InvoicesPage() {
   const pagination = usePagination(rows.length);
   useEffect(() => { pagination.resetPage(); }, [filters]);
   const pageRows = rows.slice(pagination.start, pagination.end);
+
+  if (!supplierTabSettings.invoicesTabVisible) {
+    return (
+      <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">
+        <DashboardHero title="Factures" subtitle="Gérez et suivez toutes vos factures." />
+        <div className="rounded-2xl border border-border/50 p-16 text-center text-muted-foreground">
+          <Lock className="w-10 h-10 mx-auto mb-3 opacity-20" />
+          <p className="font-medium">Cette fonctionnalité est temporairement indisponible.</p>
+          <p className="text-sm mt-1">Contactez votre administrateur pour plus d'informations.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6 py-6 px-3 -mx-6 sm:px-6 sm:mx-0">

@@ -11,6 +11,7 @@ import {
   discountCodeSettings,
   supplierTabSettings,
   supplierStoreSettings, type SupplierStoreSettings,
+  deliveryCompanyVisibilitySettings,
 } from "@shared/schema";
 
 // Persisted + admin-editable shape of supplierTabSettings — deliberately
@@ -35,6 +36,8 @@ export type SupplierTabSettingsShape = {
   productsTabVisible: boolean;
   newProductVisible: boolean;
   packVisible: boolean;
+  paymentsTabVisible: boolean;
+  invoicesTabVisible: boolean;
 };
 
 // Stage 2 — Batch 20 business-domain consolidation. Merges Landing Config
@@ -449,6 +452,7 @@ export class PlatformSettingsStorage {
           categoryRequestsVisible: row.categoryRequestsVisible,
           productsTabVisible: row.productsTabVisible, newProductVisible: row.newProductVisible,
           packVisible: row.packVisible,
+          paymentsTabVisible: row.paymentsTabVisible, invoicesTabVisible: row.invoicesTabVisible,
         }
       : await (async () => {
           const [created] = await db.insert(supplierTabSettings).values({}).returning();
@@ -463,6 +467,7 @@ export class PlatformSettingsStorage {
             categoryRequestsVisible: created.categoryRequestsVisible,
             productsTabVisible: created.productsTabVisible, newProductVisible: created.newProductVisible,
             packVisible: created.packVisible,
+            paymentsTabVisible: created.paymentsTabVisible, invoicesTabVisible: created.invoicesTabVisible,
           };
         })();
     return {
@@ -516,6 +521,30 @@ export class PlatformSettingsStorage {
       await db.update(supplierStoreSettings).set({ ...next, updatedAt: new Date() }).where(eq(supplierStoreSettings.id, row.id));
     } else {
       await db.insert(supplierStoreSettings).values(next);
+    }
+    return next;
+  }
+
+  // ── Delivery Company Visibility (Admin → System Management → Delivery) ──────
+  // Gates (1) DELIVERY_COMPANY as a selectable registration account type and (2) the
+  // Supplier-facing external-delivery-company dispatch options — never the Supplier's own
+  // driver workflow, and never a deletion of any existing account/driver/delivery. Same
+  // single auto-seeded row, default-true pattern as getPromotionSettings above.
+  async getDeliveryCompanyVisibilitySettings(): Promise<{ visible: boolean }> {
+    const [row] = await db.select().from(deliveryCompanyVisibilitySettings).limit(1);
+    if (row) return { visible: row.visible };
+    const [created] = await db.insert(deliveryCompanyVisibilitySettings).values({}).returning();
+    return { visible: created.visible };
+  }
+
+  async updateDeliveryCompanyVisibilitySettings(updates: Partial<{ visible: boolean }>): Promise<{ visible: boolean }> {
+    const current = await this.getDeliveryCompanyVisibilitySettings();
+    const next = { ...current, ...updates };
+    const [row] = await db.select({ id: deliveryCompanyVisibilitySettings.id }).from(deliveryCompanyVisibilitySettings).limit(1);
+    if (row) {
+      await db.update(deliveryCompanyVisibilitySettings).set({ ...next, updatedAt: new Date() }).where(eq(deliveryCompanyVisibilitySettings.id, row.id));
+    } else {
+      await db.insert(deliveryCompanyVisibilitySettings).values(next);
     }
     return next;
   }

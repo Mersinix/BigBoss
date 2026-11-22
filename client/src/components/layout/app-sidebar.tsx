@@ -239,9 +239,11 @@ export function AppSidebar() {
             { title: "Livraison", url: "/supplier/delivery-status", icon: MapPin },
             // Admin → System Management → Supplier → Onglet's "Onglet Retours" toggle.
             ...(supplierTabSettings.returnsTabVisible ? [{ title: "Retours", url: "/supplier/returns", icon: RotateCcw }] : []),
-            { title: "Factures", url: "/supplier/invoices", icon: FileText },
-            { title: "Paiements", url: "/supplier/payouts", icon: Wallet },
-            
+            // Admin → System Management → Supplier → Onglet's "Onglet Factures" toggle (task:
+            // "Add Supplier Payments and Invoices Visibility Controls").
+            ...(supplierTabSettings.invoicesTabVisible ? [{ title: "Factures", url: "/supplier/invoices", icon: FileText }] : []),
+            // Admin → System Management → Supplier → Onglet's "Onglet Paiements" toggle (same task).
+            ...(supplierTabSettings.paymentsTabVisible ? [{ title: "Paiements", url: "/supplier/payouts", icon: Wallet }] : []),
           ],
         },
          {
@@ -331,7 +333,15 @@ export function AppSidebar() {
     return [];
   };
 
-  const navGroups = getNavGroups();
+  // Supplier-only (task: "Supplier Sidebar — Automatically Hide Empty Section Headings in Real
+  // Time"): every Supplier nav group above already conditionally spreads its own items based on
+  // the exact same Admin-controlled visibility settings (supplierTabSettings/
+  // supplierStoreSettings/promotionSettings/discountCodeSettings) — so `group.items` is already
+  // the final, filtered list. One generic, reusable rule — hide a group heading whenever its own
+  // filtered items list ends up empty — covers every current and future Supplier section without
+  // a single section-specific check, and is scoped to the Supplier role only so no other role's
+  // sidebar (which never ends up with an empty group today) changes at all.
+  const navGroups = getNavGroups().filter((group) => user.role !== "SUPPLIER" || group.items.length > 0);
   // Scoped to the Supplier and Admin roles only (tasks: "Translate Supplier
   // Sidebar into French", "Translate Admin Sidebar into French") — every
   // other role (Barista Academy, etc.) keeps its existing English "Sign

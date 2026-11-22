@@ -25,7 +25,7 @@ import {
   Package, User as UserIcon, Receipt, Calendar, Coffee, X, Check,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import DeliveryDetails, { DELIVERY_STATUS_META as STATUS_META, DELIVERY_MODE_LABEL } from "@/components/delivery/delivery-details";
+import DeliveryDetails, { DELIVERY_STATUS_META as STATUS_META, DELIVERY_STATUS_BORDER, DELIVERY_MODE_LABEL } from "@/components/delivery/delivery-details";
 import { DriverDetailModal } from "@/components/driver/driver-detail-modal";
 import { useDriverDetails } from "@/hooks/use-driver-profile";
 import { DeliveryCompanyDetailModal } from "@/components/delivery/delivery-company-detail-modal";
@@ -67,7 +67,7 @@ function DeliveryCard({ delivery, onViewDetails, onCancel, cancelling }: {
   return (
     <Card
       data-testid={`card-admin-delivery-${delivery.id}`}
-      className="cursor-pointer hover:shadow-md transition-shadow"
+      className={`cursor-pointer hover:shadow-md transition-shadow ${DELIVERY_STATUS_BORDER[delivery.status] ?? "border-border/50"}`}
       onClick={onViewDetails}
     >
       <CardContent className="p-4 flex flex-col gap-3">

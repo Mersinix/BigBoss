@@ -218,6 +218,8 @@ export function registerPlatformSettingsRoutes(app: Express): void {
           productsTabVisible: z.boolean().optional(),
           newProductVisible: z.boolean().optional(),
           packVisible: z.boolean().optional(),
+          paymentsTabVisible: z.boolean().optional(),
+          invoicesTabVisible: z.boolean().optional(),
         }).strict().parse(req.body);
         const settings = await storage.updateSupplierTabSettings(body);
         broadcast("supplier_tab_settings_updated", settings);
@@ -255,6 +257,30 @@ export function registerPlatformSettingsRoutes(app: Express): void {
       } catch (err) {
         if (err instanceof z.ZodError) return res.status(400).json({ message: "Invalid supplier store settings" });
         res.status(500).json({ message: "Failed to update supplier store settings" });
+      }
+    });
+
+    // ── Delivery Company Visibility (Admin → System Management → Delivery) ─────
+    // Gates the DELIVERY_COMPANY registration account type and the Supplier-facing
+    // external-delivery-company dispatch options — never the Supplier's own driver
+    // workflow, never a deletion of any existing account/driver/delivery. Public GET, same
+    // convention as every other boolean platform setting above (registration page/Supplier
+    // page both need to read it without being authenticated as Admin).
+    app.get("/api/delivery-company-visibility", async (_req, res) => {
+      try {
+        res.json(await storage.getDeliveryCompanyVisibilitySettings());
+      } catch { res.status(500).json({ message: "Failed to load delivery company visibility settings" }); }
+    });
+
+    app.patch("/api/admin/delivery-company-visibility", requireAdmin, async (req, res) => {
+      try {
+        const body = z.object({ visible: z.boolean().optional() }).strict().parse(req.body);
+        const settings = await storage.updateDeliveryCompanyVisibilitySettings(body);
+        broadcast("delivery_company_visibility_updated", settings);
+        res.json(settings);
+      } catch (err) {
+        if (err instanceof z.ZodError) return res.status(400).json({ message: "Invalid delivery company visibility settings" });
+        res.status(500).json({ message: "Failed to update delivery company visibility settings" });
       }
     });
 

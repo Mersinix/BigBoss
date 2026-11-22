@@ -2198,31 +2198,38 @@ export default function AdminProductsPage() {
 
       {/* Section + View switcher */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        {/* Section switcher — same visual/scrolling design as the Admin System Management
-            switcher: hidden-scrollbar horizontal scroll on mobile, pill container, active
-            tab in a bg-background/shadow-sm chip. */}
-        <div className="min-w-0 overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
-          <div className="flex gap-1 bg-secondary/40 rounded-xl p-1 w-max min-w-full sm:w-fit">
+        {/* Section switcher (task: "Full-Width Switcher Layout — Catalogue produits") — full
+            width at every breakpoint with the three options evenly sharing it (flex-1), unlike
+            the generic content-sized reference switcher (Supplier → Livraison → Delivery
+            Status): this one sits inside a row flex container (the "justify-between" wrapper
+            above), which doesn't stretch a plain content-sized child to the full row width the
+            way a flex-col page wrapper does, so an explicit w-full is needed here for the
+            container to actually reach 100% of its parent. Each label truncates (rather than
+            wrapping or overflowing) if a very narrow viewport ever can't fit it at an equal
+            third — graceful degradation instead of the reference's horizontal-scroll fallback,
+            which would undo the even 3-way split this task specifically asks for. */}
+        <div className="min-w-0 w-full overflow-x-auto [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: "none" }}>
+          <div className="flex gap-1 bg-secondary/40 rounded-xl p-1 w-full">
             <button
               onClick={() => setSection('catalog')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0 transition-all ${section === 'catalog' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`flex-1 min-w-0 flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium transition-all ${section === 'catalog' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               data-testid="section-catalog"
             >
-              Gestion des produits
+              <span className="truncate">Gestion des produits</span>
             </button>
             <button
               onClick={() => setSection('supplier')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0 transition-all ${section === 'supplier' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`flex-1 min-w-0 flex items-center justify-center px-4 py-2 rounded-lg text-sm font-medium transition-all ${section === 'supplier' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               data-testid="section-supplier"
             >
-              Produits des fournisseurs
+              <span className="truncate">Produits des fournisseurs</span>
             </button>
             <button
               onClick={() => setSection('packs')}
-              className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap shrink-0 transition-all flex items-center gap-1.5 ${section === 'packs' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+              className={`flex-1 min-w-0 flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${section === 'packs' ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
               data-testid="section-packs"
             >
-              <Layers className="w-3.5 h-3.5" />Packs
+              <Layers className="w-3.5 h-3.5 shrink-0" /><span className="truncate">Packs</span>
             </button>
           </div>
         </div>

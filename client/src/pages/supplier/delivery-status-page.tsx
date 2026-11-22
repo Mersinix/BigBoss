@@ -16,11 +16,12 @@ import { Truck, CheckCircle, Clock, MapPin, Package, Search, X, Building2, User 
 import { formatDate } from "@/lib/format";
 import { useToast } from "@/hooks/use-toast";
 import SupplierDeliveryTabs from "@/components/delivery/supplier-delivery-tabs";
-import DeliveryDetails, { DELIVERY_STATUS_META, DELIVERY_MODE_LABEL } from "@/components/delivery/delivery-details";
+import DeliveryDetails, { DELIVERY_STATUS_META, DELIVERY_STATUS_BORDER, DELIVERY_MODE_LABEL } from "@/components/delivery/delivery-details";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import type { DeliveryWithDetails } from "@shared/schema";
 import { DashboardHero, KpiOverviewButton, KpiOverviewModal } from "@/components/dashboard/dashboard-kit";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useDeliveryCompanyDispatchEligibility } from "@/hooks/use-delivery-company-visibility";
 
 const STATUS_FILTERS = ["ALL", "PENDING", "AVAILABLE", "ACCEPTED", "ASSIGNED", "PICKED_UP", "IN_TRANSIT", "DELIVERED", "CANCELLED"];
 const DATE_FILTERS = [
@@ -152,6 +153,14 @@ export function DispatchDialog({ delivery, onClose }: { delivery: DeliveryWithDe
   const dispatch = useDispatchDelivery();
   const { toast } = useToast();
   const [view, setView] = useState<"choose" | "browse">("choose");
+  // Admin → System Management → Delivery's "Visibilité des entreprises de livraison" (task:
+  // "Admin Delivery Company Visibility Control and Supplier Delivery Workflow", sections 3-5).
+  // While still loading, `eligible` stays false (see the hook's own deliberately-fail-closed
+  // default) so the external-company options never flash on before possibly being hidden.
+  // "Mes chauffeurs" is never gated by this — the Supplier's own driver workflow is always
+  // available regardless of this setting or its loading state.
+  const { eligibility, isLoading: eligibilityLoading } = useDeliveryCompanyDispatchEligibility();
+  const showDeliveryCompanyOptions = !eligibilityLoading && eligibility.eligible;
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose(); }}>
       <DialogContent hideClose>
@@ -166,6 +175,8 @@ export function DispatchDialog({ delivery, onClose }: { delivery: DeliveryWithDe
           <CompanyBrowseView delivery={delivery} onBack={() => setView("choose")} onClose={onClose} />
         ) : (
         <div className="grid grid-cols-1 gap-3 pt-2">
+          {showDeliveryCompanyOptions && (
+            <>
           <button
             onClick={() => dispatch.mutate({ deliveryId: delivery.id, mode: "DELIVERY_COMPANY" }, {
               onSuccess: () => { toast({ title: "Envoyée aux entreprises de livraison" }); onClose(); },
@@ -191,6 +202,8 @@ export function DispatchDialog({ delivery, onClose }: { delivery: DeliveryWithDe
               <p className="text-xs text-muted-foreground">Parcourir les entreprises partenaires et en choisir une précise.</p>
             </div>
           </button>
+            </>
+          )}
           <button
             onClick={() => dispatch.mutate({ deliveryId: delivery.id, mode: "SUPPLIER" }, {
               onSuccess: () => { toast({ title: "Prête à assigner à un chauffeur" }); onClose(); },
@@ -473,7 +486,7 @@ export default function SupplierDeliveryStatusPage() {
     return (
       <Card
         key={d.id}
-        className="border-border/50 hover:shadow-md transition-shadow cursor-pointer"
+        className={`hover:shadow-md transition-shadow cursor-pointer ${DELIVERY_STATUS_BORDER[d.status] ?? "border-border/50"}`}
         data-testid={`card-delivery-${d.id}`}
         onClick={() => setViewTargetId(d.id)}
       >

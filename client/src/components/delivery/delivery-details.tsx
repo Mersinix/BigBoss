@@ -21,6 +21,24 @@ export const DELIVERY_STATUS_META: Record<string, { label: string; cls: string }
   CANCELLED: { label: "Annulée", cls: "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400" },
 };
 
+// Delivery-card border colors (task: "Admin/Supplier Livraison — Add
+// Status-Colored Borders to Delivery Cards") — same hue per status as
+// DELIVERY_STATUS_META.cls above, just applied to the border utility instead of
+// bg/text, so a card's border always matches its own status badge. Shared by
+// the Admin "Livraisons" card and the Supplier "Delivery Status" card (see
+// admin/delivery-page.tsx and supplier/delivery-status-page.tsx) instead of
+// duplicating a second color mapping in either file.
+export const DELIVERY_STATUS_BORDER: Record<string, string> = {
+  PENDING:    "border-gray-300 dark:border-gray-600/60",
+  AVAILABLE:  "border-amber-400 dark:border-amber-500/60",
+  ACCEPTED:   "border-blue-400 dark:border-blue-500/60",
+  ASSIGNED:   "border-indigo-400 dark:border-indigo-500/60",
+  PICKED_UP:  "border-purple-400 dark:border-purple-500/60",
+  IN_TRANSIT: "border-purple-400 dark:border-purple-500/60",
+  DELIVERED:  "border-green-400 dark:border-green-500/60",
+  CANCELLED:  "border-red-400 dark:border-red-500/60",
+};
+
 export const DELIVERY_MODE_LABEL: Record<string, string> = {
   DELIVERY_COMPANY: "Entreprise de livraison",
   SUPPLIER: "Chauffeurs du fournisseur",

@@ -1923,6 +1923,50 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
+  // Admin → System Management → Delivery's "Visibilité des entreprises de livraison" is a
+  // master permission switch, not proof the feature is actually usable (task: "Admin Delivery
+  // Company Visibility Control and Supplier Delivery Workflow"). This answers the OTHER half —
+  // whether at least one eligible Delivery Company (the exact same eligibility rows
+  // getDeliveryCompanyProfiles already surfaces to the marketplace: approved, marketplaceVisible,
+  // not on vacation, publicationStatus APPROVED) currently has at least one valid driver (role
+  // DRIVER, status approved — the same "vetted" status createDriverForOwner always sets and the
+  // same definition used by getOfferEligibleDrivers' own roster filter). Computed on every read,
+  // never cached as a second stored flag, so it can never drift out of sync with the underlying
+  // company/driver rows.
+  async hasEligibleDeliveryCompanyWithDrivers(): Promise<boolean> {
+    const eligibleCompanies = await db.select({ userId: deliveryCompanyProfiles.userId })
+      .from(deliveryCompanyProfiles)
+      .innerJoin(users, eq(deliveryCompanyProfiles.userId, users.id))
+      .where(and(
+        eq(users.role, "DELIVERY_COMPANY" as any),
+        eq(users.status, "approved"),
+        eq(deliveryCompanyProfiles.marketplaceVisible, true),
+        eq(deliveryCompanyProfiles.isOnVacation, false),
+        eq(deliveryCompanyProfiles.publicationStatus, "APPROVED"),
+      ));
+    if (eligibleCompanies.length === 0) return false;
+    const companyIds = eligibleCompanies.map((c) => c.userId);
+    const [driverRow] = await db.select({ id: users.id }).from(users)
+      .where(and(
+        eq(users.role, "DRIVER" as any),
+        eq(users.status, "approved"),
+        inArray(users.deliveryCompanyId, companyIds),
+      ))
+      .limit(1);
+    return !!driverRow;
+  }
+
+  // Combines the Admin master switch with the eligibility check above into the single shape
+  // the Supplier dispatch UI needs (section 4's table: Masqué→hidden regardless of eligibility;
+  // Visible+no eligible company→hidden; Visible+eligible company→visible).
+  async getDeliveryCompanyDispatchEligibility(): Promise<{ visible: boolean; hasEligibleCompany: boolean; eligible: boolean }> {
+    const [{ visible }, hasEligibleCompany] = await Promise.all([
+      this.getDeliveryCompanyVisibilitySettings(),
+      this.hasEligibleDeliveryCompanyWithDrivers(),
+    ]);
+    return { visible, hasEligibleCompany, eligible: visible && hasEligibleCompany };
+  }
+
   // Single-company public card — sanitized shape used for the Supplier-facing
   // Details modal and the Delivery Company's own Eye preview, mirroring
   // getMaintenanceCard exactly.
@@ -2489,6 +2533,14 @@ export class DatabaseStorage implements IStorage {
 
   async updateSupplierStoreSettings(updates: Partial<Omit<SupplierStoreSettings, "id" | "updatedAt">>): Promise<Omit<SupplierStoreSettings, "id" | "updatedAt">> {
     return this.platformSettingsDomain.updateSupplierStoreSettings(updates);
+  }
+
+  async getDeliveryCompanyVisibilitySettings(): Promise<{ visible: boolean }> {
+    return this.platformSettingsDomain.getDeliveryCompanyVisibilitySettings();
+  }
+
+  async updateDeliveryCompanyVisibilitySettings(updates: Partial<{ visible: boolean }>): Promise<{ visible: boolean }> {
+    return this.platformSettingsDomain.updateDeliveryCompanyVisibilitySettings(updates);
   }
 
   async getPrinterCategoryMapping(printerId: number): Promise<{ categories: string[]; subCategories: string[] }> {

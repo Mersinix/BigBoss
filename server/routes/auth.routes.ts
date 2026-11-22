@@ -71,6 +71,15 @@ export function registerAuthRoutes(app: Express): void {
         const PENDING_ROLES = ['CAFE_OWNER', 'SUPPLIER', 'DELIVERY_COMPANY', 'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE'];
         const LOCATION_REQUIRED_ROLES = ['CAFE_OWNER', 'SUPPLIER', 'PRINTER', 'MARKETING', 'BARISTA_ACADEMY', 'BARISTA_MARKETPLACE', 'MAINTENANCE'];
         const role = body.role ?? 'CAFE_OWNER';
+        // Admin → System Management → Delivery's "Visibilité des entreprises de livraison"
+        // (task: "Admin Delivery Company Visibility Control and Supplier Delivery Workflow") —
+        // enforced here, not just hidden on the registration form, so a direct/manipulated
+        // request cannot create a DELIVERY_COMPANY account while Masqué. Existing accounts are
+        // never affected by this check.
+        if (role === 'DELIVERY_COMPANY') {
+          const { visible } = await storage.getDeliveryCompanyVisibilitySettings();
+          if (!visible) return res.status(403).json({ message: "L'inscription en tant qu'entreprise de livraison est désactivée pour le moment." });
+        }
         // Registration now only collects the address-details step (no map pin), so
         // lat/lng are no longer required here — Admin sets/refines the precise
         // geolocation later via the full 3-step location picker (see /api/admin/users/:id/location).

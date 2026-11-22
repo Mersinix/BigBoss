@@ -3418,6 +3418,16 @@ export const supplierTabSettings = pgTable("supplier_tab_settings", {
   productsTabVisible: boolean("products_tab_visible").notNull().default(true),
   newProductVisible: boolean("new_product_visible").notNull().default(true),
   packVisible: boolean("pack_visible").notNull().default(true),
+  // Admin → System Management → Supplier → Onglet's "Visibilité des onglets" card — two
+  // further independent Supplier nav tabs, Paiements (/supplier/payouts) and Factures
+  // (/supplier/invoices) — task: "Add Supplier Payments and Invoices Visibility Controls".
+  // Same single-row/default-true pattern as returnsTabVisible/cafesTabVisible above: sidebar
+  // visibility (plus the same page-level placeholder Returns already uses) only. Both pages
+  // read live order/sub-order data via the shared /api/orders endpoint (no dedicated payouts/
+  // invoices table or route exists — see payouts-page.tsx/invoices-page.tsx) — these settings
+  // never touch that endpoint or the underlying order/financial data/history.
+  paymentsTabVisible: boolean("payments_tab_visible").notNull().default(true),
+  invoicesTabVisible: boolean("invoices_tab_visible").notNull().default(true),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 export type SupplierTabSettings = typeof supplierTabSettings.$inferSelect;
@@ -3931,6 +3941,25 @@ export const deliveryCompanyProfiles = pgTable("delivery_company_profiles", {
 });
 export type DeliveryCompanyProfile = typeof deliveryCompanyProfiles.$inferSelect;
 export type InsertDeliveryCompanyProfile = typeof deliveryCompanyProfiles.$inferInsert;
+
+// Admin-controlled visibility of the Delivery Company account type across registration AND
+// the Supplier delivery dispatch workflow (task: "Admin Delivery Company Visibility Control
+// and Supplier Delivery Workflow"). Same single-row/default-true pattern as promotionSettings/
+// messagingSettings elsewhere in this file — hiding this never deletes a Delivery Company
+// account, driver, or existing delivery/assignment; it only gates (1) whether DELIVERY_COMPANY
+// appears as a selectable registration account type (enforced on both the registration UI and
+// the backend registration endpoint) and (2) whether the Supplier-facing external-delivery-
+// company dispatch options (Entreprise de livraison / Choisir une entreprise / company
+// reassignment) are offered — the Supplier's own driver ("Mes chauffeurs") workflow is NEVER
+// gated by this setting. Supplier-side dispatch visibility additionally requires at least one
+// eligible company with a valid driver to exist (computed on read, never a second stored flag
+// — see storage.getDeliveryCompanyDispatchEligibility).
+export const deliveryCompanyVisibilitySettings = pgTable("delivery_company_visibility_settings", {
+  id: serial("id").primaryKey(),
+  visible: boolean("visible").notNull().default(true),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export type DeliveryCompanyVisibilitySettings = typeof deliveryCompanyVisibilitySettings.$inferSelect;
 
 export type DeliveryCompanyMarketplaceCard = DeliveryCompanyProfile & {
   userId: number;

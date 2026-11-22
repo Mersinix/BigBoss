@@ -122,6 +122,15 @@ export function registerDeliveryRoutes(app: Express): void {
           // real mapped cards instead of broadcasting to every partner. Validated below.
           deliveryCompanyId: z.number().int().positive().optional(),
         }).parse(req.body);
+        // Admin → System Management → Delivery's "Visibilité des entreprises de livraison"
+        // (task: "Admin Delivery Company Visibility Control and Supplier Delivery Workflow",
+        // section 6) — enforced here, not just hidden in the UI, so a direct/manipulated
+        // request cannot dispatch or reassign to an external company while Masqué. The
+        // Supplier's own driver dispatch (mode 'SUPPLIER') is never affected.
+        if (mode === 'DELIVERY_COMPANY') {
+          const { visible } = await storage.getDeliveryCompanyVisibilitySettings();
+          if (!visible) return res.status(403).json({ message: 'La livraison par entreprise partenaire est désactivée' });
+        }
         if (deliveryCompanyId != null) {
           const target = await storage.getUser(deliveryCompanyId);
           if (!target || target.role !== 'DELIVERY_COMPANY' || target.status !== 'approved') {
@@ -843,6 +852,20 @@ export function registerDeliveryRoutes(app: Express): void {
     // deliveryCompanyProfiles and server/storage.ts's DELIVERY COMPANY section.
     // The reviewer/reporter here is a Supplier (not a Cafe Owner) since Suppliers
     // are the ones who actually deal with Delivery Companies via Order Delivery.
+
+    // Combines the Admin "Visibilité des entreprises de livraison" master switch with actual
+    // eligibility (at least one approved/published/non-vacationing company with at least one
+    // approved driver) into the single shape the Supplier dispatch UI needs (task: "Admin
+    // Delivery Company Visibility Control and Supplier Delivery Workflow", section 4). Public
+    // GET — same convention as /api/delivery-company/profiles above, non-sensitive boolean/
+    // count data the Supplier page needs without an extra round trip.
+    app.get('/api/delivery-company-dispatch-eligibility', async (_req, res) => {
+      try {
+        res.json(await storage.getDeliveryCompanyDispatchEligibility());
+      } catch (err: any) {
+        res.status(500).json({ message: err.message ?? 'Error checking delivery company eligibility' });
+      }
+    });
 
     app.get('/api/delivery-company/profiles', async (req: any, res) => {
       try {

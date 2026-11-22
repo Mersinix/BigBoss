@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
-import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Ban, Moon, Sun, SunMoon, Car, Store, ShieldCheck, LogIn, AlertTriangle, X, RotateCcw, Save, Palette, Tag, Percent, DollarSign, BarChart3, Gift, Star, Ticket, Coffee, Video, Music, LayoutDashboard, TrendingUp, Briefcase, ClipboardList, HelpCircle, Warehouse, MessageCircle, Bell, Folder, Package, Layers } from "lucide-react";
+import { Printer, Megaphone, Wrench, ShoppingBag, GripVertical, Eye, EyeOff, Clock, Sliders, LayoutTemplate, Image, FootprintsIcon, Plus, Trash2, ChevronDown, ChevronUp, CircleDollarSign, MessageSquare, GraduationCap, Users, Truck, Zap, Ban, Moon, Sun, SunMoon, Car, Store, ShieldCheck, LogIn, AlertTriangle, X, RotateCcw, Save, Palette, Tag, Percent, DollarSign, BarChart3, Gift, Star, Ticket, Coffee, Video, Music, LayoutDashboard, TrendingUp, Briefcase, ClipboardList, HelpCircle, Warehouse, MessageCircle, Bell, Folder, Package, Layers, FileText } from "lucide-react";
 import { useDeliveryPricingSettings, useUpdateDeliveryPricingSettings, VEHICLE_TYPE_LABELS, type DeliveryVehicleType, type DeliveryPricingSettings } from "@/hooks/use-delivery-ecosystem";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useFormatCurrency } from "@/hooks/use-currency";
@@ -505,6 +505,8 @@ type SupplierTabSettingsAdmin = {
   productsTabVisible: boolean;
   newProductVisible: boolean;
   packVisible: boolean;
+  paymentsTabVisible: boolean;
+  invoicesTabVisible: boolean;
 };
 
 function SupplierTabVisibilitySection() {
@@ -640,7 +642,49 @@ function SupplierTabVisibilitySection() {
                   />
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">Masquer l'un ou l'autre ne supprime, ne modifie ni ne désactive les retours, cafés, support ou stock déjà existants ; ces réglages sont indépendants les uns des autres.</p>
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="bg-muted rounded-lg p-2 shrink-0"><DollarSign className="w-4 h-4 text-foreground/70" /></div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Onglet Paiements</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Contrôlez l'accès à l'onglet Paiements dans l'espace fournisseur.</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <Badge variant="outline" className={`text-xs ${statusBadgeClass(value.paymentsTabVisible)}`} data-testid="badge-supplier-tab-payments-status">
+                    {value.paymentsTabVisible ? "Visible" : "Masqué"}
+                  </Badge>
+                  <Switch
+                    checked={value.paymentsTabVisible}
+                    onCheckedChange={(checked) => update("paymentsTabVisible", checked)}
+                    disabled={saveMutation.isPending}
+                    aria-label="Onglet Paiements"
+                    data-testid="switch-supplier-tab-payments-visible"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="bg-muted rounded-lg p-2 shrink-0"><FileText className="w-4 h-4 text-foreground/70" /></div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Onglet Factures</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Contrôlez l'accès à l'onglet Factures dans l'espace fournisseur.</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <Badge variant="outline" className={`text-xs ${statusBadgeClass(value.invoicesTabVisible)}`} data-testid="badge-supplier-tab-invoices-status">
+                    {value.invoicesTabVisible ? "Visible" : "Masqué"}
+                  </Badge>
+                  <Switch
+                    checked={value.invoicesTabVisible}
+                    onCheckedChange={(checked) => update("invoicesTabVisible", checked)}
+                    disabled={saveMutation.isPending}
+                    aria-label="Onglet Factures"
+                    data-testid="switch-supplier-tab-invoices-visible"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">Masquer l'un ou l'autre ne supprime, ne modifie ni ne désactive les retours, cafés, support, stock, paiements ou factures déjà existants ; ces réglages sont indépendants les uns des autres.</p>
             </>
           )}
         </CardContent>
@@ -2779,6 +2823,93 @@ function GlobalCurrencySection() {
   );
 }
 
+// ── Delivery Company Visibility ──────────────────────────────────────────────
+// Task: "Admin Delivery Company Visibility Control and Supplier Delivery Workflow". Same
+// single auto-seeded settings row + Switch/Badge pattern as DiscountCodeSettingsSection above,
+// against the new /api/delivery-company-visibility + PATCH /api/admin/delivery-company-visibility
+// endpoints. Hiding this never deletes a Delivery Company account, driver, or existing
+// delivery/assignment — it only gates new DELIVERY_COMPANY registrations and new Supplier
+// dispatch/reassignment to an external company (enforced server-side; see auth.routes.ts and
+// delivery.routes.ts's PATCH /api/deliveries/:id/dispatch). The Supplier's own driver
+// ("Mes chauffeurs") workflow is never affected by this setting.
+type DeliveryCompanyVisibilityAdmin = { visible: boolean };
+
+function DeliveryCompanyVisibilitySection() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: settings } = useQuery<DeliveryCompanyVisibilityAdmin>({ queryKey: ["/api/delivery-company-visibility"] });
+  const [local, setLocal] = useState<DeliveryCompanyVisibilityAdmin | null>(null);
+
+  useEffect(() => {
+    if (settings) setLocal(settings);
+  }, [settings]);
+
+  const value = local ?? settings;
+
+  const saveMutation = useMutation({
+    mutationFn: (updates: Partial<DeliveryCompanyVisibilityAdmin>) =>
+      apiRequest("PATCH", "/api/admin/delivery-company-visibility", updates),
+    onSuccess: async (response) => {
+      const saved = await response.json();
+      setLocal(saved);
+      queryClient.setQueryData(["/api/delivery-company-visibility"], saved);
+      toast({ title: "Visibilité des entreprises de livraison mise à jour" });
+    },
+    onError: (error: any) => toast({ variant: "destructive", title: "Échec de la mise à jour", description: error?.message }),
+  });
+
+  const statusBadgeClass = (enabled: boolean) => enabled
+    ? "bg-green-100 text-green-700 border-green-200 dark:bg-green-500/15 dark:text-green-400 dark:border-green-500/30"
+    : "bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-500/15 dark:text-gray-400 dark:border-gray-500/30";
+
+  const update = (field: keyof DeliveryCompanyVisibilityAdmin, next: boolean) => {
+    if (!value) return;
+    setLocal({ ...value, [field]: next });
+    saveMutation.mutate({ [field]: next });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center gap-3">
+          <div className="bg-green-500/10 rounded-xl p-3"><Truck className="w-5 h-5 text-green-600" /></div>
+          <div>
+            <CardTitle className="text-base">Visibilité des entreprises de livraison</CardTitle>
+            <CardDescription className="pt-1">Contrôlez l'inscription de nouvelles entreprises de livraison et la disponibilité de leurs options de dispatch chez les fournisseurs.</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!value ? <Skeleton className="h-20 w-full" /> : (
+          <>
+            <div className="flex items-center justify-between gap-4 rounded-xl border border-border/50 p-3">
+              <div>
+                <p className="text-sm font-medium">Entreprises de livraison</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Visible : l'inscription Entreprise de livraison et les options de dispatch externe correspondantes chez les fournisseurs sont disponibles (sous réserve qu'une entreprise éligible avec au moins un chauffeur existe). Masqué : l'inscription et ces options de dispatch sont désactivées ; les fournisseurs continuent d'assigner leurs propres chauffeurs normalement.
+                </p>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <Badge variant="outline" className={`text-xs ${statusBadgeClass(value.visible)}`} data-testid="badge-delivery-company-visibility-status">
+                  {value.visible ? "Visible" : "Masqué"}
+                </Badge>
+                <Switch
+                  checked={value.visible}
+                  onCheckedChange={(checked) => update("visible", checked)}
+                  disabled={saveMutation.isPending}
+                  aria-label="Visibilité des entreprises de livraison"
+                  data-testid="switch-delivery-company-visibility"
+                />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">Masquer ne supprime aucun compte, chauffeur, livraison ou historique existant ; les livraisons déjà confiées à une entreprise de livraison conservent leur statut et leur historique inchangés.</p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Delivery Pricing configuration ───────────────────────────────────────────
 // One centralized section per task requirement ("Do not scatter configuration
 // across unrelated Admin pages") — everything the fee engine in
@@ -3313,11 +3444,14 @@ export default function SystemManagementPage() {
         <LandingConfigSection />
       )}
 
-      {/* ── Delivery (pricing only — the admin financial management modules that used to
-          render here were removed; see task "Simplify Admin Delivery Configuration —
-          Remove Financial Management Modules") ── */}
+      {/* ── Delivery (pricing + Delivery Company visibility — the admin financial management
+          modules that used to render here were removed; see task "Simplify Admin Delivery
+          Configuration — Remove Financial Management Modules") ── */}
       {activeSection === "delivery" && (
-        <DeliveryPricingSection />
+        <div className="space-y-6">
+          <DeliveryCompanyVisibilitySection />
+          <DeliveryPricingSection />
+        </div>
       )}
 
       {/* ── Services (whole-service visibility + Hero Actions per service) ── */}

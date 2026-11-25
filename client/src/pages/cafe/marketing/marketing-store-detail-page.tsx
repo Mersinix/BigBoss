@@ -19,6 +19,7 @@ import { QuoteRequestDialog } from "@/pages/cafe/marketing/marketing-page";
 import { useMarketingStoreNav } from "@/hooks/use-marketing-store-nav";
 import { useCircularItemNav } from "@/hooks/use-circular-item-nav";
 import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
+import { hasConfiguredOpeningHours } from "@/lib/opening-hours";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -242,6 +243,8 @@ export default function MarketingStoreDetailPage() {
     );
   }
 
+  const scheduleConfigured = hasConfiguredOpeningHours(card.weeklyHours ?? null);
+
   return (
     <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
       <div className="relative h-64 sm:h-72 lg:h-80 overflow-hidden bg-gray-900">
@@ -294,14 +297,16 @@ export default function MarketingStoreDetailPage() {
           >
             <Flag className="w-4 h-4 text-white/80" />
           </button>
-          <button
-            className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
-            onClick={() => setInfoOpen(true)}
-            data-testid="button-marketing-store-availability"
-            title="Disponibilité"
-          >
-            <Clock className="w-4 h-4 text-white/80" />
-          </button>
+          {scheduleConfigured && (
+            <button
+              className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
+              onClick={() => setInfoOpen(true)}
+              data-testid="button-marketing-store-availability"
+              title="Disponibilité"
+            >
+              <Clock className="w-4 h-4 text-white/80" />
+            </button>
+          )}
           <button
             className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
             onClick={() => setReviewsModalOpen(true)}
@@ -554,7 +559,7 @@ export default function MarketingStoreDetailPage() {
       </div>
 
       <MarketingAvailabilityModal
-        open={infoOpen}
+        open={infoOpen && scheduleConfigured}
         onClose={() => setInfoOpen(false)}
         providerName={card.name}
         weeklyHours={card.weeklyHours}

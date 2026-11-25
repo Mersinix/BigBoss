@@ -67,14 +67,14 @@ export default function PaymentDetailsModal({
 
         <div className={`flex flex-col max-h-[90vh] overflow-hidden transition-colors duration-200 ${t.modalBg}`}>
           <div className={`shrink-0 border-b px-4 sm:px-6 pt-5 pb-4 flex items-center justify-between ${t.headerBg}`}>
-            <button onClick={onClose} aria-label="Fermer" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${t.iconBtn}`}>
-              <X className="w-4 h-4" />
-            </button>
+            <div className="w-8" />
             <div className="flex items-center gap-2">
               <Wallet className="w-4 h-4 text-amber-500" />
               <span className={`font-mono text-[15px] font-bold tracking-tight ${t.textPrimary}`}>{payoutReference(row.subOrderId)}</span>
             </div>
-            <div className="w-8" />
+            <button onClick={onClose} aria-label="Fermer" className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${t.iconBtn}`}>
+              <X className="w-4 h-4" />
+            </button>
           </div>
 
           {/* Thin scrollbar treatment — matches the existing Admin Order Details modal's own

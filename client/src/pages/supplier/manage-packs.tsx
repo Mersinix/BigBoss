@@ -366,6 +366,10 @@ function PackFormModal({ open, onClose, editing, listings, preSelectedItems = []
     supplierLng: null,
     supplierAvgRating: 0,
     supplierReviewCount: 0,
+    storeId: null,
+    storeName: "Supplier",
+    storeAvgRating: 0,
+    storeReviewCount: 0,
     items: preview.rows.map((row: any, index: number) => ({
       id: index + 1,
       listingId: row.listingId,

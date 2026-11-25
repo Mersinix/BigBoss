@@ -1923,11 +1923,88 @@ export class DeliveryStorage {
    * ("do not invent a production value"). It stays null until a real provider or an
    * Admin-configured speed model supplies a non-invented value.
    */
-  private getRoute(
+  // Vehicle → Google Routes API travelMode (task: "Investigate and correct delivery-distance
+  // accuracy — order #186"). TWO_WHEELER is intentionally NOT used for MOTO: Google only
+  // supports it in a handful of countries and would silently fail here (this app's deliveries
+  // are Tunisia-only today), so every motorized vehicle maps to DRIVE; BICYCLE is the one case
+  // with a real, supported, distinct mode.
+  private routeTravelMode(vehicleType?: DeliveryVehicleType | null): 'DRIVE' | 'BICYCLE' {
+    return vehicleType === 'BICYCLE' ? 'BICYCLE' : 'DRIVE';
+  }
+
+  /**
+   * Real road-routing call (task: "Investigate and correct delivery-distance accuracy — order
+   * #186") — Google's Routes API (`routes.googleapis.com`), the current replacement for the
+   * legacy Directions/Distance Matrix APIs, which investigation confirmed are NOT enabled for
+   * this project's existing `VITE_GOOGLE_MAPS_API_KEY` (REQUEST_DENIED: "legacy API ... not
+   * enabled for your project"); the new Routes API IS enabled for that same key (confirmed live:
+   * a real computeRoutes call for order #186's exact pickup/destination coordinates returned
+   * 2151 m, vs. the 1090 m the haversine fallback had been silently presenting as the delivery
+   * distance). No new credentials/dependency were introduced — this reuses the key the app
+   * already has and already loads client-side for the Maps JS SDK.
+   *
+   * Returns null (never throws) on ANY failure — missing key, network error, timeout, non-OK
+   * HTTP status, or no route found — so callers can fall back to haversine exactly as before.
+   * This preserves the existing "always available" guarantee: a Google outage, quota exhaustion,
+   * or misconfiguration degrades distance accuracy, never delivery creation/assignment itself.
+   */
+  private async fetchRoutingProviderDistance(
+    a: { lat: number; lng: number },
+    b: { lat: number; lng: number },
+    vehicleType?: DeliveryVehicleType | null,
+  ): Promise<{ distanceKm: number; estimatedDurationMinutes: number | null } | null> {
+    const apiKey = process.env.VITE_GOOGLE_MAPS_API_KEY;
+    if (!apiKey) return null;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
+    try {
+      const res = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration',
+        },
+        body: JSON.stringify({
+          origin: { location: { latLng: { latitude: a.lat, longitude: a.lng } } },
+          destination: { location: { latLng: { latitude: b.lat, longitude: b.lng } } },
+          travelMode: this.routeTravelMode(vehicleType),
+          regionCode: 'TN',
+        }),
+      });
+      if (!res.ok) {
+        console.warn(`[DeliveryRouteEngine] Routes API HTTP ${res.status} — falling back to straight-line distance.`);
+        return null;
+      }
+      const data = await res.json() as { routes?: { distanceMeters?: number; duration?: string }[] };
+      const route = data.routes?.[0];
+      if (!route?.distanceMeters) {
+        console.warn('[DeliveryRouteEngine] Routes API returned no usable route — falling back to straight-line distance.');
+        return null;
+      }
+      const durationSeconds = route.duration ? parseInt(route.duration, 10) : NaN;
+      return {
+        distanceKm: route.distanceMeters / 1000,
+        estimatedDurationMinutes: Number.isFinite(durationSeconds) ? Math.round(durationSeconds / 60) : null,
+      };
+    } catch (err: any) {
+      console.warn(`[DeliveryRouteEngine] Routes API request failed (${err?.message ?? err}) — falling back to straight-line distance.`);
+      return null;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async getRoute(
     a: { lat: number; lng: number } | null,
     b: { lat: number; lng: number } | null,
-  ): { distanceKm: number; estimatedDurationMinutes: number | null; source: 'routing_provider' | 'fallback' } {
+    vehicleType?: DeliveryVehicleType | null,
+  ): Promise<{ distanceKm: number; estimatedDurationMinutes: number | null; source: 'routing_provider' | 'fallback' }> {
     if (!a || !b) return { distanceKm: 0, estimatedDurationMinutes: null, source: 'fallback' };
+    const real = await this.fetchRoutingProviderDistance(a, b, vehicleType);
+    if (real) return { ...real, source: 'routing_provider' };
+    // Straight-line fallback — never labelled as a verified road distance (see distanceSource).
     return { distanceKm: this.haversineKm(a, b), estimatedDurationMinutes: null, source: 'fallback' };
   }
 
@@ -2236,8 +2313,13 @@ export class DeliveryStorage {
     // into one combined distanceKm, which silently made the Coffee Owner's delivery share
     // include the cost of the driver travelling to the Supplier — a real bug, now fixed by
     // this separation (see docs/bigboss-delivery-two-leg-distance-model.md).
-    const supplierToCafeRoute = this.getRoute(supplierPos, cafePos);
-    const driverToSupplierRoute = this.getRoute(driverPos, supplierPos);
+    // Both legs are independent routing requests — run in parallel rather than sequentially
+    // awaiting each (no caching/dedup layer introduced; each is a genuinely distinct
+    // origin/destination pair, so there is nothing to deduplicate here).
+    const [supplierToCafeRoute, driverToSupplierRoute] = await Promise.all([
+      this.getRoute(supplierPos, cafePos, vehicleType),
+      this.getRoute(driverPos, supplierPos, vehicleType),
+    ]);
     const distanceKm = supplierToCafeRoute.distanceKm;
     const distanceSource: 'routing_provider' | 'fallback' = supplierToCafeRoute.source;
     const estimatedDurationMinutes = supplierToCafeRoute.estimatedDurationMinutes;

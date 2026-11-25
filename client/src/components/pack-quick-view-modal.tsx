@@ -169,28 +169,25 @@ function PackReviewsModal({
   );
 }
 
-// ── Supplier name + rating ────────────────────────────────────────────────────
+// ── Store name + rating ───────────────────────────────────────────────────────
+// (task: "Pack Detail Modal — Store vs Supplier Identity") — reuses the same
+// storeName/storeAvgRating/storeReviewCount fields the mapped Pack card already
+// exposes (packs.storage.ts buildPackDetails), which come from the Pack's own
+// `pack` object already fetched for this modal (/api/marketplace/packs/:id) —
+// no separate request needed. Previously this fetched /api/reviews/supplier-public,
+// which mixes in PACK-type reviews alongside SUPPLIER-type ones — a different,
+// inflated number from the Store's real SUPPLIER-only rating shown everywhere else.
 
-function SupplierNameWithRating({ supplierId, supplierName, isDark }: { supplierId: number; supplierName: string; isDark: boolean }) {
+function StoreNameWithRating({ storeName, avgRating, reviewCount, isDark }: { storeName: string; avgRating: number; reviewCount: number; isDark: boolean }) {
   const t = useTheme(isDark);
-  const { data: reviews = [] } = useQuery<SupplierProductReview[]>({
-    queryKey: ["/api/reviews/supplier-public", supplierId],
-    queryFn: async () => {
-      const res = await fetch(`/api/reviews/supplier-public/${supplierId}`);
-      if (!res.ok) throw new Error("Failed");
-      return res.json();
-    },
-    enabled: !!supplierId,
-  });
-  const avgRating = reviews.length ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length : 0;
   return (
     <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-      <p className={`text-xl font-extrabold leading-tight min-w-0 ${t.textPrimary} ${t.textMuted}`}>{supplierName}</p>
-      {reviews.length > 0 && (
+      <p className={`text-xl font-extrabold leading-tight min-w-0 ${t.textPrimary} ${t.textMuted}`}>{storeName}</p>
+      {reviewCount > 0 && (
         <div className="flex items-center gap-1">
           <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
           <span className={`text-xs font-medium ${t.textPrimary}`}>{avgRating.toFixed(1)}</span>
-          <span className={`text-[10px] ${t.textMuted}`}>({reviews.length})</span>
+          <span className={`text-[10px] ${t.textMuted}`}>({reviewCount})</span>
         </div>
       )}
     </div>
@@ -883,7 +880,7 @@ export function PackQuickViewModal({ previewPack, previewOpen, onPreviewClose }:
                 )}
 
                 {/* Supplier */}
-                <SupplierNameWithRating supplierId={pack.supplierId} supplierName={pack.supplierName} isDark={isDark} />
+                <StoreNameWithRating storeName={pack.storeName} avgRating={pack.storeAvgRating} reviewCount={pack.storeReviewCount} isDark={isDark} />
 
                 {/* Price / distance / stock / expiry row — expiry and stock
                     now match PackCardTile's exact treatment (amber, same

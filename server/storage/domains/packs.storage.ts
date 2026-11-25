@@ -2,7 +2,7 @@ import { db } from "../../db";
 import { eq, and, inArray, isNull, desc } from "drizzle-orm";
 import {
   packs, packItems, packFavorites, supplierProductListings, supplierProductVariants,
-  products, users, supplierProductReviews,
+  products, users, supplierProductReviews, supplierStores,
   type Pack, type PackDetail, type PackItemDetail,
 } from "@shared/schema";
 import { buildTaxonomyCache } from "../../storage";
@@ -133,6 +133,14 @@ export class PacksStorage {
     const supplierIds = Array.from(new Set(rows.map((p) => p.supplierId)));
     const suppliers = supplierIds.length ? await db.select().from(users).where(inArray(users.id, supplierIds)) : [];
     const supplierMap = new Map(suppliers.map((u) => [u.id, { name: u.name, lat: u.locationLat ?? null, lng: u.locationLng ?? null }]));
+    // Store identity (task: "Coffee Owner Mapped Pack Cards — Store vs Supplier Identity") —
+    // the Shop/Store-page Pack card must show the Pack's actual registered STORE (supplierStores
+    // row), not the Supplier account's own display name, which can differ (e.g. supplier user
+    // "Café Bondin" whose registered store is named "BONDIN Story"). One supplier has at most
+    // one store (supplierStores.supplierId is unique), so this join is still a single batch
+    // query, never N+1 — same pattern as the supplier batch-fetch above.
+    const stores = supplierIds.length ? await db.select().from(supplierStores).where(inArray(supplierStores.supplierId, supplierIds)) : [];
+    const storeMap = new Map(stores.map((s) => [s.supplierId, { id: s.id, name: s.name }]));
     const tx = await buildTaxonomyCache();
     const itemsByPack = new Map<number, typeof allItems>();
     for (const it of validItems) {
@@ -233,6 +241,13 @@ export class PacksStorage {
       const packAvgRating = packReviewCount ? packRevs.reduce((s, r) => s + r.rating, 0) / packReviewCount : 0;
       const supplierInfo = supplierMap.get(pack.supplierId);
       const supRating = supplierRatingMap.get(pack.supplierId);
+      // Store identity/rating — the registered supplierStores row for this Pack's supplier
+      // (one store per supplier, enforced by a unique constraint), falling back to the
+      // supplier's own name only in the defensive case a supplier has no store record at all.
+      // The rating/review-count values are the SAME aggregate getStoreDetail already uses
+      // (reviewType='SUPPLIER', keyed by this supplierId) — not recomputed differently, just
+      // exposed under the Store's own identity instead of the Supplier account's display name.
+      const storeInfo = storeMap.get(pack.supplierId);
       result.push({
         ...pack,
         supplierName: supplierInfo?.name ?? "",
@@ -240,6 +255,10 @@ export class PacksStorage {
         supplierLng: supplierInfo?.lng ?? null,
         supplierAvgRating: supRating ? supRating.sum / supRating.count : 0,
         supplierReviewCount: supRating?.count ?? 0,
+        storeId: storeInfo?.id ?? null,
+        storeName: storeInfo?.name ?? supplierInfo?.name ?? "",
+        storeAvgRating: supRating ? supRating.sum / supRating.count : 0,
+        storeReviewCount: supRating?.count ?? 0,
         items: itemDetails,
         categoryIds: Array.from(categoryIds),
         subCategoryIds: Array.from(subCategoryIds),

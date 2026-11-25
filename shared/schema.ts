@@ -4221,6 +4221,16 @@ export type PackDetail = Pack & {
   supplierLng: string | null;
   supplierAvgRating: number;   // supplier-level rating (same source as StoreDetail.avgRating)
   supplierReviewCount: number;
+  // The Pack's registered Store identity (task: "Coffee Owner Mapped Pack Cards — Store vs
+  // Supplier Identity") — distinct from supplierName above, which is the Supplier account's
+  // own display name and can differ from its registered store's name. storeAvgRating/
+  // storeReviewCount are numerically the same aggregate as supplierAvgRating/
+  // supplierReviewCount (one store per supplier), exposed under the Store's own identity for
+  // the mapped Pack card to use instead of the Supplier account name.
+  storeId: number | null;
+  storeName: string;
+  storeAvgRating: number;
+  storeReviewCount: number;
   items: PackItemDetail[];
   categoryIds: number[];
   subCategoryIds: number[];
@@ -4270,6 +4280,13 @@ export type StoreCard = {
   videoUrl: string | null;
   musicUrl: string | null;
   openingHours: OpeningHoursMap | null;
+  // Store-wide rating (task: "Coffee Owner Product Detail Modal — Store vs Supplier
+  // Identity") — same SUPPLIER-type review aggregate getStoreDetail/the mapped Pack
+  // card already use, keyed by this store's supplierId. Included on every StoreCard
+  // (not just StoreDetail) so any consumer of the existing /api/stores list — e.g. the
+  // Coffee Owner's product detail modal — already has it without a separate request.
+  avgRating: number;
+  reviewCount: number;
 };
 
 export type StoreAdminRow = StoreCard & {
@@ -4282,8 +4299,6 @@ export type StoreAdminRow = StoreCard & {
 
 export type StoreDetail = StoreCard & {
   products: ProductWithTaxonomy[];
-  avgRating: number;
-  reviewCount: number;
 };
 
 export type ShopFavoriteItem = {

@@ -33,6 +33,7 @@ import { MarketingPortfolioAlbumModal } from "@/components/marketing/marketing-p
 import { ReviewModal } from "@/components/review-modal";
 import { BaristaJobTargetButton } from "@/components/barista/barista-job-target-button";
 import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
+import { hasConfiguredOpeningHours } from "@/lib/opening-hours";
 import type { OpeningHoursMap } from "@shared/schema";
 
 const LEVEL_LABELS: Record<string, string> = { BEGINNER: "Débutant", ADVANCED: "Avancé", EXPERT: "Expert" };
@@ -141,6 +142,7 @@ export function BaristaDetailModal({
   };
   const { data, isLoading } = useBaristaProfileDetail(baristaUserId);
   const card = data?.card;
+  const scheduleConfigured = hasConfiguredOpeningHours(card?.weeklyHours ?? null);
   // Cover is the detail modal's primary hero image; Photo de profil then Flash
   // are tried in order if it's missing or fails to load (analyse.md image-mapping task).
   const coverImage = useFallbackImage([card?.coverImageUrl, card?.profileImageUrl, card?.flashImageUrl], baristaUserId);
@@ -294,7 +296,9 @@ export function BaristaDetailModal({
                   here anymore. */}
               <div className="absolute bottom-3 right-3 flex gap-2">
                 <button onClick={() => { if (!readOnly) setReportModalOpen(true); }} title="Signaler" data-testid="button-open-barista-report" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Flag className="w-4 h-4 text-white" /></button>
-                <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-barista-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
+                {scheduleConfigured && (
+                  <button onClick={() => setAvailabilityModalOpen(true)} title="Disponibilité" data-testid="button-open-barista-availability" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Clock className="w-4 h-4 text-white" /></button>
+                )}
                 <button onClick={() => setReviewsModalOpen(true)} title="Avis" data-testid="button-open-barista-reviews" className="w-9 h-9 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center hover:scale-105 transition-transform"><Star className="w-4 h-4 text-white" /></button>
                 {!readOnly && (
                   <BaristaJobTargetButton
@@ -475,7 +479,7 @@ export function BaristaDetailModal({
     {/* Disponibilité — weekly schedule, Shop Opening Hours visual reference,
         real saved Barista data only. */}
     <BaristaAvailabilityModal
-      open={availabilityModalOpen}
+      open={availabilityModalOpen && scheduleConfigured}
       onClose={() => setAvailabilityModalOpen(false)}
       baristaName={card?.name ?? ""}
       weeklyHours={card?.weeklyHours ?? null}

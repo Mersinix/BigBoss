@@ -681,15 +681,18 @@ export function PackCardTile({
           )}
         </div>
         
-         {/* Row 3b: Supplier name (left) + supplier rating (right) */}
-        {pack.supplierName && (
+         {/* Row 3b: Store name (left) + Store rating (right) — the Pack's registered Store
+             identity (task: "Coffee Owner Mapped Pack Cards — Store vs Supplier Identity"),
+             not the Supplier account's own display name, which can differ. */}
+        {pack.storeName && (
           <div className="flex items-center gap-1 mt-1 min-w-0">
-            
-            <span className={`text-[10px] truncate flex-1 font-bold text-sm leading-tight line-clamp-1 transition-colors ${t.textMuted} ${t.dk ? "text-white" : "text-gray-900"}`}>{pack.supplierName}</span>
-            {pack.supplierReviewCount > 0 && (
+
+            <span className={`text-[10px] truncate flex-1 font-bold text-sm leading-tight line-clamp-1 transition-colors ${t.textMuted} ${t.dk ? "text-white" : "text-gray-900"}`}>{pack.storeName}</span>
+            {pack.storeReviewCount > 0 && (
               <span className="flex items-center gap-0.5 shrink-0">
                 <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
-                <span className={`text-[10px] font-medium ${t.textPrimary}`}>{pack.supplierAvgRating.toFixed(1)}</span>
+                <span className={`text-[10px] font-medium ${t.textPrimary}`}>{pack.storeAvgRating.toFixed(1)}</span>
+                <span className={`text-[10px] ${t.textMuted}`}>({pack.storeReviewCount})</span>
               </span>
             )}
           </div>

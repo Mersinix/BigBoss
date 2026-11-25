@@ -244,11 +244,24 @@ export class SupplierStorage {
   private async buildStoreCards(stores: SupplierStore[]): Promise<StoreCard[]> {
     if (!stores.length) return [];
     const supplierIds = stores.map((s) => s.supplierId);
-    const [allUsers, allListings, allProducts] = await Promise.all([
+    const [allUsers, allListings, allProducts, storeReviews] = await Promise.all([
       db.select().from(users).where(inArray(users.id, supplierIds)),
       db.select().from(supplierProductListings).where(inArray(supplierProductListings.supplierId, supplierIds)),
       db.select().from(products),
+      // Store-wide rating (task: "Coffee Owner Product Detail Modal — Store vs Supplier
+      // Identity") — same SUPPLIER-type aggregate getStoreDetail already computed on its
+      // own; batched here once for every store in this list instead, so getStoreDetail
+      // (below) can just read it off the card rather than re-querying.
+      db.select().from(supplierProductReviews)
+        .where(and(inArray(supplierProductReviews.supplierId, supplierIds), eq(supplierProductReviews.reviewType, 'SUPPLIER'))),
     ]);
+    const storeRatingMap = new Map<number, { sum: number; count: number }>();
+    for (const r of storeReviews) {
+      const sid = r.supplierId!;
+      if (!storeRatingMap.has(sid)) storeRatingMap.set(sid, { sum: 0, count: 0 });
+      storeRatingMap.get(sid)!.sum += r.rating;
+      storeRatingMap.get(sid)!.count += 1;
+    }
     // Real offer eligibility (task: "Fix Invalid Supplier Product Mappings
     // and Empty Products") — derived from persisted variants via
     // computeListingOffer, never from l.price/l.stock directly (see that
@@ -271,6 +284,7 @@ export class SupplierStorage {
     }
     return stores.map((store) => {
       const supplier = userMap.get(store.supplierId);
+      const rating = storeRatingMap.get(store.supplierId);
        const listings = (listingsBySupplier.get(store.supplierId) ?? []).filter(
          (l) => l.visibility === 'VISIBLE' && l.isIndividuallyVisible && !l.onlyForPack
            && computeListingOffer(variantsByListing.get(l.id) ?? []).eligible,
@@ -307,6 +321,8 @@ export class SupplierStorage {
         videoUrl: (store as any).videoUrl ?? null,
         musicUrl: (store as any).musicUrl ?? null,
         openingHours: (store as any).openingHours ?? null,
+        avgRating: rating ? rating.sum / rating.count : 0,
+        reviewCount: rating?.count ?? 0,
       };
     });
   }
@@ -371,13 +387,10 @@ export class SupplierStorage {
     const [store] = await db.select().from(supplierStores).where(eq(supplierStores.id, id));
     if (!store) return undefined;
     if (opts?.requireVisible && (store.approvalStatus !== 'APPROVED' || store.visibility !== 'VISIBLE')) return undefined;
+    // avgRating/reviewCount now come straight off the card (buildStoreCards already
+    // computes them from the same SUPPLIER-type review aggregate) — no second query.
     const [card] = await this.buildStoreCards([store]);
-    const [listings, reviewRows] = await Promise.all([
-      db.select().from(supplierProductListings).where(eq(supplierProductListings.supplierId, store.supplierId)),
-      db.select().from(supplierProductReviews).where(
-        and(eq(supplierProductReviews.supplierId, store.supplierId), eq(supplierProductReviews.reviewType as any, 'SUPPLIER'))
-      ),
-    ]);
+    const listings = await db.select().from(supplierProductListings).where(eq(supplierProductListings.supplierId, store.supplierId));
     // Real offer eligibility derived from persisted variants, not from
     // l.price/l.stock (see computeListingOffer) — task: "Fix Invalid
     // Supplier Product Mappings and Empty Products".
@@ -396,9 +409,7 @@ export class SupplierStorage {
       // never checked by pack retrieval, so this store's packs are unaffected.
       (l) => l.visibility === 'VISIBLE' && l.isIndividuallyVisible && !l.onlyForPack && offerByListing.get(l.id)!.eligible,
     );
-    const reviewCount = reviewRows.length;
-    const avgRating = reviewCount ? reviewRows.reduce((s, r) => s + r.rating, 0) / reviewCount : 0;
-    if (!activeListings.length) return { ...card, products: [], avgRating, reviewCount };
+    if (!activeListings.length) return { ...card, products: [] };
     const productIds = activeListings.map((l) => l.productId);
     const listingIds = activeListings.map((l) => l.id);
     const [prods, productReviewRows, promoListings] = await Promise.all([
@@ -435,7 +446,7 @@ export class SupplierStorage {
         reviewCount: stats?.count ?? 0,
       } as unknown as ProductWithTaxonomy;
     });
-    return { ...card, products: enriched, avgRating, reviewCount };
+    return { ...card, products: enriched };
   }
 
   // ── Supplier mappings ───────────────────────────────────────────────────────

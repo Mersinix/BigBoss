@@ -15,6 +15,7 @@ import { printCategoryIcon, printSubCategoryIcon } from "@/lib/print-category-ic
 import { PrintCompanyAvailabilityModal } from "@/components/print/print-company-detail-modal";
 import { PrintServiceDetailModal } from "@/components/print/print-service-detail-modal";
 import { ReviewModal } from "@/components/review-modal";
+import { hasConfiguredOpeningHours } from "@/lib/opening-hours";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -249,6 +250,8 @@ export default function PrintStoreDetailPage() {
     );
   }
 
+  const scheduleConfigured = hasConfiguredOpeningHours(card.weeklyHours ?? null);
+
   return (
     <div className={`min-h-screen transition-colors duration-300 ${t.pageBg}`}>
       <div className="relative h-64 sm:h-72 lg:h-80 overflow-hidden bg-gray-900">
@@ -300,14 +303,16 @@ export default function PrintStoreDetailPage() {
           >
             <Flag className="w-4 h-4 text-white/80" />
           </button>
-          <button
-            className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
-            onClick={() => setInfoOpen(true)}
-            data-testid="button-print-store-availability"
-            title="Disponibilité"
-          >
-            <Clock className="w-4 h-4 text-white/80" />
-          </button>
+          {scheduleConfigured && (
+            <button
+              className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
+              onClick={() => setInfoOpen(true)}
+              data-testid="button-print-store-availability"
+              title="Disponibilité"
+            >
+              <Clock className="w-4 h-4 text-white/80" />
+            </button>
+          )}
           <button
             className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
             onClick={() => setReviewsModalOpen(true)}
@@ -557,7 +562,7 @@ export default function PrintStoreDetailPage() {
       </div>
 
       <PrintCompanyAvailabilityModal
-        open={infoOpen}
+        open={infoOpen && scheduleConfigured}
         onClose={() => setInfoOpen(false)}
         companyName={card.name}
         weeklyHours={card.weeklyHours}

@@ -367,7 +367,7 @@ function PrinterAccountDetail({ account, onClose, onRefresh, onOpenService }: {
             <div className="flex gap-2"><Layers className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Services</p><p>{account.activeServiceCount} actif(s) / {account.totalServiceCount} au total</p></div></div>
             <div className="flex gap-2"><Package className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Commandes</p><p>{account.totalOrders}</p></div></div>
             <div className="flex gap-2"><Wallet className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Revenu (commandes livrées)</p><p>{fmt(account.revenueCents)}</p></div></div>
-            <div className="flex gap-2"><Star className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Évaluation</p><p>{account.reviewCount > 0 ? `${(account.rating / 10).toFixed(1)} (${account.reviewCount} avis)` : "Aucun avis"}</p></div></div>
+            <div className="flex gap-2"><Star className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" /><div><p className="text-xs text-muted-foreground">Évaluation</p><p>{account.reviewCount > 0 ? `${(account.rating / 10).toFixed(1)} (${account.reviewCount} )` : "Aucun avis"}</p></div></div>
             {account.description && <div className="sm:col-span-2"><p className="text-xs text-muted-foreground">Description</p><p className="whitespace-pre-wrap">{account.description}</p></div>}
           </>}
 

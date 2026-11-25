@@ -35,6 +35,7 @@ import { useCircularItemNav } from "@/hooks/use-circular-item-nav";
 import { ItemNavButtons } from "@/components/shared/item-nav-buttons";
 import { FlashMode } from "@/components/flash-mode";
 import { PackCardTile } from "@/pages/cafe/browse-products";
+import { hasConfiguredOpeningHours } from "@/lib/opening-hours";
 import type { StoreDetail, ProductWithTaxonomy, OpeningHoursMap, PackDetail, CategoryWithCount, ListingPromotion, SubCategoryWithDetails, BrandWithCount, FlavorWithCount, SizeWithCount, SupplierProductReview } from "@shared/schema";
 
 // ── Supplier Reviews modal — renders the shared Avis modal
@@ -156,6 +157,11 @@ const DAYS: { key: keyof OpeningHoursMap; label: string }[] = [
   { key: "saturday",  label: "Saturday" },
   { key: "sunday",    label: "Sunday" },
 ];
+
+// Disponibilité icon visibility — see hasConfiguredOpeningHours's own doc
+// (client/src/lib/opening-hours.ts), shared with every other module that uses this
+// same OpeningHoursMap shape (task: "Extend Disponibilité Icon Visibility Rule to
+// Other Modules").
 
 // ── Slideshow cover ───────────────────────────────────────────────────────────
 
@@ -289,7 +295,9 @@ function StorePacksSection({ filteredPacks: filtered, hasCommercialAccess, isDar
         )}
       </div>
       {expanded ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        // 4 cards per row at desktop — matches the Shop page's own Pack grid
+        // (browse-products.tsx) rather than this page's 5-column Product grid.
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-4 gap-3">
           {filtered.map((pack) => (
             <PackCardTile key={pack.id} pack={pack} hasCommercialAccess={hasCommercialAccess} isDark={isDark} navIds={navIds} />
           ))}
@@ -862,6 +870,7 @@ export default function StoreDetailPage() {
   const videoUrl: string | null = storeAny?.videoUrl ?? null;
   const musicUrl: string | null = storeAny?.musicUrl ?? null;
   const openingHours: OpeningHoursMap | null = storeAny?.openingHours ?? null;
+  const scheduleConfigured = hasConfiguredOpeningHours(openingHours);
   const avgRating: number = storeAny?.avgRating ?? 0;
   const reviewCount: number = storeAny?.reviewCount ?? 0;
 
@@ -958,14 +967,16 @@ export default function StoreDetailPage() {
               <span className="text-[10px] text-white/70">({reviewCount})</span>
             </div>
           )}
-          <button
-            className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
-            onClick={() => setInfoOpen(true)}
-            data-testid="button-store-info"
-            title="Store information & opening hours"
-          >
-            <Info className="w-4 h-4 text-white/80" />
-          </button>
+          {scheduleConfigured && (
+            <button
+              className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
+              onClick={() => setInfoOpen(true)}
+              data-testid="button-store-info"
+              title="Store information & opening hours"
+            >
+              <Info className="w-4 h-4 text-white/80" />
+            </button>
+          )}
           <button
             className="w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:scale-105 transition-transform"
             onClick={() => setSupplierReviewsOpen(true)}
@@ -1276,7 +1287,7 @@ export default function StoreDetailPage() {
 
       {/* ── Info modal ─────────────────────────────────────────────────────── */}
       <InfoModal
-        open={infoOpen}
+        open={infoOpen && scheduleConfigured}
         onClose={() => setInfoOpen(false)}
         openingHours={openingHours}
         storeName={store.name}

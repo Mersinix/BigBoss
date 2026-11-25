@@ -20,6 +20,7 @@ import { DeliveryProgress } from "@/components/order/delivery-progress";
 import { OrderProgress } from "@/components/order/order-progress";
 import { groupOrderItemsByProduct } from "@/lib/order-item-grouping";
 import SupplierCancelItemsModal from "@/components/supplier/supplier-cancel-items-modal";
+import { useThemeStore } from "@/store/theme-store";
 
 // ── Status meta ───────────────────────────────────────────────────────────────
 
@@ -112,7 +113,14 @@ type Props = {
 const GRANULAR_CANCEL_STATUSES = new Set(["PENDING", "CONFIRMED", "PREPARING"]);
 
 export default function SupplierOrderDetailsModal({ open, onClose, order, supplierId, readOnly = false }: Props) {
-  const [isDark, setIsDark] = useState(true);
+  // Shared app-wide theme (task: "Fix the modal theme synchronization") — previously a
+  // local `useState(true)`, always defaulting to Dark regardless of the Supplier navbar's
+  // actual theme and never reflecting a toggle made elsewhere. useThemeStore is the same
+  // store DashboardLayout (Admin + Supplier navbar) already reads/writes, so this modal now
+  // always opens in whatever theme is currently selected, and toggling here updates the
+  // navbar immediately too.
+  const isDark = useThemeStore((s) => s.isDark);
+  const toggleDark = useThemeStore((s) => s.toggle);
   const t = useTheme(isDark);
   const { toast } = useToast();
   const fmt = useFormatCurrency();
@@ -225,18 +233,18 @@ export default function SupplierOrderDetailsModal({ open, onClose, order, suppli
           {/* ── Header ── */}
           <div className={`shrink-0 border-b px-6 pt-5 pb-4 ${t.headerBg}`}>
             <div className="flex items-center justify-between mb-3">
-              <button onClick={onClose} aria-label="Fermer"
+              <button onClick={toggleDark} aria-label="Changer le thème"
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${t.iconBtn}`}>
-                <X className="w-4 h-4" />
+                {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
               </button>
 
               <span className={`font-mono text-[15px] font-bold tracking-tight ${t.textPrimary}`}>
                 Commande #{String(order.id).padStart(6, "0")}
               </span>
 
-              <button onClick={() => setIsDark(d => !d)} aria-label="Changer le thème"
+              <button onClick={onClose} aria-label="Fermer"
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${t.iconBtn}`}>
-                {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-gray-500" />}
+                <X className="w-4 h-4" />
               </button>
             </div>
 

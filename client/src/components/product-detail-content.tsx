@@ -320,7 +320,7 @@ function VariantRow({
 
 function SupplierSection({
   listing, product, visibleVariants, reviewStats, distanceKm, promotions = [], isDark = false, isModal = false,
-  storeId = null, onStoreClick, onOpenPromotion,
+  storeId = null, store = null, useStoreIdentity = false, onStoreClick, onOpenPromotion,
 }: {
   listing: MarketplaceListing;
   product: MarketplaceProduct;
@@ -337,9 +337,21 @@ function SupplierSection({
   // eligible store exists, in which case no button renders at all.
   isModal?: boolean;
   storeId?: number | null;
+  // Store identity (task: "Coffee Owner Product Detail Modal — Store vs Supplier
+  // Identity") — the resolved StoreCard for this listing's supplier (already looked up
+  // by the caller via the existing storesBySupplier map, no new request here). Only
+  // used for display when useStoreIdentity is true — passed as the quick-view modal's
+  // own top-level isModal (true for BOTH the Shop and Store-page entry points), kept
+  // deliberately separate from the `isModal` prop above (which the Boutique button
+  // narrows with `&& !isStoreContext`), so the standalone product-detail-page.tsx and
+  // the Boutique button's own visibility rule are both completely unaffected.
+  store?: StoreCard | null;
+  useStoreIdentity?: boolean;
   onStoreClick?: (storeId: number) => void;
   onOpenPromotion: (target: PromotionBadgeTarget) => void;
 }) {
+  const displayName = useStoreIdentity && store ? store.name : listing.supplierName;
+  const displayStats = useStoreIdentity && store ? { avgRating: store.avgRating, total: store.reviewCount } : reviewStats;
   const cardBorder = isDark ? "bg-gray-800 border-gray-700/60" : "border-border/50";
   const headerBg   = isDark ? "bg-gray-800/50"   : "bg-secondary/30";
   const bodyBg     = isDark ? "bg-gray-800"       : "";
@@ -368,7 +380,7 @@ function SupplierSection({
               pinned to the right of the same row, both vertically centered. */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-              <p className={`${nameCls} truncate`}>{listing.supplierName}</p>
+              <p className={`${nameCls} truncate`}>{displayName}</p>
               {supplierBadgePromos.map((promo, i) => (
                 <button
                   type="button"
@@ -399,10 +411,10 @@ function SupplierSection({
                 <MapPin className="w-3 h-3 shrink-0" />{distanceKm < 1 ? `${Math.round(distanceKm * 1000)} m` : `${distanceKm.toFixed(1)} km`}
               </span>
             )}
-            {reviewStats && reviewStats.total > 0 && (
+            {displayStats && displayStats.total > 0 && (
               <div className="flex items-center gap-1">
-                <Stars rating={reviewStats.avgRating} size="xs" />
-                <span className={`text-xs ${subCls}`}>({reviewStats.total})</span>
+                <Stars rating={displayStats.avgRating} size="xs" />
+                <span className={`text-xs ${subCls}`}>({displayStats.total})</span>
               </div>
             )}
           </div>
@@ -1404,6 +1416,8 @@ export function ProductDetailContent({
                 isDark={isModal && isDark}
                 isModal={isModal}
                 storeId={storesBySupplier.get(listing.supplierId)?.id ?? null}
+                store={storesBySupplier.get(listing.supplierId) ?? null}
+                useStoreIdentity={isModal}
                 onStoreClick={handleStoreClick}
                 onOpenPromotion={setPromoTarget}
               />
@@ -1430,6 +1444,8 @@ export function ProductDetailContent({
               isDark={isModal && isDark}
               isModal={isModal}
               storeId={storesBySupplier.get(s.supplierId)?.id ?? null}
+              store={storesBySupplier.get(s.supplierId) ?? null}
+              useStoreIdentity={isModal}
               onStoreClick={handleStoreClick}
               onOpenPromotion={setPromoTarget}
             />
@@ -1606,6 +1622,8 @@ export function ProductDetailContent({
                           isDark={isModal && isDark}
                           isModal={isModal && !isStoreContext}
                           storeId={storesBySupplier.get(listing.supplierId)?.id ?? null}
+                          store={storesBySupplier.get(listing.supplierId) ?? null}
+                          useStoreIdentity={isModal}
                           onStoreClick={handleStoreClick}
                           onOpenPromotion={setPromoTarget}
                         />
@@ -1632,6 +1650,8 @@ export function ProductDetailContent({
                         isDark={isModal && isDark}
                         isModal={isModal && !isStoreContext}
                         storeId={storesBySupplier.get(s.supplierId)?.id ?? null}
+                        store={storesBySupplier.get(s.supplierId) ?? null}
+                        useStoreIdentity={isModal}
                         onStoreClick={handleStoreClick}
                         onOpenPromotion={setPromoTarget}
                       />

@@ -201,6 +201,12 @@ export function registerPlatformSettingsRoutes(app: Express): void {
 
     app.patch("/api/admin/supplier-tab-settings", requireAdmin, async (req, res) => {
       try {
+        // Not .strict() (task: "Fix Supplier Products Tab Visibility Settings — Replit
+        // Only") — a request carrying a field this schema doesn't yet recognize (e.g. a
+        // momentary client/server version skew during a deploy) is silently ignored by
+        // zod's default behavior instead of rejecting the entire request with a 400. Every
+        // declared field below is still validated exactly as before; this only changes
+        // what happens to an UNRECOGNIZED key.
         const body = z.object({
           returnsTabVisible: z.boolean().optional(),
           cafesTabVisible: z.boolean().optional(),
@@ -220,7 +226,7 @@ export function registerPlatformSettingsRoutes(app: Express): void {
           packVisible: z.boolean().optional(),
           paymentsTabVisible: z.boolean().optional(),
           invoicesTabVisible: z.boolean().optional(),
-        }).strict().parse(req.body);
+        }).parse(req.body);
         const settings = await storage.updateSupplierTabSettings(body);
         broadcast("supplier_tab_settings_updated", settings);
         res.json(settings);

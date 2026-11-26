@@ -18799,3 +18799,139 @@ corriger après coup comme pour Maintenance aux tâches 52-53).
   Vérifié uniquement par lecture de code (réutilisation stricte des
   composants déjà fonctionnels) et par l'exercice direct de la base de
   données ci-dessus.
+
+## 58. Admin → Supplier → Visibilité de l'onglet Produits — erreur 400 "Invalid supplier tab settings" signalée sur Replit uniquement
+
+### Symptôme rapporté
+
+En environnement local, activer/désactiver **Onglet Produits** (Admin →
+Gestion du système → Supplier → Visibilité des onglets) fonctionne
+normalement. Sur le déploiement Replit, la même action renvoie
+`400 Bad Request — Invalid supplier tab settings`.
+
+### Investigation menée (lecture complète de la chaîne)
+
+- **Frontend** — `ProductsTabVisibilitySection`
+  (`client/src/pages/admin/system-management-page.tsx`) : chaque
+  switch (Onglet Produits / Nouveau produit / Pack) appelle la même
+  fonction générique `update(field, next)`, qui envoie **une seule clé
+  à la fois** via `apiRequest("PATCH", "/api/admin/supplier-tab-settings",
+  { [field]: next })` — jamais un objet composite, jamais un champ
+  dérivé (`performanceTabVisible`/`communicationTabVisible` ne sont
+  liés à aucun switch de cette section, confirmé par recherche
+  textuelle : aucun appel `update("performanceTabVisible", …)` nulle
+  part dans le fichier).
+- **Route backend** —
+  `PATCH /api/admin/supplier-tab-settings`
+  (`server/routes/platform-settings.routes.ts`) : schéma zod
+  `.strict()` qui déclare explicitement `productsTabVisible`,
+  `newProductVisible` et `packVisible` (tous `z.boolean().optional()`),
+  au même niveau que tous les autres onglets déjà existants. Le
+  message d'erreur `"Invalid supplier tab settings"` est renvoyé
+  exclusivement dans la branche `err instanceof z.ZodError` — c'est
+  donc bien une invalidation du **corps de la requête**, pas une
+  erreur de base de données (qui remonterait en 500 via la branche
+  générique).
+- **Storage** — `SupplierTabSettingsShape`
+  (`server/storage/domains/platform-settings.storage.ts`) et
+  `getSupplierTabSettings`/`updateSupplierTabSettings` : les trois
+  champs sont présents, lus et persistés de façon cohérente ; aucune
+  divergence de nom (camelCase ↔ colonne snake_case) avec le schéma
+  Drizzle.
+- **Schéma / migrations** —
+  `supplierTabSettings` (`shared/schema.ts`) : `productsTabVisible`,
+  `newProductVisible`, `packVisible` sont bien des colonnes
+  `boolean(...).notNull().default(true)`, au même format que toutes
+  les colonnes voisines déjà en production. Aucune migration
+  destructrice n'est nécessaire — les colonnes existent déjà dans le
+  schéma versionné.
+- **Vérification réelle effectuée (pas seulement une lecture)** :
+  exécution directe, dans ce dépôt local, du pipeline exact
+  `zod.strict().parse(...)` → `storage.updateSupplierTabSettings(...)`
+  pour chacun des six payloads à une seule clé que l'UI envoie
+  réellement (`{productsTabVisible:true}`, `{productsTabVisible:false}`,
+  `{newProductVisible:true}`, `{newProductVisible:false}`,
+  `{packVisible:true}`, `{packVisible:false}`) : **les six réussissent**,
+  la valeur persiste correctement à chaque étape, et l'état initial a
+  été restauré exactement à l'identique en fin de script (script
+  temporaire supprimé après usage). Un second test par vrai serveur
+  HTTP (port 5071, process jetable, arrêté et libéré en fin de test)
+  confirme que le serveur démarre et répond `200` sur
+  `GET /api/supplier-tab-settings` avec le code actuel.
+
+### Root cause
+
+Le code source actuel (frontend, route, storage, schéma) est
+**intégralement cohérent** : il n'existe aucune divergence de nom de
+champ, de forme de payload, ni de règle de validation entre ce que le
+frontend envoie et ce que `.strict()` accepte — confirmé empiriquement
+ci-dessus, pas seulement par lecture. Il n'est pas possible, depuis cet
+environnement (pas d'accès à l'instance Replit réelle), d'exécuter une
+requête contre le déploiement Replit lui-même pour observer directement
+son état.
+
+Le profil exact du symptôme (une erreur 400 de **validation de forme de
+requête**, spécifique à un seul environnement, qui disparaît en local)
+correspond à une classe de bug précise : un **décalage de version entre
+ce qui tourne réellement sur Replit et le code source actuel** — par
+exemple un processus Node encore démarré à partir d'un ancien commit (ou
+d'un ancien build compilé) antérieur à l'ajout de
+`productsTabVisible`/`newProductVisible`/`packVisible` dans ce schéma
+zod (ajout documenté dans ce même fichier, tâche "Fix Supplier Produits
+Tab Visibility Logic"), pendant qu'un bundle frontend plus récent (servi
+par le navigateur, potentiellement mis en cache différemment) envoie
+une requête dans la forme actuelle. Ce n'est pas un bug de logique
+métier : c'est la raison pour laquelle aucune anomalie n'est
+reproductible dans le code lui-même.
+
+### Correction appliquée — durcissement défensif, pas de contournement spécifique à un environnement
+
+Le point de fragilité réel, indépendamment de la cause exacte du
+décalage sur Replit, est le mot-clé `.strict()` : il transforme
+**toute** clé non reconnue dans le corps de la requête en échec total
+de la requête (400), plutôt que de simplement l'ignorer. C'est ce
+comportement précis qui transforme un décalage mineur de version
+(même temporaire, même lié à un redéploiement partiel) en une panne
+visible pour l'administrateur. Suppression du `.strict()` sur ce seul
+schéma : zod revient à son comportement par défaut, qui **ignore
+silencieusement** une clé imprévue au lieu de rejeter toute la requête
+— chaque champ explicitement déclaré continue d'être validé
+exactement comme avant (toujours `boolean().optional()`, aucune
+tolérance de type modifiée). Cette correction est strictement la même
+dans tous les environnements (aucune condition `NODE_ENV`/Replit
+ajoutée) et ne modifie ni Google Maps, ni Vite, ni les composants
+React Switch, ni aucune autre route.
+
+### Logique métier vérifiée (inchangée)
+
+- **Onglet Produits désactivé** → masque Nouveau produit et Pack quel
+  que soit leur propre réglage (`ProductsTabVisibilitySection`'s
+  `effectivelyVisible = !!value && value.productsTabVisible`, logique
+  déjà en place, non modifiée).
+- **Onglet Produits activé** → chaque réglage individuel reprend son
+  propre état sauvegardé.
+- **Produits du catalogue / Mes produits** : jamais gatés par ces
+  réglages (confirmé dans le commentaire du schéma et dans
+  `manage-products.tsx` — tabs "admin-products"/"my-products" non
+  concernés).
+- **Aucune suppression/modification de produits ou packs existants** :
+  cette fonctionnalité ne touche qu'une table de configuration
+  (`supplier_tab_settings`), jamais `packs`/`products`/
+  `supplierProductListings`.
+
+### Tests réellement effectués
+
+- Exécution directe du pipeline zod + storage pour les 6 payloads réels
+  (voir ci-dessus) : tous réussissent après correction (suppression de
+  `.strict()`), comme avant (le comportement nominal ne change pas,
+  seule la tolérance aux clés imprévues change).
+- `npx tsc --noEmit` : 0 erreur.
+- `npm run build` (client + serveur) : succès.
+- **Non vérifiable cette session** : aucun accès à l'environnement
+  Replit réel (pas de connexion internet/Replit depuis ce sandbox),
+  donc impossible de reproduire le 400 d'origine ni de confirmer que
+  cette correction le résout concrètement là-bas. Recommandation
+  explicite à l'utilisateur : redéployer/redémarrer le service Replit
+  après cette correction pour éliminer tout décalage de build résiduel,
+  puis réessayer le scénario 1→10 de la section Validation de la
+  demande.

@@ -19088,3 +19088,133 @@ ait jamais deux chiffres contradictoires dans l'interface.
   correctement depuis les données réelles.
 
 ### Implémentation — suite dans les sections suivantes de ce même document, au fil de l'avancement (Phases 2 à 7).
+
+## 60. Audit — Admin Products : intelligence fournisseurs et informations produit en temps réel
+
+### Objectif de la tâche
+
+Enrichir la page `/admin/products` d'un nouveau modal "Informations du
+produit", ouvert via une icône info ajoutée au modal existant
+"Modifier le produit", affichant pour un produit donné : tous les
+fournisseurs qui le proposent, leurs boutiques, prix, stock, ventes
+par fournisseur, la meilleure offre, et le détail actif/inactif/
+rupture — sans toucher au formulaire d'édition, à la création, à la
+suppression ni à l'activation/désactivation existants.
+
+### Architecture existante pertinente
+
+- **Modal d'édition existant** — `ProductFormModal` (fonction locale
+  de `client/src/pages/admin/products-page.tsx`), prop `editing:
+  ProductWithTaxonomy | null`, un unique point d'appel dans ce même
+  fichier (confirmé par recherche globale — pas de réutilisation côté
+  Fournisseur, donc aucun risque de fuite de cette icône vers un
+  contexte non-Admin).
+- **Relations réelles confirmées par lecture du schéma** (mêmes
+  tables que l'audit de la tâche précédente, section 59, plus les
+  tables de commandes) :
+  - `products` (catalogue global) ↔ `supplierProductListings`
+    (`productId`) ↔ `supplierProductVariants` (`listingId`, prix/stock
+    réels par variante) — exactement la même chaîne que pour la
+    tâche Catégories, cette fois filtrée sur un seul `productId` au
+    lieu d'un filtre de taxonomie.
+  - **Attribution des ventes** : `orderItems.productId` → `orderItems
+    .subOrderId` → `subOrders.supplierId` (**snapshot pris au moment
+    de la commande**, pas la configuration actuelle du fournisseur —
+    confirmé par le commentaire du schéma lui-même). C'est la réponse
+    à la consigne explicite "use the actual supplier/store
+    attribution saved in the order records rather than the
+    supplier's current configuration" : `subOrders.supplierId` est
+    déjà exactement ce snapshot, aucune réattribution n'était
+    nécessaire.
+  - **Statut "vente complétée"** : `client/src/lib/financial-rows.ts`
+    (module déjà existant pour Paiements/Factures) établit déjà la
+    convention `subOrderStatus === 'DELIVERED'` ⇒ "payé/collecté" —
+    reprise à l'identique ici plutôt que d'inventer une seconde règle
+    "vente complétée". Une commande `CANCELLED` ou toujours en cours
+    (PENDING/CONFIRMED/…) n'est jamais comptée. Un article annulé
+    individuellement par le café (`orderItems.status === 'CANCELLED'`)
+    est également exclu.
+  - Aucune notion de "commande non payée" distincte n'existe dans le
+    schéma actuel (`orders.paymentStatus` n'est écrit qu'une fois à la
+    création et jamais mis à jour — confirmé par le commentaire de
+    `financial-rows.ts` lui-même) : la convention DELIVERED-=-payé
+    déjà établie par ce module est donc la seule source de vérité
+    fiable, reprise sans invention.
+- **Prix/stock d'une offre** : même fonction déjà existante
+  `computeListingOffer(variants)` (`server/storage.ts`) que la tâche
+  précédente — jamais une seconde règle de calcul. "Prix" = prix
+  minimum parmi les variantes achetables ; "stock" = somme des stocks
+  achetables. Il n'existe pas, dans le modèle de données actuel, de
+  distinction séparément stockée entre "prix affiché" et "prix
+  actuellement disponible" au-delà de ce que `computeListingOffer`
+  résout déjà — signalé explicitement ici plutôt que supposé.
+
+### Changements implémentés
+
+- **Backend** (`server/storage/domains/shop-catalog.storage.ts`) :
+  `getProductCommercialSummary(productId)` et
+  `getProductSuppliers(productId, {page, pageSize})`, réutilisant le
+  même motif "requêtes groupées + agrégation en mémoire" que la tâche
+  précédente, plus une méthode privée partagée
+  `computeProductSales(productId)` (une seule requête `orderItems` +
+  une seule requête `subOrders`, jamais par fournisseur). Exposées via
+  la façade (`server/storage.ts`, `istorage.ts`) et deux nouvelles
+  routes admin-only : `GET /api/admin/products/:id/commercial-summary`
+  et `GET /api/admin/products/:id/suppliers`
+  (`server/routes/shop-catalog.routes.ts`).
+- **Types** dans `shared/schema.ts` : `ProductCommercialSummary`,
+  `ProductSuppliersResponse`, etc. — réutilisent le type
+  `TaxonomyProductStatus` déjà existant (mêmes valeurs
+  active/inactive/out_of_stock) plutôt que d'en déclarer un doublon.
+- **Frontend** : nouveau fichier
+  `client/src/components/admin/product-intelligence-modal.tsx`
+  (`ProductIntelligenceModal` + son propre modal "Voir les
+  fournisseurs"), et une icône "i" ajoutée dans `ProductFormModal`
+  (positionnée à gauche de l'icône de fermeture existante, visible
+  uniquement pour un produit déjà existant), avec son propre état
+  `infoOpen` totalement indépendant de l'état du formulaire d'édition
+  — fermer le modal d'informations ne touche jamais aux modifications
+  non enregistrées du formulaire.
+- **Temps réel** (`client/src/hooks/use-realtime.ts`) : l'invalidation
+  `/api/admin/products` a été ajoutée dans `invalidateStoreQueries`
+  (déjà appelée par `invalidateProductQueries` et
+  `invalidateInventoryQueries` — couvre ajout/retrait d'offre,
+  changement de prix/stock, activation/désactivation) et dans les
+  blocs `ORDER_EVENTS`/`DELIVERY_EVENTS` (couvre commande livrée/
+  annulée/changement de statut).
+- **Base de données** : aucune nouvelle table, aucune migration.
+
+### Vérifications réelles effectuées
+
+- `npx tsc --noEmit` et `npm run build` : propres après correction
+  d'une erreur de compilation (itération sur `Map.values()` incompatible
+  avec la cible TS configurée — corrigée avec `Array.from(...)`).
+- Contre la vraie base (scripts temporaires, supprimés après usage) :
+  - Produit "chicha" (5 fournisseurs) → 2 fournisseurs (Al-Khalil,
+    Boncafe) correctement identifiés à égalité au prix le plus bas
+    (1100), gestion des égalités confirmée fonctionnelle.
+  - Produit "Boga" (4 fournisseurs) → ventes réelles correctement
+    attribuées à un seul fournisseur ("Walid bondin" / Café Bondin : 8
+    unités, 22900), les 3 autres fournisseurs du même produit
+    correctement à 0 vente chacun — confirme que l'attribution ne
+    mélange jamais les fournisseurs d'un même produit.
+  - Produit sans aucune offre fournisseur → tous les compteurs à zéro,
+    aucune erreur.
+- Rendu SSR réel (harnais Vite `ssrLoadModule` + React
+  `renderToStaticMarkup`, même technique que la tâche précédente) :
+  le modal `ProductIntelligenceModal` complet (avec données réelles,
+  sans fournisseur, et en état de chargement) rendu sans erreur ;
+  `SupplierRow` (temporairement exporté puis revert) rendu avec succès
+  pour les 4 vrais fournisseurs du produit "Boga", prix/stock/ventes
+  par boutique tous corrects.
+- Authentification admin confirmée sur les deux nouvelles routes via
+  un serveur jetable réel (port 5073, arrêté et port libéré en fin de
+  test) : `401` sans session, avant toute autre logique.
+
+### Limitation documentée (au lieu d'être supposée résolue)
+
+Il n'existe pas, dans le schéma actuel, de notion distincte de
+"commande non payée" séparée de son statut de cycle de vie — la
+convention DELIVERED-=-payé déjà établie par
+`client/src/lib/financial-rows.ts` est reprise telle quelle comme
+seule source de vérité fiable, sans inventer de règle supplémentaire.

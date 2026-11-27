@@ -3,6 +3,7 @@ import { eq, and, or, inArray, asc } from "drizzle-orm";
 import {
   categories, subCategories, flavors, sizes, brands, products, favorites,
   supplierProductListings, supplierProductVariants, supplierStores, users,
+  subOrders, orderItems,
   type CategoryWithCount, type InsertCategory,
   type SubCategoryWithDetails, type InsertSubCategory,
   type FlavorWithCount, type InsertFlavor,
@@ -12,6 +13,7 @@ import {
   type Product,
   type TaxonomyEntityType, type TaxonomyCommercialSummary, type TaxonomySubCategoryCoverage,
   type TaxonomySuppliersResponse, type TaxonomySupplierGroup, type TaxonomySupplierProduct, type TaxonomyProductStatus,
+  type ProductCommercialSummary, type ProductBestOffer, type ProductSuppliersResponse, type ProductSupplierGroup,
 } from "@shared/schema";
 import { computeListingOffer } from "../../storage";
 
@@ -444,6 +446,187 @@ export class ShopCatalogStorage {
     });
 
     groups.sort((a, b) => b.productCount - a.productCount || a.supplierName.localeCompare(b.supplierName));
+
+    const total = groups.length;
+    const page = opts?.page ?? 1;
+    const pageSize = opts?.pageSize ?? 20;
+    const start = (page - 1) * pageSize;
+    return { suppliers: groups.slice(start, start + pageSize), total };
+  }
+
+  // ── Admin Products — Supplier Intelligence & Real-Time Product Information ──
+  // "Informations du produit" modal (task: "Admin Products – Supplier Intelligence &
+  // Real-Time Product Information"). Scoped to ONE catalog product (never a taxonomy
+  // filter) — reuses the exact same supplierProductListings/supplierProductVariants/
+  // supplierStores pattern and computeListingOffer rule as getTaxonomyCommercialSummary/
+  // getTaxonomySuppliers above, plus sales attribution from orderItems/subOrders.
+  //
+  // Sales attribution: a unit counts as "sold" only once its parent sub-order is
+  // DELIVERED — the exact same convention client/src/lib/financial-rows.ts already
+  // established for Payouts/Invoices (derivePaymentCollectionStatus: DELIVERED =
+  // collected/paid), never a second invented rule — and only while the order ITEM
+  // itself was never Coffee-Owner-cancelled (orderItems.status !== 'CANCELLED').
+  // subOrders.supplierId is a snapshot taken at order time (see schema comment), so this
+  // correctly attributes a historical sale to whichever supplier actually fulfilled it,
+  // even if that supplier's current listing has since changed hands or been removed.
+
+  private async computeProductSales(productId: number): Promise<Map<number, { units: number; amount: number }>> {
+    const items = await db.select().from(orderItems).where(and(eq(orderItems.productId, productId), eq(orderItems.status, 'ACTIVE')));
+    const salesBySupplier = new Map<number, { units: number; amount: number }>();
+    if (!items.length) return salesBySupplier;
+    const subOrderIds = Array.from(new Set(items.map((i) => i.subOrderId).filter((id): id is number => id != null)));
+    const subs = subOrderIds.length ? await db.select().from(subOrders).where(inArray(subOrders.id, subOrderIds)) : [];
+    const subMap = new Map(subs.map((s) => [s.id, s]));
+    for (const it of items) {
+      if (it.subOrderId == null) continue;
+      const sub = subMap.get(it.subOrderId);
+      if (!sub || sub.status !== 'DELIVERED') continue; // not yet completed/paid — never counted as sold
+      const entry = salesBySupplier.get(sub.supplierId) ?? { units: 0, amount: 0 };
+      entry.units += it.quantity;
+      entry.amount += it.totalPrice ?? it.unitPrice * it.quantity;
+      salesBySupplier.set(sub.supplierId, entry);
+    }
+    return salesBySupplier;
+  }
+
+  async getProductCommercialSummary(productId: number): Promise<ProductCommercialSummary> {
+    const listings = await db.select().from(supplierProductListings).where(eq(supplierProductListings.productId, productId));
+    const listingIds = listings.map((l) => l.id);
+    const variants = listingIds.length
+      ? await db.select().from(supplierProductVariants).where(inArray(supplierProductVariants.listingId, listingIds))
+      : [];
+    const variantsByListing = new Map<number, typeof variants>();
+    for (const v of variants) {
+      if (!variantsByListing.has(v.listingId)) variantsByListing.set(v.listingId, []);
+      variantsByListing.get(v.listingId)!.push(v);
+    }
+
+    const supplierIds = Array.from(new Set(listings.map((l) => l.supplierId)));
+    const [stores, sales] = await Promise.all([
+      supplierIds.length ? db.select().from(supplierStores).where(inArray(supplierStores.supplierId, supplierIds)) : Promise.resolve([]),
+      this.computeProductSales(productId),
+    ]);
+    const storeSupplierIds = new Set(stores.map((s) => s.supplierId));
+    const storeMap = new Map(stores.map((s) => [s.supplierId, s]));
+
+    let offersActive = 0, offersInactive = 0, offersOutOfStock = 0;
+    const perListing = new Map<number, { price: number; stock: number; status: TaxonomyProductStatus }>();
+    for (const l of listings) {
+      const offer = computeListingOffer(variantsByListing.get(l.id) ?? []);
+      const status: TaxonomyProductStatus = l.visibility !== 'VISIBLE' ? 'inactive' : offer.eligible ? 'active' : 'out_of_stock';
+      if (status === 'active') offersActive++; else if (status === 'inactive') offersInactive++; else offersOutOfStock++;
+      perListing.set(l.id, { price: offer.minPrice, stock: offer.totalStock, status });
+    }
+
+    // Best price (Phase 5) — only among currently active (visible + in-stock) offers;
+    // all offers tied at the global minimum are returned, never a single arbitrary pick.
+    const activeListings = listings.filter((l) => perListing.get(l.id)!.status === 'active');
+    let bestOffers: ProductBestOffer[] = [];
+    if (activeListings.length) {
+      const minPrice = Math.min(...activeListings.map((l) => perListing.get(l.id)!.price));
+      const tied = activeListings.filter((l) => perListing.get(l.id)!.price === minPrice);
+      const tiedSupplierIds = Array.from(new Set(tied.map((l) => l.supplierId)));
+      const tiedUsers = await db.select().from(users).where(inArray(users.id, tiedSupplierIds));
+      const tiedUserMap = new Map(tiedUsers.map((u) => [u.id, u]));
+      bestOffers = tied.map((l) => {
+        const o = perListing.get(l.id)!;
+        const store = storeMap.get(l.supplierId);
+        return {
+          supplierId: l.supplierId,
+          supplierName: tiedUserMap.get(l.supplierId)?.name ?? '',
+          storeName: store?.name ?? tiedUserMap.get(l.supplierId)?.name ?? '',
+          price: o.price, stock: o.stock, status: o.status,
+        };
+      });
+    }
+
+    let unitsSoldTotal = 0, salesAmountTotal = 0;
+    for (const entry of Array.from(sales.values())) { unitsSoldTotal += entry.units; salesAmountTotal += entry.amount; }
+
+    return {
+      supplierCount: supplierIds.length,
+      storeCount: supplierIds.filter((sid) => storeSupplierIds.has(sid)).length,
+      offersActive, offersInactive, offersOutOfStock,
+      unitsSoldTotal, salesAmountTotal,
+      bestOffers,
+    };
+  }
+
+  async getProductSuppliers(
+    productId: number, opts?: { page?: number; pageSize?: number },
+  ): Promise<ProductSuppliersResponse> {
+    const listings = await db.select().from(supplierProductListings).where(eq(supplierProductListings.productId, productId));
+    if (!listings.length) return { suppliers: [], total: 0 };
+
+    const listingIds = listings.map((l) => l.id);
+    const variants = listingIds.length
+      ? await db.select().from(supplierProductVariants).where(inArray(supplierProductVariants.listingId, listingIds))
+      : [];
+    const variantsByListing = new Map<number, typeof variants>();
+    for (const v of variants) {
+      if (!variantsByListing.has(v.listingId)) variantsByListing.set(v.listingId, []);
+      variantsByListing.get(v.listingId)!.push(v);
+    }
+
+    const supplierIds = Array.from(new Set(listings.map((l) => l.supplierId)));
+    const [supplierUsers, stores, sales] = await Promise.all([
+      db.select().from(users).where(inArray(users.id, supplierIds)),
+      db.select().from(supplierStores).where(inArray(supplierStores.supplierId, supplierIds)),
+      this.computeProductSales(productId),
+    ]);
+    const userMap = new Map(supplierUsers.map((u) => [u.id, u]));
+    const storeMap = new Map(stores.map((s) => [s.supplierId, s]));
+
+    const listingsBySupplier = new Map<number, typeof listings>();
+    for (const l of listings) {
+      if (!listingsBySupplier.has(l.supplierId)) listingsBySupplier.set(l.supplierId, []);
+      listingsBySupplier.get(l.supplierId)!.push(l);
+    }
+
+    const groups: ProductSupplierGroup[] = supplierIds.map((sid) => {
+      const supplierListings = listingsBySupplier.get(sid) ?? [];
+      const store = storeMap.get(sid);
+      const supplierUser = userMap.get(sid);
+      const supplierSales = sales.get(sid) ?? { units: 0, amount: 0 };
+      // One store per supplier in this app's current data model (supplierStores.supplierId
+      // is unique) — each of this supplier's listings becomes one store entry; in practice
+      // a supplier has at most one listing per product, so this is 0 or 1 entries, kept as
+      // an array for correctness if that ever changes.
+      const storesOut = supplierListings.map((l) => {
+        const offer = computeListingOffer(variantsByListing.get(l.id) ?? []);
+        const status: TaxonomyProductStatus = l.visibility !== 'VISIBLE' ? 'inactive' : offer.eligible ? 'active' : 'out_of_stock';
+        return {
+          storeId: store?.id ?? null,
+          storeName: store?.name ?? supplierUser?.name ?? '',
+          address: supplierUser?.locationAddress ?? null,
+          listingId: l.id,
+          price: offer.minPrice,
+          stock: offer.totalStock,
+          status,
+          // Sales are attributed per SUPPLIER (subOrders.supplierId), not per listing —
+          // with one listing per supplier per product, this is an exact 1:1 split;
+          // never double-counted across this supplier's own multiple listings for the
+          // same product, since computeProductSales already summed them once upstream.
+          unitsSold: supplierListings.length === 1 ? supplierSales.units : 0,
+          salesAmount: supplierListings.length === 1 ? supplierSales.amount : 0,
+        };
+      });
+      const activeCount = storesOut.filter((s) => s.status === 'active').length;
+      const inactiveCount = storesOut.filter((s) => s.status === 'inactive').length;
+      const outOfStockCount = storesOut.filter((s) => s.status === 'out_of_stock').length;
+      return {
+        supplierId: sid,
+        supplierName: supplierUser?.name ?? '',
+        logoUrl: store?.logoUrl ?? null,
+        storeCount: store ? 1 : 0,
+        activeCount, inactiveCount, outOfStockCount,
+        unitsSoldTotal: supplierSales.units,
+        salesAmountTotal: supplierSales.amount,
+        stores: storesOut,
+      };
+    });
+
+    groups.sort((a, b) => b.unitsSoldTotal - a.unitsSoldTotal || a.supplierName.localeCompare(b.supplierName));
 
     const total = groups.length;
     const page = opts?.page ?? 1;

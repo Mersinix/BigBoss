@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Slider } from "@/components/ui/slider";
-import { Plus, Pencil, Trash2, Package, Search, X, CheckCircle2, Clock, LayoutGrid, LayoutList, Layers, Eye, EyeOff } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, Search, X, CheckCircle2, Clock, LayoutGrid, LayoutList, Layers, Eye, EyeOff, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
@@ -19,6 +19,7 @@ import { useFormatCurrency } from "@/hooks/use-currency";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { useImageAdjustStyle, clampAdjustmentPct, getAdjustmentFor, useImageGallery, type ImageAdjustmentMap } from "@/lib/image-adjustment";
+import { ProductIntelligenceModal } from "@/components/admin/product-intelligence-modal";
 import type { ProductWithTaxonomy, CategoryWithCount, SubCategoryWithDetails, FlavorWithCount, SizeWithCount, BrandWithCount } from "@shared/schema";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -257,6 +258,10 @@ function ProductFormModal({
 }) {
   const { toast } = useToast();
   const qc = useQueryClient();
+  // "Informations du produit" (task: "Admin Products – Supplier Intelligence & Real-Time
+  // Product Information") — independent of this form's own open/edit state; closing it
+  // never closes or resets this modal.
+  const [infoOpen, setInfoOpen] = useState(false);
   // URL-keyed (not index-keyed) so adjustments stay attached to the correct
   // image even if additional images are reordered/removed in this form.
   const [imgAdj, setImgAdj] = useState<ImageAdjustmentMap>(() => (editing as any)?.imageAdjustments ?? {});
@@ -374,8 +379,18 @@ function ProductFormModal({
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent hideClose className="sm:max-w-4xl max-h-[90vh] overflow-y-auto [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-gray-700 hover:[&::-webkit-scrollbar-thumb]:bg-gray-600">
+        {/* Information icon (task: "Admin Products – Supplier Intelligence & Real-Time
+            Product Information") — only for an existing product (nothing commercial to show
+            for one not yet created); opens an independent modal that never closes or resets
+            this edit form. Positioned left of the existing close icon. */}
+        {editing && (
+          <button type="button" className="absolute right-14 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={() => setInfoOpen(true)} aria-label="Informations du produit" data-testid="button-open-product-intelligence">
+            <Info className="w-4 h-4" />
+          </button>
+        )}
         <button type="button" className="absolute right-4 top-4 p-1.5 rounded-full transition-colors bg-gray-100 hover:bg-gray-200 text-gray-500 dark:bg-gray-800 dark:hover:bg-gray-700 dark:text-gray-400 dark:hover:text-white" onClick={onClose} aria-label="Fermer" data-testid="button-close-add-edit-product">
           <X className="w-4 h-4" />
         </button>
@@ -613,6 +628,14 @@ function ProductFormModal({
         </div>
       </DialogContent>
     </Dialog>
+    {editing && (
+      <ProductIntelligenceModal
+        open={infoOpen}
+        onClose={() => setInfoOpen(false)}
+        product={editing}
+      />
+    )}
+    </>
   );
 }
 

@@ -60,6 +60,7 @@ import {
   type InsertSize, type Size, type SizeWithCount,
   type InsertBrand, type Brand, type BrandWithCount,
   type TaxonomyEntityType, type TaxonomyCommercialSummary, type TaxonomySuppliersResponse,
+  type ProductCommercialSummary, type ProductSuppliersResponse,
   type SupplierCategoryMapping,
   type AdminSupplierCategoryOverview,
   type InsertSupplierProductListing, type SupplierProductListing, type SupplierListingWithProduct,
@@ -3206,6 +3207,15 @@ export class DatabaseStorage implements IStorage {
 
   async getTaxonomySuppliers(type: TaxonomyEntityType, id: number, opts?: { page?: number; pageSize?: number }): Promise<TaxonomySuppliersResponse> {
     return this.shopCatalogDomain.getTaxonomySuppliers(type, id, opts);
+  }
+
+  // ── Admin Products — Supplier Intelligence & Real-Time Product Information ──
+  async getProductCommercialSummary(productId: number): Promise<ProductCommercialSummary> {
+    return this.shopCatalogDomain.getProductCommercialSummary(productId);
+  }
+
+  async getProductSuppliers(productId: number, opts?: { page?: number; pageSize?: number }): Promise<ProductSuppliersResponse> {
+    return this.shopCatalogDomain.getProductSuppliers(productId, opts);
   }
 
   // ── Supplier mappings ───────────────────────────────────────────────────────

@@ -166,6 +166,12 @@ function invalidateStoreQueries(qc: QueryClient) {
   // invalidateProductQueries/invalidateInventoryQueries above, which already
   // call this function, so this one addition covers all three paths.
   qc.invalidateQueries({ queryKey: ["/api/admin/taxonomy"] });
+  // Admin Products → "Informations du produit" modal (task: "Admin Products –
+  // Supplier Intelligence & Real-Time Product Information") — a supplier
+  // adding/removing an offer, changing price/stock, or (de)activating it all
+  // reach here the same way (invalidateProductQueries/invalidateInventoryQueries
+  // both already call this function), so this covers Phase 8 scenarios 1-7.
+  qc.invalidateQueries({ queryKey: ["/api/admin/products"] });
 }
 
 function invalidatePackQueries(qc: QueryClient) {
@@ -449,11 +455,17 @@ export function useRealtime(userId?: number) {
             // orders/sub-orders (see storage.getSupplierCafes) — keep it in sync too.
             qc.invalidateQueries({ queryKey: ["/api/supplier/cafes"] });
             invalidateMessagingQueries(qc);
+            // Admin Products → "Informations du produit" modal's sales-by-supplier stats
+            // (task: "Admin Products – Supplier Intelligence & Real-Time Product
+            // Information", Phase 8 §8-10) — a sub-order reaching DELIVERED, or being
+            // cancelled, changes "unitsSold"/"salesAmount" for the product(s) it contains.
+            qc.invalidateQueries({ queryKey: ["/api/admin/products"] });
           }
           if (DELIVERY_EVENTS.includes(event)) {
             qc.invalidateQueries({ queryKey: ["/api/deliveries"] });
             // Delivery status changes propagate into sub-order/order aggregates.
             qc.invalidateQueries({ queryKey: ["/api/orders"] });
+            qc.invalidateQueries({ queryKey: ["/api/admin/products"] });
             // Smart Driver Dispatch System — an assignment or cancellation also resolves (or
             // starts) this delivery's dispatch pill and eligible-driver list, even though
             // neither event name is one of SMART_DISPATCH_EVENTS below.

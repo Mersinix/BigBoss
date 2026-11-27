@@ -50,6 +50,7 @@ import type {
   SupplierVariantWithLabels, User, orders,
   SupplierStoreSettings,
   TaxonomyEntityType, TaxonomyCommercialSummary, TaxonomySuppliersResponse,
+  ProductCommercialSummary, ProductSuppliersResponse,
 } from "@shared/schema";
 import type { SupplierTabSettingsShape } from "../domains/platform-settings.storage";
 import type { RedactedDelivery } from "../../storage";
@@ -186,6 +187,10 @@ export interface IStorage {
   // Admin Categories Management — Supplier Coverage & Catalog Intelligence
   getTaxonomyCommercialSummary(type: TaxonomyEntityType, id: number): Promise<TaxonomyCommercialSummary>;
   getTaxonomySuppliers(type: TaxonomyEntityType, id: number, opts?: { page?: number; pageSize?: number }): Promise<TaxonomySuppliersResponse>;
+
+  // Admin Products — Supplier Intelligence & Real-Time Product Information
+  getProductCommercialSummary(productId: number): Promise<ProductCommercialSummary>;
+  getProductSuppliers(productId: number, opts?: { page?: number; pageSize?: number }): Promise<ProductSuppliersResponse>;
 
   // Favorites (shop/product favorites, persisted per-user)
   getFavoritesByUser(userId: number): Promise<ShopFavoriteItem[]>;

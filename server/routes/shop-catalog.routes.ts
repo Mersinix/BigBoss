@@ -555,6 +555,28 @@ export function registerShopCatalogRoutes(app: Express): void {
       } catch (err: any) { res.status(500).json({ message: err.message ?? "Error" }); }
     });
 
+    // ── Admin Products — Supplier Intelligence & Real-Time Product Information ──
+    // Admin-only (task: "Protect them with existing admin authentication and
+    // authorization" / "Do not expose confidential supplier information to
+    // unauthorized users") — scoped to one specific catalog productId.
+    app.get("/api/admin/products/:id/commercial-summary", requireAdmin, async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
+        res.json(await storage.getProductCommercialSummary(id));
+      } catch (err: any) { res.status(500).json({ message: err.message ?? "Error" }); }
+    });
+
+    app.get("/api/admin/products/:id/suppliers", requireAdmin, async (req, res) => {
+      try {
+        const id = parseInt(req.params.id);
+        if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
+        const page = req.query.page ? parseInt(req.query.page as string) : undefined;
+        const pageSize = req.query.pageSize ? parseInt(req.query.pageSize as string) : undefined;
+        res.json(await storage.getProductSuppliers(id, { page, pageSize }));
+      } catch (err: any) { res.status(500).json({ message: err.message ?? "Error" }); }
+    });
+
     // ── Catalog Suggestions ────────────────────────────────────────────────────
 
     const CATALOG_TYPES = ['category', 'subcategory', 'brand', 'flavor', 'size'] as const;

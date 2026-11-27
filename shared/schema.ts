@@ -4547,6 +4547,69 @@ export type TaxonomySuppliersResponse = {
   total: number; // total matching suppliers, for pagination (independent of page size)
 };
 
+// ── Admin Products — Supplier Intelligence & Real-Time Product Information ──
+// "Informations du produit" modal, opened from the existing "Modifier le
+// produit" edit modal via a new info icon. Same TaxonomyProductStatus values
+// reused (active/inactive/out_of_stock has identical meaning for a product
+// offer as for a taxonomy-matching listing — no second status type).
+export type ProductBestOffer = {
+  supplierId: number;
+  supplierName: string;
+  storeName: string;
+  price: number;
+  stock: number;
+  status: TaxonomyProductStatus;
+};
+
+// Sales attribution (task: "use the actual supplier/store attribution saved
+// in the order records") — units/amount are summed from orderItems whose
+// parent sub-order is DELIVERED, the exact same "paid/completed" convention
+// client/src/lib/financial-rows.ts already established for Payouts/Invoices
+// (derivePaymentCollectionStatus: DELIVERED = collected), and excluding
+// per-item Coffee Owner cancellations (orderItems.status === 'CANCELLED').
+export type ProductCommercialSummary = {
+  supplierCount: number;
+  storeCount: number;
+  offersActive: number;
+  offersInactive: number;
+  offersOutOfStock: number;
+  unitsSoldTotal: number;
+  salesAmountTotal: number;
+  // Active + in-stock offers tied at the global lowest price; empty if none
+  // qualify (never fabricated, never an inactive/out-of-stock offer).
+  bestOffers: ProductBestOffer[];
+};
+
+export type ProductSupplierStore = {
+  storeId: number | null; // null when the supplier has an offer but no published store yet
+  storeName: string;
+  address: string | null;
+  listingId: number;
+  price: number;
+  stock: number;
+  status: TaxonomyProductStatus;
+  unitsSold: number;
+  salesAmount: number;
+};
+
+export type ProductSupplierGroup = {
+  supplierId: number;
+  supplierName: string;
+  logoUrl: string | null;
+  storeCount: number;
+  activeCount: number;
+  inactiveCount: number;
+  outOfStockCount: number;
+  unitsSoldTotal: number;
+  salesAmountTotal: number;
+  stores: ProductSupplierStore[];
+};
+
+export type ProductSuppliersResponse = {
+  suppliers: ProductSupplierGroup[];
+  total: number;
+};
+
 export type CatalogSuggestionType = 'category' | 'subcategory' | 'brand' | 'flavor' | 'size';
 
 export type CatalogSuggestion = {

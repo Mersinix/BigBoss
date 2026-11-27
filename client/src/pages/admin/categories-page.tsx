@@ -18,6 +18,7 @@ import { invalidateMarketplace } from "@/lib/invalidate-marketplace";
 import { DashboardHero } from "@/components/dashboard/dashboard-kit";
 import { DataPagination, usePagination } from "@/components/ui/data-pagination";
 import { CatalogSuggestionCard } from "@/components/shared/catalog-suggestion-card";
+import { TaxonomyCommercialSection } from "@/components/admin/taxonomy-commercial-section";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -304,6 +305,7 @@ function CategoriesTab() {
               <Label>Actif</Label>
               <ActiveToggle active={form.isActive} onChange={v => setForm(f => ({ ...f, isActive: v }))} />
             </div>
+            {editing && <TaxonomyCommercialSection type="category" id={editing.id} entityName={editing.name} />}
             <div className="flex gap-2 justify-end items-center">
               {editing && (
                 <Button
@@ -540,6 +542,7 @@ function SubCategoriesTab() {
               <Label>Actif</Label>
               <ActiveToggle active={form.isActive} onChange={v => setForm(f => ({ ...f, isActive: v }))} />
             </div>
+            {editing && <TaxonomyCommercialSection type="subcategory" id={editing.id} entityName={editing.name} />}
             <div className="flex gap-2 justify-end items-center">
               {editing && (
                 <Button
@@ -796,14 +799,19 @@ function TaxonomyCrudTab({
                   ) : null)}
                   {(item as any).description && <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{(item as any).description}</p>}
                 </div>
-                <div className="flex flex-wrap gap-1">
-                  {(item.subCategoryNames ?? []).length > 0
-                    ? item.subCategoryNames!.map((n, i) => <Badge key={i} variant="outline" className="text-[11px]">{n}</Badge>)
-                    : <span className="text-xs text-muted-foreground">—</span>
-                  }
+                {/* Entity-count presentation (task: "Admin Categories – UI Refinements —
+                    Simplify Flavor, Size and Brand cards") — same compact style as the
+                    Categories tab's own card (subCategoryCount + productCount badges),
+                    replacing the previous list of subcategory names, which is still shown
+                    in full inside this item's own detail modal (unchanged below). */}
+                <div className="flex items-center gap-2 flex-wrap mt-1">
+                  {/* subCategoryNames (not the raw subCategoryIds array) — the exact same
+                      filtered set the removed badges used to list, so this count can never
+                      exceed what the user previously saw spelled out. */}
+                  <Badge variant="secondary" className="text-[11px]">{(item.subCategoryNames ?? []).length} sous-cat.</Badge>
+                  <Badge variant="outline" className="text-[11px]">{item.productCount} produits</Badge>
                 </div>
                 <div className="flex items-center justify-between mt-1">
-                  <Badge variant="outline" className="text-[11px]">{item.productCount} produits</Badge>
                   <p className="text-[11px] text-muted-foreground">{item.createdBy || "—"}</p>
                 </div>
               </div>
@@ -906,6 +914,7 @@ function TaxonomyCrudTab({
               <Label>Actif</Label>
               <ActiveToggle active={formIsActive} onChange={setFormIsActive} />
             </div>
+            {editing && <TaxonomyCommercialSection type={testPrefix as "flavor" | "size" | "brand"} id={editing.id} entityName={editing.name} />}
             <div className="flex gap-2 justify-end items-center">
               {editing && (
                 <Button

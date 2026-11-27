@@ -49,6 +49,7 @@ import type {
   SupplierProductListing, SupplierProductReview, SupplierProductVariant, SupplierStore,
   SupplierVariantWithLabels, User, orders,
   SupplierStoreSettings,
+  TaxonomyEntityType, TaxonomyCommercialSummary, TaxonomySuppliersResponse,
 } from "@shared/schema";
 import type { SupplierTabSettingsShape } from "../domains/platform-settings.storage";
 import type { RedactedDelivery } from "../../storage";
@@ -181,6 +182,10 @@ export interface IStorage {
   updateBrand(id: number, updates: Partial<InsertBrand>): Promise<Brand>;
   deleteBrand(id: number): Promise<void>;
   bulkUpdateBrandOrder(orders: { id: number; displayOrder: number }[]): Promise<void>;
+
+  // Admin Categories Management — Supplier Coverage & Catalog Intelligence
+  getTaxonomyCommercialSummary(type: TaxonomyEntityType, id: number): Promise<TaxonomyCommercialSummary>;
+  getTaxonomySuppliers(type: TaxonomyEntityType, id: number, opts?: { page?: number; pageSize?: number }): Promise<TaxonomySuppliersResponse>;
 
   // Favorites (shop/product favorites, persisted per-user)
   getFavoritesByUser(userId: number): Promise<ShopFavoriteItem[]>;

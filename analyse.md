@@ -18935,3 +18935,156 @@ React Switch, ni aucune autre route.
   après cette correction pour éliminer tout décalage de build résiduel,
   puis réessayer le scénario 1→10 de la section Validation de la
   demande.
+
+## 59. Audit — Admin Categories Management : couverture fournisseurs et intelligence catalogue
+
+### Objectif de la tâche
+
+Enrichir les modals de détail existants des 5 entités de taxonomie
+(Catégories, Sous-catégories, Saveurs, Tailles, Marques) sur
+`/admin/categories` avec une section "Informations commerciales"
+(fournisseurs/produits/couverture) et un nouveau modal "Voir les
+fournisseurs" affichant la hiérarchie Fournisseur → Boutique →
+Produits, sans toucher aux modals, au CRUD, au drag-and-drop ni à la
+pagination déjà existants.
+
+### Architecture existante (avant modification)
+
+**Frontend** — `client/src/pages/admin/categories-page.tsx` (1827
+lignes) :
+- `CategoriesTab()` — son propre `Dialog` d'édition (icône emoji, nom,
+  description, actif, supprimer/annuler/enregistrer).
+- `SubCategoriesTab()` — même structure de `Dialog`, plus un sélecteur
+  de catégorie parente.
+- `TaxonomyCrudTab({ title, icon, apiPath, queryKey, testPrefix,
+  extraFields, cats, subs })` — composant générique **partagé** par
+  Saveurs/Tailles/Marques (3 instances différenciées uniquement par
+  leurs props), même structure de `Dialog`.
+- Les trois ont déjà un badge `productCount` sur chaque carte, mais ce
+  compteur vient de `getCategories`/`getSubCategories`/`getFlavors`/
+  `getSizes`/`getBrands` (voir ci-dessous) — il compte les produits du
+  **catalogue admin** (`products`), pas les offres réelles des
+  fournisseurs. C'est précisément la distinction que la tâche demande
+  d'introduire.
+
+**Backend** — `server/storage/domains/shop-catalog.storage.ts`
+(`ShopCatalogStorage`, exposée via la façade `server/storage.ts` →
+`shopCatalogDomain`) :
+- Chaque `getCategories`/`getSubCategories`/`getFlavors`/`getSizes`/
+  `getBrands` calcule déjà son `productCount` en filtrant la table
+  `products` (jamais `supplierProductListings`) — confirmé par lecture
+  directe du code, pas une supposition.
+- Routes correspondantes dans
+  `server/routes/shop-catalog.routes.ts`, toutes derrière
+  `requireAdmin` pour les mutations (GET publics, filtrés côté
+  fournisseur via `includeAll`).
+
+### Relations de données réelles (confirmées par lecture du schéma, pas supposées)
+
+- `products` (catalogue admin) porte **directement** les champs de
+  taxonomie : `categoryId`, `subCategoryId`, `flavorId`, `sizeId`,
+  `brandId`, plus les tableaux multi-valeurs `flavorIds`/`sizeIds`
+  (un produit peut avoir plusieurs saveurs/tailles). Les marques
+  restent mono-valeur (`brandId` seul, pas de `brandIds` — confirmé,
+  pas supposé).
+- `supplierProductListings` relie un **fournisseur** (`supplierId`) à
+  un produit du catalogue (`productId`) — "le fournisseur enrichit un
+  produit admin avec son prix/stock/variantes disponibles". C'est la
+  **seule** table qui dit "ce fournisseur vend réellement ce produit".
+- `supplierProductVariants` (par `listingId`) porte les vraies
+  variantes prix/stock. La fonction déjà existante
+  `computeListingOffer(variants)` (`server/storage.ts`) est la règle
+  **déjà utilisée ailleurs** (Shop, Store pages, Packs) pour décider
+  si une offre est actuellement achetable — réutilisée ici tel quel,
+  aucune seconde règle inventée.
+- `supplierStores` (une ligne par fournisseur, `supplierId` **unique**
+  — contrainte déjà vérifiée dans une tâche précédente de cette
+  session) — la "boutique" visible du fournisseur. Un fournisseur
+  ayant des listings correspondants peut néanmoins n'avoir **aucune**
+  ligne `supplierStores` (jamais créée) : c'est exactement le cas que
+  la consigne demande de ne pas présumer résolu automatiquement.
+- `supplierCategories`/`supplierSubCategories` (mapping d'approbation
+  fournisseur ↔ catégorie) sont **délibérément ignorées** pour ce
+  calcul : elles indiquent seulement qu'un fournisseur est autorisé à
+  vendre dans une catégorie, pas qu'il y vend réellement un produit —
+  utiliser ces tables aurait justement reproduit l'erreur que la tâche
+  met en garde contre ("ne pas supposer qu'une association catégorie
+  ⇒ chaque boutique du fournisseur offre des produits dans cette
+  catégorie").
+
+### Endpoints et méthodes de storage existants réutilisés
+
+- `computeListingOffer` (`server/storage.ts`) — réutilisée telle
+  quelle pour classer chaque listing Active/Inactive/Rupture.
+- Le motif "une poignée de `db.select()` groupés + agrégation en
+  mémoire via `Map`" déjà utilisé par **toutes** les méthodes
+  existantes de `ShopCatalogStorage` (et par la quasi-totalité du
+  reste de la couche storage de ce projet, vérifié dans plusieurs
+  tâches précédentes de cette session) — repris à l'identique, pas de
+  SQL brut `GROUP BY` introduit, pour rester cohérent avec
+  l'architecture existante (Phase 5 : "follow the existing project
+  architecture").
+- `DataPagination`/`usePagination` (`client/src/components/ui/
+  data-pagination.tsx`) — déjà importés dans `categories-page.tsx`,
+  réutilisés pour paginer la liste de fournisseurs du nouveau modal.
+
+### Changements nécessaires (implémentés dans cette tâche)
+
+- **Backend** : deux nouvelles méthodes sur `ShopCatalogStorage`
+  (`getTaxonomyCommercialSummary`, `getTaxonomySuppliers`), exposées
+  via la façade (`server/storage.ts`, `server/storage/types/
+  istorage.ts`) et deux nouvelles routes `GET /api/admin/taxonomy/
+  :type/:id/summary` et `GET /api/admin/taxonomy/:type/:id/suppliers`
+  (`server/routes/shop-catalog.routes.ts`), toutes deux `requireAdmin`.
+  Nouveaux types partagés dans `shared/schema.ts`
+  (`TaxonomyCommercialSummary`, `TaxonomySuppliersResponse`, etc.).
+  **Aucune nouvelle table ni migration** : tout est dérivé en direct
+  des tables existantes.
+- **Frontend** : un nouveau composant partagé `TaxonomyCommercialSection`
+  (section "Informations commerciales", injecté dans les 3 `Dialog`
+  existants sans les remplacer) et un nouveau composant partagé
+  `TaxonomySuppliersModal` (Fournisseur → Boutique → Produits,
+  paginé), tous deux paramétrés par `type` + `id` + nom affiché.
+
+### Décision documentée — définition de "Produits : Total/Actif/Inactif/Rupture"
+
+La consigne demande à la fois "éviter le double comptage entre
+fournisseurs" et un détail Actif/Inactif/Rupture par fournisseur et
+par boutique dans le modal Phase 3. Ces deux états ne peuvent pas être
+fusionnés sans perte d'information si le même produit du catalogue est
+vendu par deux fournisseurs avec des statuts différents (ex. actif
+chez l'un, en rupture chez l'autre). Décision retenue et appliquée de
+façon cohérente partout : le comptage se fait au niveau du **listing**
+(une offre = un couple fournisseur/produit), jamais dédupliqué par
+produit catalogue. "Éviter le double comptage" est donc respecté au
+sens où chaque listing n'est compté **qu'une seule fois** (jamais une
+fois par variante, jamais une fois par fournisseur ET une fois en
+agrégat global) — le total affiché dans la section "Informations
+commerciales" est exactement la somme des totaux par fournisseur
+affichés dans le modal "Voir les fournisseurs", garantissant qu'il n'y
+ait jamais deux chiffres contradictoires dans l'interface.
+
+### Risques identifiés
+
+- Un fournisseur avec des listings correspondants mais sans boutique
+  publiée (`supplierStores` absent) : géré explicitement
+  (`storeCount` peut être `< supplierCount`, `storeId: null` dans la
+  réponse) plutôt que silencieusement ignoré ou présumé toujours
+  présent.
+- Risque de confusion entre le `productCount` déjà affiché sur chaque
+  carte (comptage catalogue admin, inchangé) et le nouveau total de la
+  section "Informations commerciales" (comptage listings fournisseurs)
+  — les deux chiffres peuvent légitimement différer et ce n'est pas un
+  bug ; le libellé de chaque section le distingue clairement dans
+  l'implémentation.
+- Vérifié en direct contre la vraie base (scripts temporaires,
+  supprimés après usage) : catégorie "A" (aucun produit) → tous les
+  compteurs à zéro sans erreur ; catégorie "CAFE" → 4 fournisseurs/4
+  boutiques/16 produits tous actifs, avec un détail de couverture par
+  sous-catégorie correct (ex. "Accessoires" à 1 seul fournisseur) ;
+  catégorie "CATO" → 0 fournisseur mais une sous-catégorie "SUB"
+  correctement marquée "Non couvert" ; sous-catégorie "Robusta Beans"
+  → catégorie parente, saveurs/tailles/marques liées toutes résolues
+  correctement depuis les données réelles.
+
+### Implémentation — suite dans les sections suivantes de ce même document, au fil de l'avancement (Phases 2 à 7).

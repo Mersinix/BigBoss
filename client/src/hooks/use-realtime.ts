@@ -107,7 +107,7 @@ function invalidateInventoryQueries(qc: QueryClient) {
   // Active, Hidden, In Stock, Low Stock, Out of Stock, Total Units, Inventory Value).
   qc.invalidateQueries({ queryKey: ["/api/supplier/inventory/stats"] });
   invalidateMarketplace(qc);
-  invalidateStoreQueries(qc);
+  invalidateStoreQueries(qc); // also invalidates /api/admin/taxonomy — see that function
 }
 
 function invalidateProductQueries(qc: QueryClient) {
@@ -160,6 +160,12 @@ function invalidateStoreQueries(qc: QueryClient) {
   // fixed for Maintenance/Barista/etc. in tasks 52-55.
   qc.invalidateQueries({ queryKey: ["/api/supplier/reports/published"] });
   qc.invalidateQueries({ queryKey: ["/api/admin/supplier/reports"] });
+  // A store being created/removed/(un)published changes taxonomy "storeCount"
+  // (task: "Admin Categories Management: Supplier Coverage & Catalog
+  // Intelligence") — reached from STORE_EVENTS directly and from both
+  // invalidateProductQueries/invalidateInventoryQueries above, which already
+  // call this function, so this one addition covers all three paths.
+  qc.invalidateQueries({ queryKey: ["/api/admin/taxonomy"] });
 }
 
 function invalidatePackQueries(qc: QueryClient) {
@@ -428,6 +434,12 @@ export function useRealtime(userId?: number) {
             qc.invalidateQueries({ queryKey: ["/api/brands"] });
             qc.invalidateQueries({ queryKey: ["/api/admin/products"] });
             qc.invalidateQueries({ queryKey: ["/api/supplier/admin-products"] });
+            // Admin Categories Management → "Informations commerciales" + "Voir les
+            // fournisseurs" (task: "Admin Categories Management: Supplier Coverage &
+            // Catalog Intelligence") — a category/subcategory/flavor/size/brand being
+            // created/edited/deleted changes which products match which entity, so any
+            // open commercial-summary/suppliers modal must refresh too.
+            qc.invalidateQueries({ queryKey: ["/api/admin/taxonomy"] });
             invalidateMarketplace(qc);
           }
           if (ORDER_EVENTS.includes(event)) {

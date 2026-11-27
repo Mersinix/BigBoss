@@ -59,6 +59,7 @@ import {
   type InsertFlavor, type Flavor, type FlavorWithCount,
   type InsertSize, type Size, type SizeWithCount,
   type InsertBrand, type Brand, type BrandWithCount,
+  type TaxonomyEntityType, type TaxonomyCommercialSummary, type TaxonomySuppliersResponse,
   type SupplierCategoryMapping,
   type AdminSupplierCategoryOverview,
   type InsertSupplierProductListing, type SupplierProductListing, type SupplierListingWithProduct,
@@ -3196,6 +3197,15 @@ export class DatabaseStorage implements IStorage {
 
   async bulkUpdateBrandOrder(orders: { id: number; displayOrder: number }[]): Promise<void> {
     return this.shopCatalogDomain.bulkUpdateBrandOrder(orders);
+  }
+
+  // ── Admin Categories Management — Supplier Coverage & Catalog Intelligence ──
+  async getTaxonomyCommercialSummary(type: TaxonomyEntityType, id: number): Promise<TaxonomyCommercialSummary> {
+    return this.shopCatalogDomain.getTaxonomyCommercialSummary(type, id);
+  }
+
+  async getTaxonomySuppliers(type: TaxonomyEntityType, id: number, opts?: { page?: number; pageSize?: number }): Promise<TaxonomySuppliersResponse> {
+    return this.shopCatalogDomain.getTaxonomySuppliers(type, id, opts);
   }
 
   // ── Supplier mappings ───────────────────────────────────────────────────────

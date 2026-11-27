@@ -54,7 +54,7 @@ const SYSTEM_MANAGEMENT_SECTIONS: { id: SystemManagementSection; label: string; 
   { id: "landing",  label: "Landing Page",     icon: LayoutTemplate },
   { id: "delivery", label: "Delivery",         icon: Truck },
   { id: "services", label: "Services",         icon: Zap },
-  { id: "messages", label: "Messages System",  icon: MessageSquare },
+  { id: "messages", label: "Messages",  icon: MessageSquare },
   { id: "global",   label: "Global Settings",  icon: Sliders },
   { id: "supplier", label: "Supplier",         icon: Store },
 ];
@@ -86,7 +86,7 @@ const SUPPLIER_SUB_SECTIONS: { id: SupplierSubSection; label: string; icon: any 
   { id: "categories", label: "Catégories", icon: Folder },
   { id: "products", label: "Produits", icon: Package },
   { id: "promotion", label: "Promotion", icon: Tag },
-  { id: "discount-codes", label: "Codes promotionnels", icon: Ticket },
+  { id: "discount-codes", label: "Code Promo", icon: Ticket },
 ];
 
 // ── Service visibility ────────────────────────────────────────────────────────

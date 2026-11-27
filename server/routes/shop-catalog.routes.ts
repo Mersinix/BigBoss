@@ -526,6 +526,35 @@ export function registerShopCatalogRoutes(app: Express): void {
       catch { res.status(500).json({ message: "Error" }); }
     });
 
+    // ── Admin Categories Management — Supplier Coverage & Catalog Intelligence ──
+    // Both routes are admin-only (task: "restrict these endpoints to authorized
+    // administrators") and reuse the existing :type validation already
+    // established by the Catalog Suggestions routes below (TAXONOMY_TYPES mirrors
+    // that same CATALOG_TYPES list).
+    const TAXONOMY_TYPES = ['category', 'subcategory', 'flavor', 'size', 'brand'] as const;
+
+    app.get("/api/admin/taxonomy/:type/:id/summary", requireAdmin, async (req, res) => {
+      try {
+        const { type } = req.params;
+        if (!TAXONOMY_TYPES.includes(type as any)) return res.status(400).json({ message: "Invalid taxonomy type" });
+        const id = parseInt(req.params.id);
+        if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
+        res.json(await storage.getTaxonomyCommercialSummary(type as any, id));
+      } catch (err: any) { res.status(500).json({ message: err.message ?? "Error" }); }
+    });
+
+    app.get("/api/admin/taxonomy/:type/:id/suppliers", requireAdmin, async (req, res) => {
+      try {
+        const { type } = req.params;
+        if (!TAXONOMY_TYPES.includes(type as any)) return res.status(400).json({ message: "Invalid taxonomy type" });
+        const id = parseInt(req.params.id);
+        if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid id" });
+        const page = req.query.page ? parseInt(req.query.page as string) : undefined;
+        const pageSize = req.query.pageSize ? parseInt(req.query.pageSize as string) : undefined;
+        res.json(await storage.getTaxonomySuppliers(type as any, id, { page, pageSize }));
+      } catch (err: any) { res.status(500).json({ message: err.message ?? "Error" }); }
+    });
+
     // ── Catalog Suggestions ────────────────────────────────────────────────────
 
     const CATALOG_TYPES = ['category', 'subcategory', 'brand', 'flavor', 'size'] as const;

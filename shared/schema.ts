@@ -4462,6 +4462,91 @@ export type BrandWithCount = Brand & {
   subCategoryNames: string[];
 };
 
+// ── Admin Categories Management — Supplier Coverage & Catalog Intelligence ───
+// "Informations commerciales" section added to the existing Category/
+// SubCategory/Flavor/Size/Brand detail modals, plus the "Voir les
+// fournisseurs" drill-down modal. Every count here is derived live from
+// supplierProductListings/supplierProductVariants/supplierStores — never a
+// stored/cached aggregate — so it always reflects the current catalog state.
+export type TaxonomyEntityType = 'category' | 'subcategory' | 'flavor' | 'size' | 'brand';
+
+// A single supplier listing's live commercial status — reuses the exact same
+// rule the Shop/Store pages already use (computeListingOffer on the listing's
+// persisted variants), never a separate "active" heuristic:
+//   - 'inactive'     listing.visibility !== 'VISIBLE' (supplier paused/hid it)
+//   - 'out_of_stock' visible, but no variant is currently purchasable
+//   - 'active'       visible AND at least one variant is purchasable
+export type TaxonomyProductStatus = 'active' | 'inactive' | 'out_of_stock';
+
+export type TaxonomySubCategoryCoverage = {
+  id: number;
+  name: string;
+  supplierCount: number;
+  productCount: number;
+  covered: boolean; // supplierCount > 0
+};
+
+// Phase 2 "Informations commerciales" summary — one per taxonomy entity.
+// productTotal/productActive/productInactive/productOutOfStock are counted at
+// the LISTING level (one matching product offered by one supplier = one unit),
+// not deduplicated by catalog product — a product sold by two suppliers is two
+// listings with two independent statuses, and this is the same unit the
+// Suppliers modal (below) breaks down per supplier/store, so the two always
+// add up consistently.
+export type TaxonomyCommercialSummary = {
+  supplierCount: number; // distinct suppliers with >=1 matching listing
+  storeCount: number;    // of those suppliers, how many have a published store
+  productTotal: number;
+  productActive: number;
+  productInactive: number;
+  productOutOfStock: number;
+  // Categories only — one row per subcategory of this category.
+  subCategoryCoverage?: TaxonomySubCategoryCoverage[];
+  // Subcategories only — this subcategory's parent + whatever flavors/sizes/
+  // brands are actually linked to it via their own subCategoryIds.
+  parentCategory?: { id: number; name: string } | null;
+  linkedFlavors?: { id: number; name: string }[];
+  linkedSizes?: { id: number; name: string }[];
+  linkedBrands?: { id: number; name: string }[];
+};
+
+export type TaxonomySupplierProduct = {
+  listingId: number;
+  productId: number;
+  productName: string;
+  productImageUrl: string | null;
+  sku: string | null;
+  status: TaxonomyProductStatus;
+};
+
+export type TaxonomySupplierStore = {
+  storeId: number | null; // null when the supplier has matching listings but no published store yet
+  storeName: string;
+  address: string | null;
+  productCount: number;
+  activeCount: number;
+  inactiveCount: number;
+  outOfStockCount: number;
+  products: TaxonomySupplierProduct[];
+};
+
+export type TaxonomySupplierGroup = {
+  supplierId: number;
+  supplierName: string;
+  logoUrl: string | null;
+  storeCount: number;
+  productCount: number;
+  activeCount: number;
+  inactiveCount: number;
+  outOfStockCount: number;
+  stores: TaxonomySupplierStore[];
+};
+
+export type TaxonomySuppliersResponse = {
+  suppliers: TaxonomySupplierGroup[];
+  total: number; // total matching suppliers, for pagination (independent of page size)
+};
+
 export type CatalogSuggestionType = 'category' | 'subcategory' | 'brand' | 'flavor' | 'size';
 
 export type CatalogSuggestion = {
